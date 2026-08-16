@@ -17,8 +17,6 @@ from trafilatura import extract
 
 from .lm import LitellmModel
 
-logging.getLogger("httpx").setLevel(logging.WARNING)  # Disable INFO logging for httpx.
-
 
 def truncate_filename(filename, max_length=125):
     """Truncate filename to max_length to ensure the filename won't exceed the file system limit.

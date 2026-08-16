@@ -40,11 +40,6 @@ ENV PATH=/app/.venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     KVASIR_DATA_DIR=/data
 
-# kvasir.storm.encoder opens a litellm disk cache under Path.home() while being imported, before
-# any of our code runs. /tmp is writable under a read-only root filesystem, and losing a cache on
-# restart costs nothing.
-ENV HOME=/tmp
-
 # Encoder.__init__ raises without this. An upstream implementation detail rather than an operator's
 # decision, so it is fixed here instead of left to the deployment.
 ENV ENCODER_API_TYPE=openai
