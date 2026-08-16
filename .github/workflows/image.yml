@@ -32,6 +32,9 @@ jobs:
         with:
           images: ghcr.io/brewcoua/kvasir
           # No moving latest. A tag that changes underneath a deployment defeats digest pinning.
+          # This is load-bearing: the action defaults to latest=auto, which tags latest on any
+          # semver push, so the tag list below is not enough on its own.
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
             type=sha,format=long
