@@ -18,6 +18,8 @@ from ..interface import Engine, LMConfigs, Retriever
 from ..lm import LitellmModel
 from ..utils import FileIOHelper, truncate_filename
 
+logger = logging.getLogger(__name__)
+
 
 class STORMWikiLMConfigs(LMConfigs):
     """Configurations for LLM used in different parts of STORM.
@@ -307,21 +309,30 @@ class STORMWikiRunner(Engine):
         1. Dumping the run configuration.
         2. Dumping the LLM call history.
         """
-        config_log = self.lm_configs.log()
-        FileIOHelper.dump_json(
-            config_log, os.path.join(self.article_output_dir, "run_config.json")
-        )
+        # Both files are a record of the run rather than part of its output, and this runs after
+        # the article is already written. A model wrapper carrying something unserialisable in its
+        # kwargs would otherwise fail a run that had finished, minutes of work after the fact.
+        try:
+            config_log = self.lm_configs.log()
+            FileIOHelper.dump_json(
+                config_log, os.path.join(self.article_output_dir, "run_config.json")
+            )
+        except Exception:
+            logger.exception("Could not write run_config.json.")
 
-        llm_call_history = self.lm_configs.collect_and_reset_lm_history()
-        with open(
-            os.path.join(self.article_output_dir, "llm_call_history.jsonl"), "w"
-        ) as f:
-            for call in llm_call_history:
-                if "kwargs" in call:
-                    call.pop(
-                        "kwargs"
-                    )  # All kwargs are dumped together to run_config.json.
-                f.write(json.dumps(call) + "\n")
+        try:
+            llm_call_history = self.lm_configs.collect_and_reset_lm_history()
+            with open(
+                os.path.join(self.article_output_dir, "llm_call_history.jsonl"), "w"
+            ) as f:
+                for call in llm_call_history:
+                    if "kwargs" in call:
+                        call.pop(
+                            "kwargs"
+                        )  # All kwargs are dumped together to run_config.json.
+                    f.write(json.dumps(call) + "\n")
+        except Exception:
+            logger.exception("Could not write llm_call_history.jsonl.")
 
     def _load_information_table_from_local_fs(self, information_table_local_path):
         # Upstream asserted here, so under python -O the missing file surfaced as an obscure

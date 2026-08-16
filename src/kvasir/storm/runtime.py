@@ -10,12 +10,11 @@ this fork rather than deployment configuration, and none of them touch the files
 network. The cache is the part that does, so it is opened only by an explicit `configure_cache`
 call.
 
-Concurrency lives here for the same reason. The pipeline nests thread pools three deep — section
-writing fans out to retrieval, which fans out to page fetches — and upstream sized each level
-independently, so the worst case multiplied out to hundreds of simultaneous requests against a
-self-hosted gateway and search instance. One setting sizes every pool, and outbound requests take a
-permit from one process-wide budget. Those pools also carry the caller's context, so a run stays
-identifiable in the logs after the pipeline fans out.
+Concurrency lives here for the same reason. The pipeline nests thread pools, and upstream sized each
+level independently, so the worst case multiplied out to hundreds of simultaneous requests against a
+self-hosted gateway and search instance. One setting sizes every pool, and outbound search requests
+take a permit from one process-wide budget. Those pools also carry the caller's context, so a run
+stays identifiable in the logs after the pipeline fans out.
 """
 
 import concurrent.futures
@@ -71,30 +70,18 @@ def max_threads() -> int:
     return _max_threads
 
 
-def acquire_fetch_slot() -> None:
-    """Claim one of the process's fetch permits, blocking until one is free.
-
-    Callers that fan out over a thread pool acquire before submitting, so a permit bounds the
-    threads created as well as the requests in flight. Release from the task itself.
-
-    Only outbound search and page requests take a permit, and neither waits on a future while
-    holding one, so this cannot deadlock against the pools nested above it.
-    """
-    _fetch_slots.acquire()
-
-
-def release_fetch_slot() -> None:
-    _fetch_slots.release()
-
-
 @contextmanager
 def fetch_slot() -> Iterator[None]:
-    """Hold a fetch permit for the duration of a single outbound request."""
-    acquire_fetch_slot()
+    """Hold one of the process's fetch permits for a single outbound request.
+
+    Retrieval is the innermost level of the pipeline and waits on no future of its own, so a permit
+    is never held across a wait and this cannot deadlock against the pools nested above it.
+    """
+    _fetch_slots.acquire()
     try:
         yield
     finally:
-        release_fetch_slot()
+        _fetch_slots.release()
 
 
 class UsageSink(Protocol):
@@ -168,7 +155,6 @@ __all__ = [
     "ContextThreadPoolExecutor",
     "DEFAULT_MAX_THREADS",
     "UsageSink",
-    "acquire_fetch_slot",
     "configure_cache",
     "configure_concurrency",
     "fetch_slot",
@@ -178,5 +164,4 @@ __all__ = [
     "record_lm_usage",
     "record_search_usage",
     "record_usage_into",
-    "release_fetch_slot",
 ]

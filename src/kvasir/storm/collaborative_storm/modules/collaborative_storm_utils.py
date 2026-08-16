@@ -1,8 +1,6 @@
 import dspy
 import logging
-import os
 import re
-import toml
 from typing import List, Tuple, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -224,21 +222,6 @@ def clean_up_section(text):
         output_paragraphs.append(p)
 
     return "\n\n".join(output_paragraphs)  # Join with '\n\n' for markdown format.
-
-
-def load_api_key(toml_file_path):
-    try:
-        with open(toml_file_path, "r") as file:
-            data = toml.load(file)
-    except FileNotFoundError:
-        logger.error("File not found: %s", toml_file_path)
-        return
-    except toml.TomlDecodeError:
-        logger.error("Error decoding TOML file: %s", toml_file_path)
-        return
-    # Set environment variables
-    for key, value in data.items():
-        os.environ[key] = str(value)
 
 
 def _get_answer_question_module_instance(

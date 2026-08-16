@@ -21,10 +21,24 @@ published `knowledge-storm` package. `src/kvasir/storm/LICENSE` and `src/kvasir/
 the fork point and that the tree is modified. That directory is MIT, as upstream is; the rest of
 kvasir is MIT OR Apache-2.0.
 
-Trimming the unused retrievers and the ten deprecated language model wrappers is deliberately not
-done yet. `src/kvasir/storm` is excluded from `ruff format --check` and from the strict lint rules
-in `pyproject.toml` until then, so a fix is not buried in reformatting churn. `mypy` skips it too:
-the tree is untyped.
+What survived a second pass, after the fork settled:
+
+- `rm.py` keeps `SearXNG` alone. The other ten retrievers are gone, nine of them behind a paid
+  credential.
+- `lm.py` keeps `LM` and `LitellmModel`. The ten wrappers upstream deprecated after v1.1.0 are gone.
+- `utils.py` keeps `truncate_filename`, `ArticleTextProcessing` and `FileIOHelper`. `WebPageHelper`
+  went with the retrievers that used it, and with it `QdrantVectorStoreManager`, `load_api_key`, and
+  two appropriateness checks hardcoded to `azure/gpt-4o-mini` that nothing called.
+- Six declared dependencies went with them: `langchain-text-splitters`, `openai`, `regex`, `toml`,
+  `tqdm` and `trafilatura`. The lockfile went from 114 packages to 90.
+
+Anything removed is recoverable from upstream at the fork point in `NOTICE`.
+
+`src/kvasir/storm` is still excluded from `ruff format --check`, from the strict lint rules in
+`pyproject.toml` and from `mypy`. The remaining 8,000 lines are mostly dspy `Signature` classes
+whose docstrings are the prompts themselves, so most of what a linter reports there is line length
+on prompt text. Adopting the rules would be churn against the part of the tree least worth
+reformatting.
 
 ## Configuration happens once, explicitly
 
@@ -43,8 +57,8 @@ Two other import-time mutations are gone: the `logging.basicConfig` in `interfac
 the root logger from whatever embedded the package, and the global `httpx` logger level in
 `utils.py`.
 
-`src/kvasir/storm/__init__.py` imports no submodule, so importing the package no longer drags in
-qdrant, langchain and transformers. It sets three environment defaults, because each is read by a
+`src/kvasir/storm/__init__.py` imports no submodule, so importing the package pulls in only the
+module asked for. It sets three environment defaults, because each is read by a
 third-party package while that package is being imported:
 
 - `DSP_CACHEDIR` and `DSP_CACHEBOOL`. dspy 2.4.9 creates a joblib cache directory while `dspy` is
@@ -77,20 +91,20 @@ pytorch-cpu index and the baked HuggingFace weights from the image.
 
 Upstream nested three thread pools. Section writing fans out to retrieval, which fans out to page
 fetches, and each level was sized independently at ten by default, so the worst case was their
-product. Co-STORM was worse in one place and unbounded in another: `collaborative_storm/modules/article_generation.py`
-hardcoded `max_workers=5`, and `warmstart_hierarchical_chat.py` passed no `max_workers` at all.
+product. Co-STORM was worse in one place and unbounded in another:
+`collaborative_storm/modules/article_generation.py` hardcoded `max_workers=5`, and
+`warmstart_hierarchical_chat.py` passed no `max_workers` at all.
 
-`runtime.max_threads()` now sizes every pool, from `KVASIR_MAX_THREADS`. Outbound search and page
-requests take a permit from one process-wide `BoundedSemaphore`, `runtime.acquire_fetch_slot`.
+`runtime.max_threads()` now sizes every pool, from `KVASIR_MAX_THREADS`, and outbound search
+requests take a permit from one process-wide `BoundedSemaphore` through `runtime.fetch_slot`.
 
-The permit sits only at leaves that never wait on a future. A pool shared across nesting levels
+The permit sits at a leaf that never waits on a future. A pool shared across nesting levels
 deadlocks, because outer tasks occupy every worker while waiting on inner tasks that can never be
 scheduled, and a permit held across a level that then waits on inner futures deadlocks the same way.
-`WebPageHelper.urls_to_articles` acquires before submitting rather than inside the task, so a permit
-bounds the threads created as well as the requests in flight.
 
-`webpage_helper_max_threads` defaulted to `10` at five constructors in `rm.py` and again in
-`WebPageHelper` itself. All of them now default to `None` and fall through to the process setting.
+`SearXNG` takes its snippets from each result's `content` field and fetches no pages, so retrieval
+is the innermost level and its request is the leaf. The third level went with `WebPageHelper` and
+the retrievers that used it.
 
 `knowledge_curation.py` reached into `executor._threads`, a private CPython attribute, to attach a
 Streamlit script context to each worker. There is no Streamlit here, so that and its conditional
@@ -112,7 +126,7 @@ Related changes:
 - `logging_wrapper` formatted every Co-STORM timestamp in Pacific time through a `CALIFORNIA_TZ`
   constant. It uses UTC, which is what removed `pytz`.
 
-`runtime.ContextThreadPoolExecutor` replaces `ThreadPoolExecutor` at all nine pool sites in the
+`runtime.ContextThreadPoolExecutor` replaces `ThreadPoolExecutor` at all seven pool sites in the
 tree. It copies the submitting thread's context into each task, so the run identity that
 `kvasir.logs` puts in contextvars survives the fan-out, which is where most of a run happens.
 
@@ -130,6 +144,28 @@ took no `callback_handler`; it does now.
 
 `STORMWikiRunner.run()` calls `post_run()` itself when every stage ran, rather than relying on the
 caller to remember.
+
+## Credentials are not serialised
+
+litellm keeps `api_key` in a model's `kwargs`, and upstream wrote that dict out whole in two places:
+
+- `LMConfigs.log()`, which `STORMWikiRunner.post_run` writes to `run_config.json` in the output
+  directory.
+- `CollaborativeStormLMConfigs.to_dict()`, which is part of `CoStormRunner.to_dict()` and so of
+  every serialised Co-STORM session. A session file held the gateway key once per role, for as long
+  as the session was kept.
+
+Both now drop keys beginning with `api_`, which is the filter `LitellmModel.__call__` already
+applied to its own call history. Nothing reads the serialised configuration back: since the
+`from_dict` change above, how to reach a model is current configuration rather than saved state.
+
+Session files written before this change still contain the key. Delete them, or rotate the
+credential.
+
+`post_run` also no longer fails the run when it cannot write either file. Both are a record of the
+run rather than part of its output, and they are written after the article is finished, so a model
+wrapper carrying something unserialisable in its `kwargs` used to fail a run that had already
+succeeded.
 
 ## Error handling and correctness
 
@@ -242,10 +278,6 @@ class SearXNG(dspy.Retrieve):
 It raises `RuntimeError("You must supply searxng_api_url")` when the URL is empty. The instance must
 have the JSON output format enabled; one serving HTML only returns an empty result set rather than
 failing.
-
-`SearXNG` takes its snippets from each result's `content` field and fetches no pages, so it never
-reaches `WebPageHelper`. The three-level nesting described above applies to the other retrievers in
-the tree.
 
 ### `dspy_ai` is pinned at 2.4.9
 

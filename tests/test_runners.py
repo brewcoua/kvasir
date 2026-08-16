@@ -1,5 +1,7 @@
 """No network. Building a runner makes no request; only running one does."""
 
+import json
+
 import pytest
 
 from kvasir.config import Settings
@@ -157,3 +159,12 @@ def test_a_restored_session_keeps_its_topic_and_history(settings):
     assert restored.runner_argument.topic == "a narrow topic"
     assert len(restored.conversation_history) == len(original.conversation_history)
     assert restored.to_dict()["runner_argument"]["topic"] == "a narrow topic"
+
+
+def test_a_session_file_carries_no_credential(settings):
+    """Sessions persist under the data directory for their TTL, so a key there outlives the run."""
+    state = build_costorm_runner(settings, "a narrow topic").to_dict()
+
+    assert MINIMAL["OPENAI_API_KEY"] not in json.dumps(state)
+    for role in COSTORM_ROLES:
+        assert not [key for key in state["lm_config"][role] if key.startswith("api_")]
