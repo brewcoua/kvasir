@@ -4,12 +4,11 @@ import re
 import traceback
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Union, Dict, Optional
 
 from .collaborative_storm_utils import trim_output_after_hint
 from ...dataclass import KnowledgeNode, KnowledgeBase
-from ...encoder import Encoder
+from ...encoder import Encoder, cosine_similarity
 from ...interface import Information
 
 

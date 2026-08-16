@@ -13,6 +13,7 @@ from .modules.knowledge_curation import StormKnowledgeCurationModule
 from .modules.outline_generation import StormOutlineGenerationModule
 from .modules.persona_generator import StormPersonaGenerator
 from .modules.storm_dataclass import StormInformationTable, StormArticle
+from ..encoder import Encoder
 from ..interface import Engine, LMConfigs, Retriever
 from ..lm import LitellmModel
 from ..utils import FileIOHelper, makeStringRed, truncate_filename
@@ -172,11 +173,19 @@ class STORMWikiRunner(Engine):
     """STORM Wiki pipeline runner."""
 
     def __init__(
-        self, args: STORMWikiRunnerArguments, lm_configs: STORMWikiLMConfigs, rm
+        self,
+        args: STORMWikiRunnerArguments,
+        lm_configs: STORMWikiLMConfigs,
+        rm,
+        encoder: Encoder,
     ):
         super().__init__(lm_configs=lm_configs)
         self.args = args
         self.lm_configs = lm_configs
+        # Article generation ranks snippets by embedding similarity. Upstream loaded a local
+        # sentence-transformer for it, unrelated to the encoder Co-STORM uses and to anything the
+        # caller configured; both modes share this one now.
+        self.encoder = encoder
 
         self.retriever = Retriever(rm=rm, max_thread=self.args.max_thread_num)
         storm_persona_generator = StormPersonaGenerator(
@@ -197,6 +206,7 @@ class STORMWikiRunner(Engine):
         )
         self.storm_article_generation = StormArticleGenerationModule(
             article_gen_lm=self.lm_configs.article_gen_lm,
+            encoder=self.encoder,
             retrieve_top_k=self.args.retrieve_top_k,
             max_thread_num=self.args.max_thread_num,
         )

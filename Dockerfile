@@ -20,35 +20,16 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
-# STORM's article generation loads paraphrase-MiniLM-L6-v2 through sentence-transformers. Baking
-# the weights in keeps a run from reaching huggingface.co, and keeps it working under a read-only
-# root filesystem where the cache could not be written. This is the only network access the build
-# needs beyond the package index.
-ENV HF_HOME=/opt/huggingface
-RUN /app/.venv/bin/python -c \
-    "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-MiniLM-L6-v2')"
-
 
 FROM docker.io/library/python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91
 
 COPY --from=build /app/.venv /app/.venv
-COPY --from=build /opt/huggingface /opt/huggingface
 COPY src /app/src
 
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    KVASIR_DATA_DIR=/data
-
-# Encoder.__init__ raises without this. An upstream implementation detail rather than an operator's
-# decision, so it is fixed here instead of left to the deployment.
-ENV ENCODER_API_TYPE=openai
-
-# Read the baked weights, never fetch. Offline mode also stops the hub writing to HF_HOME, which
-# lives on a read-only layer.
-ENV HF_HOME=/opt/huggingface \
-    HF_HUB_OFFLINE=1 \
-    HF_HUB_DISABLE_TELEMETRY=1 \
+    KVASIR_DATA_DIR=/data \
     DO_NOT_TRACK=1
 
 WORKDIR /app

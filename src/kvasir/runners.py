@@ -21,6 +21,7 @@ from kvasir.storm.collaborative_storm.engine import (
     RunnerArgument,
 )
 from kvasir.storm.dataclass import ConversationTurn, KnowledgeBase
+from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import LitellmModel
 from kvasir.storm.logging_wrapper import LoggingWrapper
 from kvasir.storm.rm import SearXNG
@@ -72,6 +73,20 @@ def _language_model(settings: Settings, tier: str, max_tokens: int) -> LitellmMo
     )
 
 
+def _encoder(settings: Settings) -> Encoder:
+    """The embedding model, for both modes.
+
+    Co-STORM embeds to build its mind map; STORM embeds to rank snippets against each section's
+    query. Upstream used two unrelated encoders for those, one hardcoded to `text-embedding-3-small`
+    and one a local sentence-transformer, and neither took the gateway.
+    """
+    return Encoder(
+        model=settings.embedding_model,
+        api_key=settings.openai_api_key,
+        api_base=settings.openai_api_base,
+    )
+
+
 def _retriever(settings: Settings, k: int) -> SearXNG:
     """SearXNG reads no environment variable, so the URL is passed in.
 
@@ -110,7 +125,7 @@ def build_storm_runner(
         ),
         search_top_k=top_k,
     )
-    return STORMWikiRunner(arguments, lm_configs, _retriever(settings, top_k))
+    return STORMWikiRunner(arguments, lm_configs, _retriever(settings, top_k), _encoder(settings))
 
 
 def build_costorm_runner(
@@ -131,9 +146,9 @@ def build_costorm_runner(
         lm_config=lm_config,
         runner_argument=RunnerArgument(topic=topic, retrieve_top_k=settings.search_top_k),
         logging_wrapper=LoggingWrapper(lm_config),
+        encoder=_encoder(settings),
         rm=_retriever(settings, settings.search_top_k),
     )
-    _override_embedding_model(runner, settings)
     return runner
 
 
@@ -168,17 +183,6 @@ def load_costorm_runner(settings: Settings, state: dict[str, Any]) -> CoStormRun
         encoder=runner.encoder,
     )
     return runner
-
-
-def _override_embedding_model(runner: CoStormRunner, settings: Settings) -> None:
-    """Point the encoder at the configured embedding model.
-
-    `Encoder` hardcodes `text-embedding-3-small` and takes no argument for it, but the runner keeps
-    one instance and shares it with everything it builds, so assigning the attribute is enough.
-    `from_dict` constructs a fresh `Encoder`, so this has to run after loading as well as after
-    building.
-    """
-    runner.encoder.embedding_model_name = settings.embedding_model
 
 
 def _with_model_overrides(

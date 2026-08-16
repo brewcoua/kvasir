@@ -1,152 +1,102 @@
-import os
-import numpy as np
+import threading
+from typing import List, Optional, Union
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple, Union, Optional, Dict, Literal
+import numpy as np
 
 from .runtime import litellm
 
 
-class Encoder:
+class EmbeddingError(RuntimeError):
+    """An embedding request failed.
+
+    Upstream logged per-text failures and carried on, returning fewer vectors than it was given
+    texts and, worse, misaligning the ones it did return against the input order. Callers index the
+    result positionally, so a short array silently attributes the wrong text to the wrong vector.
     """
-    A wrapper class for the LiteLLM embedding model, designed to handle embedding
-    generation tasks efficiently. It supports parallel processing and local caching of
-    embedding results for improved performance.
 
-    The Encoder utilizes the LiteLLM library to interact with various embedding models,
-    such as OpenAI and Azure embeddings. Users can specify the desired encoder type and
-    provide relevant API credentials during initialization.
 
-    Features:
-        - Support for multiple embedding models (e.g., OpenAI, Azure).
-        - Parallel processing for faster embedding generation.
-        - Local disk caching to store and reuse embedding results.
-        - Total token usage tracking for cost monitoring.
+class Encoder:
+    """Embeddings from an OpenAI-compatible endpoint, through litellm.
 
-    Note:
-        Refer to the LiteLLM documentation for details on supported embedding models:
-        https://docs.litellm.ai/docs/embedding/supported_embedding
+    Upstream chose between two hardcoded model names on an ENCODER_API_TYPE environment variable
+    and dropped `api_base` for the openai branch, so the only way to reach a gateway was to set
+    OPENAI_API_BASE and hope litellm read it. Both are arguments here.
+
+    Check https://docs.litellm.ai/docs/embedding/supported_embedding for what a model name may be.
     """
 
     def __init__(
         self,
-        encoder_type: Optional[str] = None,
+        model: str,
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
-        api_version: Optional[str] = None,
     ):
-        """
-        Initializes the Encoder with the appropriate embedding model.
-
-        Args:
-            encoder_type (Optional[str]): Type of encoder ('openai', 'azure', etc.).
-            api_key (Optional[str]): API key for the encoder service.
-            api_base (Optional[str]): API base URL for the encoder service.
-            api_version (Optional[str]): API version for the encoder service.
-        """
-        self.embedding_model_name = None
+        self.embedding_model_name = model
         self.kargs = {}
+        if api_key is not None:
+            self.kargs["api_key"] = api_key
+        if api_base is not None:
+            self.kargs["api_base"] = api_base
         self.total_token_usage = 0
-
-        # Initialize the appropriate embedding model
-        encoder_type = encoder_type or os.getenv("ENCODER_API_TYPE")
-        if not encoder_type:
-            raise ValueError("ENCODER_API_TYPE environment variable is not set.")
-
-        if encoder_type.lower() == "openai":
-            self.embedding_model_name = "text-embedding-3-small"
-            self.kargs = {"api_key": api_key or os.getenv("OPENAI_API_KEY")}
-        elif encoder_type.lower() == "azure":
-            self.embedding_model_name = "azure/text-embedding-3-small"
-            self.kargs = {
-                "api_key": api_key or os.getenv("AZURE_API_KEY"),
-                "api_base": api_base or os.getenv("AZURE_API_BASE"),
-                "api_version": api_version or os.getenv("AZURE_API_VERSION"),
-            }
-        else:
-            raise ValueError(
-                f"Unsupported ENCODER_API_TYPE '{encoder_type}'. Supported types are 'openai', 'azure', 'together'."
-            )
+        self._token_usage_lock = threading.Lock()
 
     def get_total_token_usage(self, reset: bool = False) -> int:
-        """
-        Retrieves the total token usage.
-
-        Args:
-            reset (bool): If True, resets the total token usage counter after retrieval.
-
-        Returns:
-            int: The total number of tokens used.
-        """
-        token_usage = self.total_token_usage
-        if reset:
-            self.total_token_usage = 0
+        with self._token_usage_lock:
+            token_usage = self.total_token_usage
+            if reset:
+                self.total_token_usage = 0
         return token_usage
 
     def encode(self, texts: Union[str, List[str]], max_workers: int = 5) -> np.ndarray:
+        """Embed one text into a 1-D array, or a list of texts into a 2-D array, row per text.
+
+        `max_workers` is accepted and ignored. Upstream issued one request per text across a thread
+        pool; a list goes in a single request now, which is both faster and what the endpoints
+        expect. The argument stays so existing call sites keep working.
         """
-        Public method to get embeddings for the given texts.
-
-        Args:
-            texts (Union[str, List[str]]): A single text string or a list of text strings to embed.
-
-        Returns:
-            np.ndarray: The array of embeddings.
-        """
-        return self._get_text_embeddings(texts, max_workers=max_workers)
-
-    def _get_single_text_embedding(self, text):
-        response = litellm.embedding(
-            model=self.embedding_model_name, input=text, caching=True, **self.kargs
-        )
-        embedding = response.data[0]["embedding"]
-        token_usage = response.get("usage", {}).get("total_tokens", 0)
-        return text, embedding, token_usage
-
-    def _get_text_embeddings(
-        self,
-        texts: Union[str, List[str]],
-        max_workers: int = 5,
-    ) -> Tuple[np.ndarray, int]:
-        """
-        Get text embeddings using OpenAI's text-embedding-3-small model.
-
-        Args:
-            texts (Union[str, List[str]]): A single text string or a list of text strings to embed.
-            max_workers (int): The maximum number of workers for parallel processing.
-            api_key (str): The API key for accessing OpenAI's services.
-            embedding_cache (Optional[Dict[str, np.ndarray]]): A cache to store previously computed embeddings.
-
-        Returns:
-            Tuple[np.ndarray, int]: The 2D array of embeddings and the total token usage.
-        """
-
         if isinstance(texts, str):
-            _, embedding, tokens = self._get_single_text_embedding(texts)
-            self.total_token_usage += tokens
-            return np.array(embedding)
+            return self._embed([texts])[0]
+        if not texts:
+            return np.empty((0, 0))
+        return self._embed(texts)
 
-        embeddings = []
-        total_tokens = 0
+    def _embed(self, texts: List[str]) -> np.ndarray:
+        try:
+            response = litellm.embedding(
+                model=self.embedding_model_name, input=texts, caching=True, **self.kargs
+            )
+        except Exception as exc:
+            raise EmbeddingError(
+                f"embedding {len(texts)} text(s) with {self.embedding_model_name} failed: {exc}"
+            ) from exc
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(self._get_single_text_embedding, text): text
-                for text in texts
-            }
+        # litellm does not promise the response preserves input order, and a short response is
+        # what upstream turned into silently misaligned vectors.
+        data = sorted(response.data, key=lambda item: item["index"])
+        if len(data) != len(texts):
+            raise EmbeddingError(
+                f"{self.embedding_model_name} returned {len(data)} embeddings "
+                f"for {len(texts)} text(s)"
+            )
 
-            for future in as_completed(futures):
-                try:
-                    text, embedding, tokens = future.result()
-                    embeddings.append((text, embedding, tokens))
-                    total_tokens += tokens
-                except Exception as e:
-                    print(f"An error occurred for text: {futures[future]}")
-                    print(e)
+        with self._token_usage_lock:
+            self.total_token_usage += response.get("usage", {}).get("total_tokens", 0)
 
-        # Sort results to match the order of the input texts
-        embeddings.sort(key=lambda x: texts.index(x[0]))
-        embeddings = [result[1] for result in embeddings]
-        self.total_token_usage += total_tokens
+        return np.array([item["embedding"] for item in data])
 
-        return np.array(embeddings)
+
+def cosine_similarity(queries: np.ndarray, corpus: np.ndarray) -> np.ndarray:
+    """Row-wise cosine similarity between two 2-D arrays, shaped (len(queries), len(corpus)).
+
+    Replaces `sklearn.metrics.pairwise.cosine_similarity`, whose only use here was this, and which
+    dragged scikit-learn and scipy into the image for it. Zero vectors score 0 rather than dividing
+    by zero, which is what sklearn does too.
+    """
+    queries = np.atleast_2d(np.asarray(queries, dtype=float))
+    corpus = np.atleast_2d(np.asarray(corpus, dtype=float))
+    return _normalise(queries) @ _normalise(corpus).T
+
+
+def _normalise(matrix: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    return matrix / np.where(norms == 0, 1, norms)
