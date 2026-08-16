@@ -127,6 +127,31 @@ and it cannot drift from upstream.
 `run()` is synchronous, IO-bound, and takes minutes to tens of minutes, using `max_thread_num`
 threads internally. Never call it on the event loop.
 
+### Plain STORM needs a local embedding model too
+
+Article generation calls `information_table.prepare_table_for_retrieval()`
+(`storm_wiki/modules/article_generation.py:70`), which runs:
+
+```python
+self.encoder = SentenceTransformer("paraphrase-MiniLM-L6-v2")
+```
+
+This is a local model fetched from HuggingFace, unrelated to the gateway and unrelated to the
+`Encoder` that Co-STORM uses. It is why `sentence-transformers` and `torch` cannot be dropped from
+the dependency tree.
+
+A run therefore reaches out to huggingface.co the first time unless the model is already cached.
+The image must ship the weights and point `HF_HOME` at them, or article generation fails on a
+network-restricted or read-only deployment.
+
+### `run()` accepts one stage at a time, and reloads state from disk
+
+Each stage has a `do_*` flag, and a stage with a disabled predecessor reloads what the previous one
+wrote (`_load_information_table_from_local_fs`, `_load_outline_from_local_fs`,
+`_load_draft_article_from_local_fs`). Calling `run()` once per stage is therefore supported and
+costs only some JSON parsing, which is how the service gets exact stage boundaries despite the
+missing callbacks below.
+
 ### There are two unrelated `BaseCallbackHandler` classes
 
 `knowledge_storm.storm_wiki.modules.callback.BaseCallbackHandler` and
