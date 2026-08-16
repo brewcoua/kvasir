@@ -9,12 +9,13 @@ import re
 import regex
 import tempfile
 import toml
-from typing import List, Dict
+from typing import List, Dict, Optional
 from tqdm import tqdm
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from trafilatura import extract
 
+from . import runtime
 from .lm import LitellmModel
 
 logger = logging.getLogger(__name__)
@@ -653,17 +654,20 @@ class WebPageHelper:
         self,
         min_char_count: int = 150,
         snippet_chunk_size: int = 1000,
-        max_thread_num: int = 10,
+        max_thread_num: Optional[int] = None,
     ):
         """
         Args:
             min_char_count: Minimum character count for the article to be considered valid.
             snippet_chunk_size: Maximum character count for each snippet.
             max_thread_num: Maximum number of threads to use for concurrent requests (e.g., downloading webpages).
+                Defaults to the process-wide setting.
         """
         self.httpx_client = httpx.Client(verify=False)
         self.min_char_count = min_char_count
-        self.max_thread_num = max_thread_num
+        self.max_thread_num = (
+            runtime.max_threads() if max_thread_num is None else max_thread_num
+        )
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=snippet_chunk_size,
             chunk_overlap=0,
@@ -694,11 +698,28 @@ class WebPageHelper:
             logger.warning("Error while requesting %r - %r", exc.request.url, exc)
             return None
 
+    def _download_holding_slot(self, url: str):
+        try:
+            return self.download_webpage(url)
+        finally:
+            runtime.release_fetch_slot()
+
     def urls_to_articles(self, urls: List[str]) -> Dict:
+        # This is the innermost of three nested pools, so it is where the fan-out multiplies out.
+        # The permit is claimed before submitting rather than inside the task, which bounds the
+        # threads created as well as the requests in flight.
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.max_thread_num
         ) as executor:
-            htmls = list(executor.map(self.download_webpage, urls))
+            futures = []
+            for url in urls:
+                runtime.acquire_fetch_slot()
+                try:
+                    futures.append(executor.submit(self._download_holding_slot, url))
+                except BaseException:
+                    runtime.release_fetch_slot()
+                    raise
+            htmls = [future.result() for future in futures]
 
         articles = {}
 

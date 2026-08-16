@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Set, Union
 
 from .collaborative_storm_utils import clean_up_section
+from ... import runtime
 from ...dataclass import KnowledgeBase, KnowledgeNode
 
 
@@ -77,7 +78,7 @@ class ArticleGenerationModule(dspy.Module):
             path = " -> ".join(node.get_path_from_root())
             return path, node_gen_paragraph
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=runtime.max_threads()) as executor:
             # Submit all tasks
             future_to_node = {
                 executor.submit(_node_generate_paragraph, node): node

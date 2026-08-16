@@ -14,13 +14,6 @@ from ...utils import ArticleTextProcessing
 
 logger = logging.getLogger(__name__)
 
-try:
-    from streamlit.runtime.scriptrunner import add_script_run_ctx
-
-    streamlit_connection = True
-except ImportError as err:
-    streamlit_connection = False
-
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -339,11 +332,6 @@ class StormKnowledgeCurationModule(KnowledgeCurationModule):
                 executor.submit(run_conv, persona): persona
                 for persona in considered_personas
             }
-
-            if streamlit_connection:
-                # Ensure the logging context is correct when connecting with Streamlit frontend.
-                for t in executor._threads:
-                    add_script_run_ctx(t)
 
             for future in as_completed(future_to_persona):
                 persona = future_to_persona[future]
