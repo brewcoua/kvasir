@@ -35,8 +35,16 @@ class StormArticleGenerationModule(ArticleGenerationModule):
         self.section_gen = ConvToSection(engine=self.article_gen_lm)
 
     def generate_section(
-        self, topic, section_name, information_table, section_outline, section_query
+        self,
+        topic,
+        section_name,
+        information_table,
+        section_outline,
+        section_query,
+        callback_handler: BaseCallbackHandler = None,
     ):
+        if callback_handler is not None:
+            callback_handler.on_section_generation_start(section=section_name)
         collected_info: List[Information] = []
         if information_table is not None:
             collected_info = information_table.retrieve_information(
@@ -48,6 +56,8 @@ class StormArticleGenerationModule(ArticleGenerationModule):
             section=section_name,
             collected_info=collected_info,
         )
+        if callback_handler is not None:
+            callback_handler.on_section_generation_end(section=section_name)
         return {
             "section_name": section_name,
             "section_content": output.section,
@@ -83,28 +93,32 @@ class StormArticleGenerationModule(ArticleGenerationModule):
             logging.error(
                 f"No outline for {topic}. Will directly search with the topic."
             )
+            if callback_handler is not None:
+                callback_handler.on_article_generation_start(sections=[topic])
             section_output_dict = self.generate_section(
                 topic=topic,
                 section_name=topic,
                 information_table=information_table,
                 section_outline="",
                 section_query=[topic],
+                callback_handler=callback_handler,
             )
             section_output_dict_collection = [section_output_dict]
         else:
+            # The introduction and the conclusion are written by the polishing stage instead, so
+            # they are announced to the callback as neither started nor pending.
+            titles_to_write = [
+                section_title
+                for section_title in sections_to_write
+                if not self._written_by_polishing(section_title)
+            ]
+            if callback_handler is not None:
+                callback_handler.on_article_generation_start(sections=titles_to_write)
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=self.max_thread_num
             ) as executor:
                 future_to_sec_title = {}
-                for section_title in sections_to_write:
-                    # We don't want to write a separate introduction section.
-                    if section_title.lower().strip() == "introduction":
-                        continue
-                        # We don't want to write a separate conclusion section.
-                    if section_title.lower().strip().startswith(
-                        "conclusion"
-                    ) or section_title.lower().strip().startswith("summary"):
-                        continue
+                for section_title in titles_to_write:
                     section_query = article_with_outline.get_outline_as_list(
                         root_section_name=section_title, add_hashtags=False
                     )
@@ -120,6 +134,7 @@ class StormArticleGenerationModule(ArticleGenerationModule):
                             information_table,
                             section_outline,
                             section_query,
+                            callback_handler,
                         )
                     ] = section_title
 
@@ -134,7 +149,18 @@ class StormArticleGenerationModule(ArticleGenerationModule):
                 current_section_info_list=section_output_dict["collected_info"],
             )
         article.post_processing()
+        if callback_handler is not None:
+            callback_handler.on_article_generation_end()
         return article
+
+    @staticmethod
+    def _written_by_polishing(section_title: str) -> bool:
+        title = section_title.lower().strip()
+        return (
+            title == "introduction"
+            or title.startswith("conclusion")
+            or title.startswith("summary")
+        )
 
 
 class ConvToSection(dspy.Module):

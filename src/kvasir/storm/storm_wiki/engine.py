@@ -284,12 +284,16 @@ class STORMWikiRunner(Engine):
         return draft_article
 
     def run_article_polishing_module(
-        self, draft_article: StormArticle, remove_duplicate: bool = False
+        self,
+        draft_article: StormArticle,
+        remove_duplicate: bool = False,
+        callback_handler: BaseCallbackHandler = None,
     ) -> StormArticle:
         polished_article = self.storm_article_polishing_module.polish_article(
             topic=self.topic,
             draft_article=draft_article,
             remove_duplicate=remove_duplicate,
+            callback_handler=callback_handler,
         )
         FileIOHelper.write_str(
             polished_article.to_string(),
@@ -447,5 +451,14 @@ class STORMWikiRunner(Engine):
                     url_to_info_path=url_to_info_path,
                 )
             self.run_article_polishing_module(
-                draft_article=draft_article, remove_duplicate=remove_duplicate
+                draft_article=draft_article,
+                remove_duplicate=remove_duplicate,
+                callback_handler=callback_handler,
             )
+
+        # Upstream left this to the caller, so a run that finished still wrote no run_config.json or
+        # llm_call_history.jsonl unless the caller remembered. Only a call that began the run does
+        # it: post_run resets the LM history and truncates the file, so firing it once per stage of
+        # a staged invocation would leave only the last stage on disk.
+        if do_research:
+            self.post_run()

@@ -3,6 +3,7 @@ from typing import Union
 
 import dspy
 
+from .callback import BaseCallbackHandler
 from .storm_dataclass import StormArticle
 from ...interface import ArticlePolishingModule
 from ...utils import ArticleTextProcessing
@@ -27,7 +28,11 @@ class StormArticlePolishingModule(ArticlePolishingModule):
         )
 
     def polish_article(
-        self, topic: str, draft_article: StormArticle, remove_duplicate: bool = False
+        self,
+        topic: str,
+        draft_article: StormArticle,
+        remove_duplicate: bool = False,
+        callback_handler: BaseCallbackHandler = None,
     ) -> StormArticle:
         """
         Polish article.
@@ -36,7 +41,10 @@ class StormArticlePolishingModule(ArticlePolishingModule):
             topic (str): The topic of the article.
             draft_article (StormArticle): The draft article.
             remove_duplicate (bool): Whether to use one additional LM call to remove duplicates from the article.
+            callback_handler (BaseCallbackHandler): An optional callback handler. Defaults to None.
         """
+        if callback_handler is not None:
+            callback_handler.on_polish_start()
 
         article_text = draft_article.to_string()
         polish_result = self.polish_page(
@@ -50,6 +58,8 @@ class StormArticlePolishingModule(ArticlePolishingModule):
         polished_article = copy.deepcopy(draft_article)
         polished_article.insert_or_create_section(article_dict=polished_article_dict)
         polished_article.post_processing()
+        if callback_handler is not None:
+            callback_handler.on_polish_end()
         return polished_article
 
 

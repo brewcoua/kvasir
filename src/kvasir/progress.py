@@ -2,15 +2,12 @@
 
 STORM runs synchronously in a worker thread while the response is served from the event loop, so
 the two sides are connected by an asyncio queue fed through `call_soon_threadsafe`.
-
-Upstream's callbacks cover the research and outline stages only. There is no callback for article
-generation or polishing, so those stages are published by whatever drives the run. That is why
-publishing is a method on the stream rather than something only the handler can do.
 """
 
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any
 
 from kvasir.models import Progress
@@ -54,15 +51,18 @@ class ProgressStream:
 
 
 class StormProgressHandler(BaseCallbackHandler):
-    """Publishes upstream's research and outline callbacks onto a `ProgressStream`.
+    """Publishes STORM's callbacks onto a `ProgressStream`.
 
-    Called from STORM's own worker threads, so it holds no state beyond a turn counter, and the
-    counter only ever grows.
+    Called from STORM's own worker threads, so it holds nothing but two counters, both guarded
+    because sections and conversation turns are both produced concurrently.
     """
 
     def __init__(self, stream: ProgressStream) -> None:
         self._stream = stream
+        self._lock = threading.Lock()
         self._turns = 0
+        self._sections = 0
+        self._sections_done = 0
 
     def on_identify_perspective_start(self, **kwargs: Any) -> None:
         self._stream.publish(RESEARCH, "identifying perspectives")
@@ -74,8 +74,10 @@ class StormProgressHandler(BaseCallbackHandler):
         self._stream.publish(RESEARCH, "searching and asking questions")
 
     def on_dialogue_turn_end(self, dlg_turn: Any, **kwargs: Any) -> None:
-        self._turns += 1
-        self._stream.publish(RESEARCH, f"completed conversation turn {self._turns}")
+        with self._lock:
+            self._turns += 1
+            turns = self._turns
+        self._stream.publish(RESEARCH, f"completed conversation turn {turns}")
 
     def on_information_gathering_end(self, **kwargs: Any) -> None:
         self._stream.publish(RESEARCH, f"gathered information over {self._turns} turns")
@@ -88,6 +90,30 @@ class StormProgressHandler(BaseCallbackHandler):
 
     def on_outline_refinement_end(self, outline: str, **kwargs: Any) -> None:
         self._stream.publish(OUTLINE, "refined the outline")
+
+    def on_article_generation_start(self, sections: list[str], **kwargs: Any) -> None:
+        self._sections = len(sections)
+        self._stream.publish(ARTICLE, f"writing {self._sections} sections with citations")
+
+    def on_section_generation_start(self, section: str, **kwargs: Any) -> None:
+        self._stream.publish(ARTICLE, f"writing {section}")
+
+    def on_section_generation_end(self, section: str, **kwargs: Any) -> None:
+        # Sections are written concurrently, so this counts completions rather than tracking which
+        # section is current.
+        with self._lock:
+            self._sections_done += 1
+            done = self._sections_done
+        self._stream.publish(ARTICLE, f"finished {section} ({done}/{self._sections})")
+
+    def on_article_generation_end(self, **kwargs: Any) -> None:
+        self._stream.publish(ARTICLE, "assembled the article")
+
+    def on_polish_start(self, **kwargs: Any) -> None:
+        self._stream.publish(POLISH, "polishing the article")
+
+    def on_polish_end(self, **kwargs: Any) -> None:
+        self._stream.publish(POLISH, "polished the article")
 
 
 class CoStormProgressHandler(CoStormBaseCallbackHandler):
