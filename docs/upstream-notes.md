@@ -87,6 +87,32 @@ Co-STORM roles (`CollaborativeStormLMConfigs`): `set_question_answering_lm`,
 `set_discourse_manage_lm`, `set_utterance_polishing_lm`, `set_warmstart_outline_gen_lm`,
 `set_question_asking_lm`, `set_knowledge_base_lm`.
 
+### `CoStormRunner.from_dict` calls `init()`, so do not use it
+
+`from_dict` (`collaborative_storm/engine.py:555`) rebuilds the configuration from scratch rather
+than from the serialised data, and its own source says so:
+
+```python
+# FIXME: does not use the lm_config data but naively use default setting
+lm_config = CollaborativeStormLMConfigs()
+lm_config.init(lm_type=os.getenv("OPENAI_API_TYPE"))
+```
+
+Three consequences, none of which surface as an error:
+
+- `init()` is the method with the hardcoded `api_base=None`, against `gpt-4o-2024-05-13`. A
+  restored session bills an OpenAI account directly.
+- With `OPENAI_API_TYPE` unset, `init()` matches no branch and leaves all six roles as `None`.
+- No `rm` is passed to the constructor, so the retriever falls back to `BingSearch`.
+
+Restore instead by building a correct runner and putting the conversation state onto it:
+`conversation_history` and `warmstart_conv_archive` through `ConversationTurn.from_dict`, the
+experts through `discourse_manager.deserialize_experts`, and the mind map through
+`KnowledgeBase.from_dict`. That is what `from_dict` does apart from the parts above.
+
+The knowledge base captures its model by value at construction (`dataclass.py:340`, passed as
+`engine=`), so it must be rebuilt with the right configuration rather than corrected afterwards.
+
 ## Retrieval: `SearXNG`
 
 ```python

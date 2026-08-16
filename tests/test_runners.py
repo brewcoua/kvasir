@@ -3,7 +3,7 @@
 import pytest
 
 from kvasir.config import Settings
-from kvasir.runners import build_costorm_runner, build_storm_runner
+from kvasir.runners import build_costorm_runner, build_storm_runner, load_costorm_runner
 
 MINIMAL = {
     "OPENAI_API_KEY": "key",
@@ -123,3 +123,37 @@ def test_overrides_do_not_mutate_the_shared_settings(settings, tmp_path):
     build_storm_runner(settings, tmp_path, model_fast="openai/ollama/other:cloud")
 
     assert settings.model_fast == "openai/ollama/fast:cloud"
+
+
+def test_a_restored_session_still_reaches_the_gateway(settings):
+    """The regression this guards is silent and expensive.
+
+    CoStormRunner.from_dict calls CollaborativeStormLMConfigs.init(), which hardcodes
+    api_base=None against gpt-4o-2024-05-13, and passes no retriever so BingSearch is used. A
+    session restored that way would bill an OpenAI account directly and fail on a paid search key,
+    with nothing in the response to say so.
+    """
+
+    original = build_costorm_runner(settings, "a narrow topic")
+    restored = load_costorm_runner(settings, original.to_dict())
+
+    for role in COSTORM_ROLES:
+        model = getattr(restored.lm_config, role)
+        assert model.kwargs["api_base"] == "https://gateway.example/v1", role
+        assert model.model in {"openai/ollama/fast:cloud", "openai/ollama/strong:cloud"}, role
+
+    assert type(restored.rm).__name__ == "SearXNG"
+    assert restored.encoder.embedding_model_name == "openai/ollama/embed:cloud"
+    # The knowledge base captures the model by value at construction, so restoring it with the
+    # wrong config would leave this one pointing at api.openai.com even if lm_config were fixed.
+    assert restored.knowledge_base.gen_summary_module.engine is restored.lm_config.knowledge_base_lm
+
+
+def test_a_restored_session_keeps_its_topic_and_history(settings):
+    original = build_costorm_runner(settings, "a narrow topic")
+    state = original.to_dict()
+    restored = load_costorm_runner(settings, state)
+
+    assert restored.runner_argument.topic == "a narrow topic"
+    assert len(restored.conversation_history) == len(original.conversation_history)
+    assert restored.to_dict()["runner_argument"]["topic"] == "a narrow topic"

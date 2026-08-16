@@ -37,8 +37,10 @@ def load_pipe():
 
 
 @pytest.fixture
-def service(monkeypatch):
+def service(monkeypatch, tmp_path):
     """A real kvasir on a real port, with the STORM run itself faked."""
+    # Startup creates the sessions directory, and the default /data is not writable here.
+    monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
     for name, value in {
         "OPENAI_API_KEY": "key",
         "OPENAI_API_BASE": "https://gateway.example/v1",

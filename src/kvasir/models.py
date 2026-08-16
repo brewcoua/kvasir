@@ -39,6 +39,49 @@ class ResearchResult(BaseModel):
     duration_seconds: float
 
 
+class SessionRequest(BaseModel):
+    """Body of `POST /v1/session`. The id is the caller's, so Open WebUI can key it by chat id."""
+
+    session_id: str = Field(min_length=1)
+    topic: str = Field(min_length=1)
+    model_fast: str | None = None
+    model_strong: str | None = None
+
+
+class StepRequest(BaseModel):
+    """Body of `POST /v1/session/{id}/step`. An empty utterance advances the round table."""
+
+    utterance: str = ""
+
+
+class Turn(BaseModel):
+    """One conversation turn, as the `done` event of a step."""
+
+    role: str
+    role_description: str
+    utterance: str
+    utterance_type: str
+    citations: list[Citation]
+    mind_map_reorganised: bool
+
+
+class Report(BaseModel):
+    """Payload of `POST /v1/session/{id}/report`."""
+
+    report: str
+    citations: list[Citation]
+
+
+class SessionInfo(BaseModel):
+    """Payload of `GET /v1/session/{id}`."""
+
+    session_id: str
+    topic: str
+    turn_count: int
+    experts: list[str]
+    updated_at: float
+
+
 class Progress(BaseModel):
     """Payload of a `progress` event."""
 

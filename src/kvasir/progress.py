@@ -13,6 +13,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from knowledge_storm.collaborative_storm.modules.callback import (
+    BaseCallbackHandler as CoStormBaseCallbackHandler,
+)
 from knowledge_storm.storm_wiki.modules.callback import BaseCallbackHandler
 
 from kvasir.models import Progress
@@ -21,6 +24,10 @@ RESEARCH = "research"
 OUTLINE = "outline"
 ARTICLE = "article"
 POLISH = "polish"
+
+WARM_START = "warm_start"
+TURN = "turn"
+MIND_MAP = "mind_map"
 
 
 class ProgressStream:
@@ -82,3 +89,50 @@ class StormProgressHandler(BaseCallbackHandler):
 
     def on_outline_refinement_end(self, outline: str, **kwargs: Any) -> None:
         self._stream.publish(OUTLINE, "refined the outline")
+
+
+class CoStormProgressHandler(CoStormBaseCallbackHandler):
+    """Publishes Co-STORM's callbacks, and records whether the mind map was reorganised.
+
+    This is a different class from the STORM handler above. Upstream ships two `BaseCallbackHandler`
+    types that share a name and nothing else, one per engine.
+    """
+
+    def __init__(self, stream: ProgressStream) -> None:
+        self._stream = stream
+        self.mind_map_reorganised = False
+
+    def on_warmstart_update(self, message: str, **kwargs: Any) -> None:
+        self._stream.publish(WARM_START, message)
+
+    def on_turn_policy_planning_start(self, **kwargs: Any) -> None:
+        self._stream.publish(TURN, "deciding who speaks next")
+
+    def on_expert_action_planning_start(self, **kwargs: Any) -> None:
+        self._stream.publish(TURN, "planning the next contribution")
+
+    def on_expert_information_collection_start(self, **kwargs: Any) -> None:
+        self._stream.publish(TURN, "searching for sources")
+
+    def on_expert_information_collection_end(self, info: list[Any], **kwargs: Any) -> None:
+        self._stream.publish(TURN, f"collected {len(info)} sources")
+
+    def on_expert_utterance_generation_end(self, **kwargs: Any) -> None:
+        self._stream.publish(TURN, "drafted a response")
+
+    def on_expert_utterance_polishing_start(self, **kwargs: Any) -> None:
+        self._stream.publish(TURN, "polishing the response")
+
+    def on_mindmap_insert_start(self, **kwargs: Any) -> None:
+        self._stream.publish(MIND_MAP, "filing what was learned")
+
+    def on_mindmap_reorg_start(self, **kwargs: Any) -> None:
+        # The only signal that the mind map changed shape, which a turn response reports.
+        self.mind_map_reorganised = True
+        self._stream.publish(MIND_MAP, "reorganising the mind map")
+
+    def on_expert_list_update_start(self, **kwargs: Any) -> None:
+        self._stream.publish(TURN, "updating the expert list")
+
+    def on_article_generation_start(self, **kwargs: Any) -> None:
+        self._stream.publish(ARTICLE, "writing the report")
