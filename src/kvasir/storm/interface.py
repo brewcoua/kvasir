@@ -433,7 +433,7 @@ class LMConfigs(ABC):
     def init_check(self):
         for attr_name in self.__dict__:
             if "_lm" in attr_name and getattr(self, attr_name) is None:
-                logging.warning(
+                logger.warning(
                     f"Language model for {attr_name} is not initialized. Please call set_{attr_name}()"
                 )
 
@@ -539,19 +539,12 @@ class Engine(ABC):
         pass
 
     def summary(self):
-        print("***** Execution time *****")
-        for k, v in self.time.items():
-            print(f"{k}: {v:.4f} seconds")
-
-        print("***** Token usage of language models: *****")
-        for k, v in self.lm_cost.items():
-            print(f"{k}")
-            for model_name, tokens in v.items():
-                print(f"    {model_name}: {tokens}")
-
-        print("***** Number of queries of retrieval models: *****")
-        for k, v in self.rm_cost.items():
-            print(f"{k}: {v}")
+        """What the run cost, per stage. Upstream printed this and returned nothing."""
+        return {
+            "execution_time_seconds": dict(self.time),
+            "lm_token_usage": dict(self.lm_cost),
+            "rm_queries": dict(self.rm_cost),
+        }
 
     def reset(self):
         self.time = {}

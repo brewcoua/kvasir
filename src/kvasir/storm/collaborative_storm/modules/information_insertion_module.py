@@ -1,7 +1,7 @@
 import dspy
+import logging
 import numpy as np
 import re
-import traceback
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Union, Dict, Optional
@@ -10,6 +10,8 @@ from .collaborative_storm_utils import trim_output_after_hint
 from ...dataclass import KnowledgeNode, KnowledgeBase
 from ...encoder import Encoder, cosine_similarity
 from ...interface import Information
+
+logger = logging.getLogger(__name__)
 
 
 class InsertInformation(dspy.Signature):
@@ -253,8 +255,8 @@ class InsertInformationModule(dspy.Module):
                         root=insert_root,
                     )
                 return (question, query), candidate_placement
-            except Exception as e:
-                print(traceback.format_exc())
+            except Exception:
+                logger.exception("Failed to place %r in the mind map", question)
                 return (question, query), None
 
         def insert_info_to_kb(info, placement_prediction):

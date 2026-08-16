@@ -1,10 +1,15 @@
 from contextlib import contextmanager
+import logging
 import time
-import pytz
-from datetime import datetime
+from datetime import UTC, datetime
 
-# Define California timezone
-CALIFORNIA_TZ = pytz.timezone("America/Los_Angeles")
+logger = logging.getLogger(__name__)
+
+
+def _to_millisecond_string(moment):
+    if moment is None:
+        return None
+    return moment.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
 class EventLog:
@@ -15,14 +20,10 @@ class EventLog:
         self.child_events = {}
 
     def record_start_time(self):
-        self.start_time = datetime.now(
-            pytz.utc
-        )  # Store in UTC for consistent timezone conversion
+        self.start_time = datetime.now(UTC)
 
     def record_end_time(self):
-        self.end_time = datetime.now(
-            pytz.utc
-        )  # Store in UTC for consistent timezone conversion
+        self.end_time = datetime.now(UTC)
 
     def get_total_time(self):
         if self.start_time and self.end_time:
@@ -30,20 +31,11 @@ class EventLog:
         return 0
 
     def get_start_time(self):
-        if self.start_time:
-            # Format to milliseconds
-            return self.start_time.astimezone(CALIFORNIA_TZ).strftime(
-                "%Y-%m-%d %H:%M:%S.%f"
-            )[:-3]
-        return None
+        # Upstream rendered these in America/Los_Angeles, wherever the run happened.
+        return _to_millisecond_string(self.start_time)
 
     def get_end_time(self):
-        if self.end_time:
-            # Format to milliseconds
-            return self.end_time.astimezone(CALIFORNIA_TZ).strftime(
-                "%Y-%m-%d %H:%M:%S.%f"
-            )[:-3]
-        return None
+        return _to_millisecond_string(self.end_time)
 
     def add_child_event(self, child_event):
         self.child_events[child_event.event_name] = child_event
@@ -172,7 +164,7 @@ class LoggingWrapper:
     @contextmanager
     def log_pipeline_stage(self, pipeline_stage):
         if self.pipeline_stage_active:
-            print(
+            logger.warning(
                 "A pipeline stage is already active, ending the current stage safely."
             )
             self._pipeline_stage_end()
@@ -181,8 +173,10 @@ class LoggingWrapper:
         try:
             self._pipeline_stage_start(pipeline_stage)
             yield
-        except Exception as e:
-            print(f"Error occurred during pipeline stage '{pipeline_stage}': {e}")
+        except Exception:
+            # Upstream swallowed this, so a stage that failed looked successful to its caller.
+            logger.exception("Pipeline stage %r failed", pipeline_stage)
+            raise
         finally:
             self.logging_dict[self.current_pipeline_stage]["total_wall_time"] = (
                 time.time() - start_time

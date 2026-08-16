@@ -1,7 +1,7 @@
 import dspy
+import logging
 import os
 import re
-import sys
 import toml
 from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 
@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 from ...interface import Information, Retriever, LMConfigs
 from ...logging_wrapper import LoggingWrapper
 from ...rm import BingSearch
+
+logger = logging.getLogger(__name__)
 
 
 def extract_storm_info_snippet(info: Information, snippet_index: int) -> Information:
@@ -230,10 +232,10 @@ def load_api_key(toml_file_path):
         with open(toml_file_path, "r") as file:
             data = toml.load(file)
     except FileNotFoundError:
-        print(f"File not found: {toml_file_path}", file=sys.stderr)
+        logger.error("File not found: %s", toml_file_path)
         return
     except toml.TomlDecodeError:
-        print(f"Error decoding TOML file: {toml_file_path}", file=sys.stderr)
+        logger.error("Error decoding TOML file: %s", toml_file_path)
         return
     # Set environment variables
     for key, value in data.items():
