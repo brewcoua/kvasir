@@ -1,7 +1,7 @@
 import dspy
 from itertools import zip_longest
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+from ...encoder import cosine_similarity
 from typing import List, Optional, TYPE_CHECKING
 
 from .callback import BaseCallbackHandler

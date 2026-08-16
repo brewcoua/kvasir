@@ -508,6 +508,7 @@ class CoStormRunner:
         lm_config: CollaborativeStormLMConfigs,
         runner_argument: RunnerArgument,
         logging_wrapper: LoggingWrapper,
+        encoder: Encoder,
         rm: Optional[dspy.Retrieve] = None,
         callback_handler: BaseCallbackHandler = None,
     ):
@@ -519,7 +520,9 @@ class CoStormRunner:
             self.rm = BingSearch(k=runner_argument.retrieve_top_k)
         else:
             self.rm = rm
-        self.encoder = Encoder()
+        # Passed in rather than built here. Upstream constructed its own, against a hardcoded model
+        # name, which left a caller no way to choose one but to overwrite the attribute afterwards.
+        self.encoder = encoder
         self.conversation_history = []
         self.warmstart_conv_archive = []
         self.knowledge_base = KnowledgeBase(
@@ -552,7 +555,7 @@ class CoStormRunner:
         }
 
     @classmethod
-    def from_dict(cls, data, callback_handler: BaseCallbackHandler = None):
+    def from_dict(cls, data, encoder: Encoder, callback_handler: BaseCallbackHandler = None):
         # FIXME: does not use the lm_config data but naively use default setting
         lm_config = CollaborativeStormLMConfigs()
         lm_config.init(lm_type=os.getenv("OPENAI_API_TYPE"))
@@ -560,9 +563,9 @@ class CoStormRunner:
             lm_config=lm_config,
             runner_argument=RunnerArgument.from_dict(data["runner_argument"]),
             logging_wrapper=LoggingWrapper(lm_config),
+            encoder=encoder,
             callback_handler=callback_handler,
         )
-        costorm_runner.encoder = Encoder()
         costorm_runner.conversation_history = [
             ConversationTurn.from_dict(turn) for turn in data["conversation_history"]
         ]

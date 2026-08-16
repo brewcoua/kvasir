@@ -77,29 +77,29 @@ def test_log_level_is_upper_cased():
 
 
 def test_apply_environment_exports_what_litellm_reads(monkeypatch):
-    for name in ("OPENAI_API_BASE", "OPENAI_BASE_URL", "ENCODER_API_TYPE", "DO_NOT_TRACK"):
+    for name in ("OPENAI_API_BASE", "OPENAI_BASE_URL", "DO_NOT_TRACK"):
         monkeypatch.delenv(name, raising=False)
 
     apply_environment(Settings.from_env(MINIMAL))
 
-    # Both spellings, because the Encoder passes no api_base and litellm reads one or the other
-    # depending on the code path taken.
+    # Both spellings, because litellm reads one or the other depending on the code path taken.
+    # Models and embeddings are given the base explicitly, so these are a backstop against a
+    # default pointing at api.openai.com rather than the route to the gateway.
     assert os.environ["OPENAI_API_BASE"] == "https://gateway.example/v1"
     assert os.environ["OPENAI_BASE_URL"] == "https://gateway.example/v1"
-    assert os.environ["ENCODER_API_TYPE"] == "openai"
     assert os.environ["DO_NOT_TRACK"] == "1"
 
-    import litellm
+
+def test_telemetry_is_off():
+    from kvasir.storm.runtime import litellm
 
     assert litellm.telemetry is False
 
 
-def test_apply_environment_keeps_an_explicit_encoder_api_type(monkeypatch):
-    monkeypatch.setenv("ENCODER_API_TYPE", "azure")
+def test_the_cache_lives_under_the_data_directory():
+    settings = Settings.from_env(MINIMAL | {"KVASIR_DATA_DIR": "/srv/kvasir"})
 
-    apply_environment(Settings.from_env(MINIMAL))
-
-    assert os.environ["ENCODER_API_TYPE"] == "azure"
+    assert str(settings.cache_dir) == "/srv/kvasir/cache"
 
 
 def test_settings_are_frozen():

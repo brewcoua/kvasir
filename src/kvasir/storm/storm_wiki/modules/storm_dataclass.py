@@ -4,9 +4,8 @@ from collections import OrderedDict
 from typing import Union, Optional, Any, List, Tuple, Dict
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
 
+from ...encoder import cosine_similarity
 from ...interface import Information, InformationTable, Article, ArticleSectionNode
 from ...utils import ArticleTextProcessing, FileIOHelper
 
@@ -106,8 +105,15 @@ class StormInformationTable(InformationTable):
             conversations.append((persona, dialogue_turns))
         return cls(conversations)
 
-    def prepare_table_for_retrieval(self):
-        self.encoder = SentenceTransformer("paraphrase-MiniLM-L6-v2")
+    def prepare_table_for_retrieval(self, encoder):
+        """Embed every collected snippet so `retrieve_information` can rank them.
+
+        Upstream loaded a local `SentenceTransformer("paraphrase-MiniLM-L6-v2")` here, which pulled
+        torch and the model weights into every deployment for this one purpose, and embedded
+        against a model unrelated to the one Co-STORM uses. The caller passes the same gateway
+        `Encoder` instead.
+        """
+        self.encoder = encoder
         self.collected_urls = []
         self.collected_snippets = []
         for url, information in self.url_to_info.items():

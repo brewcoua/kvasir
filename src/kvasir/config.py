@@ -109,14 +109,13 @@ def apply_environment(settings: Settings) -> None:
     Safe to call any time before the first model or embedding call. Nothing here is read at import
     time.
     """
-    # The Encoder takes no api_base for the openai type, so the gateway is reached only through
-    # these. OPENAI_BASE_URL mirrors OPENAI_API_BASE because litellm reads both depending on path.
+    # Both models and embeddings are given the key and base explicitly now, so nothing depends on
+    # these to reach the gateway. They stay because litellm reads them for anything constructed
+    # without them, and a stray default pointing at api.openai.com is the failure they prevent.
+    # OPENAI_BASE_URL mirrors OPENAI_API_BASE because litellm reads both depending on path.
     os.environ["OPENAI_API_KEY"] = settings.openai_api_key
     os.environ["OPENAI_API_BASE"] = settings.openai_api_base
     os.environ["OPENAI_BASE_URL"] = settings.openai_api_base
-    # Encoder.__init__ raises ValueError without this. It is an upstream implementation detail
-    # rather than something an operator should have to know.
-    os.environ.setdefault("ENCODER_API_TYPE", "openai")
 
     # No telemetry leaves this service. huggingface_hub honours both of these; litellm has no
     # environment switch and is turned off in kvasir.storm.runtime. dspy 2.4.9 and the rest of the

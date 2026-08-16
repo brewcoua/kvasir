@@ -23,32 +23,14 @@ dependencies = [
     "pytz==2026.3.post1",
     "regex==2026.7.19",
     "requests==2.34.2",
-    "scikit-learn==1.8.0",
-    # 5.7.0, not what a bare resolve picks: older versions import the long-removed
-    # huggingface_hub.cached_download and fail on import.
-    "sentence-transformers==5.7.0",
     "toml==0.10.2",
     "tqdm==4.70.0",
     "trafilatura==2.2.0",
-    "transformers==4.57.6",
     "ujson==5.13.0",
-    # Not imported here. Declared only so [tool.uv.sources] can redirect it, which uv applies to
-    # direct dependencies alone. See the comment on the torch source below.
-    "torch==2.13.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/brewcoua/kvasir"
-
-[tool.uv.sources]
-# The default torch wheels bundle the CUDA runtime, several GB the service can never use: no model
-# runs locally, embeddings go to the gateway. The CPU index carries the same versions without it.
-torch = [{ index = "pytorch-cpu" }]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 [build-system]
 requires = ["hatchling"]

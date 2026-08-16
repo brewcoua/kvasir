@@ -21,12 +21,16 @@ class StormArticleGenerationModule(ArticleGenerationModule):
     def __init__(
         self,
         article_gen_lm=Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        encoder=None,
         retrieve_top_k: int = 5,
         max_thread_num: int = 10,
     ):
         super().__init__()
         self.retrieve_top_k = retrieve_top_k
         self.article_gen_lm = article_gen_lm
+        # Ranks snippets against each section's query. Upstream loaded a local sentence-transformer
+        # inside the information table for this; it is the gateway encoder now.
+        self.encoder = encoder
         self.max_thread_num = max_thread_num
         self.section_gen = ConvToSection(engine=self.article_gen_lm)
 
@@ -67,7 +71,7 @@ class StormArticleGenerationModule(ArticleGenerationModule):
             callback_handler (BaseCallbackHandler): An optional callback handler that can be used to trigger
                 custom callbacks at various stages of the article generation process. Defaults to None.
         """
-        information_table.prepare_table_for_retrieval()
+        information_table.prepare_table_for_retrieval(self.encoder)
 
         if article_with_outline is None:
             article_with_outline = StormArticle(topic_name=topic)

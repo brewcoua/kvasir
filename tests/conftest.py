@@ -1,7 +1,6 @@
-import os
+"""Nothing to set up.
 
-# Encoder.__init__ raises without this, and constructing a Co-STORM runner constructs an Encoder.
-# The service sets it in apply_environment and the image sets it as an ENV, so a test that builds a
-# runner directly needs the same. Set here rather than per test, so no test depends on another
-# having run apply_environment first.
-os.environ.setdefault("ENCODER_API_TYPE", "openai")
+This file used to point HOME at a tempdir and set ENCODER_API_TYPE, because importing the fork
+wrote to the filesystem and constructing an Encoder read that variable. Neither is true any more.
+It stays so pytest keeps rootdir on the repository.
+"""

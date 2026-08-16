@@ -14,7 +14,6 @@ from dsp import ERRORS, backoff_hdlr, giveup_hdlr
 from dsp.modules.hf import openai_to_hf
 from dsp.modules.hf_client import send_hftgi_request_v01_wrapped
 from openai import OpenAI, AzureOpenAI
-from transformers import AutoTokenizer
 
 try:
     from anthropic import RateLimitError
@@ -1017,6 +1016,11 @@ class TogetherClient(dspy.HFModel):
         self.apply_tokenizer_chat_template = apply_tokenizer_chat_template
         if self.apply_tokenizer_chat_template:
             logging.info("Loading huggingface tokenizer.")
+            # Imported here rather than at module scope: transformers is a heavyweight dependency
+            # wanted by this one optional branch of one deprecated client, and requiring it at
+            # import time pulled it, and torch, into every deployment.
+            from transformers import AutoTokenizer
+
             if hf_tokenizer_name is None:
                 hf_tokenizer_name = self.model
             self.tokenizer = AutoTokenizer.from_pretrained(
