@@ -1,0 +1,11 @@
+This directory is a fork of Stanford OVAL's STORM.
+
+    Upstream: https://github.com/stanford-oval/storm
+    Package:  knowledge_storm
+    Forked at: fb951af7744dab086e34962e9bc6fe878e145f83 (2025-09-30)
+    Licence:  MIT, see LICENSE in this directory
+
+The code has been modified. Divergences from upstream are recorded in docs/fork-notes.md
+at the root of this repository.
+
+The rest of kvasir is licensed MIT OR Apache-2.0; this directory is MIT only, as upstream is.

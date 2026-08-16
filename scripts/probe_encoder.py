@@ -1,9 +1,9 @@
-"""Determine whether knowledge_storm's Encoder can be pointed at an OpenAI-compatible gateway.
+"""Determine whether the fork's Encoder can be pointed at an OpenAI-compatible gateway.
 
 Co-STORM constructs `Encoder()` internally with no arguments, and `Encoder.__init__` drops
 `api_base` for `encoder_type="openai"`. Redirecting embeddings away from api.openai.com therefore
 depends on litellm reading `OPENAI_API_BASE` from the environment, which is litellm's behaviour
-rather than a documented contract of knowledge_storm. If it does not hold, Co-STORM cannot run
+rather than a documented contract of upstream. If it does not hold, Co-STORM cannot run
 against a gateway and only plain STORM is shippable.
 
 The probe stands up a throwaway HTTP server on loopback, points `OPENAI_API_BASE` at it, and asks
@@ -65,7 +65,7 @@ def main() -> int:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base_url = f"http://127.0.0.1:{server.server_port}/v1"
 
-    # Every one of these must be set before knowledge_storm.encoder is imported. That module
+    # Every one of these must be set before kvasir.storm.encoder is imported. That module
     # configures litellm and opens a disk cache under Path.home() at import time.
     os.environ["HOME"] = tempfile.mkdtemp(prefix="kvasir-probe-home-")
     os.environ["ENCODER_API_TYPE"] = "openai"
@@ -73,7 +73,7 @@ def main() -> int:
     os.environ["OPENAI_API_BASE"] = base_url
     os.environ["OPENAI_BASE_URL"] = base_url
 
-    from knowledge_storm.encoder import Encoder
+    from kvasir.storm.encoder import Encoder
 
     encoder = Encoder()
     print(f"gateway stand-in: {base_url}")

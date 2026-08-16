@@ -8,23 +8,37 @@ license = { text = "MIT OR Apache-2.0" }
 dependencies = [
     "fastapi==0.141.1",
     "httpx==0.28.1",
-    "knowledge-storm==1.1.1",
     "pydantic==2.13.4",
+    "uvicorn==0.52.3",
+    # src/kvasir/storm is a fork of knowledge_storm, so its dependencies are declared here rather
+    # than pulled in through a published package. See src/kvasir/storm/NOTICE.
+    "backoff==2.2.1",
+    "beautifulsoup4==4.15.0",
+    "diskcache==5.6.3",
+    "dspy-ai==2.4.9",
+    "langchain-text-splitters==1.1.2",
+    "litellm==1.80.0",
+    "numpy==2.4.6",
+    "openai==1.109.1",
+    "pytz==2026.3.post1",
+    "regex==2026.7.19",
+    "requests==2.34.2",
+    "scikit-learn==1.8.0",
+    # 5.7.0, not what a bare resolve picks: older versions import the long-removed
+    # huggingface_hub.cached_download and fail on import.
+    "sentence-transformers==5.7.0",
+    "toml==0.10.2",
+    "tqdm==4.70.0",
+    "trafilatura==2.2.0",
+    "transformers==4.57.6",
+    "ujson==5.13.0",
     # Not imported here. Declared only so [tool.uv.sources] can redirect it, which uv applies to
     # direct dependencies alone. See the comment on the torch source below.
     "torch==2.13.0",
-    "uvicorn==0.52.3",
 ]
 
 [project.urls]
 Homepage = "https://github.com/brewcoua/kvasir"
-
-[tool.uv]
-# knowledge-storm leaves sentence-transformers unpinned, and the resolver picks 2.2.2, which
-# imports huggingface_hub.cached_download. That was removed in huggingface-hub 0.26, so
-# `import knowledge_storm` raises ImportError. 5.7.0 is the oldest version that resolves against
-# the rest of the tree. Nothing here uses sentence-transformers; it is a transitive weight.
-constraint-dependencies = ["sentence-transformers==5.7.0"]
 
 [tool.uv.sources]
 # The default torch wheels bundle the CUDA runtime, several GB the service can never use: no model
@@ -46,6 +60,10 @@ packages = ["src/kvasir"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# The fork arrived formatted to upstream's own conventions. Reformatting it wholesale would bury
+# every subsequent fix in unrelated churn, so it is excluded until the trimming pass, which is when
+# what survives becomes small enough to adopt these rules deliberately.
+extend-exclude = ["src/kvasir/storm"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -54,14 +72,16 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.11"
 strict = true
 files = ["src"]
-# knowledge_storm ships no type information, so its classes are Any and strict mode refuses to
-# subclass them. Extending its callback handlers is the supported way to observe a run.
+# The fork is untyped, so its classes are Any and strict mode refuses to subclass them. Extending
+# its callback handlers is the supported way to observe a run.
 disallow_subclassing_any = false
+exclude = ["^src/kvasir/storm/"]
 
 [[tool.mypy.overrides]]
-# knowledge_storm ships no type information.
-module = ["knowledge_storm.*"]
+# The fork is untyped, and typing 10k lines of it is not this project's work.
+module = ["kvasir.storm.*"]
 ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

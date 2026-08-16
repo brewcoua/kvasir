@@ -40,7 +40,7 @@ ENV PATH=/app/.venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     KVASIR_DATA_DIR=/data
 
-# knowledge_storm.encoder opens a litellm disk cache under Path.home() while being imported, before
+# kvasir.storm.encoder opens a litellm disk cache under Path.home() while being imported, before
 # any of our code runs. /tmp is writable under a read-only root filesystem, and losing a cache on
 # restart costs nothing.
 ENV HOME=/tmp

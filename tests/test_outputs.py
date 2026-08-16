@@ -98,7 +98,7 @@ def test_fixture_matches_what_upstream_actually_writes(tmp_path):
     Loading the fixture with StormArticle.from_string and dumping it again with upstream's own
     dump_reference_to_file must reproduce the fixture, or the fixture is not a real STORM output.
     """
-    from knowledge_storm.storm_wiki.modules.storm_dataclass import StormArticle
+    from kvasir.storm.storm_wiki.modules.storm_dataclass import StormArticle
 
     expected = json.loads((POLISHED / "url_to_info.json").read_text())
 

@@ -14,22 +14,21 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from knowledge_storm.collaborative_storm.engine import (
+from kvasir.config import Settings
+from kvasir.storm.collaborative_storm.engine import (
     CollaborativeStormLMConfigs,
     CoStormRunner,
     RunnerArgument,
 )
-from knowledge_storm.dataclass import ConversationTurn, KnowledgeBase
-from knowledge_storm.lm import LitellmModel
-from knowledge_storm.logging_wrapper import LoggingWrapper
-from knowledge_storm.rm import SearXNG
-from knowledge_storm.storm_wiki.engine import (
+from kvasir.storm.dataclass import ConversationTurn, KnowledgeBase
+from kvasir.storm.lm import LitellmModel
+from kvasir.storm.logging_wrapper import LoggingWrapper
+from kvasir.storm.rm import SearXNG
+from kvasir.storm.storm_wiki.engine import (
     STORMWikiLMConfigs,
     STORMWikiRunner,
     STORMWikiRunnerArguments,
 )
-
-from kvasir.config import Settings
 
 # Upstream's own examples pick a token budget per role, and the numbers below are theirs. They are
 # not arbitrary: a role that emits a whole polished article needs far more room than one that
