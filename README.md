@@ -9,7 +9,7 @@ map.
 
 Upstream ships a Python library and a Streamlit demo labelled for local development, but no server
 and no container image. This repository supplies the missing middle: a small FastAPI service, a
-multi-arch image on GHCR, and two Open WebUI Pipe functions.
+`linux/amd64` image on GHCR, and two Open WebUI Pipe functions.
 
 ## What it needs
 

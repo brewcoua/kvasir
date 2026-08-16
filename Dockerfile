@@ -1,5 +1,6 @@
 # Digests rather than tags, so a rebuild resolves to the same bytes and the published image can be
-# pinned by digest downstream. Both are multi-arch indexes covering linux/amd64 and linux/arm64.
+# pinned by digest downstream. Both are multi-arch indexes, so this builds for arm64 unchanged if
+# the publishing workflow is ever asked to.
 FROM docker.io/library/python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91 AS build
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c /uv /bin/uv
