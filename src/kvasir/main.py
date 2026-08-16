@@ -12,10 +12,11 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from kvasir import conversation, logs
@@ -39,6 +40,7 @@ from kvasir.sse import HEADERS, MEDIA_TYPE, frame
 from kvasir.storm.runtime import configure_cache, configure_concurrency
 
 READINESS_TIMEOUT_SECONDS = 5.0
+INDEX = Path(__file__).parent / "static" / "index.html"
 
 logger = logging.getLogger("kvasir")
 
@@ -72,6 +74,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> FileResponse:
+    """The runs page. One file, no build step, and nothing loaded from another origin."""
+    return FileResponse(INDEX, media_type="text/html")
 
 
 @app.get("/healthz")

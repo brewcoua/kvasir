@@ -200,3 +200,16 @@ def test_the_registry_forgets_the_oldest():
 
     assert registry.get(first.id) is None
     assert [run.topic for run in registry.list()] == ["three", "two"]
+
+
+def test_the_page_is_self_contained(client):
+    """The image is read-only and offline, so anything from another origin would never load."""
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+    body = response.text
+    assert "<title>kvasir runs</title>" in body
+    for origin in ("http://", "https://", "//cdn", "src=", "@import"):
+        assert origin not in body, origin
