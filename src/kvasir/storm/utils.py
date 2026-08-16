@@ -708,7 +708,7 @@ class WebPageHelper:
         # This is the innermost of three nested pools, so it is where the fan-out multiplies out.
         # The permit is claimed before submitting rather than inside the task, which bounds the
         # threads created as well as the requests in flight.
-        with concurrent.futures.ThreadPoolExecutor(
+        with runtime.ContextThreadPoolExecutor(
             max_workers=self.max_thread_num
         ) as executor:
             futures = []

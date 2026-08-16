@@ -23,6 +23,7 @@ def test_defaults():
     assert settings.max_concurrent_runs == 1
     assert settings.search_top_k == settings.max_conv_turn == settings.max_perspective == 3
     assert settings.log_level == "INFO"
+    assert settings.log_format == "json"
 
 
 @pytest.mark.parametrize("name", sorted(MINIMAL))
@@ -74,6 +75,13 @@ def test_rejects_unusable_integers(value):
 
 def test_log_level_is_upper_cased():
     assert Settings.from_env(MINIMAL | {"LOG_LEVEL": "debug"}).log_level == "DEBUG"
+
+
+def test_log_format_is_checked():
+    assert Settings.from_env(MINIMAL | {"LOG_FORMAT": "TEXT"}).log_format == "text"
+
+    with pytest.raises(ConfigError, match="LOG_FORMAT"):
+        Settings.from_env(MINIMAL | {"LOG_FORMAT": "logfmt"})
 
 
 def test_apply_environment_exports_what_litellm_reads(monkeypatch):

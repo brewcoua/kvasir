@@ -14,13 +14,17 @@ Concurrency lives here for the same reason. The pipeline nests thread pools thre
 writing fans out to retrieval, which fans out to page fetches — and upstream sized each level
 independently, so the worst case multiplied out to hundreds of simultaneous requests against a
 self-hosted gateway and search instance. One setting sizes every pool, and outbound requests take a
-permit from one process-wide budget.
+permit from one process-wide budget. Those pools also carry the caller's context, so a run stays
+identifiable in the logs after the pipeline fans out.
 """
 
+import concurrent.futures
+import contextvars
 import os
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from typing import Any, TypeVar
 
 import litellm
 from litellm.caching.caching import Cache
@@ -92,8 +96,27 @@ def fetch_slot() -> Iterator[None]:
         release_fetch_slot()
 
 
+_T = TypeVar("_T")
+
+
+class ContextThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
+    """A pool whose tasks run in a copy of the submitting thread's context.
+
+    A worker thread starts with an empty context, so a run's identity would be lost the moment the
+    pipeline fans out — which is most of a run, and the part worth having logs for. Copying at
+    submit time rather than at construction is what makes the copy reflect the stage the run was
+    actually in when the work was handed over.
+    """
+
+    def submit(  # type: ignore[override]
+        self, fn: Callable[..., _T], /, *args: Any, **kwargs: Any
+    ) -> concurrent.futures.Future[_T]:
+        return super().submit(contextvars.copy_context().run, fn, *args, **kwargs)
+
+
 __all__ = [
     "Cache",
+    "ContextThreadPoolExecutor",
     "DEFAULT_MAX_THREADS",
     "acquire_fetch_slot",
     "configure_cache",

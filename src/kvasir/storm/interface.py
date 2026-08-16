@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
+from . import runtime
 from .utils import ArticleTextProcessing
 
 logger = logging.getLogger(__name__)
@@ -300,7 +301,7 @@ class Retriever:
         # Upstream used executor.map, which re-raises the first failure while iterating and so
         # discarded every sibling query's results along with it. One failing query now costs only
         # its own results.
-        with concurrent.futures.ThreadPoolExecutor(
+        with runtime.ContextThreadPoolExecutor(
             max_workers=self.max_thread
         ) as executor:
             futures = {executor.submit(process_query, q): q for q in queries}

@@ -1,4 +1,3 @@
-import concurrent.futures
 import logging
 import os
 from concurrent.futures import as_completed
@@ -9,6 +8,7 @@ import dspy
 from .callback import BaseCallbackHandler
 from .persona_generator import StormPersonaGenerator
 from .storm_dataclass import DialogueTurn, StormInformationTable
+from ... import runtime
 from ...interface import KnowledgeCurationModule, Retriever, Information
 from ...utils import ArticleTextProcessing
 
@@ -327,7 +327,7 @@ class StormKnowledgeCurationModule(KnowledgeCurationModule):
 
         max_workers = min(self.max_thread_num, len(considered_personas))
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with runtime.ContextThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_persona = {
                 executor.submit(run_conv, persona): persona
                 for persona in considered_personas

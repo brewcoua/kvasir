@@ -1,4 +1,3 @@
-import concurrent.futures
 import copy
 import logging
 from concurrent.futures import as_completed
@@ -8,6 +7,7 @@ import dspy
 
 from .callback import BaseCallbackHandler
 from .storm_dataclass import StormInformationTable, StormArticle
+from ... import runtime
 from ...interface import ArticleGenerationModule, Information
 from ...utils import ArticleTextProcessing
 
@@ -114,7 +114,7 @@ class StormArticleGenerationModule(ArticleGenerationModule):
             ]
             if callback_handler is not None:
                 callback_handler.on_article_generation_start(sections=titles_to_write)
-            with concurrent.futures.ThreadPoolExecutor(
+            with runtime.ContextThreadPoolExecutor(
                 max_workers=self.max_thread_num
             ) as executor:
                 future_to_sec_title = {}

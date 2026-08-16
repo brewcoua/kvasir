@@ -50,6 +50,7 @@ class Settings:
     max_conv_turn: int
     max_perspective: int
     log_level: str
+    log_format: str
 
     @property
     def sessions_dir(self) -> Path:
@@ -93,7 +94,18 @@ class Settings:
             max_conv_turn=_positive_int(env, "KVASIR_MAX_CONV_TURN", 3),
             max_perspective=_positive_int(env, "KVASIR_MAX_PERSPECTIVE", 3),
             log_level=(env.get("LOG_LEVEL", "").strip() or "INFO").upper(),
+            # JSON by default: this runs as a container whose stdout goes to a log shipper, and
+            # a run's lines interleave across threads, so they need to be parseable rather than
+            # readable. `text` is for reading them by eye during development.
+            log_format=_log_format(env),
         )
+
+
+def _log_format(env: Mapping[str, str]) -> str:
+    value = (env.get("LOG_FORMAT", "").strip() or "json").lower()
+    if value not in ("json", "text"):
+        raise ConfigError(f"LOG_FORMAT must be json or text, got {value!r}")
+    return value
 
 
 def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
