@@ -169,9 +169,8 @@ class InsertInformationModule(dspy.Module):
             return int(match.group(1))
         try:
             return int(string.strip())
-        except:
-            pass
-        return None
+        except ValueError:
+            return None
 
     def choose_candidate_from_embedding_ranking(
         self,

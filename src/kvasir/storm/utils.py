@@ -7,6 +7,7 @@ import os
 import pickle
 import re
 import regex
+import tempfile
 import toml
 from typing import List, Dict
 from tqdm import tqdm
@@ -50,10 +51,6 @@ def load_api_key(toml_file_path):
     # Set environment variables
     for key, value in data.items():
         os.environ[key] = str(value)
-
-
-def makeStringRed(message):
-    return f"\033[91m {message}\033[00m"
 
 
 class QdrantVectorStoreManager:
@@ -595,13 +592,30 @@ class ArticleTextProcessing:
 
 class FileIOHelper:
     @staticmethod
-    def dump_json(obj, file_name, encoding="utf-8"):
-        with open(file_name, "w", encoding=encoding) as fw:
-            json.dump(obj, fw, default=FileIOHelper.handle_non_serializable)
+    def _atomic_write(path, mode, write, encoding="utf-8"):
+        """Write through a temporary sibling, so a crash leaves the previous file intact.
+
+        Upstream truncated the destination first, which turned an interrupted run into a
+        half-written artefact that the resume path would then load as if it were complete.
+        """
+        directory = os.path.dirname(os.path.abspath(path))
+        fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            with os.fdopen(fd, mode, encoding=encoding) as f:
+                write(f)
+            os.replace(tmp, path)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
 
     @staticmethod
-    def handle_non_serializable(obj):
-        return "non-serializable contents"  # mark the non-serializable part
+    def dump_json(obj, file_name, encoding="utf-8"):
+        # Upstream substituted the string "non-serializable contents" for anything json could not
+        # encode, so the loss was invisible until something read the file back.
+        FileIOHelper._atomic_write(
+            file_name, "w", lambda fw: json.dump(obj, fw), encoding=encoding
+        )
 
     @staticmethod
     def load_json(file_name, encoding="utf-8"):
@@ -610,18 +624,18 @@ class FileIOHelper:
 
     @staticmethod
     def write_str(s, path):
-        with open(path, "w") as f:
-            f.write(s)
+        FileIOHelper._atomic_write(path, "w", lambda f: f.write(s))
 
     @staticmethod
     def load_str(path):
-        with open(path, "r") as f:
-            return "\n".join(f.readlines())
+        # Upstream joined readlines() with "\n", which doubles every newline: the lines it joins
+        # already end in one. Round trips with write_str now.
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
 
     @staticmethod
     def dump_pickle(obj, path):
-        with open(path, "wb") as f:
-            pickle.dump(obj, f)
+        FileIOHelper._atomic_write(path, "wb", lambda f: pickle.dump(obj, f), encoding=None)
 
     @staticmethod
     def load_pickle(path):

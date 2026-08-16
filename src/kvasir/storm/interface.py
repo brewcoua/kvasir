@@ -64,14 +64,6 @@ class Information:
         self.meta = meta if meta is not None else {}
         self.citation_uuid = -1
 
-    def __hash__(self):
-        return hash(
-            (
-                self.url,
-                tuple(sorted(self.snippets)),
-            )
-        )
-
     def __eq__(self, other):
         if not isinstance(other, Information):
             return False
@@ -305,13 +297,18 @@ class Retriever:
                 local_to_return.append(storm_info)
             return local_to_return
 
+        # Upstream used executor.map, which re-raises the first failure while iterating and so
+        # discarded every sibling query's results along with it. One failing query now costs only
+        # its own results.
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.max_thread
         ) as executor:
-            results = list(executor.map(process_query, queries))
-
-        for result in results:
-            to_return.extend(result)
+            futures = {executor.submit(process_query, q): q for q in queries}
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    to_return.extend(future.result())
+                except Exception:
+                    logger.exception("Retrieval failed for query %r", futures[future])
 
         return to_return
 

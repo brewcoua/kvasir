@@ -423,11 +423,13 @@ class DiscourseManager:
         )
 
     def _parse_expert_names_to_agent(self, expert_descriptions: Union[str, List[str]]):
-        if type(expert_descriptions) == str:
+        if isinstance(expert_descriptions, str):
             expert_descriptions = [expert_descriptions]
         agents: CoStormExpert = []
         for expert_name in expert_descriptions:
-            role_name, role_description = expert_name.split(":")
+            # The model writes "Name: description", and descriptions routinely contain a colon
+            # of their own. Splitting on every colon raised ValueError and failed the turn.
+            role_name, _, role_description = expert_name.partition(":")
             role_name = role_name.strip()
             role_description = role_description.strip()
             new_costorm_expert = CoStormExpert(

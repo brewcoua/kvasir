@@ -16,7 +16,7 @@ from .modules.storm_dataclass import StormInformationTable, StormArticle
 from ..encoder import Encoder
 from ..interface import Engine, LMConfigs, Retriever
 from ..lm import LitellmModel
-from ..utils import FileIOHelper, makeStringRed, truncate_filename
+from ..utils import FileIOHelper, truncate_filename
 
 
 class STORMWikiLMConfigs(LMConfigs):
@@ -231,7 +231,7 @@ class STORMWikiRunner(Engine):
             ground_truth_url=ground_truth_url,
             callback_handler=callback_handler,
             max_perspective=self.args.max_perspective,
-            disable_perspective=False,
+            disable_perspective=self.args.disable_perspective,
             return_conversation_log=True,
         )
 
@@ -324,28 +324,31 @@ class STORMWikiRunner(Engine):
                 f.write(json.dumps(call) + "\n")
 
     def _load_information_table_from_local_fs(self, information_table_local_path):
-        assert os.path.exists(information_table_local_path), makeStringRed(
-            f"{information_table_local_path} not exists. Please set --do-research argument to prepare the conversation_log.json for this topic."
-        )
+        # Upstream asserted here, so under python -O the missing file surfaced as an obscure
+        # failure inside the loader instead.
+        if not os.path.exists(information_table_local_path):
+            raise FileNotFoundError(
+                f"{information_table_local_path} does not exist. Run the research stage first."
+            )
         return StormInformationTable.from_conversation_log_file(
             information_table_local_path
         )
 
     def _load_outline_from_local_fs(self, topic, outline_local_path):
-        assert os.path.exists(outline_local_path), makeStringRed(
-            f"{outline_local_path} not exists. Please set --do-generate-outline argument to prepare the storm_gen_outline.txt for this topic."
-        )
+        if not os.path.exists(outline_local_path):
+            raise FileNotFoundError(
+                f"{outline_local_path} does not exist. Run the outline stage first."
+            )
         return StormArticle.from_outline_file(topic=topic, file_path=outline_local_path)
 
     def _load_draft_article_from_local_fs(
         self, topic, draft_article_path, url_to_info_path
     ):
-        assert os.path.exists(draft_article_path), makeStringRed(
-            f"{draft_article_path} not exists. Please set --do-generate-article argument to prepare the storm_gen_article.txt for this topic."
-        )
-        assert os.path.exists(url_to_info_path), makeStringRed(
-            f"{url_to_info_path} not exists. Please set --do-generate-article argument to prepare the url_to_info.json for this topic."
-        )
+        for path in (draft_article_path, url_to_info_path):
+            if not os.path.exists(path):
+                raise FileNotFoundError(
+                    f"{path} does not exist. Run the article generation stage first."
+                )
         article_text = FileIOHelper.load_str(draft_article_path)
         references = FileIOHelper.load_json(url_to_info_path)
         return StormArticle.from_string(
@@ -380,14 +383,13 @@ class STORMWikiRunner(Engine):
             remove_duplicate: If True, remove duplicated content.
             callback_handler: A callback handler to handle the intermediate results.
         """
-        assert (
+        if not (
             do_research
             or do_generate_outline
             or do_generate_article
             or do_polish_article
-        ), makeStringRed(
-            "No action is specified. Please set at least one of --do-research, --do-generate-outline, --do-generate-article, --do-polish-article"
-        )
+        ):
+            raise ValueError("run() was asked to do nothing: enable at least one stage.")
 
         self.topic = topic
         self.article_dir_name = truncate_filename(
