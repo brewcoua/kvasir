@@ -1,0 +1,17 @@
+{
+    "url_to_unified_index": {
+        "https://example.org/parish-survey": 1
+    },
+    "url_to_info": {
+        "https://example.org/parish-survey": {
+            "url": "https://example.org/parish-survey",
+            "description": "",
+            "snippets": [
+                "The stone appears in the drainage survey of 1783, listed among unremovable obstructions."
+            ],
+            "title": "Parish drainage survey, 1783",
+            "meta": {},
+            "citation_uuid": -1
+        }
+    }
+}

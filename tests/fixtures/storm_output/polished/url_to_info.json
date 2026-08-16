@@ -1,0 +1,42 @@
+{
+    "url_to_unified_index": {
+        "https://example.org/parish-survey": 1,
+        "https://example.org/petrology-review": 2,
+        "https://example.org/field-notes": 3
+    },
+    "url_to_info": {
+        "https://example.org/parish-survey": {
+            "url": "https://example.org/parish-survey",
+            "description": "",
+            "snippets": [
+                "The stone appears in the drainage survey of 1783, listed among unremovable obstructions.",
+                "A later hand has annotated the entry."
+            ],
+            "title": "Parish drainage survey, 1783",
+            "meta": {
+                "query": "kvasir stone parish survey"
+            },
+            "citation_uuid": -1
+        },
+        "https://example.org/petrology-review": {
+            "url": "https://example.org/petrology-review",
+            "description": "A review of erratic provenance in the region.",
+            "snippets": [
+                "Thin-section analysis places the source outcrop some four hundred kilometres north."
+            ],
+            "title": "Provenance of regional erratics",
+            "meta": {
+                "query": "erratic provenance petrology"
+            },
+            "citation_uuid": -1
+        },
+        "https://example.org/field-notes": {
+            "url": "https://example.org/field-notes",
+            "description": "Unpublished field notes.",
+            "snippets": [],
+            "title": "Field notes, undated",
+            "meta": {},
+            "citation_uuid": -1
+        }
+    }
+}

@@ -126,3 +126,29 @@ and it cannot drift from upstream.
 
 `run()` is synchronous, IO-bound, and takes minutes to tens of minutes, using `max_thread_num`
 threads internally. Never call it on the event loop.
+
+### `url_to_info.json` holds two maps, not a list of sources
+
+`dump_reference_to_file` writes:
+
+```json
+{
+  "url_to_unified_index": {"https://example.org/a": 1},
+  "url_to_info": {"https://example.org/a": {"url": "...", "description": "...",
+                                            "snippets": ["..."], "title": "...",
+                                            "meta": {}, "citation_uuid": -1}}
+}
+```
+
+The number behind an article's `[n]` marker comes from `url_to_unified_index`. The `citation_uuid`
+field inside a source is a separate per-stage counter, and upstream writes it as `-1` in this file,
+so reading it instead would number every citation `-1`.
+
+Polishing rewrites `storm_gen_article_polished.txt` but does not rewrite this file, so the
+numbering is the draft's. That is only safe while `remove_duplicate` stays at its default of
+`False`, since that is the flag that renumbers sources.
+
+`tests/fixtures/storm_output/` holds a checked-in output directory in this format.
+`test_fixture_matches_what_upstream_actually_writes` loads it with `StormArticle.from_string` and
+dumps it again through upstream's own serialiser, so the fixture cannot drift from what STORM
+really writes.
