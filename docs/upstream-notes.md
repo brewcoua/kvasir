@@ -127,6 +127,23 @@ and it cannot drift from upstream.
 `run()` is synchronous, IO-bound, and takes minutes to tens of minutes, using `max_thread_num`
 threads internally. Never call it on the event loop.
 
+### There are two unrelated `BaseCallbackHandler` classes
+
+`knowledge_storm.storm_wiki.modules.callback.BaseCallbackHandler` and
+`knowledge_storm.collaborative_storm.modules.callback.BaseCallbackHandler` share a name and nothing
+else. They have different methods and neither inherits from the other. Import the one matching the
+engine being observed.
+
+STORM's has eight methods, all in the research and outline stages:
+`on_identify_perspective_start`, `on_identify_perspective_end(perspectives)`,
+`on_information_gathering_start`, `on_dialogue_turn_end(dlg_turn)`,
+`on_information_gathering_end`, `on_information_organization_start`,
+`on_direct_outline_generation_end(outline)`, `on_outline_refinement_end(outline)`.
+
+**Nothing reports article generation or polishing.** The last callback of a run is
+`on_outline_refinement_end`, after which the longest part of the run happens silently. Progress for
+those stages has to come from whatever drives the run, not from upstream.
+
 ### `url_to_info.json` holds two maps, not a list of sources
 
 `dump_reference_to_file` writes:
