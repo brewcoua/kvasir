@@ -85,7 +85,6 @@ def test_an_expert_description_may_contain_a_colon():
         runner_argument=RunnerArgument(topic="the Antikythera mechanism"),
         lm_config=lm_config,
         logging_wrapper=LoggingWrapper(lm_config),
-        # C8 removes the BingSearch default that makes this necessary.
         rm=object(),
         callback_handler=None,
     )

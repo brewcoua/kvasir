@@ -18,7 +18,6 @@ from ..encoder import Encoder
 from ..interface import LMConfigs, Agent
 from ..logging_wrapper import LoggingWrapper
 from ..lm import LitellmModel
-from ..rm import BingSearch
 
 
 class CollaborativeStormLMConfigs(LMConfigs):
@@ -511,17 +510,16 @@ class CoStormRunner:
         runner_argument: RunnerArgument,
         logging_wrapper: LoggingWrapper,
         encoder: Encoder,
-        rm: Optional[dspy.Retrieve] = None,
+        rm: dspy.Retrieve,
         callback_handler: BaseCallbackHandler = None,
     ):
         self.runner_argument = runner_argument
         self.lm_config = lm_config
         self.logging_wrapper = logging_wrapper
         self.callback_handler = callback_handler
-        if rm is None:
-            self.rm = BingSearch(k=runner_argument.retrieve_top_k)
-        else:
-            self.rm = rm
+        # Required rather than defaulted. Upstream fell back to BingSearch, so a caller that
+        # forgot a retriever got one needing a paid key instead of an error.
+        self.rm = rm
         # Passed in rather than built here. Upstream constructed its own, against a hardcoded model
         # name, which left a caller no way to choose one but to overwrite the attribute afterwards.
         self.encoder = encoder
@@ -557,15 +555,28 @@ class CoStormRunner:
         }
 
     @classmethod
-    def from_dict(cls, data, encoder: Encoder, callback_handler: BaseCallbackHandler = None):
-        # FIXME: does not use the lm_config data but naively use default setting
-        lm_config = CollaborativeStormLMConfigs()
-        lm_config.init(lm_type=os.getenv("OPENAI_API_TYPE"))
+    def from_dict(
+        cls,
+        data,
+        lm_config: CollaborativeStormLMConfigs,
+        encoder: Encoder,
+        rm: dspy.Retrieve,
+        callback_handler: BaseCallbackHandler = None,
+    ):
+        """Restore a runner from `to_dict()` output.
+
+        The models, encoder and retriever are passed in rather than rebuilt from the file.
+        Upstream re-initialised them from OPENAI_API_TYPE, an initialiser that hardcodes
+        api_base=None, and passed no retriever at all, so a restored session silently left the
+        gateway for api.openai.com and searched through BingSearch. Only conversation state is
+        restored here; how to reach the models is current configuration, not saved state.
+        """
         costorm_runner = cls(
             lm_config=lm_config,
             runner_argument=RunnerArgument.from_dict(data["runner_argument"]),
             logging_wrapper=LoggingWrapper(lm_config),
             encoder=encoder,
+            rm=rm,
             callback_handler=callback_handler,
         )
         costorm_runner.conversation_history = [
