@@ -99,12 +99,12 @@ def test_an_expert_description_may_contain_a_colon():
 
 def test_the_run_configuration_carries_no_credential():
     """Upstream returned kwargs whole, so run_config.json held the gateway key in plaintext."""
-    from kvasir.storm.lm import LitellmModel
+    from kvasir.storm.lm import GatewayModel
     from kvasir.storm.storm_wiki.engine import STORMWikiLMConfigs
 
     configs = STORMWikiLMConfigs()
     configs.set_article_gen_lm(
-        LitellmModel(
+        GatewayModel(
             model="openai/ollama/strong:cloud",
             api_key="a-real-key",
             api_base="https://gateway.example/v1",

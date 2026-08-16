@@ -1,7 +1,6 @@
 import dspy
-import os
 from dataclasses import dataclass, field, asdict
-from typing import List, Union, Literal, Optional, Dict
+from typing import List, Union, Dict
 
 from .modules import collaborative_storm_utils as collaborative_storm_utils
 from .modules.callback import BaseCallbackHandler
@@ -17,15 +16,15 @@ from ..dataclass import ConversationTurn, KnowledgeBase
 from ..encoder import Encoder
 from ..interface import LMConfigs, Agent
 from ..logging_wrapper import LoggingWrapper
-from ..lm import LitellmModel
 
 
 class CollaborativeStormLMConfigs(LMConfigs):
     """Configurations for LLM used in different parts of Co-STORM.
 
     Given that different parts in Co-STORM framework have different complexity, we use different LLM configurations
-    to achieve a balance between quality and efficiency. If no specific configuration is provided, we use the default
-    setup in the paper.
+    to achieve a balance between quality and efficiency. Every role must be set explicitly: upstream's `init()`
+    convenience initialiser hardcoded provider model names and `api_base=None`, so it could not be pointed at a
+    gateway, and is gone. `kvasir.runners` sets them.
     """
 
     def __init__(self):
@@ -35,110 +34,6 @@ class CollaborativeStormLMConfigs(LMConfigs):
         self.warmstart_outline_gen_lm = None
         self.question_asking_lm = None
         self.knowledge_base_lm = None
-
-    def init(
-        self,
-        lm_type: Literal["openai", "azure", "together"],
-        temperature: Optional[float] = 1.0,
-        top_p: Optional[float] = 0.9,
-    ):
-        if lm_type and lm_type == "openai":
-            openai_kwargs = {
-                "api_key": os.getenv("OPENAI_API_KEY"),
-                "temperature": temperature,
-                "top_p": top_p,
-                "api_base": None,
-            }
-            self.question_answering_lm = LitellmModel(
-                model="gpt-4o-2024-05-13", max_tokens=1000, **openai_kwargs
-            )
-            self.discourse_manage_lm = LitellmModel(
-                model="gpt-4o-2024-05-13", max_tokens=500, **openai_kwargs
-            )
-            self.utterance_polishing_lm = LitellmModel(
-                model="gpt-4o-2024-05-13", max_tokens=2000, **openai_kwargs
-            )
-            self.warmstart_outline_gen_lm = LitellmModel(
-                model="gpt-4-1106-preview", max_tokens=500, **openai_kwargs
-            )
-            self.question_asking_lm = LitellmModel(
-                model="gpt-4o-2024-05-13", max_tokens=300, **openai_kwargs
-            )
-            self.knowledge_base_lm = LitellmModel(
-                model="gpt-4o-2024-05-13", max_tokens=1000, **openai_kwargs
-            )
-        elif lm_type and lm_type == "azure":
-            azure_kwargs = {
-                "api_key": os.getenv("AZURE_API_KEY"),
-                "temperature": temperature,
-                "top_p": top_p,
-                "api_base": os.getenv("AZURE_API_BASE"),
-                "api_version": os.getenv("AZURE_API_VERSION"),
-            }
-            self.question_answering_lm = LitellmModel(
-                model="azure/gpt-4o", max_tokens=1000, **azure_kwargs, model_type="chat"
-            )
-            self.discourse_manage_lm = LitellmModel(
-                model="azure/gpt-4o", max_tokens=500, **azure_kwargs, model_type="chat"
-            )
-            self.utterance_polishing_lm = LitellmModel(
-                model="azure/gpt-4o", max_tokens=2000, **azure_kwargs, model_type="chat"
-            )
-            self.warmstart_outline_gen_lm = LitellmModel(
-                model="azure/gpt-4o", max_tokens=300, **azure_kwargs, model_type="chat"
-            )
-            self.question_asking_lm = LitellmModel(
-                model="azure/gpt-4o", max_tokens=300, **azure_kwargs, model_type="chat"
-            )
-            self.knowledge_base_lm = LitellmModel(
-                model="azure/gpt-4o", max_tokens=1000, **azure_kwargs, model_type="chat"
-            )
-        elif lm_type and lm_type == "together":
-            together_kwargs = {
-                "api_key": os.getenv("TOGETHER_API_KEY"),
-                "temperature": temperature,
-                "top_p": top_p,
-            }
-            self.question_answering_lm = LitellmModel(
-                model="together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                max_tokens=1000,
-                model_type="chat",
-                **together_kwargs,
-            )
-            self.discourse_manage_lm = LitellmModel(
-                model="together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                max_tokens=500,
-                model_type="chat",
-                **together_kwargs,
-            )
-            self.utterance_polishing_lm = LitellmModel(
-                model="together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                max_tokens=2000,
-                model_type="chat",
-                **together_kwargs,
-            )
-            self.warmstart_outline_gen_lm = LitellmModel(
-                model="together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                max_tokens=500,
-                model_type="chat",
-                **together_kwargs,
-            )
-            self.question_asking_lm = LitellmModel(
-                model="together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                max_tokens=300,
-                model_type="chat",
-                **together_kwargs,
-            )
-            self.knowledge_base_lm = LitellmModel(
-                model="together_ai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                max_tokens=1000,
-                model_type="chat",
-                **together_kwargs,
-            )
-        else:
-            raise Exception(
-                "No valid OpenAI API provider is provided. Cannot use default LLM configurations."
-            )
 
     def set_question_answering_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
         self.question_answering_lm = model
@@ -175,9 +70,9 @@ class CollaborativeStormLMConfigs(LMConfigs):
     def to_dict(self):
         """Each role's model settings, for the serialised session.
 
-        Credentials are dropped. Upstream serialised `kwargs` whole, and litellm keeps `api_key`
-        there, so every session file on disk held the gateway key once per role, for as long as the
-        session was kept.
+        Credentials are dropped. Upstream serialised `kwargs` whole, and `api_key` lives there, so
+        every session file on disk held the gateway key once per role, for as long as the session
+        was kept.
 
         Nothing reads these back: `from_dict` takes its configuration from the caller, since how to
         reach a model is current configuration rather than saved state.

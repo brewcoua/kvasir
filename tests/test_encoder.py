@@ -1,9 +1,9 @@
 """The encoder must reach the configured gateway, and must never return a short result.
 
-This replaces scripts/probe_encoder.py, whose question was whether litellm read OPENAI_API_BASE
-from the environment, because upstream's Encoder dropped the api_base argument and left that as the
-only route to a gateway. It takes the argument now, so the question is answerable here instead of
-by a script somebody has to remember to run.
+This replaces scripts/probe_encoder.py, whose question was whether OPENAI_API_BASE was read from the
+environment, because upstream's Encoder dropped the api_base argument and left that as the only
+route to a gateway. It takes the argument now, so the question is answerable here instead of by a
+script somebody has to remember to run.
 """
 
 from __future__ import annotations
@@ -103,9 +103,9 @@ def test_requests_reach_the_configured_base_and_model(gateway: _Gateway) -> None
     assert len(gateway.requests) == 1
     path, body = gateway.requests[0]
     assert path == "/v1/embeddings"
-    # litellm consumes the leading provider segment to decide how to call, and sends the rest. A
-    # name like "openai/ollama/model:cloud" therefore arrives as "ollama/model:cloud".
-    assert body["model"] == "my-embedding-model"
+    # Verbatim. litellm used to consume the leading segment as a provider hint, so a name like
+    # "openai/ollama/model:cloud" arrived at the gateway as "ollama/model:cloud".
+    assert body["model"] == "openai/my-embedding-model"
 
 
 def test_a_list_is_one_request(gateway: _Gateway) -> None:

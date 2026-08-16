@@ -1,18 +1,14 @@
 """Importing the fork must not touch the filesystem or configure logging.
 
-Upstream opened a litellm disk cache under `Path.home()` while being imported, which is why the
-image used to point HOME at /tmp. These run in a subprocess because the assertions are about what
-happens during import, and the test process has already imported everything.
+Upstream opened a response cache under `Path.home()` while being imported, which is why the image
+used to point HOME at /tmp. These run in a subprocess because the assertions are about what happens
+during import, and the test process has already imported everything.
 """
 
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
-
-import pytest
-
-from kvasir.storm.runtime import configure_cache, litellm
 
 
 def _run(source: str, home: Path) -> subprocess.CompletedProcess[str]:
@@ -24,25 +20,11 @@ def _run(source: str, home: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_import_opens_no_cache(tmp_path: Path) -> None:
-    result = _run(
-        """
-        import kvasir.storm.lm
-        import kvasir.storm.encoder
-        from kvasir.storm.runtime import litellm
-
-        assert litellm.cache is None, litellm.cache
-        """,
-        tmp_path,
-    )
-    assert result.returncode == 0, result.stderr
-
-
 def test_import_writes_nothing_under_home(tmp_path: Path) -> None:
     """A read-only home must not stop the fork being imported.
 
-    This covers dspy's joblib cache as much as litellm's: dspy 2.4.9 creates `~/cachedir_joblib`
-    while being imported unless `DSP_CACHEDIR` says otherwise, which `kvasir.storm.__init__` does.
+    dspy 2.4.9 creates `~/cachedir_joblib` while being imported unless `DSP_CACHEDIR` says
+    otherwise, which `kvasir.storm.__init__` does.
     """
     home = tmp_path / "home"
     home.mkdir()
@@ -86,25 +68,3 @@ def test_importing_the_package_pulls_in_no_submodule(tmp_path: Path) -> None:
         tmp_path,
     )
     assert result.returncode == 0, result.stderr
-
-
-@pytest.fixture(autouse=True)
-def _restore_cache() -> object:
-    before = litellm.cache
-    yield
-    litellm.cache = before
-
-
-def test_configure_cache_creates_the_directory(tmp_path: Path) -> None:
-    cache_dir = tmp_path / "does" / "not" / "exist"
-    configure_cache(cache_dir)
-
-    assert cache_dir.is_dir()
-    assert litellm.cache is not None
-
-
-def test_configure_cache_with_none_disables_caching(tmp_path: Path) -> None:
-    configure_cache(tmp_path)
-    configure_cache(None)
-
-    assert litellm.cache is None

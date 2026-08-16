@@ -84,30 +84,26 @@ def test_log_format_is_checked():
         Settings.from_env(MINIMAL | {"LOG_FORMAT": "logfmt"})
 
 
-def test_apply_environment_exports_what_litellm_reads(monkeypatch):
-    for name in ("OPENAI_API_BASE", "OPENAI_BASE_URL", "DO_NOT_TRACK"):
+def test_apply_environment_disables_telemetry(monkeypatch):
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.delenv("HF_HUB_DISABLE_TELEMETRY", raising=False)
+
+    apply_environment()
+
+    assert os.environ["DO_NOT_TRACK"] == "1"
+    assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "1"
+
+
+def test_apply_environment_exports_no_credential(monkeypatch):
+    """The OPENAI_* exports existed only because litellm read them behind our back."""
+    for name in ("OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
 
-    apply_environment(Settings.from_env(MINIMAL))
+    apply_environment()
 
-    # Both spellings, because litellm reads one or the other depending on the code path taken.
-    # Models and embeddings are given the base explicitly, so these are a backstop against a
-    # default pointing at api.openai.com rather than the route to the gateway.
-    assert os.environ["OPENAI_API_BASE"] == "https://gateway.example/v1"
-    assert os.environ["OPENAI_BASE_URL"] == "https://gateway.example/v1"
-    assert os.environ["DO_NOT_TRACK"] == "1"
-
-
-def test_telemetry_is_off():
-    from kvasir.storm.runtime import litellm
-
-    assert litellm.telemetry is False
-
-
-def test_the_cache_lives_under_the_data_directory():
-    settings = Settings.from_env(MINIMAL | {"KVASIR_DATA_DIR": "/srv/kvasir"})
-
-    assert str(settings.cache_dir) == "/srv/kvasir/cache"
+    assert "OPENAI_API_KEY" not in os.environ
+    assert "OPENAI_API_BASE" not in os.environ
+    assert "OPENAI_BASE_URL" not in os.environ
 
 
 def test_settings_are_frozen():

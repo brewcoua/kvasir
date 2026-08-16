@@ -9,7 +9,7 @@ import logging
 from typing import Callable, Union, List
 
 import dspy
-import requests
+import httpx
 
 from . import runtime
 
@@ -82,8 +82,10 @@ class SearXNG(dspy.Retrieve):
                 # SearXNG serves the snippets directly, so this request is the leaf of the
                 # pipeline's nested pools and the only outbound call the retrieval level makes.
                 with runtime.fetch_slot():
-                    response = requests.get(
-                        self.searxng_api_url, headers=headers, params=params
+                    # A timeout, because upstream had none: a stalled instance held a pipeline
+                    # thread and one of the process's fetch permits indefinitely.
+                    response = httpx.get(
+                        self.searxng_api_url, headers=headers, params=params, timeout=30.0
                     )
                 results = response.json()
 

@@ -20,7 +20,7 @@ from kvasir.storm.collaborative_storm.engine import (
     RunnerArgument,
 )
 from kvasir.storm.encoder import Encoder
-from kvasir.storm.lm import LitellmModel
+from kvasir.storm.lm import GatewayModel
 from kvasir.storm.logging_wrapper import LoggingWrapper
 from kvasir.storm.rm import SearXNG
 from kvasir.storm.storm_wiki.engine import (
@@ -53,13 +53,12 @@ _COSTORM_ROLES = {
 }
 
 
-def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -> LitellmModel:
+def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -> GatewayModel:
     """A model bound to the gateway.
 
-    `LitellmModel` merges its kwargs into `litellm.completion()`, so `api_base` arrives intact.
-    `OpenAIModel` is deprecated and accepts no `api_base`, which is why it is not used.
+    The model name is sent verbatim: nothing parses or rewrites it on the way out.
     """
-    model = LitellmModel(
+    model = GatewayModel(
         model=settings.model_fast if tier == "fast" else settings.model_strong,
         api_key=settings.openai_api_key,
         api_base=settings.openai_api_base,

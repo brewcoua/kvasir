@@ -473,9 +473,9 @@ class LMConfigs(ABC):
     def log(self):
         """Each role's model settings, for the run configuration written to disk.
 
-        Credentials are dropped. Upstream returned `kwargs` whole, and litellm keeps `api_key`
-        there, so `run_config.json` was written with the gateway key in plaintext. `LitellmModel`
-        already filters the same prefix out of its call history, so this only makes the two agree.
+        Credentials are dropped. Upstream returned `kwargs` whole, and `api_key` lives there, so
+        `run_config.json` was written with the gateway key in plaintext. `GatewayModel` already
+        filters the same prefix out of its call history, so this only makes the two agree.
         """
         return OrderedDict(
             {

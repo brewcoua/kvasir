@@ -25,12 +25,14 @@ What survived a second pass, after the fork settled:
 
 - `rm.py` keeps `SearXNG` alone. The other ten retrievers are gone, nine of them behind a paid
   credential.
-- `lm.py` keeps `LM` and `LitellmModel`. The ten wrappers upstream deprecated after v1.1.0 are gone.
+- `lm.py` keeps one class, `GatewayModel`. The copied dspy `LM` base, the text-completion path, the
+  in-process LRU cache and the ten wrappers upstream deprecated after v1.1.0 are gone.
 - `utils.py` keeps `truncate_filename`, `ArticleTextProcessing` and `FileIOHelper`. `WebPageHelper`
   went with the retrievers that used it, and with it `QdrantVectorStoreManager`, `load_api_key`, and
   two appropriateness checks hardcoded to `azure/gpt-4o-mini` that nothing called.
 - Six declared dependencies went with them: `langchain-text-splitters`, `openai`, `regex`, `toml`,
-  `tqdm` and `trafilatura`. The lockfile went from 114 packages to 90.
+  `tqdm` and `trafilatura`. Dropping litellm took four more: `litellm`, `diskcache`, `ujson` and
+  `requests`. The lockfile went from 114 packages to 77.
 
 Anything removed is recoverable from upstream at the fork point in `NOTICE`.
 
@@ -40,30 +42,45 @@ whose docstrings are the prompts themselves, so most of what a linter reports th
 on prompt text. Adopting the rules would be churn against the part of the tree least worth
 reformatting.
 
+## The gateway is reached directly, and litellm is gone
+
+Every model and embedding call is one POST to an OpenAI-compatible endpoint, so `httpx` is the whole
+transport. `src/kvasir/storm/gateway.py` is that client: `post()` for the request, and
+`response_cost()` for what a call cost.
+
+litellm was doing nothing this deployment needs. Routing, provider fallbacks, retries and response
+caching are the external gateway's job — LiteLLM proxy or Bifrost — and doing them again in-process
+only added a dependency that rewrote model names on the way out. It read the first `/`-separated
+segment of a model name as a provider hint and did not forward it, which is why `KVASIR_MODEL_FAST`
+used to need explaining. Names now reach the gateway verbatim.
+
+Cost is read from whichever shape the gateway reports: a LiteLLM proxy's `x-litellm-response-cost`
+header, or a `cost` in the `usage` object, as a number or split into `prompt_cost` and
+`completion_cost`. Absent, it is 0.0.
+
+Removed with it: `diskcache`, `ujson`, `requests`, and litellm's own `aiohttp`, `tiktoken`,
+`tokenizers` and `fastuuid`.
+
 ## Configuration happens once, explicitly
 
-Upstream configured litellm as a side effect of importing `lm.py` or `encoder.py`, twice, and opened
-a disk cache under `Path.home()/.storm_local_cache` while doing it. Importing the package therefore
-wrote to the filesystem, which fails outright under a read-only root, and no caller could choose a
-different directory without editing the source.
+Upstream opened a disk cache under `Path.home()/.storm_local_cache` as a side effect of importing
+`lm.py` or `encoder.py`, twice. Importing the package therefore wrote to the filesystem, which fails
+outright under a read-only root, and no caller could choose a different directory without editing
+the source. There is no local response cache now at all: the gateway caches, and doing it in two
+places only meant two places to invalidate.
 
-`src/kvasir/storm/runtime.py` is now the only place the package configures anything process-wide.
-Importing it still sets `litellm.drop_params` and `litellm.telemetry`, because those are policy for
-this fork and neither touches the filesystem or the network. The cache is opened only by an explicit
-`configure_cache(cache_dir)` call, which `main.lifespan` makes once at startup. A caller that never
-calls it runs uncached rather than writing somewhere it did not choose.
+`src/kvasir/storm/runtime.py` is the only place the package configures anything process-wide, and
+importing it touches neither the filesystem nor the network. What is left there is concurrency and
+the usage sink.
 
 Two other import-time mutations are gone: the `logging.basicConfig` in `interface.py`, which stole
 the root logger from whatever embedded the package, and the global `httpx` logger level in
 `utils.py`.
 
 `src/kvasir/storm/__init__.py` imports no submodule, so importing the package pulls in only the
-module asked for. It sets three environment defaults, because each is read by a
-third-party package while that package is being imported:
-
-- `DSP_CACHEDIR` and `DSP_CACHEBOOL`. dspy 2.4.9 creates a joblib cache directory while `dspy` is
-  imported, whether or not caching is on. This is why the container needs a writable `/tmp`.
-- `LITELLM_LOCAL_MODEL_COST_MAP`. Without it litellm fetches its model cost map over the network.
+module asked for. It sets `DSP_CACHEDIR` and `DSP_CACHEBOOL`, because dspy 2.4.9 creates a joblib
+cache directory while `dspy` is imported, whether or not caching is on. This is why the container
+needs a writable `/tmp`.
 
 ## Embeddings go through the gateway
 
@@ -75,7 +92,7 @@ and required an `ENCODER_API_TYPE` environment variable.
 Both now use one `Encoder(model, api_key, api_base)`:
 
 - No `ENCODER_API_TYPE`, no hardcoded model name, no Azure special case.
-- One `litellm.embedding` call for a whole list, rather than one request per text across a thread
+- One `/embeddings` request for a whole list, rather than one request per text across a thread
   pool.
 - A failed or short response raises `EmbeddingError`. Upstream printed per-text failures and carried
   on, returning fewer vectors than it was given texts and misaligning the ones it did return against
@@ -131,7 +148,7 @@ tree. It copies the submitting thread's context into each task, so the run ident
 `kvasir.logs` puts in contextvars survives the fan-out, which is where most of a run happens.
 
 `runtime` also carries a `UsageSink` on a contextvar. `lm.py` reports each completion with its
-token counts and litellm's `response_cost`, `encoder.py` reports embedding tokens, and
+token counts and what the gateway reported the call cost, `encoder.py` reports embedding tokens, and
 `Retriever.retrieve` reports query counts. Nothing in the tree imports `kvasir`; with no sink
 installed the calls are no-ops. `kvasir.runs.Run` is the sink the service installs.
 
@@ -147,7 +164,7 @@ caller to remember.
 
 ## Credentials are not serialised
 
-litellm keeps `api_key` in a model's `kwargs`, and upstream wrote that dict out whole in two places:
+A model keeps `api_key` in its `kwargs`, and upstream wrote that dict out whole in two places:
 
 - `LMConfigs.log()`, which `STORMWikiRunner.post_run` writes to `run_config.json` in the output
   directory.
@@ -155,7 +172,7 @@ litellm keeps `api_key` in a model's `kwargs`, and upstream wrote that dict out 
   every serialised Co-STORM session. A session file held the gateway key once per role, for as long
   as the session was kept.
 
-Both now drop keys beginning with `api_`, which is the filter `LitellmModel.__call__` already
+Both now drop keys beginning with `api_`, which is the filter `GatewayModel.__call__` already
 applied to its own call history. Nothing reads the serialised configuration back: since the
 `from_dict` change above, how to reach a model is current configuration rather than saved state.
 
@@ -177,7 +194,7 @@ succeeded.
   any failure, which then entered the conversation log as if the expert had said it. It logs the
   failure and drops the turn. The second canned answer in that file, for genuinely empty retrieval,
   is upstream's deliberate anti-hallucination guard and is kept.
-- `LitellmModel` was the only live language model wrapper and the only one without a
+- The only live language model wrapper was the only one without a
   `@backoff.on_exception`. All seven that had one are on classes deprecated after upstream v1.1.0.
   It now retries connection errors, rate limits, timeouts and 5xx. A bad request, an auth failure or
   a context-length overflow is deterministic and still fails immediately.
@@ -197,9 +214,10 @@ succeeded.
 
 `CoStormRunner.from_dict` carried its own `# FIXME`. It discarded the serialised language model
 configuration, re-ran `CollaborativeStormLMConfigs.init()` from `OPENAI_API_TYPE`, and passed no
-`rm`. `init()` is the method that hardcodes `api_base=None` against `gpt-4o-2024-05-13`, so a
+`rm`. `init()` was the method that hardcoded `api_base=None` against `gpt-4o-2024-05-13`, so a
 restored session billed an OpenAI account directly and retrieved through `BingSearch`. None of that
-surfaced as an error.
+surfaced as an error. `init()` and its STORM counterpart `init_openai_model()` are now deleted:
+nothing could point either at a gateway, and every role is set explicitly by `kvasir.runners`.
 
 `from_dict` now takes `lm_config`, `encoder` and `rm` and uses them. How to reach a model is current
 configuration, not saved state, so `kvasir.runners.load_costorm_runner` passes what the current

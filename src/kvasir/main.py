@@ -37,7 +37,7 @@ from kvasir.research import run_research
 from kvasir.runs import Run, RunNotFound, RunRegistry
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.sse import HEADERS, MEDIA_TYPE, frame
-from kvasir.storm.runtime import configure_cache, configure_concurrency
+from kvasir.storm.runtime import configure_concurrency
 
 READINESS_TIMEOUT_SECONDS = 5.0
 INDEX = Path(__file__).parent / "static" / "index.html"
@@ -49,10 +49,7 @@ logger = logging.getLogger("kvasir")
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Fail here rather than on the first request if the environment is unusable."""
     settings = Settings.from_env()
-    apply_environment(settings)
-    # Nothing in the fork opens a cache by itself, so this is the only call that decides where
-    # model and embedding responses are cached.
-    configure_cache(settings.cache_dir)
+    apply_environment()
     configure_concurrency(settings.max_threads)
     logs.configure(settings)
 

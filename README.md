@@ -132,8 +132,10 @@ The same data is available as JSON.
 A run is `queued`, `running`, `done`, `failed` or `rejected`. `rejected` means it never got a slot,
 so a 429 is visible as a run rather than only as a status code.
 
-Cost comes from what the gateway reports per call. A gateway that reports no cost leaves it at zero,
-which is not the same as free. Runs are held in memory, capped at the 100 most recent, and do not
+Cost comes from what the gateway reports per call. Two shapes are read: a LiteLLM proxy's
+`x-litellm-response-cost` response header, and a `cost` field in the response's `usage` object,
+either a number or split into `prompt_cost` and `completion_cost` as Bifrost reports it. A gateway
+that reports no cost leaves it at zero, which is not the same as free. Runs are held in memory, capped at the 100 most recent, and do not
 survive a restart.
 
 ## Configuration
@@ -159,22 +161,17 @@ without them.
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
 | `LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 
-Nothing in kvasir validates, normalises or rewrites a model name, but litellm reads the first
-segment as its provider and does not forward it. Set
-`KVASIR_MODEL_FAST=openai/ollama/model:cloud` and litellm consumes the leading `openai/`, sends
-`ollama/model:cloud` to `OPENAI_API_BASE`, and the rest of the name reaches the gateway intact.
-
-This applies to `KVASIR_EMBEDDING_MODEL` too. A name whose first segment is a provider litellm knows,
-such as `ollama/embed:cloud`, is routed to that provider rather than to your gateway. Prefix it with
-`openai/`. The default needs no prefix because litellm already resolves `text-embedding-3-small` to
-the OpenAI provider, and so to `OPENAI_API_BASE`.
+Model names reach the gateway verbatim. Nothing in kvasir validates, normalises, rewrites or splits
+one, so `KVASIR_MODEL_FAST`, `KVASIR_MODEL_STRONG` and `KVASIR_EMBEDDING_MODEL` are whatever your
+gateway calls the model, in whatever spelling it uses for routing.
 
 Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
 
-`OPENAI_API_KEY` and `OPENAI_API_BASE` keep those names because litellm reads them directly for
-anything constructed without them. There is deliberately no `KVASIR_` alias, since an alias is how
-embeddings silently end up on `api.openai.com`.
+`OPENAI_API_KEY` and `OPENAI_API_BASE` keep those names because they are the conventional spelling
+for an OpenAI-compatible endpoint, which is what the gateway serves. Both are passed explicitly to
+every model and to the encoder; neither is exported back into the environment, so there is no path
+by which a default reaches `api.openai.com`.
 
 Saturation returns 429 rather than queueing, because a queued run would outlast any sensible client
 timeout.
