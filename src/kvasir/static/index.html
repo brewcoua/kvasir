@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kvasir runs</title>
+    <!--
+      Everything is inline. The image is read-only and has no outbound network, so a stylesheet or
+      script from anywhere else would simply fail to load.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfbfa;
+        --panel: #ffffff;
+        --line: #e3e2df;
+        --text: #1c1b19;
+        --dim: #6d6b66;
+        --accent: #3b5bdb;
+        --ok: #2f9e44;
+        --bad: #c92a2a;
+        --busy: #e08c00;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16161a;
+          --panel: #1e1e23;
+          --line: #33333b;
+          --text: #eceaea;
+          --dim: #9a978f;
+          --accent: #748ffc;
+          --ok: #69db7c;
+          --bad: #ff8787;
+          --busy: #ffc078;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+      }
+      h1 {
+        font-size: 1rem;
+        margin: 0;
+        letter-spacing: 0.02em;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(16rem, 22rem) 1fr;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        align-items: start;
+      }
+      @media (max-width: 60rem) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .panel h2 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--dim);
+        margin: 0;
+        padding: 0.6rem 0.85rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .runs button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 0.6rem 0.85rem;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      .runs button:hover {
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      .runs button[aria-current="true"] {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .topic {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .meta {
+        color: var(--dim);
+        font-size: 0.8rem;
+      }
+      .state {
+        font-weight: 600;
+      }
+      .state.running {
+        color: var(--busy);
+      }
+      .state.done {
+        color: var(--ok);
+      }
+      .state.failed,
+      .state.rejected {
+        color: var(--bad);
+      }
+      .body {
+        padding: 0.85rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.25rem 0.5rem 0.25rem 0;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--dim);
+        font-weight: 500;
+        font-size: 0.8rem;
+      }
+      td.n,
+      th.n {
+        text-align: right;
+        padding-right: 0;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      .events {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-height: 22rem;
+        overflow-y: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+      }
+      .events li {
+        padding: 0.15rem 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .stage {
+        color: var(--accent);
+      }
+      .empty {
+        color: var(--dim);
+        padding: 0.85rem;
+      }
+      .error {
+        color: var(--bad);
+        margin-top: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>kvasir</h1>
+      <span class="meta" id="summary">loading…</span>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>Runs</h2>
+        <div class="runs" id="runs"><p class="empty">Nothing has run yet.</p></div>
+      </section>
+
+      <section class="panel">
+        <h2>Detail</h2>
+        <div class="body" id="detail"><p class="empty">Pick a run.</p></div>
+      </section>
+    </main>
+
+    <script>
+      const LIST_INTERVAL_MS = 3000;
+
+      let selected = null;
+      let source = null;
+
+      const el = (id) => document.getElementById(id);
+      const text = (value) => document.createTextNode(String(value));
+
+      function seconds(from, to) {
+        if (!from) return "";
+        const end = to ?? Date.now() / 1000;
+        return `${(end - from).toFixed(1)}s`;
+      }
+
+      function node(tag, className, content) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (content !== undefined) element.append(text(content));
+        return element;
+      }
+
+      async function json(path) {
+        const response = await fetch(path);
+        if (!response.ok) throw new Error(`${path}: ${response.status}`);
+        return response.json();
+      }
+
+      function drawRuns(runs) {
+        const list = el("runs");
+        list.replaceChildren();
+        if (runs.length === 0) {
+          list.append(node("p", "empty", "Nothing has run yet."));
+          return;
+        }
+        for (const run of runs) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.setAttribute("aria-current", String(run.id === selected));
+          button.append(node("span", "topic", run.topic));
+
+          const meta = node("span", "meta");
+          meta.append(node("span", `state ${run.state}`, run.state));
+          meta.append(text(` · ${run.kind} · ${seconds(run.started_at, run.ended_at)}`));
+          button.append(meta);
+
+          button.addEventListener("click", () => select(run.id));
+          list.append(button);
+        }
+      }
+
+      function usageTable(title, rows) {
+        const table = document.createElement("table");
+        const head = table.insertRow();
+        for (const [label, numeric] of [
+          [title, false],
+          ["calls", true],
+          ["in", true],
+          ["out", true],
+          ["cost", true],
+        ]) {
+          const cell = document.createElement("th");
+          if (numeric) cell.className = "n";
+          cell.append(text(label));
+          head.append(cell);
+        }
+        for (const [name, usage] of Object.entries(rows)) {
+          const row = table.insertRow();
+          row.insertCell().append(text(name));
+          for (const value of [
+            usage.calls,
+            usage.prompt_tokens,
+            usage.completion_tokens,
+            usage.cost.toFixed(4),
+          ]) {
+            const cell = row.insertCell();
+            cell.className = "n";
+            cell.append(text(value));
+          }
+        }
+        const wrapper = node("div", "scroll");
+        wrapper.append(table);
+        return wrapper;
+      }
+
+      function drawDetail(run) {
+        const panel = el("detail");
+        panel.replaceChildren();
+
+        const heading = node("p");
+        heading.append(node("span", `state ${run.state}`, run.state));
+        heading.append(text(` · ${run.topic}`));
+        panel.append(heading);
+
+        const usage = run.usage;
+        panel.append(
+          node(
+            "p",
+            "meta",
+            `${usage.prompt_tokens + usage.completion_tokens} tokens · ` +
+              `${usage.cost.toFixed(4)} cost · ${usage.embedding_tokens} embedding tokens · ` +
+              `${usage.searches} searches`,
+          ),
+        );
+
+        if (run.error) panel.append(node("p", "error", run.error));
+
+        if (run.stages.length > 0) {
+          const stages = document.createElement("table");
+          for (const stage of run.stages) {
+            const row = stages.insertRow();
+            row.insertCell().append(text(stage.name));
+            const cell = row.insertCell();
+            cell.className = "n";
+            cell.append(text(seconds(stage.started_at, stage.ended_at)));
+          }
+          const wrapper = node("div", "scroll");
+          wrapper.append(stages);
+          panel.append(wrapper);
+        }
+
+        if (Object.keys(usage.by_role).length > 0) panel.append(usageTable("role", usage.by_role));
+        if (Object.keys(usage.by_model).length > 0)
+          panel.append(usageTable("model", usage.by_model));
+
+        const events = node("ul", "events");
+        events.id = "events";
+        for (const event of run.events) events.append(eventItem(event));
+        panel.append(events);
+      }
+
+      function eventItem(event) {
+        const item = document.createElement("li");
+        item.append(node("span", "stage", event.stage));
+        item.append(text(` ${event.detail}`));
+        return item;
+      }
+
+      function follow(runId) {
+        source = new EventSource(`/v1/runs/${runId}/events`);
+
+        source.addEventListener("snapshot", (message) => {
+          const run = JSON.parse(message.data);
+          if (run.id !== selected) return;
+          drawDetail(run);
+          // The server closes the stream once the run is over. EventSource would reconnect for
+          // ever otherwise, since it treats any close as a connection to retry.
+          if (run.ended_at !== null) source.close();
+        });
+
+        source.addEventListener("progress", (message) => {
+          const list = el("events");
+          if (!list) return;
+          list.append(eventItem(JSON.parse(message.data)));
+          list.scrollTop = list.scrollHeight;
+        });
+      }
+
+      async function select(runId) {
+        if (source) source.close();
+        selected = runId;
+        drawDetail(await json(`/v1/runs/${runId}`));
+        follow(runId);
+        refresh();
+      }
+
+      async function refresh() {
+        try {
+          const runs = await json("/v1/runs");
+          drawRuns(runs);
+          const active = runs.filter((run) => run.state === "running").length;
+          el("summary").textContent = `${runs.length} run(s), ${active} in flight`;
+        } catch (error) {
+          el("summary").textContent = String(error);
+        }
+      }
+
+      refresh();
+      setInterval(refresh, LIST_INTERVAL_MS);
+    </script>
+  </body>
+</html>
