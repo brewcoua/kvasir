@@ -3,13 +3,12 @@ import logging
 import os
 import re
 import toml
-from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
+from typing import List, Tuple, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..engine import RunnerArgument
 from ...interface import Information, Retriever, LMConfigs
 from ...logging_wrapper import LoggingWrapper
-from ...rm import BingSearch
 
 logger = logging.getLogger(__name__)
 
@@ -246,13 +245,10 @@ def _get_answer_question_module_instance(
     lm_config: LMConfigs,
     runner_argument: "RunnerArgument",
     logging_wrapper: LoggingWrapper,
-    rm: Optional[dspy.Retrieve] = None,
+    rm: dspy.Retrieve,
 ):
     from .grounded_question_answering import AnswerQuestionModule
 
-    # configure retriever
-    if rm is None:
-        rm = BingSearch(k=runner_argument.retrieve_top_k)
     retriever = Retriever(rm=rm, max_thread=runner_argument.max_search_thread)
     # return AnswerQuestionModule instance
     return AnswerQuestionModule(

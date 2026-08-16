@@ -81,7 +81,7 @@ def test_both_tiers_are_actually_used(storm, costorm):
 
 
 def test_costorm_uses_searxng_rather_than_the_paid_default(costorm):
-    # CoStormRunner falls back to BingSearch when rm is omitted, which needs a paid key.
+    # Upstream fell back to BingSearch when rm was omitted, which needs a paid key.
     assert type(costorm.rm).__name__ == "SearXNG"
     assert costorm.rm.searxng_api_url == "http://searxng.example"
 
@@ -128,10 +128,10 @@ def test_overrides_do_not_mutate_the_shared_settings(settings, tmp_path):
 def test_a_restored_session_still_reaches_the_gateway(settings):
     """The regression this guards is silent and expensive.
 
-    CoStormRunner.from_dict calls CollaborativeStormLMConfigs.init(), which hardcodes
-    api_base=None against gpt-4o-2024-05-13, and passes no retriever so BingSearch is used. A
-    session restored that way would bill an OpenAI account directly and fail on a paid search key,
-    with nothing in the response to say so.
+    Upstream's from_dict called CollaborativeStormLMConfigs.init(), which hardcodes api_base=None
+    against gpt-4o-2024-05-13, and passed no retriever so BingSearch was used. A session restored
+    that way would bill an OpenAI account directly and fail on a paid search key, with nothing in
+    the response to say so.
     """
 
     original = build_costorm_runner(settings, "a narrow topic")

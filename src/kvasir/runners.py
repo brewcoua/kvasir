@@ -2,8 +2,7 @@
 
 Every language model role is set explicitly. The convenience initialiser
 `CollaborativeStormLMConfigs.init()` hardcodes `api_base=None` and cannot be pointed at a gateway,
-so it is never called. The retriever is always passed explicitly too, because `CoStormRunner`
-defaults to `BingSearch`, which needs a paid key.
+so it is never called.
 
 See docs/upstream-notes.md for the signatures these rely on.
 """
@@ -20,7 +19,6 @@ from kvasir.storm.collaborative_storm.engine import (
     CoStormRunner,
     RunnerArgument,
 )
-from kvasir.storm.dataclass import ConversationTurn, KnowledgeBase
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import LitellmModel
 from kvasir.storm.logging_wrapper import LoggingWrapper
@@ -129,6 +127,13 @@ def build_storm_runner(
     return STORMWikiRunner(arguments, lm_configs, _retriever(settings, top_k), _encoder(settings))
 
 
+def _costorm_lm_config(settings: Settings) -> CollaborativeStormLMConfigs:
+    lm_config = CollaborativeStormLMConfigs()
+    for role, (tier, max_tokens) in _COSTORM_ROLES.items():
+        getattr(lm_config, f"set_{role}_lm")(_language_model(settings, tier, max_tokens))
+    return lm_config
+
+
 def build_costorm_runner(
     settings: Settings,
     topic: str,
@@ -139,10 +144,7 @@ def build_costorm_runner(
     """Build a Co-STORM runner for `topic`. Call `warm_start()` on it before stepping."""
     settings = _with_model_overrides(settings, model_fast, model_strong)
 
-    lm_config = CollaborativeStormLMConfigs()
-    for role, (tier, max_tokens) in _COSTORM_ROLES.items():
-        getattr(lm_config, f"set_{role}_lm")(_language_model(settings, tier, max_tokens))
-
+    lm_config = _costorm_lm_config(settings)
     runner = CoStormRunner(
         lm_config=lm_config,
         runner_argument=RunnerArgument(
@@ -161,34 +163,16 @@ def build_costorm_runner(
 def load_costorm_runner(settings: Settings, state: dict[str, Any]) -> CoStormRunner:
     """Restore a Co-STORM runner from `to_dict()` output.
 
-    `CoStormRunner.from_dict` is deliberately not used. It calls
-    `CollaborativeStormLMConfigs.init()`, which hardcodes `api_base=None` against
-    `gpt-4o-2024-05-13`, so a restored session would talk to api.openai.com rather than the
-    gateway. It also builds no retriever, falling back to `BingSearch`. Its own source carries a
-    FIXME about discarding the serialised model configuration.
-
-    So the runner is built correctly first and the conversation state is restored onto it. That is
-    what `from_dict` does either way; only the parts it gets wrong are replaced.
-
-    The runner arguments come from current settings rather than from the file, so a configuration
-    change takes effect on the next turn of an existing session.
+    The models, encoder and retriever come from current settings rather than from the file, so a
+    configuration change takes effect on the next turn of an existing session. The runner arguments
+    are the exception: they are restored, since they shaped the conversation already in the file.
     """
-    runner = build_costorm_runner(settings, state["runner_argument"]["topic"])
-
-    runner.conversation_history = [
-        ConversationTurn.from_dict(turn) for turn in state["conversation_history"]
-    ]
-    runner.warmstart_conv_archive = [
-        ConversationTurn.from_dict(turn) for turn in state.get("warmstart_conv_archive", [])
-    ]
-    runner.discourse_manager.deserialize_experts(state["experts"])
-    runner.knowledge_base = KnowledgeBase.from_dict(
-        data=state["knowledge_base"],
-        knowledge_base_lm=runner.lm_config.knowledge_base_lm,
-        node_expansion_trigger_count=runner.runner_argument.node_expansion_trigger_count,
-        encoder=runner.encoder,
+    return CoStormRunner.from_dict(
+        state,
+        lm_config=_costorm_lm_config(settings),
+        encoder=_encoder(settings),
+        rm=_retriever(settings, settings.search_top_k),
     )
-    return runner
 
 
 def _with_model_overrides(
