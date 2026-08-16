@@ -2,7 +2,7 @@
 
 `STORMWikiRunner.run()` returns nothing useful. It writes a directory of files and leaves the path
 on `runner.article_output_dir`, which is what the service reads rather than recomputing the
-topic-to-directory rule. See docs/upstream-notes.md.
+topic-to-directory rule. See docs/fork-notes.md.
 """
 
 from __future__ import annotations

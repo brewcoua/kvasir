@@ -4,7 +4,7 @@ Every language model role is set explicitly. The convenience initialiser
 `CollaborativeStormLMConfigs.init()` hardcodes `api_base=None` and cannot be pointed at a gateway,
 so it is never called.
 
-See docs/upstream-notes.md for the signatures these rely on.
+See docs/fork-notes.md for the signatures these rely on.
 """
 
 from __future__ import annotations

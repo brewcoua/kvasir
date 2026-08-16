@@ -11,6 +11,9 @@ Upstream ships a Python library and a Streamlit demo labelled for local developm
 and no container image. This repository supplies the missing middle: a small FastAPI service, a
 `linux/amd64` image on GHCR, and two Open WebUI Pipe functions.
 
+`knowledge_storm` is vendored as `src/kvasir/storm` and modified, rather than depended on. See
+[`docs/fork-notes.md`](docs/fork-notes.md) for what diverges and why.
+
 ## What it needs
 
 - An OpenAI-compatible gateway. All model and embedding traffic goes there, and nothing calls
@@ -52,11 +55,15 @@ starting and failing on the first request.
 Pin the digest in production. `ghcr.io/brewcoua/kvasir:0.1.0@sha256:...` is the intended form; the
 publishing workflow writes the digest to its run summary. There is deliberately no moving `latest`.
 
+Open `localhost:8080/` for the runs page: what is running now, which stage it is in, how long each
+stage took, and what it has spent.
+
 ### Runtime requirements
 
 The image runs as uid 65532 under a read-only root filesystem. Only `/data` and `/tmp` need to be
-writable. `/tmp` is required, not optional: `knowledge_storm` opens a cache under `$HOME` while
-being imported, and the image points `HOME` there.
+writable. `/tmp` is required, not optional: dspy creates a joblib cache directory while it is being
+imported, whether or not caching is on, and `src/kvasir/storm/__init__.py` points `DSP_CACHEDIR`
+there. A run's scratch directory also lives under `/tmp`.
 
 ## Research a topic
 
@@ -69,6 +76,9 @@ curl -N -X POST localhost:8080/v1/research \
 The response is `text/event-stream`:
 
 ```
+event: run
+data: {"run_id": "0f3c9a1b7e42"}
+
 event: progress
 data: {"stage": "research", "detail": "completed conversation turn 3"}
 
@@ -78,6 +88,10 @@ data: {"article": "...", "outline": "...", "citations": [...], "duration_seconds
 
 Stages are `research`, `outline`, `article` and `polish`. A run takes minutes to tens of minutes,
 so use a client that streams, and set a generous timeout.
+
+Every streaming response opens with a `run` frame. Use its `run_id` to follow the run at
+`/v1/runs/{id}` if the client stops reading, and to attribute cost afterwards. A client that does
+not know the event name ignores it.
 
 Optional fields: `search_top_k`, `max_conv_turn`, `max_perspective`, `do_polish_article`,
 `model_fast`, `model_strong`. Each falls back to the configured default.
@@ -101,6 +115,27 @@ Sessions are one JSON file each under `$KVASIR_DATA_DIR/sessions`, written to a 
 and renamed, so a crash mid-write leaves the previous session readable. Expired sessions are swept
 once at startup, with no scheduler and no background task.
 
+## Watch what is running
+
+`GET /` serves a single page listing runs, and for a selected run its stages with timings, its token
+and cost tally split by role and by model, and its event log. It is one self-contained file with no
+external asset, since the image is read-only and offline.
+
+The same data is available as JSON.
+
+| Request | Effect |
+| --- | --- |
+| `GET /v1/runs` | Every run the process remembers, newest first. |
+| `GET /v1/runs/{id}` | One run, with per-stage timings, usage and recent events. |
+| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a snapshot. |
+
+A run is `queued`, `running`, `done`, `failed` or `rejected`. `rejected` means it never got a slot,
+so a 429 is visible as a run rather than only as a status code.
+
+Cost comes from what the gateway reports per call. A gateway that reports no cost leaves it at zero,
+which is not the same as free. Runs are held in memory, capped at the 100 most recent, and do not
+survive a restart.
+
 ## Configuration
 
 Everything is environment variables. The first five are required and the service will not start
@@ -113,20 +148,32 @@ without them.
 | `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing. |
 | `KVASIR_MODEL_STRONG` | required | Outline and article generation. |
 | `KVASIR_SEARXNG_URL` | required | SearXNG base URL. |
-| `KVASIR_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model. Co-STORM only. |
+| `KVASIR_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model. Used by both modes. |
 | `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions. |
 | `KVASIR_SESSION_TTL_HOURS` | `168` | Session expiry, applied at startup. |
 | `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
+| `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
 | `KVASIR_MAX_CONV_TURN` | `3` | Questions per perspective. |
 | `KVASIR_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
+| `LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 
-Model names reach the gateway exactly as written, including any routing prefix such as
-`openai/ollama/model:cloud`. Nothing validates, normalises or strips them.
+Nothing in kvasir validates, normalises or rewrites a model name, but litellm reads the first
+segment as its provider and does not forward it. Set
+`KVASIR_MODEL_FAST=openai/ollama/model:cloud` and litellm consumes the leading `openai/`, sends
+`ollama/model:cloud` to `OPENAI_API_BASE`, and the rest of the name reaches the gateway intact.
 
-`OPENAI_API_KEY` and `OPENAI_API_BASE` keep those names because litellm and `knowledge_storm`'s
-`Encoder` read them directly. There is deliberately no `KVASIR_` alias, since an alias is how
+This applies to `KVASIR_EMBEDDING_MODEL` too. A name whose first segment is a provider litellm knows,
+such as `ollama/embed:cloud`, is routed to that provider rather than to your gateway. Prefix it with
+`openai/`. The default needs no prefix because litellm already resolves `text-embedding-3-small` to
+the OpenAI provider, and so to `OPENAI_API_BASE`.
+
+Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
+inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
+
+`OPENAI_API_KEY` and `OPENAI_API_BASE` keep those names because litellm reads them directly for
+anything constructed without them. There is deliberately no `KVASIR_` alias, since an alias is how
 embeddings silently end up on `api.openai.com`.
 
 Saturation returns 429 rather than queueing, because a queued run would outlast any sensible client
@@ -134,11 +181,14 @@ timeout.
 
 ## Cost and duration
 
-**Not measured.** No gateway was reachable while this was built, so no honest figure for tokens or
-wall-clock time on a default run can be given here. The defaults come from upstream's own examples
-rather than from measurement. Measure once against your own gateway before deciding whether they
-suit you, and note that `max_conv_turn` and `max_perspective` multiply: the research stage is
-roughly `max_perspective * max_conv_turn` conversations.
+**Not measured here.** No gateway was reachable while this was built, so no honest figure for
+tokens or wall-clock time on a default run can be given. The defaults come from upstream's own
+examples rather than from measurement.
+
+Measure against your own gateway. `GET /v1/runs/{id}` reports a finished run's tokens and cost split
+by role and by model, which is enough to decide whether the defaults suit you. Note that
+`max_conv_turn` and `max_perspective` multiply: the research stage is roughly
+`max_perspective * max_conv_turn` conversations.
 
 ## Open WebUI
 
@@ -155,17 +205,23 @@ uv run mypy
 uv run pytest -m integration   # needs a real gateway and SearXNG
 ```
 
-[`docs/upstream-notes.md`](docs/upstream-notes.md) records what was read from the installed
-`knowledge-storm`, including several traps that produce wrong behaviour rather than errors. Read it
-before changing anything that touches upstream.
+[`docs/fork-notes.md`](docs/fork-notes.md) records every divergence from upstream, what it fixes,
+and how to rebase onto a later upstream. Read it before changing anything under `src/kvasir/storm`.
 
-`knowledge-storm` is dormant: version 1.1.1, last released 2025-01-23. Its pin is expected to sit
-still, and a stale pin is not a bug. Renovate is configured accordingly.
+That directory is excluded from `ruff format --check`, from the strict lint rules and from `mypy`,
+until the unused retrievers and deprecated model wrappers are trimmed. Trimming them is a separate
+pass.
+
+`dspy-ai` is pinned at 2.4.9, which is what the fork was written against. Its API changed
+substantially afterwards, so raising it is a project rather than a dependency bump, and Renovate is
+configured not to offer one.
 
 ## Licence
 
 Dual MIT and Apache-2.0, at your option. See [LICENSE-MIT](LICENSE-MIT) and
 [LICENSE-APACHE](LICENSE-APACHE).
 
-STORM and Co-STORM are the work of [Stanford OVAL](https://github.com/stanford-oval/storm), used
-here as a published dependency under the MIT licence. This repository neither forks nor vendors it.
+STORM and Co-STORM are the work of [Stanford OVAL](https://github.com/stanford-oval/storm). Their
+`knowledge_storm` package is vendored and modified under `src/kvasir/storm`, which stays MIT only,
+as upstream is. See [`src/kvasir/storm/NOTICE`](src/kvasir/storm/NOTICE) for the fork point and
+[`docs/fork-notes.md`](docs/fork-notes.md) for what was changed.
