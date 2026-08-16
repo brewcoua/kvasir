@@ -3,6 +3,7 @@ from typing import List, Optional, Union
 
 import numpy as np
 
+from . import runtime
 from .runtime import litellm
 
 
@@ -79,8 +80,10 @@ class Encoder:
                 f"for {len(texts)} text(s)"
             )
 
+        tokens = response.get("usage", {}).get("total_tokens", 0)
         with self._token_usage_lock:
-            self.total_token_usage += response.get("usage", {}).get("total_tokens", 0)
+            self.total_token_usage += tokens
+        runtime.record_embedding_usage(self.embedding_model_name, tokens)
 
         return np.array([item["embedding"] for item in data])
 

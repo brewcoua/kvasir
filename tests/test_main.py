@@ -102,8 +102,9 @@ def test_research_streams_progress_then_the_article(client, monkeypatch):
     assert response.headers["content-type"].startswith("text/event-stream")
 
     events = parse(response.text)
-    assert [name for name, _ in events] == ["progress", "progress", "done"]
-    assert events[0][1] == {"stage": "research", "detail": "asking questions"}
+    assert [name for name, _ in events] == ["run", "progress", "progress", "done"]
+    assert events[0][1]["run_id"]
+    assert events[1][1] == {"stage": "research", "detail": "asking questions"}
     assert events[-1][1]["article"] == RESULT.article
     assert events[-1][1]["citations"][0]["index"] == 1
 
@@ -115,8 +116,8 @@ def test_research_reports_a_failure_as_an_error_event(client, monkeypatch):
     monkeypatch.setattr(main, "run_research", fake_run)
     events = parse(client.post("/v1/research", json={"topic": "x"}).text)
 
-    assert [name for name, _ in events] == ["error"]
-    assert "gateway refused the connection" in events[0][1]["message"]
+    assert [name for name, _ in events] == ["run", "error"]
+    assert "gateway refused the connection" in events[-1][1]["message"]
 
 
 def test_research_rejects_an_empty_topic(client):
@@ -179,8 +180,8 @@ def test_creating_a_session_streams_warm_start_progress(client, sessions, monkey
     monkeypatch.setattr(main.conversation, "create", fake_create)
     events = parse(client.post("/v1/session", json={"session_id": "chat-1", "topic": "x"}).text)
 
-    assert [name for name, _ in events] == ["progress", "done"]
-    assert events[0][1]["stage"] == "warm_start"
+    assert [name for name, _ in events] == ["run", "progress", "done"]
+    assert events[1][1]["stage"] == "warm_start"
     assert events[-1][1]["experts"] == ["Petrologist"]
 
 
@@ -208,7 +209,7 @@ def test_stepping_streams_progress_then_the_turn(client, sessions, monkeypatch):
     monkeypatch.setattr(main.conversation, "step", fake_step)
     events = parse(client.post("/v1/session/chat-1/step", json={"utterance": "why?"}).text)
 
-    assert [name for name, _ in events] == ["progress", "done"]
+    assert [name for name, _ in events] == ["run", "progress", "done"]
     turn = events[-1][1]
     assert turn["role"] == "Petrologist"
     assert turn["mind_map_reorganised"] is True
@@ -231,8 +232,8 @@ def test_stepping_without_an_utterance_advances_the_round_table(client, sessions
 def test_stepping_a_missing_session_reports_it_in_the_stream(client, sessions):
     events = parse(client.post("/v1/session/absent/step", json={}).text)
 
-    assert [name for name, _ in events] == ["error"]
-    assert "no session absent" in events[0][1]["message"]
+    assert [name for name, _ in events] == ["run", "error"]
+    assert "no session absent" in events[-1][1]["message"]
 
 
 def test_report_returns_markdown_and_citations(client, sessions, monkeypatch):

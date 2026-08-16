@@ -311,6 +311,9 @@ class Retriever:
                 except Exception:
                     logger.exception("Retrieval failed for query %r", futures[future])
 
+        # Every retriever passes through here, so counting queries once is enough for all of them.
+        runtime.record_search_usage(type(self.rm).__name__, len(queries))
+
         return to_return
 
 

@@ -23,6 +23,7 @@ except ImportError:
 ############################
 # Code copied from https://github.com/stanfordnlp/dspy/blob/main/dspy/clients/lm.py on Sep 29, 2024
 
+from . import runtime
 from .runtime import litellm
 
 logger = logging.getLogger(__name__)
@@ -251,6 +252,16 @@ class LitellmModel(LM):
         )
         response_dict = response.json()
         self.log_usage(response_dict)
+        usage = response_dict.get("usage") or {}
+        runtime.record_lm_usage(
+            self.model,
+            # Set by whatever built this model, so a run can be read as which stage spent what.
+            getattr(self, "role", None),
+            usage.get("prompt_tokens", 0),
+            usage.get("completion_tokens", 0),
+            # None on a cache hit, which costs nothing.
+            response.get("_hidden_params", {}).get("response_cost") or 0.0,
+        )
         outputs = [
             c.message.content if hasattr(c, "message") else c["text"]
             for c in response["choices"]
