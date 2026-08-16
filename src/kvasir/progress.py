@@ -11,7 +11,7 @@ import logging
 import threading
 from typing import Any
 
-from kvasir import logs
+from kvasir import logs, runs
 from kvasir.models import Progress
 from kvasir.storm.collaborative_storm.modules.callback import (
     BaseCallbackHandler as CoStormBaseCallbackHandler,
@@ -45,6 +45,7 @@ class ProgressStream:
         spawns afterwards inherit it.
         """
         logs.set_stage(stage)
+        runs.record_progress(stage, detail)
         logger.info("%s", detail)
         event = Progress(stage=stage, detail=detail)
         self._loop.call_soon_threadsafe(self._queue.put_nowait, event)

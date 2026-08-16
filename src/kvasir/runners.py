@@ -53,13 +53,13 @@ _COSTORM_ROLES = {
 }
 
 
-def _language_model(settings: Settings, tier: str, max_tokens: int) -> LitellmModel:
+def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -> LitellmModel:
     """A model bound to the gateway.
 
     `LitellmModel` merges its kwargs into `litellm.completion()`, so `api_base` arrives intact.
     `OpenAIModel` is deprecated and accepts no `api_base`, which is why it is not used.
     """
-    return LitellmModel(
+    model = LitellmModel(
         model=settings.model_fast if tier == "fast" else settings.model_strong,
         api_key=settings.openai_api_key,
         api_base=settings.openai_api_base,
@@ -69,6 +69,9 @@ def _language_model(settings: Settings, tier: str, max_tokens: int) -> LitellmMo
         temperature=1.0,
         top_p=0.9,
     )
+    # Read back when the model reports its usage, so a run can be read as which stage spent what.
+    model.role = role
+    return model
 
 
 def _encoder(settings: Settings) -> Encoder:
@@ -112,7 +115,7 @@ def build_storm_runner(
 
     lm_configs = STORMWikiLMConfigs()
     for role, (tier, max_tokens) in _STORM_ROLES.items():
-        getattr(lm_configs, f"set_{role}_lm")(_language_model(settings, tier, max_tokens))
+        getattr(lm_configs, f"set_{role}_lm")(_language_model(settings, role, tier, max_tokens))
 
     top_k = search_top_k if search_top_k is not None else settings.search_top_k
     arguments = STORMWikiRunnerArguments(
@@ -130,7 +133,7 @@ def build_storm_runner(
 def _costorm_lm_config(settings: Settings) -> CollaborativeStormLMConfigs:
     lm_config = CollaborativeStormLMConfigs()
     for role, (tier, max_tokens) in _COSTORM_ROLES.items():
-        getattr(lm_config, f"set_{role}_lm")(_language_model(settings, tier, max_tokens))
+        getattr(lm_config, f"set_{role}_lm")(_language_model(settings, role, tier, max_tokens))
     return lm_config
 
 

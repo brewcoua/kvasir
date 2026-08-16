@@ -24,7 +24,8 @@ import os
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, TypeVar
+from contextvars import ContextVar
+from typing import Any, Protocol, TypeVar
 
 import litellm
 from litellm.caching.caching import Cache
@@ -96,6 +97,54 @@ def fetch_slot() -> Iterator[None]:
         release_fetch_slot()
 
 
+class UsageSink(Protocol):
+    """Where the pipeline reports what a run spent. Implemented outside this package."""
+
+    def record_lm(
+        self, model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+    ) -> None: ...
+
+    def record_embedding(self, model: str, tokens: int) -> None: ...
+
+    def record_search(self, engine: str, queries: int) -> None: ...
+
+
+# A contextvar rather than a global, because a sink belongs to one run and the pipeline reports
+# from every thread that run touches. The pools above carry it along with everything else.
+_usage_sink: ContextVar[UsageSink | None] = ContextVar("usage_sink", default=None)
+
+
+@contextmanager
+def record_usage_into(sink: UsageSink) -> Iterator[None]:
+    """Send everything this thread and its pools spend to `sink`."""
+    token = _usage_sink.set(sink)
+    try:
+        yield
+    finally:
+        _usage_sink.reset(token)
+
+
+def record_lm_usage(
+    model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+) -> None:
+    """Report one completion. A no-op when nothing is listening, which is the library case."""
+    sink = _usage_sink.get()
+    if sink is not None:
+        sink.record_lm(model, role, prompt_tokens, completion_tokens, cost)
+
+
+def record_embedding_usage(model: str, tokens: int) -> None:
+    sink = _usage_sink.get()
+    if sink is not None:
+        sink.record_embedding(model, tokens)
+
+
+def record_search_usage(engine: str, queries: int) -> None:
+    sink = _usage_sink.get()
+    if sink is not None:
+        sink.record_search(engine, queries)
+
+
 _T = TypeVar("_T")
 
 
@@ -118,11 +167,16 @@ __all__ = [
     "Cache",
     "ContextThreadPoolExecutor",
     "DEFAULT_MAX_THREADS",
+    "UsageSink",
     "acquire_fetch_slot",
     "configure_cache",
     "configure_concurrency",
     "fetch_slot",
     "litellm",
     "max_threads",
+    "record_embedding_usage",
+    "record_lm_usage",
+    "record_search_usage",
+    "record_usage_into",
     "release_fetch_slot",
 ]

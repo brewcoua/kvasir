@@ -93,3 +93,62 @@ class Error(BaseModel):
     """Payload of an `error` event."""
 
     message: str
+
+
+class ModelUsage(BaseModel):
+    """What one model, or one role, spent on a run."""
+
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    # Whatever the gateway reported per call. Zero on a cache hit, and zero for a gateway that
+    # reports no cost at all, which is not the same as free.
+    cost: float
+
+
+class RunUsage(BaseModel):
+    """A run's totals, and the two breakdowns worth having."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    cost: float
+    embedding_tokens: int
+    searches: int
+    by_model: dict[str, ModelUsage]
+    by_role: dict[str, ModelUsage]
+
+
+class RunSummary(BaseModel):
+    """One run, as `GET /v1/runs` lists it."""
+
+    id: str
+    kind: str
+    topic: str
+    state: str
+    stage: str | None
+    created_at: float
+    started_at: float | None
+    ended_at: float | None
+    error: str | None
+    usage: RunUsage
+
+
+class RunStage(BaseModel):
+    """When a run entered a stage, and when it left. `ended_at` is null while it is still there."""
+
+    name: str
+    started_at: float
+    ended_at: float | None
+
+
+class RunDetail(RunSummary):
+    """One run, as `GET /v1/runs/{id}` returns it."""
+
+    stages: list[RunStage]
+    events: list[Progress]
+
+
+class RunStarted(BaseModel):
+    """Payload of the `run` event, the first frame of every streaming response."""
+
+    run_id: str
