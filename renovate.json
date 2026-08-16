@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "description": "Base and tool images are pinned by digest so a rebuild resolves to the same bytes.",
+      "matchManagers": ["dockerfile"],
+      "pinDigests": true
+    },
+    {
+      "description": "knowledge-storm is dormant upstream, last released 2025-01-23. A pin that never moves is expected rather than a stale dependency, so it is not proposed automatically.",
+      "matchPackageNames": ["knowledge-storm"],
+      "enabled": false
+    },
+    {
+      "description": "sentence-transformers is constrained because upstream leaves it unpinned and the resolver otherwise picks a version incompatible with modern huggingface-hub. Raising it needs the constraint in pyproject.toml checked by hand.",
+      "matchPackageNames": ["sentence-transformers"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "torch comes from the PyTorch CPU index rather than PyPI, and only exists to keep the CUDA runtime out of the image.",
+      "matchPackageNames": ["torch"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

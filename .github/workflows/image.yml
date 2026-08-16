@@ -1,0 +1,62 @@
+name: image
+
+# Tags only. The consumer pins digests, so publishing on every push to the default branch would
+# produce images nobody references.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+  # Required for the signed provenance attestation buildx attaches.
+  id-token: write
+  attestations: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # arm64 is built under emulation. Every dependency ships a prebuilt wheel, so nothing is
+      # compiled and the cost stays tolerable.
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/brewcoua/kvasir
+          # No moving latest. A tag that changes underneath a deployment defeats digest pinning.
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha,format=long
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/brewcoua/kvasir
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Report the digest to pin
+        run: echo "ghcr.io/brewcoua/kvasir@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
