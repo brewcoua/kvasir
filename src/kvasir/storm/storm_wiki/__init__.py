@@ -1,2 +1,1 @@
-from .engine import *
-from .modules import *
+"""Deliberately empty. Import submodules by their full path."""

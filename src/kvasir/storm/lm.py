@@ -8,7 +8,6 @@ import requests
 import threading
 from typing import Optional, Literal, Any
 import ujson
-from pathlib import Path
 
 
 from dsp import ERRORS, backoff_hdlr, giveup_hdlr
@@ -25,32 +24,8 @@ except ImportError:
 ############################
 # Code copied from https://github.com/stanfordnlp/dspy/blob/main/dspy/clients/lm.py on Sep 29, 2024
 
-# try:
-import warnings
+from .runtime import litellm
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=UserWarning)
-    if "LITELLM_LOCAL_MODEL_COST_MAP" not in os.environ:
-        os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
-    import litellm
-
-    litellm.drop_params = True
-    litellm.telemetry = False
-
-from litellm.caching.caching import Cache
-
-disk_cache_dir = os.path.join(Path.home(), ".storm_local_cache")
-litellm.cache = Cache(disk_cache_dir=disk_cache_dir, type="disk")
-
-# except ImportError:
-
-#     class LitellmPlaceholder:
-#         def __getattr__(self, _):
-#             raise ImportError(
-#                 "The LiteLLM package is not installed. Run `pip install litellm`."
-#             )
-
-# litellm = LitellmPlaceholder()
 LM_LRU_CACHE_MAX_SIZE = 3000
 
 

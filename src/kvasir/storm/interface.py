@@ -11,9 +11,6 @@ from typing import Dict, List, Optional, Union, TYPE_CHECKING
 
 from .utils import ArticleTextProcessing
 
-logging.basicConfig(
-    level=logging.INFO, format="%(name)s : %(levelname)-8s : %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:

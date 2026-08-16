@@ -3,34 +3,8 @@ import numpy as np
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple, Union, Optional, Dict, Literal
-from pathlib import Path
 
-try:
-    import warnings
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        if "LITELLM_LOCAL_MODEL_COST_MAP" not in os.environ:
-            os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
-        import litellm
-
-        litellm.drop_params = True
-        litellm.telemetry = False
-
-    from litellm.caching.caching import Cache
-
-    disk_cache_dir = os.path.join(Path.home(), ".storm_local_cache")
-    litellm.cache = Cache(disk_cache_dir=disk_cache_dir, type="disk")
-
-except ImportError:
-
-    class LitellmPlaceholder:
-        def __getattr__(self, _):
-            raise ImportError(
-                "The LiteLLM package is not installed. Run `pip install litellm`."
-            )
-
-    litellm = LitellmPlaceholder()
+from .runtime import litellm
 
 
 class Encoder:

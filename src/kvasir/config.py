@@ -52,6 +52,16 @@ class Settings:
     def sessions_dir(self) -> Path:
         return self.data_dir / "sessions"
 
+    @property
+    def cache_dir(self) -> Path:
+        """Where litellm caches model and embedding responses.
+
+        Under the data directory rather than $HOME, so it survives a restart and needs no writable
+        home. Upstream opened it under Path.home() while being imported, which is what the image
+        used to work around by pointing HOME at /tmp.
+        """
+        return self.data_dir / "cache"
+
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
         env = os.environ if env is None else env
@@ -97,8 +107,7 @@ def apply_environment(settings: Settings) -> None:
     """Set the environment that the fork and litellm read behind our back.
 
     Safe to call any time before the first model or embedding call. Nothing here is read at import
-    time; HOME is, and the image sets it, because `kvasir.storm.encoder` opens a litellm disk
-    cache under Path.home() while being imported.
+    time.
     """
     # The Encoder takes no api_base for the openai type, so the gateway is reached only through
     # these. OPENAI_BASE_URL mirrors OPENAI_API_BASE because litellm reads both depending on path.
@@ -110,11 +119,7 @@ def apply_environment(settings: Settings) -> None:
     os.environ.setdefault("ENCODER_API_TYPE", "openai")
 
     # No telemetry leaves this service. huggingface_hub honours both of these; litellm has no
-    # environment switch and is disabled in code below. dspy 2.4.9 and the rest of the tree ship
-    # no telemetry, so nothing else is set here.
+    # environment switch and is turned off in kvasir.storm.runtime. dspy 2.4.9 and the rest of the
+    # tree ship no telemetry, so nothing else is set here.
     os.environ["DO_NOT_TRACK"] = "1"
     os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-
-    import litellm
-
-    litellm.telemetry = False
