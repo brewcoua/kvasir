@@ -16,15 +16,9 @@ dependencies = [
     "beautifulsoup4==4.15.0",
     "diskcache==5.6.3",
     "dspy-ai==2.4.9",
-    "langchain-text-splitters==1.1.2",
     "litellm==1.80.0",
     "numpy==2.4.6",
-    "openai==1.109.1",
-    "regex==2026.7.19",
     "requests==2.34.2",
-    "toml==0.10.2",
-    "tqdm==4.70.0",
-    "trafilatura==2.2.0",
     "ujson==5.13.0",
 ]
 

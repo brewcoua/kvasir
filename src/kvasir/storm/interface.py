@@ -471,9 +471,19 @@ class LMConfigs(ABC):
         return model_name_to_usage
 
     def log(self):
+        """Each role's model settings, for the run configuration written to disk.
+
+        Credentials are dropped. Upstream returned `kwargs` whole, and litellm keeps `api_key`
+        there, so `run_config.json` was written with the gateway key in plaintext. `LitellmModel`
+        already filters the same prefix out of its call history, so this only makes the two agree.
+        """
         return OrderedDict(
             {
-                attr_name: getattr(self, attr_name).kwargs
+                attr_name: {
+                    key: value
+                    for key, value in getattr(self, attr_name).kwargs.items()
+                    if not key.startswith("api_")
+                }
                 for attr_name in self.__dict__
                 if "_lm" in attr_name and hasattr(getattr(self, attr_name), "kwargs")
             }

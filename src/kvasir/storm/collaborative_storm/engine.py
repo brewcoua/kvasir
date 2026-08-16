@@ -173,16 +173,23 @@ class CollaborativeStormLMConfigs(LMConfigs):
         return lm_usage
 
     def to_dict(self):
-        """
-        Converts the CollaborativeStormLMConfigs instance to a dictionary representation.
+        """Each role's model settings, for the serialised session.
 
-        Returns:
-            dict: The dictionary representation of the CollaborativeStormLMConfigs.
+        Credentials are dropped. Upstream serialised `kwargs` whole, and litellm keeps `api_key`
+        there, so every session file on disk held the gateway key once per role, for as long as the
+        session was kept.
+
+        Nothing reads these back: `from_dict` takes its configuration from the caller, since how to
+        reach a model is current configuration rather than saved state.
         """
-        config_dict = {}
-        for attr_name in self.__dict__:
-            config_dict[attr_name] = getattr(self, attr_name).kwargs
-        return config_dict
+        return {
+            attr_name: {
+                key: value
+                for key, value in getattr(self, attr_name).kwargs.items()
+                if not key.startswith("api_")
+            }
+            for attr_name in self.__dict__
+        }
 
 
 @dataclass

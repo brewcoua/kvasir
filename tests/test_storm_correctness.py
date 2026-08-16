@@ -95,3 +95,47 @@ def test_an_expert_description_may_contain_a_colon():
 
     assert expert.role_name == "Historian"
     assert expert.role_description == "studies the era: 1900-1950"
+
+
+def test_the_run_configuration_carries_no_credential():
+    """Upstream returned kwargs whole, so run_config.json held the gateway key in plaintext."""
+    from kvasir.storm.lm import LitellmModel
+    from kvasir.storm.storm_wiki.engine import STORMWikiLMConfigs
+
+    configs = STORMWikiLMConfigs()
+    configs.set_article_gen_lm(
+        LitellmModel(
+            model="openai/ollama/strong:cloud",
+            api_key="a-real-key",
+            api_base="https://gateway.example/v1",
+            max_tokens=700,
+        )
+    )
+
+    logged = configs.log()
+
+    assert logged["article_gen_lm"]["max_tokens"] == 700
+    assert "a-real-key" not in json.dumps(logged)
+    assert not [key for key in logged["article_gen_lm"] if key.startswith("api_")]
+
+
+def test_a_finished_run_survives_an_unwritable_record(tmp_path):
+    """post_run writes a record of the run, minutes after the article itself is already done."""
+    from types import SimpleNamespace
+
+    from kvasir.storm.storm_wiki.engine import STORMWikiRunner
+
+    class _Configs:
+        def log(self):
+            return {"article_gen_lm": {"callback": object()}}
+
+        def collect_and_reset_lm_history(self):
+            return []
+
+    runner = SimpleNamespace(lm_configs=_Configs(), article_output_dir=str(tmp_path))
+
+    STORMWikiRunner.post_run(runner)
+
+    assert not (tmp_path / "run_config.json").exists()
+    # The second artefact is written even though the first could not be.
+    assert (tmp_path / "llm_call_history.jsonl").exists()
