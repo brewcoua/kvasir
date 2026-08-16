@@ -13,12 +13,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from knowledge_storm.collaborative_storm.modules.callback import (
+from kvasir.models import Progress
+from kvasir.storm.collaborative_storm.modules.callback import (
     BaseCallbackHandler as CoStormBaseCallbackHandler,
 )
-from knowledge_storm.storm_wiki.modules.callback import BaseCallbackHandler
-
-from kvasir.models import Progress
+from kvasir.storm.storm_wiki.modules.callback import BaseCallbackHandler
 
 RESEARCH = "research"
 OUTLINE = "outline"

@@ -3,7 +3,7 @@
 All configuration is environment variables, and missing required values raise at startup rather
 than on the first request.
 
-The OPENAI_* names are not ours to choose. litellm and knowledge_storm's Encoder read them
+The OPENAI_* names are not ours to choose. litellm and the fork's Encoder read them
 directly, and pointing embeddings at the gateway depends on that, so there is deliberately no
 KVASIR_ alias for them: an alias is how the encoder silently ends up on api.openai.com.
 """
@@ -94,10 +94,10 @@ def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
 
 
 def apply_environment(settings: Settings) -> None:
-    """Set the environment that knowledge_storm and litellm read behind our back.
+    """Set the environment that the fork and litellm read behind our back.
 
     Safe to call any time before the first model or embedding call. Nothing here is read at import
-    time; HOME is, and the image sets it, because `knowledge_storm.encoder` opens a litellm disk
+    time; HOME is, and the image sets it, because `kvasir.storm.encoder` opens a litellm disk
     cache under Path.home() while being imported.
     """
     # The Encoder takes no api_base for the openai type, so the gateway is reached only through
