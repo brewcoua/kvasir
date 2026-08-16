@@ -7,6 +7,7 @@ import dspy
 import requests
 from dsp import backoff_hdlr, giveup_hdlr
 
+from . import runtime
 from .utils import WebPageHelper
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class BingSearch(dspy.Retrieve):
         is_valid_source: Callable = None,
         min_char_count: int = 150,
         snippet_chunk_size: int = 1000,
-        webpage_helper_max_threads=10,
+        webpage_helper_max_threads=None,
         mkt="en-US",
         language="en",
         **kwargs,
@@ -416,7 +417,7 @@ class SerperRM(dspy.Retrieve):
         ENABLE_EXTRA_SNIPPET_EXTRACTION=False,
         min_char_count: int = 150,
         snippet_chunk_size: int = 1000,
-        webpage_helper_max_threads=10,
+        webpage_helper_max_threads=None,
     ):
         """Args:
         serper_search_api_key str: API key to run serper, can be found by creating an account on https://serper.dev/
@@ -707,9 +708,12 @@ class SearXNG(dspy.Retrieve):
         for query in queries:
             try:
                 params = {"q": query, "format": "json"}
-                response = requests.get(
-                    self.searxng_api_url, headers=headers, params=params
-                )
+                # SearXNG serves the snippets directly, so this request is the leaf of the
+                # pipeline's nested pools and the only outbound call the retrieval level makes.
+                with runtime.fetch_slot():
+                    response = requests.get(
+                        self.searxng_api_url, headers=headers, params=params
+                    )
                 results = response.json()
 
                 for r in results["results"]:
@@ -737,7 +741,7 @@ class DuckDuckGoSearchRM(dspy.Retrieve):
         is_valid_source: Callable = None,
         min_char_count: int = 150,
         snippet_chunk_size: int = 1000,
-        webpage_helper_max_threads=10,
+        webpage_helper_max_threads=None,
         safe_search: str = "On",
         region: str = "us-en",
     ):
@@ -867,7 +871,7 @@ class TavilySearchRM(dspy.Retrieve):
         is_valid_source: Callable = None,
         min_char_count: int = 150,
         snippet_chunk_size: int = 1000,
-        webpage_helper_max_threads=10,
+        webpage_helper_max_threads=None,
         include_raw_content=False,
     ):
         """
@@ -991,7 +995,7 @@ class GoogleSearch(dspy.Retrieve):
         is_valid_source: Callable = None,
         min_char_count: int = 150,
         snippet_chunk_size: int = 1000,
-        webpage_helper_max_threads=10,
+        webpage_helper_max_threads=None,
     ):
         """
         Params:

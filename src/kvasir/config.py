@@ -15,6 +15,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from kvasir.storm.runtime import DEFAULT_MAX_THREADS
+
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
 _REQUIRED = (
@@ -43,6 +45,7 @@ class Settings:
     data_dir: Path
     session_ttl_hours: int
     max_concurrent_runs: int
+    max_threads: int
     search_top_k: int
     max_conv_turn: int
     max_perspective: int
@@ -83,6 +86,9 @@ class Settings:
             data_dir=Path(env.get("KVASIR_DATA_DIR", "").strip() or "/data"),
             session_ttl_hours=_positive_int(env, "KVASIR_SESSION_TTL_HOURS", 168),
             max_concurrent_runs=_positive_int(env, "KVASIR_MAX_CONCURRENT_RUNS", 1),
+            # How wide each of the pipeline's thread pools runs, and how many search or page
+            # requests may be in flight at once across the whole process.
+            max_threads=_positive_int(env, "KVASIR_MAX_THREADS", DEFAULT_MAX_THREADS),
             search_top_k=_positive_int(env, "KVASIR_SEARCH_TOP_K", 3),
             max_conv_turn=_positive_int(env, "KVASIR_MAX_CONV_TURN", 3),
             max_perspective=_positive_int(env, "KVASIR_MAX_PERSPECTIVE", 3),

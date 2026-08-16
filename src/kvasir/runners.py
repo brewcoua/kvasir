@@ -124,6 +124,7 @@ def build_storm_runner(
             max_perspective if max_perspective is not None else settings.max_perspective
         ),
         search_top_k=top_k,
+        max_thread_num=settings.max_threads,
     )
     return STORMWikiRunner(arguments, lm_configs, _retriever(settings, top_k), _encoder(settings))
 
@@ -144,7 +145,12 @@ def build_costorm_runner(
 
     runner = CoStormRunner(
         lm_config=lm_config,
-        runner_argument=RunnerArgument(topic=topic, retrieve_top_k=settings.search_top_k),
+        runner_argument=RunnerArgument(
+            topic=topic,
+            retrieve_top_k=settings.search_top_k,
+            max_search_thread=settings.max_threads,
+            max_thread_num=settings.max_threads,
+        ),
         logging_wrapper=LoggingWrapper(lm_config),
         encoder=_encoder(settings),
         rm=_retriever(settings, settings.search_top_k),

@@ -22,6 +22,7 @@ from ...dataclass import ConversationTurn, KnowledgeBase
 from ...interface import LMConfigs
 from ...logging_wrapper import LoggingWrapper
 from ...storm_wiki.modules.outline_generation import WritePageOutline
+from ... import runtime
 from ...utils import ArticleTextProcessing as AP
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,11 @@ class ReportToConversation(dspy.Module):
         nodes = [node for node in nodes if node.name != "root" and node.content]
         topic = knowledge_base.topic
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        # Upstream left this unbounded, so it ran at the interpreter default rather than at the
+        # width the rest of the pipeline is configured for.
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=runtime.max_threads()
+        ) as executor:
             future_to_node = {
                 executor.submit(process_node, node, topic): node for node in nodes
             }

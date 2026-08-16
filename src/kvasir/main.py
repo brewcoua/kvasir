@@ -31,7 +31,7 @@ from kvasir.progress import ProgressStream
 from kvasir.research import run_research
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.sse import HEADERS, MEDIA_TYPE, frame
-from kvasir.storm.runtime import configure_cache
+from kvasir.storm.runtime import configure_cache, configure_concurrency
 
 READINESS_TIMEOUT_SECONDS = 5.0
 
@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Nothing in the fork opens a cache by itself, so this is the only call that decides where
     # model and embedding responses are cached.
     configure_cache(settings.cache_dir)
+    configure_concurrency(settings.max_threads)
     logging.basicConfig(level=settings.log_level)
 
     app.state.settings = settings
