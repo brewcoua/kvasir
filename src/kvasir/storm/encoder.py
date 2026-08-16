@@ -4,7 +4,7 @@ from typing import List, Optional, Union
 import numpy as np
 
 from . import runtime
-from .runtime import litellm
+from .gateway import post
 
 
 class EmbeddingError(RuntimeError):
@@ -17,13 +17,12 @@ class EmbeddingError(RuntimeError):
 
 
 class Encoder:
-    """Embeddings from an OpenAI-compatible endpoint, through litellm.
+    """Embeddings from an OpenAI-compatible endpoint.
 
     Upstream chose between two hardcoded model names on an ENCODER_API_TYPE environment variable
     and dropped `api_base` for the openai branch, so the only way to reach a gateway was to set
-    OPENAI_API_BASE and hope litellm read it. Both are arguments here.
-
-    Check https://docs.litellm.ai/docs/embedding/supported_embedding for what a model name may be.
+    OPENAI_API_BASE and hope litellm read it. Both are arguments here, and the model name reaches
+    the gateway verbatim.
     """
 
     def __init__(
@@ -33,11 +32,8 @@ class Encoder:
         api_base: Optional[str] = None,
     ):
         self.embedding_model_name = model
-        self.kargs = {}
-        if api_key is not None:
-            self.kargs["api_key"] = api_key
-        if api_base is not None:
-            self.kargs["api_base"] = api_base
+        self.api_key = api_key
+        self.api_base = api_base
         self.total_token_usage = 0
         self._token_usage_lock = threading.Lock()
 
@@ -62,25 +58,31 @@ class Encoder:
         return self._embed(texts)
 
     def _embed(self, texts: List[str]) -> np.ndarray:
+        if not self.api_base:
+            raise EmbeddingError(f"no api_base configured for {self.embedding_model_name}")
         try:
-            response = litellm.embedding(
-                model=self.embedding_model_name, input=texts, caching=True, **self.kargs
+            response = post(
+                "/embeddings",
+                self.api_base,
+                self.api_key,
+                {"model": self.embedding_model_name, "input": texts},
             )
+            body = response.json()
         except Exception as exc:
             raise EmbeddingError(
                 f"embedding {len(texts)} text(s) with {self.embedding_model_name} failed: {exc}"
             ) from exc
 
-        # litellm does not promise the response preserves input order, and a short response is
-        # what upstream turned into silently misaligned vectors.
-        data = sorted(response.data, key=lambda item: item["index"])
+        # Nothing promises the response preserves input order, and a short response is what
+        # upstream turned into silently misaligned vectors.
+        data = sorted(body["data"], key=lambda item: item["index"])
         if len(data) != len(texts):
             raise EmbeddingError(
                 f"{self.embedding_model_name} returned {len(data)} embeddings "
                 f"for {len(texts)} text(s)"
             )
 
-        tokens = response.get("usage", {}).get("total_tokens", 0)
+        tokens = (body.get("usage") or {}).get("total_tokens", 0)
         with self._token_usage_lock:
             self.total_token_usage += tokens
         runtime.record_embedding_usage(self.embedding_model_name, tokens)

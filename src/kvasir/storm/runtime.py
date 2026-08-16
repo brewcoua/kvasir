@@ -1,54 +1,27 @@
-"""The single place this package configures litellm and its own concurrency.
+"""The single place this package configures its own concurrency and reports what a run spent.
 
-Upstream did this twice, in `lm.py` and `encoder.py`, as a side effect of importing either module.
-Two things went wrong with that. The disk cache was opened under `Path.home()`, so importing the
-package wrote to the filesystem and failed outright under a read-only root; and there was no way to
-choose a different directory, or none at all, without editing the source.
+Nothing here touches the filesystem or the network while being imported. Upstream opened a response
+cache under `Path.home()` as a side effect of importing `lm.py` or `encoder.py`, which made
+importing the package write to the filesystem and fail outright under a read-only root. There is no
+local cache at all now: the gateway this service talks to caches responses, and doing it twice only
+meant two places to invalidate.
 
-Importing this module still sets the process-wide litellm flags below, because they are policy for
-this fork rather than deployment configuration, and none of them touch the filesystem or the
-network. The cache is the part that does, so it is opened only by an explicit `configure_cache`
-call.
-
-Concurrency lives here for the same reason. The pipeline nests thread pools, and upstream sized each
-level independently, so the worst case multiplied out to hundreds of simultaneous requests against a
-self-hosted gateway and search instance. One setting sizes every pool, and outbound search requests
-take a permit from one process-wide budget. Those pools also carry the caller's context, so a run
-stays identifiable in the logs after the pipeline fans out.
+The pipeline nests thread pools, and upstream sized each level independently, so the worst case
+multiplied out to hundreds of simultaneous requests against a self-hosted gateway and search
+instance. One setting sizes every pool, and outbound search requests take a permit from one
+process-wide budget. Those pools also carry the caller's context, so a run stays identifiable in the
+logs after the pipeline fans out.
 """
 
 import concurrent.futures
 import contextvars
-import os
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Protocol, TypeVar
 
-import litellm
-from litellm.caching.caching import Cache
-
 DEFAULT_MAX_THREADS = 10
-
-# Gateways route to models that reject parameters other models accept, and a rejected parameter
-# should not fail a run.
-litellm.drop_params = True
-litellm.telemetry = False
-
-
-def configure_cache(cache_dir: str | os.PathLike[str] | None) -> None:
-    """Open a litellm disk cache under `cache_dir`, or disable caching when it is None.
-
-    Idempotent. Not called on import, so a caller that never calls it runs uncached rather than
-    writing somewhere it did not choose.
-    """
-    if cache_dir is None:
-        litellm.cache = None
-        return
-    os.makedirs(cache_dir, exist_ok=True)
-    litellm.cache = Cache(disk_cache_dir=str(cache_dir), type="disk")
-
 
 _max_threads = DEFAULT_MAX_THREADS
 _fetch_slots = threading.BoundedSemaphore(DEFAULT_MAX_THREADS)
@@ -151,14 +124,11 @@ class ContextThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 
 
 __all__ = [
-    "Cache",
     "ContextThreadPoolExecutor",
     "DEFAULT_MAX_THREADS",
     "UsageSink",
-    "configure_cache",
     "configure_concurrency",
     "fetch_slot",
-    "litellm",
     "max_threads",
     "record_embedding_usage",
     "record_lm_usage",
