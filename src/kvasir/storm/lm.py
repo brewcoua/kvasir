@@ -25,6 +25,8 @@ except ImportError:
 
 from .runtime import litellm
 
+logger = logging.getLogger(__name__)
+
 LM_LRU_CACHE_MAX_SIZE = 3000
 
 
@@ -138,7 +140,11 @@ def _red(text: str, end: str = "\n"):
 
 
 def _inspect_history(lm, n: int = 1):
-    """Prints the last n prompts and their completions."""
+    """Prints the last n prompts and their completions.
+
+    Deliberately prints, with ANSI colour: it is a debugging entry point called by hand, never by
+    the pipeline. Routing it through logging would put a coloured transcript in the service's logs.
+    """
 
     for item in lm.history[-n:]:
         messages = item["messages"] or [{"role": "user", "content": item["prompt"]}]
@@ -506,7 +512,7 @@ class AzureOpenAIModel(dspy.LM):
             return response
 
         except Exception as e:
-            logging.error(f"Error making request to Azure OpenAI: {str(e)}")
+            logger.error("Error making request to Azure OpenAI: %s", e)
             raise
 
     def _get_choice_text(self, choice: Any) -> str:
@@ -888,7 +894,7 @@ class VLLMClient(dspy.dsp.LM):
         try:
             response = self.request(prompt, **kwargs)
         except Exception as e:
-            print(f"Failed to generate completion: {e}")
+            logger.error("Failed to generate completion: %s", e)
             raise Exception(e)
 
         self.log_usage(response)
@@ -977,7 +983,7 @@ class TGIClient(dspy.HFClientTGI):
             response = {"prompt": prompt, "choices": [{"text": c} for c in completions]}
             return response
         except Exception:
-            print("Failed to parse JSON response:", response.text)
+            logger.error("Failed to parse JSON response: %s", response.text)
             raise Exception("Received invalid JSON response from server")
 
 
@@ -1015,7 +1021,7 @@ class TogetherClient(dspy.HFModel):
         #     self.use_inst_template = True
         self.apply_tokenizer_chat_template = apply_tokenizer_chat_template
         if self.apply_tokenizer_chat_template:
-            logging.info("Loading huggingface tokenizer.")
+            logger.info("Loading huggingface tokenizer.")
             # Imported here rather than at module scope: transformers is a heavyweight dependency
             # wanted by this one optional branch of one deprecated client, and requiring it at
             # import time pulled it, and torch, into every deployment.

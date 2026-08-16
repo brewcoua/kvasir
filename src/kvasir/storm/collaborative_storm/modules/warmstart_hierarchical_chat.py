@@ -8,8 +8,9 @@ Additionally, the system generates a first draft of the report, which is then us
 The synthesized conversation is presented to the user to help them quickly catch up on the system's current knowledge about the topic.
 """
 
-import dspy
 import concurrent.futures
+import dspy
+import logging
 from threading import Lock
 from typing import List, Optional, Union, TYPE_CHECKING
 
@@ -22,6 +23,8 @@ from ...interface import LMConfigs
 from ...logging_wrapper import LoggingWrapper
 from ...storm_wiki.modules.outline_generation import WritePageOutline
 from ...utils import ArticleTextProcessing as AP
+
+logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
@@ -237,7 +240,7 @@ class WarmStartConversation(dspy.Module):
                         with lock:
                             conversation_history.append(conversation_turn)
                     except Exception as e:
-                        print(f"Error processing expert {expert}: {e}")
+                        logger.error("Error processing expert %s: %s", expert, e)
 
         # multi-thread conversation
         with concurrent.futures.ThreadPoolExecutor(

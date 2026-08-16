@@ -7,7 +7,6 @@ import os
 import pickle
 import re
 import regex
-import sys
 import toml
 from typing import List, Dict
 from tqdm import tqdm
@@ -16,6 +15,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from trafilatura import extract
 
 from .lm import LitellmModel
+
+logger = logging.getLogger(__name__)
 
 
 def truncate_filename(filename, max_length=125):
@@ -28,7 +29,7 @@ def truncate_filename(filename, max_length=125):
 
     if len(filename) > max_length:
         truncated_filename = filename[:max_length]
-        logging.warning(
+        logger.warning(
             f"Filename is too long. Filename is truncated to {truncated_filename}."
         )
         return truncated_filename
@@ -41,10 +42,10 @@ def load_api_key(toml_file_path):
         with open(toml_file_path, "r") as file:
             data = toml.load(file)
     except FileNotFoundError:
-        print(f"File not found: {toml_file_path}", file=sys.stderr)
+        logger.error("File not found: %s", toml_file_path)
         return
     except toml.TomlDecodeError:
-        print(f"Error decoding TOML file: {toml_file_path}", file=sys.stderr)
+        logger.error("Error decoding TOML file: %s", toml_file_path)
         return
     # Set environment variables
     for key, value in data.items():
@@ -74,15 +75,15 @@ class QdrantVectorStoreManager:
         if client is None:
             raise ValueError("Qdrant client is not initialized.")
         if client.collection_exists(collection_name=f"{collection_name}"):
-            print(f"Collection {collection_name} exists. Loading the collection...")
+            logger.info("Collection %s exists. Loading the collection.", collection_name)
             return Qdrant(
                 client=client,
                 collection_name=collection_name,
                 embeddings=model,
             )
         else:
-            print(
-                f"Collection {collection_name} does not exist. Creating the collection..."
+            logger.info(
+                "Collection %s does not exist. Creating the collection.", collection_name
             )
             # create the collection
             client.create_collection(
@@ -676,7 +677,7 @@ class WebPageHelper:
                 res.raise_for_status()
             return res.content
         except httpx.HTTPError as exc:
-            print(f"Error while requesting {exc.request.url!r} - {exc!r}")
+            logger.warning("Error while requesting %r - %r", exc.request.url, exc)
             return None
 
     def urls_to_articles(self, urls: List[str]) -> Dict:

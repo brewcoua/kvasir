@@ -9,6 +9,8 @@ from dsp import backoff_hdlr, giveup_hdlr
 
 from .utils import WebPageHelper
 
+logger = logging.getLogger(__name__)
+
 
 class YouRM(dspy.Retrieve):
     def __init__(self, ydc_api_key=None, k=3, is_valid_source: Callable = None):
@@ -69,7 +71,7 @@ class YouRM(dspy.Retrieve):
                 if "hits" in results:
                     collected_results.extend(authoritative_results[: self.k])
             except Exception as e:
-                logging.error(f"Error occurs when searching query {query}: {e}")
+                logger.error(f"Error occurs when searching query {query}: {e}")
 
         return collected_results
 
@@ -162,7 +164,7 @@ class BingSearch(dspy.Retrieve):
                             "description": d["snippet"],
                         }
             except Exception as e:
-                logging.error(f"Error occurs when searching query {query}: {e}")
+                logger.error(f"Error occurs when searching query {query}: {e}")
 
         valid_url_to_snippets = self.webpage_helper.urls_to_snippets(
             list(url_to_results.keys())
@@ -234,8 +236,8 @@ class VectorRM(dspy.Retrieve):
         if self.client is None:
             raise ValueError("Qdrant client is not initialized.")
         if self.client.collection_exists(collection_name=f"{self.collection_name}"):
-            print(
-                f"Collection {self.collection_name} exists. Loading the collection..."
+            logger.info(
+                "Collection %s exists. Loading the collection.", self.collection_name
             )
             self.qdrant = Qdrant(
                 client=self.client,
@@ -399,7 +401,7 @@ class StanfordOvalArxivRM(dspy.Retrieve):
                 results = self._retrieve(query)
                 collected_results.extend(results)
             except Exception as e:
-                logging.error(f"Error occurs when searching query {query}: {e}")
+                logger.error(f"Error occurs when searching query {query}: {e}")
         return collected_results
 
 
@@ -636,7 +638,7 @@ class BraveRM(dspy.Retrieve):
                         }
                     )
             except Exception as e:
-                logging.error(f"Error occurs when searching query {query}: {e}")
+                logger.error(f"Error occurs when searching query {query}: {e}")
 
         return collected_results
 
@@ -720,7 +722,7 @@ class SearXNG(dspy.Retrieve):
                             }
                         )
             except Exception as e:
-                logging.error(f"Error occurs when searching query {query}: {e}")
+                logger.error(f"Error occurs when searching query {query}: {e}")
 
         return collected_results
 
@@ -825,7 +827,7 @@ class DuckDuckGoSearchRM(dspy.Retrieve):
             for d in results:
                 # assert d is dict
                 if not isinstance(d, dict):
-                    print(f"Invalid result: {d}\n")
+                    logger.warning("Discarding a non-dict search result: %r", d)
                     continue
 
                 try:
@@ -847,10 +849,9 @@ class DuckDuckGoSearchRM(dspy.Retrieve):
                         }
                         collected_results.append(result)
                     else:
-                        print(f"invalid source {url} or url in exclude_urls")
+                        logger.debug("Skipping %s: invalid source or excluded", url)
                 except Exception as e:
-                    print(f"Error occurs when processing {result=}: {e}\n")
-                    print(f"Error occurs when searching query {query}: {e}")
+                    logger.error("Error processing a result for query %r: %s", query, e)
 
         return collected_results
 
@@ -947,7 +948,7 @@ class TavilySearchRM(dspy.Retrieve):
             for d in results:
                 # assert d is dict
                 if not isinstance(d, dict):
-                    print(f"Invalid result: {d}\n")
+                    logger.warning("Discarding a non-dict search result: %r", d)
                     continue
 
                 try:
@@ -973,10 +974,9 @@ class TavilySearchRM(dspy.Retrieve):
                         }
                         collected_results.append(result)
                     else:
-                        print(f"invalid source {url} or url in exclude_urls")
+                        logger.debug("Skipping %s: invalid source or excluded", url)
                 except Exception as e:
-                    print(f"Error occurs when processing {result=}: {e}\n")
-                    print(f"Error occurs when searching query {query}: {e}")
+                    logger.error("Error processing a result for query %r: %s", query, e)
 
         return collected_results
 
@@ -1091,7 +1091,7 @@ class GoogleSearch(dspy.Retrieve):
                         }
 
             except Exception as e:
-                logging.error(f"Error occurred while searching query {query}: {e}")
+                logger.error(f"Error occurred while searching query {query}: {e}")
 
         valid_url_to_snippets = self.webpage_helper.urls_to_snippets(
             list(url_to_results.keys())
@@ -1233,6 +1233,6 @@ class AzureAISearch(dspy.Retrieve):
                     }
                     collected_results.append(document)
             except Exception as e:
-                logging.error(f"Error occurs when searching query {query}: {e}")
+                logger.error(f"Error occurs when searching query {query}: {e}")
 
         return collected_results
