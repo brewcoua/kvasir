@@ -29,6 +29,16 @@ logger = logging.getLogger(__name__)
 
 LM_LRU_CACHE_MAX_SIZE = 3000
 
+# What a retry can plausibly fix. A bad request, an auth failure or a context-length overflow is
+# deterministic, so it fails immediately rather than after sixteen minutes of backoff.
+_RETRYABLE = (
+    litellm.APIConnectionError,
+    litellm.InternalServerError,
+    litellm.RateLimitError,
+    litellm.ServiceUnavailableError,
+    litellm.Timeout,
+)
+
 
 class LM:
     def __init__(
@@ -210,6 +220,18 @@ class LitellmModel(LM):
 
         return usage
 
+    # This is the only live LM wrapper, and upstream left it as the only one without a retry:
+    # every other @backoff in this file is on a class deprecated after v1.1.0. A rate limit or a
+    # dropped connection therefore failed the whole stage on the first try.
+    @backoff.on_exception(
+        backoff.expo,
+        _RETRYABLE,
+        max_time=1000,
+        on_backoff=backoff_hdlr,
+    )
+    def _request(self, completion, payload):
+        return completion(payload)
+
     def __call__(self, prompt=None, messages=None, **kwargs):
         # Build the request.
         cache = kwargs.pop("cache", self.cache)
@@ -224,8 +246,8 @@ class LitellmModel(LM):
                 cached_litellm_text_completion if cache else litellm_text_completion
             )
 
-        response = completion(
-            ujson.dumps(dict(model=self.model, messages=messages, **kwargs))
+        response = self._request(
+            completion, ujson.dumps(dict(model=self.model, messages=messages, **kwargs))
         )
         response_dict = response.json()
         self.log_usage(response_dict)

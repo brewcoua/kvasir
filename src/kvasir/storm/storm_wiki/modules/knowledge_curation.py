@@ -12,6 +12,8 @@ from .storm_dataclass import DialogueTurn, StormInformationTable
 from ...interface import KnowledgeCurationModule, Retriever, Information
 from ...utils import ArticleTextProcessing
 
+logger = logging.getLogger(__name__)
+
 try:
     from streamlit.runtime.scriptrunner import add_script_run_ctx
 
@@ -62,13 +64,19 @@ class ConvSimulator(dspy.Module):
                 topic=topic, persona=persona, dialogue_turns=dlg_history
             ).question
             if user_utterance == "":
-                logging.error("Simulated Wikipedia writer utterance is empty.")
+                logger.error("Simulated Wikipedia writer utterance is empty.")
                 break
             if user_utterance.startswith("Thank you so much for your help!"):
                 break
             expert_output = self.topic_expert(
                 topic=topic, question=user_utterance, ground_truth_url=ground_truth_url
             )
+            if expert_output.answer is None:
+                # The turn is dropped rather than recorded with a canned apology. Recording
+                # nothing means the writer would re-ask the same question, so the conversation
+                # ends here and keeps the turns it did gather.
+                logger.error("Ending the conversation after a failed answer.")
+                break
             dlg_turn = DialogueTurn(
                 agent_utterance=expert_output.answer,
                 user_utterance=user_utterance,
@@ -232,9 +240,11 @@ class TopicExpert(dspy.Module):
                     answer = ArticleTextProcessing.remove_uncompleted_sentences_with_citations(
                         answer
                     )
-                except Exception as e:
-                    logging.error(f"Error occurs when generating answer: {e}")
-                    answer = "Sorry, I cannot answer this question. Please ask another question."
+                except Exception:
+                    # Upstream substituted a canned apology, which then entered the conversation
+                    # log as if the expert had said it. The caller drops the turn instead.
+                    logger.exception("Failed to answer %r", question)
+                    answer = None
             else:
                 # When no information is found, the expert shouldn't hallucinate.
                 answer = "Sorry, I cannot find information for this question. Please ask another question."

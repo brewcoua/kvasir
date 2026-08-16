@@ -563,7 +563,8 @@ class SerperRM(dspy.Retrieve):
                             ),
                         }
                     )
-            except:
+            except (AttributeError, KeyError, TypeError) as e:
+                logger.warning("Discarding a malformed Serper result: %s", e)
                 continue
 
         return collected_results
