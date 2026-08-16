@@ -1,0 +1,167 @@
+"""Construction of the two upstream runners from settings.
+
+Every language model role is set explicitly. The convenience initialiser
+`CollaborativeStormLMConfigs.init()` hardcodes `api_base=None` and cannot be pointed at a gateway,
+so it is never called. The retriever is always passed explicitly too, because `CoStormRunner`
+defaults to `BingSearch`, which needs a paid key.
+
+See docs/upstream-notes.md for the signatures these rely on.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+from knowledge_storm.collaborative_storm.engine import (
+    CollaborativeStormLMConfigs,
+    CoStormRunner,
+    RunnerArgument,
+)
+from knowledge_storm.lm import LitellmModel
+from knowledge_storm.logging_wrapper import LoggingWrapper
+from knowledge_storm.rm import SearXNG
+from knowledge_storm.storm_wiki.engine import (
+    STORMWikiLMConfigs,
+    STORMWikiRunner,
+    STORMWikiRunnerArguments,
+)
+
+from kvasir.config import Settings
+
+# Upstream's own examples pick a token budget per role, and the numbers below are theirs. They are
+# not arbitrary: a role that emits a whole polished article needs far more room than one that
+# decides who speaks next. Which tier serves a role is our choice, and follows the rule that the
+# fast model simulates conversation, asks questions and polishes, while the strong model produces
+# outlines and article text. Upstream puts polishing on the strong model; the deployment this
+# serves is billed per token through a gateway and prefers the cheaper tier there.
+_STORM_ROLES = {
+    "conv_simulator": ("fast", 500),
+    "question_asker": ("fast", 500),
+    "outline_gen": ("strong", 400),
+    "article_gen": ("strong", 700),
+    "article_polish": ("fast", 4000),
+}
+
+_COSTORM_ROLES = {
+    "question_answering": ("strong", 1000),
+    "discourse_manage": ("fast", 500),
+    "utterance_polishing": ("fast", 2000),
+    "warmstart_outline_gen": ("strong", 500),
+    "question_asking": ("fast", 300),
+    "knowledge_base": ("strong", 1000),
+}
+
+
+def _language_model(settings: Settings, tier: str, max_tokens: int) -> LitellmModel:
+    """A model bound to the gateway.
+
+    `LitellmModel` merges its kwargs into `litellm.completion()`, so `api_base` arrives intact.
+    `OpenAIModel` is deprecated and accepts no `api_base`, which is why it is not used.
+    """
+    return LitellmModel(
+        model=settings.model_fast if tier == "fast" else settings.model_strong,
+        api_key=settings.openai_api_key,
+        api_base=settings.openai_api_base,
+        max_tokens=max_tokens,
+        # Upstream's examples use these for STORM. The multi-perspective research depends on the
+        # simulated conversations diverging, which temperature 0 would suppress.
+        temperature=1.0,
+        top_p=0.9,
+    )
+
+
+def _retriever(settings: Settings, k: int) -> SearXNG:
+    """SearXNG reads no environment variable, so the URL is passed in.
+
+    The instance must serve the JSON output format. One serving HTML only returns an empty result
+    set rather than failing, which looks like a topic with no sources.
+    """
+    return SearXNG(searxng_api_url=settings.searxng_url, k=k)
+
+
+def build_storm_runner(
+    settings: Settings,
+    output_dir: Path,
+    *,
+    search_top_k: int | None = None,
+    max_conv_turn: int | None = None,
+    max_perspective: int | None = None,
+    model_fast: str | None = None,
+    model_strong: str | None = None,
+) -> STORMWikiRunner:
+    """Build a STORM runner writing under `output_dir`.
+
+    The per-request overrides fall back to the configured defaults when omitted.
+    """
+    settings = _with_model_overrides(settings, model_fast, model_strong)
+
+    lm_configs = STORMWikiLMConfigs()
+    for role, (tier, max_tokens) in _STORM_ROLES.items():
+        getattr(lm_configs, f"set_{role}_lm")(_language_model(settings, tier, max_tokens))
+
+    top_k = search_top_k if search_top_k is not None else settings.search_top_k
+    arguments = STORMWikiRunnerArguments(
+        output_dir=str(output_dir),
+        max_conv_turn=max_conv_turn if max_conv_turn is not None else settings.max_conv_turn,
+        max_perspective=(
+            max_perspective if max_perspective is not None else settings.max_perspective
+        ),
+        search_top_k=top_k,
+    )
+    return STORMWikiRunner(arguments, lm_configs, _retriever(settings, top_k))
+
+
+def build_costorm_runner(
+    settings: Settings,
+    topic: str,
+    *,
+    model_fast: str | None = None,
+    model_strong: str | None = None,
+) -> CoStormRunner:
+    """Build a Co-STORM runner for `topic`. Call `warm_start()` on it before stepping."""
+    settings = _with_model_overrides(settings, model_fast, model_strong)
+
+    lm_config = CollaborativeStormLMConfigs()
+    for role, (tier, max_tokens) in _COSTORM_ROLES.items():
+        getattr(lm_config, f"set_{role}_lm")(_language_model(settings, tier, max_tokens))
+
+    runner = CoStormRunner(
+        lm_config=lm_config,
+        runner_argument=RunnerArgument(topic=topic, retrieve_top_k=settings.search_top_k),
+        logging_wrapper=LoggingWrapper(lm_config),
+        rm=_retriever(settings, settings.search_top_k),
+    )
+    _override_embedding_model(runner, settings)
+    return runner
+
+
+def load_costorm_runner(settings: Settings, state: dict[str, Any]) -> CoStormRunner:
+    """Restore a Co-STORM runner from `to_dict()` output."""
+    runner = CoStormRunner.from_dict(state)
+    _override_embedding_model(runner, settings)
+    return runner
+
+
+def _override_embedding_model(runner: CoStormRunner, settings: Settings) -> None:
+    """Point the encoder at the configured embedding model.
+
+    `Encoder` hardcodes `text-embedding-3-small` and takes no argument for it, but the runner keeps
+    one instance and shares it with everything it builds, so assigning the attribute is enough.
+    `from_dict` constructs a fresh `Encoder`, so this has to run after loading as well as after
+    building.
+    """
+    runner.encoder.embedding_model_name = settings.embedding_model
+
+
+def _with_model_overrides(
+    settings: Settings, model_fast: str | None, model_strong: str | None
+) -> Settings:
+    if model_fast is None and model_strong is None:
+        return settings
+    return replace(
+        settings,
+        model_fast=model_fast or settings.model_fast,
+        model_strong=model_strong or settings.model_strong,
+    )
