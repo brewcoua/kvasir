@@ -95,7 +95,7 @@ class ReportToConversation(dspy.Module):
 
         # Upstream left this unbounded, so it ran at the interpreter default rather than at the
         # width the rest of the pipeline is configured for.
-        with concurrent.futures.ThreadPoolExecutor(
+        with runtime.ContextThreadPoolExecutor(
             max_workers=runtime.max_threads()
         ) as executor:
             future_to_node = {
@@ -248,7 +248,7 @@ class WarmStartConversation(dspy.Module):
                         logger.error("Error processing expert %s: %s", expert, e)
 
         # multi-thread conversation
-        with concurrent.futures.ThreadPoolExecutor(
+        with runtime.ContextThreadPoolExecutor(
             max_workers=self.max_thread
         ) as executor:
             futures = [

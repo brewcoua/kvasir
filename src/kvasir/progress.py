@@ -7,9 +7,11 @@ the two sides are connected by an asyncio queue fed through `call_soon_threadsaf
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from typing import Any
 
+from kvasir import logs
 from kvasir.models import Progress
 from kvasir.storm.collaborative_storm.modules.callback import (
     BaseCallbackHandler as CoStormBaseCallbackHandler,
@@ -25,6 +27,8 @@ WARM_START = "warm_start"
 TURN = "turn"
 MIND_MAP = "mind_map"
 
+logger = logging.getLogger(__name__)
+
 
 class ProgressStream:
     """A queue of `Progress` events, written from a worker thread and read on the event loop."""
@@ -34,7 +38,14 @@ class ProgressStream:
         self._queue: asyncio.Queue[Progress | None] = asyncio.Queue()
 
     def publish(self, stage: str, detail: str) -> None:
-        """Queue an event. Safe to call from any thread."""
+        """Queue an event, and log it. Safe to call from any thread.
+
+        Setting the stage here rather than at each call site keeps the two in step: a progress
+        event is exactly the moment the stage is known to have changed. Threads the pipeline
+        spawns afterwards inherit it.
+        """
+        logs.set_stage(stage)
+        logger.info("%s", detail)
         event = Progress(stage=stage, detail=detail)
         self._loop.call_soon_threadsafe(self._queue.put_nowait, event)
 

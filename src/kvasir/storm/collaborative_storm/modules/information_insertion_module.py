@@ -3,10 +3,11 @@ import logging
 import numpy as np
 import re
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from typing import List, Union, Dict, Optional
 
 from .collaborative_storm_utils import trim_output_after_hint
+from ... import runtime
 from ...dataclass import KnowledgeNode, KnowledgeBase
 from ...encoder import Encoder, cosine_similarity
 from ...interface import Information
@@ -277,7 +278,7 @@ class InsertInformationModule(dspy.Module):
         to_return = []
         if not allow_create_new_node:
             # use multi thread as knowledge base structure does not change
-            with ThreadPoolExecutor(max_workers=max_thread) as executor:
+            with runtime.ContextThreadPoolExecutor(max_workers=max_thread) as executor:
                 futures = {
                     executor.submit(process_intent, question, query): (question, query)
                     for (question, query) in intent_to_placement_dict

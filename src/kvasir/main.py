@@ -9,15 +9,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from kvasir import conversation
+from kvasir import conversation, logs
 from kvasir.config import Settings, apply_environment
 from kvasir.models import (
     Error,
@@ -47,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # model and embedding responses are cached.
     configure_cache(settings.cache_dir)
     configure_concurrency(settings.max_threads)
-    logging.basicConfig(level=settings.log_level)
+    logs.configure(settings)
 
     app.state.settings = settings
     # A run holds a thread for minutes, so saturation is rejected rather than queued. Acquiring
@@ -110,7 +112,9 @@ async def research(request: ResearchRequest) -> Response:
     """Run STORM and stream progress until the article is ready."""
     settings: Settings = app.state.settings
     return _streamed(
-        lambda stream: run_research(settings, request, stream), f"research {request.topic!r}"
+        lambda stream: run_research(settings, request, stream),
+        f"research {request.topic!r}",
+        "storm",
     )
 
 
@@ -125,6 +129,7 @@ async def create_session(request: SessionRequest) -> Response:
     return _streamed(
         lambda stream: conversation.create(settings, store, request, stream),
         f"session {request.session_id}",
+        "costorm",
     )
 
 
@@ -136,6 +141,7 @@ async def step_session(session_id: str, request: StepRequest) -> Response:
     return _streamed(
         lambda stream: conversation.step(settings, store, session_id, request.utterance, stream),
         f"step {session_id}",
+        "costorm",
     )
 
 
@@ -166,17 +172,18 @@ async def _bad_session_id(request: Request, exc: SessionIdError) -> JSONResponse
     return JSONResponse({"message": str(exc)}, status_code=400)
 
 
-def _streamed(work: Callable[[ProgressStream], BaseModel], description: str) -> Response:
+def _streamed(work: Callable[[ProgressStream], BaseModel], description: str, kind: str) -> Response:
     """Run blocking work in a thread, streaming progress until it produces a result.
 
     Returns 429 rather than queueing when every run slot is taken, because a queued request would
     wait longer than any sensible client timeout, and a refusal consumes no slot.
     """
     if not app.state.run_slots.acquire(blocking=False):
+        logger.warning("rejected %s: every run slot is busy", description)
         return JSONResponse({"message": "all run slots are busy, retry later"}, status_code=429)
 
     return StreamingResponse(
-        _events(work, description, app.state.run_slots),
+        _events(work, description, kind, uuid4().hex[:12], app.state.run_slots),
         media_type=MEDIA_TYPE,
         headers=HEADERS,
     )
@@ -185,16 +192,24 @@ def _streamed(work: Callable[[ProgressStream], BaseModel], description: str) -> 
 async def _events(
     work: Callable[[ProgressStream], BaseModel],
     description: str,
+    kind: str,
+    run_id: str,
     run_slots: threading.BoundedSemaphore,
 ) -> AsyncIterator[str]:
     stream = ProgressStream()
 
     def run() -> BaseModel:
-        try:
-            return work(stream)
-        finally:
-            # Ends the iteration below even when the work raises.
-            stream.close()
+        # Entered on the worker thread, so the identity is scoped to this run rather than shared
+        # with the event loop, and the pipeline's pools inherit it when they copy the context.
+        with logs.run_context(run_id, kind):
+            started = time.monotonic()
+            logger.info("started %s", description)
+            try:
+                return work(stream)
+            finally:
+                logger.info("finished %s in %.1fs", description, time.monotonic() - started)
+                # Ends the iteration below even when the work raises.
+                stream.close()
 
     try:
         # A disconnecting client does not stop the work. Upstream offers no way to cancel a run,
@@ -207,7 +222,8 @@ async def _events(
     except SessionNotFound as exc:
         yield frame("error", Error(message=f"no session {exc}"))
     except Exception as exc:
-        logger.exception("%s failed", description)
+        # Raised on the event loop rather than in the run's thread, so the run is named explicitly.
+        logger.exception("%s failed", description, extra={"run_id": run_id, "run_kind": kind})
         yield frame("error", Error(message=f"{type(exc).__name__}: {exc}"))
     finally:
         run_slots.release()
