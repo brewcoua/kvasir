@@ -10,11 +10,31 @@ dependencies = [
     "httpx==0.28.1",
     "knowledge-storm==1.1.1",
     "pydantic==2.13.4",
+    # Not imported here. Declared only so [tool.uv.sources] can redirect it, which uv applies to
+    # direct dependencies alone. See the comment on the torch source below.
+    "torch==2.13.0",
     "uvicorn==0.52.3",
 ]
 
 [project.urls]
 Homepage = "https://github.com/brewcoua/kvasir"
+
+[tool.uv]
+# knowledge-storm leaves sentence-transformers unpinned, and the resolver picks 2.2.2, which
+# imports huggingface_hub.cached_download. That was removed in huggingface-hub 0.26, so
+# `import knowledge_storm` raises ImportError. 5.7.0 is the oldest version that resolves against
+# the rest of the tree. Nothing here uses sentence-transformers; it is a transitive weight.
+constraint-dependencies = ["sentence-transformers==5.7.0"]
+
+[tool.uv.sources]
+# The default torch wheels bundle the CUDA runtime, several GB the service can never use: no model
+# runs locally, embeddings go to the gateway. The CPU index carries the same versions without it.
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
