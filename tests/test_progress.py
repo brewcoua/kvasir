@@ -4,7 +4,14 @@ import json
 import pytest
 
 from kvasir.models import Error, Progress
-from kvasir.progress import OUTLINE, RESEARCH, ProgressStream, StormProgressHandler
+from kvasir.progress import (
+    ARTICLE,
+    OUTLINE,
+    POLISH,
+    RESEARCH,
+    ProgressStream,
+    StormProgressHandler,
+)
 from kvasir.sse import frame
 
 
@@ -57,13 +64,42 @@ async def test_handler_maps_callbacks_to_stages():
     handler.on_information_organization_start()
     handler.on_direct_outline_generation_end(outline="# a")
     handler.on_outline_refinement_end(outline="# a")
+    handler.on_article_generation_start(sections=["History", "Design"])
+    handler.on_section_generation_start(section="History")
+    handler.on_section_generation_end(section="History")
+    handler.on_article_generation_end()
+    handler.on_polish_start()
+    handler.on_polish_end()
     stream.close()
 
     events = await drain(stream)
 
-    assert [event.stage for event in events] == [RESEARCH] * 6 + [OUTLINE] * 3
-    assert "identified 2 perspectives" in [event.detail for event in events]
-    assert "completed conversation turn 2" in [event.detail for event in events]
+    assert [event.stage for event in events] == (
+        [RESEARCH] * 6 + [OUTLINE] * 3 + [ARTICLE] * 4 + [POLISH] * 2
+    )
+    details = [event.detail for event in events]
+    assert "identified 2 perspectives" in details
+    assert "completed conversation turn 2" in details
+    assert "finished History (1/2)" in details
+
+
+@pytest.mark.asyncio
+async def test_section_progress_counts_completions_not_arrival_order():
+    """Sections are written concurrently, so ends interleave with other sections' starts."""
+    stream = ProgressStream()
+    handler = StormProgressHandler(stream)
+
+    handler.on_article_generation_start(sections=["a", "b", "c"])
+    for section in ("a", "b", "c"):
+        handler.on_section_generation_start(section=section)
+    for section in ("c", "a", "b"):
+        handler.on_section_generation_end(section=section)
+    stream.close()
+
+    details = [event.detail for event in await drain(stream)]
+
+    assert details[0] == "writing 3 sections with citations"
+    assert details[-3:] == ["finished c (1/3)", "finished a (2/3)", "finished b (3/3)"]
 
 
 def test_frame_is_terminated_by_a_blank_line():
