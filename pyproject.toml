@@ -1,6 +1,9 @@
 [project]
 name = "kvasir"
-version = "0.1.0"
+# Read from src/kvasir/__init__.py so release-please's version bump does not touch this file. A
+# static version here also lands in uv.lock, which then drifts on every release PR and breaks
+# `uv sync --locked`; with a dynamic version uv omits the field entirely.
+dynamic = ["version"]
 description = "A self-hostable HTTP service for Stanford STORM and Co-STORM, with an Open WebUI client"
 readme = "README.md"
 requires-python = "==3.11.*"
@@ -24,6 +27,9 @@ Homepage = "https://github.com/brewcoua/kvasir"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/kvasir/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kvasir"]
