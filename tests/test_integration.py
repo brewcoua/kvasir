@@ -92,7 +92,7 @@ async def test_a_costorm_session_survives_being_reloaded(settings, tmp_path, str
 
     # A fresh store, standing in for a process that restarted between turns.
     reloaded = SessionStore(tmp_path / "sessions", ttl_hours=1)
-    final = await _in_thread(report, settings, reloaded, "integration-1")
+    final = await _in_thread(report, settings, reloaded, "integration-1", stream)
 
     assert final.report.strip(), "the report is empty"
     assert "#" in final.report, "the report carries no markdown headings"
