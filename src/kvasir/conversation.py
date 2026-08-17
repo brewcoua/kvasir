@@ -10,7 +10,7 @@ from typing import Any
 
 from kvasir.config import Settings
 from kvasir.models import Citation, Report, SessionInfo, SessionRequest, Turn
-from kvasir.progress import CoStormProgressHandler, ProgressStream
+from kvasir.progress import ARTICLE, CoStormProgressHandler, ProgressStream
 from kvasir.runners import build_costorm_runner, load_costorm_runner
 from kvasir.sessions import SessionStore
 
@@ -60,9 +60,17 @@ def step(
     )
 
 
-def report(settings: Settings, store: SessionStore, session_id: str) -> Report:
-    """Generate the report. Reading only, so the session is not written back."""
+def report(
+    settings: Settings, store: SessionStore, session_id: str, stream: ProgressStream
+) -> Report:
+    """Generate the report. Reading only, so the session is not written back.
+
+    Upstream's `generate_report` invokes no callback, so the two slow parts are announced here
+    rather than through a handler: rebuilding the knowledge base, then writing the report.
+    """
+    stream.publish(ARTICLE, "loading the round table")
     runner = load_costorm_runner(settings, store.load(session_id))
+    stream.publish(ARTICLE, "writing the report")
     return Report(
         report=runner.generate_report(),
         citations=_citations(runner.knowledge_base.info_uuid_to_info_dict),

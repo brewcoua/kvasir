@@ -9,7 +9,7 @@ map.
 
 Upstream ships a Python library and a Streamlit demo labelled for local development, but no server
 and no container image. This repository supplies the missing middle: a small FastAPI service, a
-`linux/amd64` image on GHCR, and two Open WebUI Pipe functions.
+`linux/amd64` image on GHCR, and an Open WebUI Pipe function.
 
 `knowledge_storm` is vendored as `src/kvasir/storm` and modified, rather than depended on. See
 [`docs/fork-notes.md`](docs/fork-notes.md) for what diverges and why.
@@ -104,12 +104,12 @@ Sessions are keyed by an id you supply, so a client can key them by its own conv
 | --- | --- |
 | `POST /v1/session` | Create and warm start. Streams. Body: `session_id`, `topic`. 409 if the id is taken. |
 | `POST /v1/session/{id}/step` | One turn. Body `{"utterance": "..."}` speaks, `{}` advances the round table. Streams. |
-| `POST /v1/session/{id}/report` | The report so far, with citations. |
+| `POST /v1/session/{id}/report` | The report so far, with citations. Streams. |
 | `GET /v1/session/{id}` | Topic, turn count and experts. |
 | `DELETE /v1/session/{id}` | Remove it. |
 
 An utterance is recorded rather than answered, so getting a reply to something you said takes a
-second step with an empty body. Both Pipes do this for you.
+second step with an empty body. The Pipe does this for you.
 
 Sessions are one JSON file each under `$KVASIR_DATA_DIR/sessions`, written to a temporary sibling
 and renamed, so a crash mid-write leaves the previous session readable. Expired sessions are swept
@@ -193,8 +193,10 @@ by role and by model, which is enough to decide whether the defaults suit you. N
 
 ## Open WebUI
 
-Two Pipe functions live under [`openwebui/`](openwebui/), with installation instructions and a
-valve reference in [`openwebui/README.md`](openwebui/README.md).
+One Pipe function lives under [`owui/`](owui/), exposing STORM and Co-STORM as two
+models. It writes a run's progress into the message as it happens, turns sources into citations,
+and reports what the run spent. Installation instructions and a valve reference are in
+[`owui/README.md`](owui/README.md).
 
 ## Development
 

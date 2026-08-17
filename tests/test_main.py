@@ -236,17 +236,20 @@ def test_stepping_a_missing_session_reports_it_in_the_stream(client, sessions):
     assert "no session absent" in events[-1][1]["message"]
 
 
-def test_report_returns_markdown_and_citations(client, sessions, monkeypatch):
-    monkeypatch.setattr(
-        main.conversation,
-        "report",
-        lambda settings, store, session_id: Report(report="# Report", citations=TURN.citations),
-    )
+def test_report_streams_markdown_and_citations(client, sessions, monkeypatch):
+    def report(settings, store, session_id, stream):
+        stream.publish("article", "writing the report")
+        return Report(report="# Report", citations=TURN.citations)
 
-    body = client.post("/v1/session/chat-1/report").json()
+    monkeypatch.setattr(main.conversation, "report", report)
 
-    assert body["report"] == "# Report"
-    assert body["citations"][0]["url"] == "https://example.org/a"
+    events = parse(client.post("/v1/session/chat-1/report").text)
+
+    assert events[0][0] == "run"
+    assert ("progress", {"stage": "article", "detail": "writing the report"}) in events
+    assert events[-1][0] == "done"
+    assert events[-1][1]["report"] == "# Report"
+    assert events[-1][1]["citations"][0]["url"] == "https://example.org/a"
 
 
 def test_session_metadata_is_read_from_disk(client, sessions):

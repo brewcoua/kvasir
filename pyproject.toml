@@ -42,7 +42,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src"]
+files = ["src", "owui"]
 # The fork is untyped, so its classes are Any and strict mode refuses to subclass them. Extending
 # its callback handlers is the supported way to observe a run.
 disallow_subclassing_any = false

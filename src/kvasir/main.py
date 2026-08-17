@@ -23,7 +23,6 @@ from kvasir import conversation, logs
 from kvasir.config import Settings, apply_environment
 from kvasir.models import (
     Error,
-    Report,
     ResearchRequest,
     RunDetail,
     RunStarted,
@@ -158,15 +157,16 @@ async def step_session(session_id: str, request: StepRequest) -> Response:
 
 
 @app.post("/v1/session/{session_id}/report")
-async def session_report(session_id: str) -> Report:
-    """Not streamed, but still a run: generating a report spends tokens like any other stage."""
-    record = app.state.runs.start("costorm", f"report {session_id}")
-
-    def work() -> Report:
-        with record.active():
-            return conversation.report(app.state.settings, app.state.sessions, session_id)
-
-    return await asyncio.to_thread(work)
+async def session_report(session_id: str) -> Response:
+    """Streams, because generating a report spends tokens and takes a slot like any other run."""
+    settings: Settings = app.state.settings
+    store: SessionStore = app.state.sessions
+    return _streamed(
+        lambda stream: conversation.report(settings, store, session_id, stream),
+        f"report {session_id}",
+        "costorm",
+        f"report {session_id}",
+    )
 
 
 @app.get("/v1/runs")
