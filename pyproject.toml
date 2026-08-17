@@ -1,6 +1,6 @@
 [project]
 name = "kvasir"
-version = "0.1.0"
+version = "0.2.0"
 description = "A self-hostable HTTP service for Stanford STORM and Co-STORM, with an Open WebUI client"
 readme = "README.md"
 requires-python = "==3.11.*"
