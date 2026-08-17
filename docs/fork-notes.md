@@ -25,14 +25,15 @@ What survived a second pass, after the fork settled:
 
 - `rm.py` keeps `SearXNG` alone. The other ten retrievers are gone, nine of them behind a paid
   credential.
-- `lm.py` keeps one class, `GatewayModel`. The copied dspy `LM` base, the text-completion path, the
-  in-process LRU cache and the ten wrappers upstream deprecated after v1.1.0 are gone.
+- `lm.py` keeps one class, `GatewayModel`, now a `dspy.LM` subclass. The copied dspy `LM` base, the
+  text-completion path, the in-process LRU cache and the ten wrappers upstream deprecated after
+  v1.1.0 are gone.
 - `utils.py` keeps `truncate_filename`, `ArticleTextProcessing` and `FileIOHelper`. `WebPageHelper`
   went with the retrievers that used it, and with it `QdrantVectorStoreManager`, `load_api_key`, and
   two appropriateness checks hardcoded to `azure/gpt-4o-mini` that nothing called.
 - Six declared dependencies went with them: `langchain-text-splitters`, `openai`, `regex`, `toml`,
-  `tqdm` and `trafilatura`. Dropping litellm took four more: `litellm`, `diskcache`, `ujson` and
-  `requests`. The lockfile went from 114 packages to 77.
+  `tqdm` and `trafilatura`. The lockfile went from 114 packages to 77, and back to 78 when dspy 3
+  brought litellm in as its own transport.
 
 Anything removed is recoverable from upstream at the fork point in `NOTICE`.
 
@@ -42,24 +43,31 @@ whose docstrings are the prompts themselves, so most of what a linter reports th
 on prompt text. Adopting the rules would be churn against the part of the tree least worth
 reformatting.
 
-## The gateway is reached directly, and litellm is gone
+## Everything reaches the gateway through dspy
 
-Every model and embedding call is one POST to an OpenAI-compatible endpoint, so `httpx` is the whole
-transport. `src/kvasir/storm/gateway.py` is that client: `post()` for the request, and
-`response_cost()` for what a call cost.
+`GatewayModel` is a `dspy.LM` subclass, so completions use dspy's own transport — litellm — and its
+error taxonomy. What the subclass adds is the accounting dspy does not do: which STORM role is
+spending, reported to the run's usage sink.
 
-litellm was doing nothing this deployment needs. Routing, provider fallbacks, retries and response
-caching are the external gateway's job — LiteLLM proxy or Bifrost — and doing them again in-process
-only added a dependency that rewrote model names on the way out. It read the first `/`-separated
-segment of a model name as a provider hint and did not forward it, which is why `KVASIR_MODEL_FAST`
-used to need explaining. Names now reach the gateway verbatim.
+The consequence to know about is the model name. dspy routes on the leading `/`-separated segment
+and consumes it, so `KVASIR_MODEL_FAST` and `KVASIR_MODEL_STRONG` carry an `openai/` prefix the
+gateway never sees; everything after it is forwarded untouched. `kvasir.config._model` rejects a
+name without one at startup rather than prefixing it silently.
 
-Cost is read from whichever shape the gateway reports: a LiteLLM proxy's `x-litellm-response-cost`
-header, or a `cost` in the `usage` object, as a number or split into `prompt_cost` and
-`completion_cost`. Absent, it is 0.0.
+Retrying is the subclass's, not litellm's. `dspy.LM` is constructed with `num_retries=0` because
+litellm retries a 400 as readily as a 429, and `forward` is wrapped in `backoff` over the four dspy
+errors a later attempt can plausibly fix: `LMRateLimitError`, `LMServerError`, `LMTimeoutError` and
+`LMTransportError`. Everything else — a bad request, an auth failure, a context-length overflow —
+fails on the first try.
 
-Removed with it: `diskcache`, `ujson`, `requests`, and litellm's own `aiohttp`, `tiktoken`,
-`tokenizers` and `fastuuid`.
+Cost is read in three places, in order: what dspy computed for a model it recognises
+(`_hidden_params.response_cost`), a LiteLLM proxy's `x-litellm-response-cost` header as litellm
+passes it through, and a `cost` in the `usage` object, as a number or split into `prompt_cost` and
+`completion_cost` as Bifrost reports it. Absent, it is 0.0.
+
+Embeddings go through `dspy.Embedder`, so `src/kvasir/storm/gateway.py` is gone: nothing in the fork
+speaks HTTP to the gateway any more, and `httpx` is left serving retrieval alone. See below for what
+that cost on the embedding side.
 
 ## Configuration happens once, explicitly
 
@@ -78,27 +86,39 @@ the root logger from whatever embedded the package, and the global `httpx` logge
 `utils.py`.
 
 `src/kvasir/storm/__init__.py` imports no submodule, so importing the package pulls in only the
-module asked for. It sets `DSP_CACHEDIR` and `DSP_CACHEBOOL`, because dspy 2.4.9 creates a joblib
-cache directory while `dspy` is imported, whether or not caching is on. This is why the container
-needs a writable `/tmp`.
+module asked for. It sets `DSPY_CACHEDIR`, because dspy opens a disk cache while `dspy` is imported
+— before any `dspy.configure_cache` call could say otherwise — whether or not caching is on. This is
+why the container needs a writable `/tmp`. Nothing reads that cache: `GatewayModel` passes
+`cache=False`.
 
-## Embeddings go through the gateway
+## Embeddings go through `dspy.Embedder`
 
 Upstream had two unrelated embedding paths. `Encoder` (Co-STORM) hardcoded `text-embedding-3-small`
 and required an `ENCODER_API_TYPE` environment variable.
 `StormInformationTable.prepare_table_for_retrieval` (plain STORM) instead loaded a local
 `SentenceTransformer("paraphrase-MiniLM-L6-v2")` from HuggingFace and scored with scikit-learn.
 
-Both now use one `Encoder(model, api_key, api_base)`:
+Both now use one `Encoder(model, api_key, api_base)`, a thin wrapper over `dspy.Embedder`:
 
 - No `ENCODER_API_TYPE`, no hardcoded model name, no Azure special case.
-- One `/embeddings` request for a whole list, rather than one request per text across a thread
-  pool.
+- `KVASIR_EMBEDDING_MODEL` carries a provider prefix like the language models do, since it routes
+  through the same dspy.
+- One request for a whole list, rather than one request per text across a thread pool.
 - A failed or short response raises `EmbeddingError`. Upstream printed per-text failures and carried
-  on, returning fewer vectors than it was given texts and misaligning the ones it did return against
-  the input order. Callers index that result positionally.
+  on, returning fewer vectors than it was given texts. Callers index that result positionally.
+- What is **not** checked any more is order. Upstream's vectors could come back misaligned and the
+  fork sorted `data` by `index` defensively; `dspy/clients/embedding.py:161` reads the rows as they
+  arrive, so the count is all that can be enforced from outside.
 - `cosine_similarity` in `encoder.py` replaces `sklearn.metrics.pairwise.cosine_similarity`, whose
   only use was this.
+
+Embedding tokens reach a run by a detour worth knowing about. `dspy.Embedder` returns vectors and
+discards the usage object, so `Encoder` registers a litellm `CustomLogger` — litellm dispatches to
+those alone — and reads usage from its success hook. That hook runs on litellm's own logging thread,
+*after* the call returned, where the run's contextvar-scoped sink does not exist. So the sink is
+read in the caller's context and passed down as litellm request `metadata`, and the hook reports
+through the sink it finds there. The consequence: a run's `embedding_tokens` is eventually
+consistent, arriving a moment after the call it belongs to.
 
 `STORMWikiRunner` takes an encoder and threads it through, so both engines are pointed at the
 gateway the same way. This is what removed `torch`, `sentence-transformers`, `scikit-learn`, the
@@ -297,10 +317,29 @@ It raises `RuntimeError("You must supply searxng_api_url")` when the URL is empt
 have the JSON output format enabled; one serving HTML only returns an empty result set rather than
 failing.
 
-### `dspy_ai` is pinned at 2.4.9
+### `dspy` is pinned at 3.3.0
 
-That is what the tree was written against, and dspy's API changed substantially afterwards. Raising
-it is a project, not a dependency bump. `renovate.json` disables the bump.
+The tree was written against 2.4.9 and was raised deliberately. What that cost, and what to expect
+when rebasing onto an upstream still on 2.4.9:
+
+- `Union[dspy.dsp.LM, dspy.dsp.HFModel]`, the annotation on roughly fifty parameters, is now
+  `dspy.LM`. `dspy.dsp` no longer carries either class, and annotations are evaluated at definition
+  time, so this was an import-time crash rather than a typing nicety.
+- Every `InputField`/`OutputField` lost its `prefix=` and `format=str`. Both are deprecated and have
+  no effect: dspy's adapters build the prompt from field names, types and `desc=`, and the prompt
+  text upstream carried in `prefix=` moved into `desc=` or into the signature docstring.
+- Field names are now visible in the prompt, as `[[ ## name ## ]]` markers. `resposne` and the two
+  bare `output` fields were renamed for that reason.
+- `WritePageOutlineFromConv.old_outline` was declared an output field while every caller passed it
+  in. The old template engine rendered it anyway; dspy refuses it.
+- `show_guidelines=False` was a template-engine setting and is gone from every call site.
+- Where a module picked structure out of prose — numbered lists of personas and experts, search
+  queries, `"step: [node]"`, `"Best placement: [1]"` — the output field states its type and the
+  adapter parses it. The regexes and substring scans that did it went with them, along with the
+  `"Undefined"` failure paths for when a model phrased its answer differently.
+
+`tests/test_storm_signatures.py` formats every signature through `ChatAdapter` and parses each typed
+output back, which is what keeps the above honest without a gateway.
 
 ## Rebasing onto a later upstream
 

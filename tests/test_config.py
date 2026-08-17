@@ -42,11 +42,21 @@ def test_all_missing_variables_are_reported_together():
         assert name in str(excinfo.value)
 
 
-def test_model_names_reach_the_gateway_verbatim():
+def test_a_model_name_is_kept_whole():
+    """Only the first segment routes; everything after it is the gateway's to interpret."""
     name = "openai/ollama/deepseek-v4-flash:cloud"
     settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_FAST": name})
 
     assert settings.model_fast == name
+
+
+@pytest.mark.parametrize("name", ["KVASIR_MODEL_FAST", "KVASIR_MODEL_STRONG"])
+def test_a_model_name_without_a_provider_is_rejected(name):
+    """Rejected rather than silently prefixed: a name rewritten out of sight is what confuses."""
+    with pytest.raises(ConfigError) as excinfo:
+        Settings.from_env(MINIMAL | {name: "gpt-4o-mini"})
+
+    assert "openai/gpt-4o-mini" in str(excinfo.value)
 
 
 def test_trailing_slashes_are_stripped_from_urls():

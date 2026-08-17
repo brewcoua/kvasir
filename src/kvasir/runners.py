@@ -56,10 +56,13 @@ _COSTORM_ROLES = {
 def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -> GatewayModel:
     """A model bound to the gateway.
 
-    The model name is sent verbatim: nothing parses or rewrites it on the way out.
+    The name's first segment routes and is consumed by dspy; the rest reaches the gateway. See
+    `kvasir.config._model`.
     """
-    model = GatewayModel(
+    return GatewayModel(
         model=settings.model_fast if tier == "fast" else settings.model_strong,
+        # Reported with the model's usage, so a run can be read as which stage spent what.
+        role=role,
         api_key=settings.openai_api_key,
         api_base=settings.openai_api_base,
         max_tokens=max_tokens,
@@ -68,9 +71,6 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
         temperature=1.0,
         top_p=0.9,
     )
-    # Read back when the model reports its usage, so a run can be read as which stage spent what.
-    model.role = role
-    return model
 
 
 def _encoder(settings: Settings) -> Encoder:
@@ -78,7 +78,8 @@ def _encoder(settings: Settings) -> Encoder:
 
     Co-STORM embeds to build its mind map; STORM embeds to rank snippets against each section's
     query. Upstream used two unrelated encoders for those, one hardcoded to `text-embedding-3-small`
-    and one a local sentence-transformer, and neither took the gateway.
+    and one a local sentence-transformer, and neither took the gateway. Both are one `dspy.Embedder`
+    now, so the name routes exactly as a language model's does.
     """
     return Encoder(
         model=settings.embedding_model,

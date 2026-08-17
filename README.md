@@ -61,8 +61,8 @@ stage took, and what it has spent.
 ### Runtime requirements
 
 The image runs as uid 65532 under a read-only root filesystem. Only `/data` and `/tmp` need to be
-writable. `/tmp` is required, not optional: dspy creates a joblib cache directory while it is being
-imported, whether or not caching is on, and `src/kvasir/storm/__init__.py` points `DSP_CACHEDIR`
+writable. `/tmp` is required, not optional: dspy creates a disk cache directory while it is being
+imported, whether or not caching is on, and `src/kvasir/storm/__init__.py` points `DSPY_CACHEDIR`
 there. A run's scratch directory also lives under `/tmp`.
 
 ## Research a topic
@@ -132,10 +132,11 @@ The same data is available as JSON.
 A run is `queued`, `running`, `done`, `failed` or `rejected`. `rejected` means it never got a slot,
 so a 429 is visible as a run rather than only as a status code.
 
-Cost comes from what the gateway reports per call. Two shapes are read: a LiteLLM proxy's
-`x-litellm-response-cost` response header, and a `cost` field in the response's `usage` object,
-either a number or split into `prompt_cost` and `completion_cost` as Bifrost reports it. A gateway
-that reports no cost leaves it at zero, which is not the same as free. Runs are held in memory, capped at the 100 most recent, and do not
+Cost comes from what the call reports. Three shapes are read, in order: the cost dspy itself
+computes for a model it recognises, a LiteLLM proxy's `x-litellm-response-cost` response header, and
+a `cost` field in the response's `usage` object, either a number or split into `prompt_cost` and
+`completion_cost` as Bifrost reports it. A gateway that reports no cost, for a model dspy does not
+price, leaves it at zero, which is not the same as free. Runs are held in memory, capped at the 100 most recent, and do not
 survive a restart.
 
 ## Configuration
@@ -150,7 +151,7 @@ without them.
 | `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing. |
 | `KVASIR_MODEL_STRONG` | required | Outline and article generation. |
 | `KVASIR_SEARXNG_URL` | required | SearXNG base URL. |
-| `KVASIR_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model. Used by both modes. |
+| `KVASIR_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model. Used by both modes. |
 | `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions. |
 | `KVASIR_SESSION_TTL_HOURS` | `168` | Session expiry, applied at startup. |
 | `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
@@ -161,9 +162,12 @@ without them.
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
 | `LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 
-Model names reach the gateway verbatim. Nothing in kvasir validates, normalises, rewrites or splits
-one, so `KVASIR_MODEL_FAST`, `KVASIR_MODEL_STRONG` and `KVASIR_EMBEDDING_MODEL` are whatever your
-gateway calls the model, in whatever spelling it uses for routing.
+`KVASIR_MODEL_FAST` and `KVASIR_MODEL_STRONG` must name a provider first: dspy routes on the leading
+`/`-separated segment and consumes it, and everything after it reaches the gateway untouched. For an
+OpenAI-compatible gateway that means an `openai/` prefix, so `openai/ollama/fast-model:cloud` asks
+the gateway for `ollama/fast-model:cloud`. A name without a prefix is rejected at startup rather
+than silently prefixed. `KVASIR_EMBEDDING_MODEL` works the same way, since embeddings go through
+dspy too.
 
 Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
@@ -209,9 +213,10 @@ That directory is excluded from `ruff format --check`, from the strict lint rule
 until the unused retrievers and deprecated model wrappers are trimmed. Trimming them is a separate
 pass.
 
-`dspy-ai` is pinned at 2.4.9, which is what the fork was written against. Its API changed
-substantially afterwards, so raising it is a project rather than a dependency bump, and Renovate is
-configured not to offer one.
+`dspy` is pinned at 3.3.0. The fork was written against 2.4.9, whose template engine is gone: the
+signatures now carry types and descriptions rather than prompt prefixes, and dspy's adapters turn
+them into prompts and parse the answers back. Where upstream picked structure out of prose with
+regexes, the output field states its type instead.
 
 ## Licence
 

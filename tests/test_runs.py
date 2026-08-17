@@ -112,7 +112,9 @@ def test_usage_is_attributed_to_the_running_run(client, monkeypatch):
         runtime.record_lm_usage("openai/strong", "article_gen", 100, 20, 0.002)
         runtime.record_lm_usage("openai/fast", "conv_simulator", 30, 5, 0.0001)
         runtime.record_lm_usage("openai/fast", "conv_simulator", 10, 5, 0.0)
-        runtime.record_embedding_usage("openai/embed", 400)
+        # Embedding usage is reported straight to the sink, since it arrives on litellm's
+        # logging thread where the contextvar is not visible.
+        runtime.current_usage_sink().record_embedding("openai/embed", 400)
         runtime.record_search_usage("SearXNG", 3)
         return RESULT
 
@@ -147,8 +149,8 @@ def test_usage_reported_from_a_pool_still_lands_on_the_run(client, monkeypatch):
 def test_usage_outside_a_run_goes_nowhere():
     """The fork is a library first: reporting with nothing listening must not fail."""
     runtime.record_lm_usage("m", "r", 1, 1, 0.0)
-    runtime.record_embedding_usage("m", 1)
     runtime.record_search_usage("m", 1)
+    assert runtime.current_usage_sink() is None
 
 
 def test_a_watcher_follows_a_run_from_another_thread():

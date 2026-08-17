@@ -1,5 +1,5 @@
 import copy
-from typing import Union
+
 
 import dspy
 
@@ -17,8 +17,8 @@ class StormArticlePolishingModule(ArticlePolishingModule):
 
     def __init__(
         self,
-        article_gen_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
-        article_polish_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        article_gen_lm: dspy.LM,
+        article_polish_lm: dspy.LM,
     ):
         self.article_gen_lm = article_gen_lm
         self.article_polish_lm = article_polish_lm
@@ -70,23 +70,23 @@ class WriteLeadSection(dspy.Signature):
     3. The lead section should be carefully sourced as appropriate. Add inline citations (e.g., "Washington, D.C., is the capital of the United States.[1][3].") where necessary.
     """
 
-    topic = dspy.InputField(prefix="The topic of the page: ", format=str)
-    draft_page = dspy.InputField(prefix="The draft page:\n", format=str)
-    lead_section = dspy.OutputField(prefix="Write the lead section:\n", format=str)
+    topic: str = dspy.InputField(desc="the topic of the page")
+    draft_page: str = dspy.InputField(desc="the draft page")
+    lead_section: str = dspy.OutputField()
 
 
 class PolishPage(dspy.Signature):
     """You are a faithful text editor that is good at finding repeated information in the article and deleting them to make sure there is no repetition in the article. You won't delete any non-repeated part in the article. You will keep the inline citations and article structure (indicated by "#", "##", etc.) appropriately. Do your job for the following article."""
 
-    draft_page = dspy.InputField(prefix="The draft article:\n", format=str)
-    page = dspy.OutputField(prefix="Your revised article:\n", format=str)
+    draft_page: str = dspy.InputField(desc="the draft article")
+    page: str = dspy.OutputField(desc="your revised article")
 
 
 class PolishPageModule(dspy.Module):
     def __init__(
         self,
-        write_lead_engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
-        polish_engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        write_lead_engine: dspy.LM,
+        polish_engine: dspy.LM,
     ):
         super().__init__()
         self.write_lead_engine = write_lead_engine
@@ -95,16 +95,12 @@ class PolishPageModule(dspy.Module):
         self.polish_page = dspy.Predict(PolishPage)
 
     def forward(self, topic: str, draft_page: str, polish_whole_page: bool = True):
-        # NOTE: Change show_guidelines to false to make the generation more robust to different LM families.
-        with dspy.settings.context(lm=self.write_lead_engine, show_guidelines=False):
+        with dspy.settings.context(lm=self.write_lead_engine):
             lead_section = self.write_lead(
                 topic=topic, draft_page=draft_page
             ).lead_section
-            if "The lead section:" in lead_section:
-                lead_section = lead_section.split("The lead section:")[1].strip()
         if polish_whole_page:
-            # NOTE: Change show_guidelines to false to make the generation more robust to different LM families.
-            with dspy.settings.context(lm=self.polish_engine, show_guidelines=False):
+            with dspy.settings.context(lm=self.polish_engine):
                 page = self.polish_page(draft_page=draft_page).page
         else:
             page = draft_page

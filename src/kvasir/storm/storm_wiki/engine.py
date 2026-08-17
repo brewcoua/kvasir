@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Union
+
 
 import dspy
 
@@ -38,19 +38,19 @@ class STORMWikiLMConfigs(LMConfigs):
         self.article_gen_lm = None  # LLM used in article generation.
         self.article_polish_lm = None  # LLM used in article polishing.
 
-    def set_conv_simulator_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_conv_simulator_lm(self, model: dspy.LM):
         self.conv_simulator_lm = model
 
-    def set_question_asker_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_question_asker_lm(self, model: dspy.LM):
         self.question_asker_lm = model
 
-    def set_outline_gen_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_outline_gen_lm(self, model: dspy.LM):
         self.outline_gen_lm = model
 
-    def set_article_gen_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_article_gen_lm(self, model: dspy.LM):
         self.article_gen_lm = model
 
-    def set_article_polish_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_article_polish_lm(self, model: dspy.LM):
         self.article_polish_lm = model
 
 
@@ -257,7 +257,10 @@ class STORMWikiRunner(Engine):
                         call.pop(
                             "kwargs"
                         )  # All kwargs are dumped together to run_config.json.
-                    f.write(json.dumps(call) + "\n")
+                    # dspy records the provider's own response object in each history entry, and
+                    # litellm's is not JSON. The record is for reading, so anything else is
+                    # stringified rather than dropped.
+                    f.write(json.dumps(call, default=str) + "\n")
         except Exception:
             logger.exception("Could not write llm_call_history.jsonl.")
 

@@ -8,7 +8,7 @@ For more detailed information, refer to Section 3.5 of the Co-STORM paper: https
 """
 
 import dspy
-from typing import List, Union
+from typing import List
 
 from .collaborative_storm_utils import (
     format_search_results,
@@ -25,9 +25,9 @@ class KnowledgeBaseSummmary(dspy.Signature):
     You will be presented with these sections where "#" denotes level of section.
     """
 
-    topic = dspy.InputField(prefix="topic: ", format=str)
-    structure = dspy.InputField(prefix="Tree structure: \n", format=str)
-    output = dspy.OutputField(prefix="Now give brief summary:\n", format=str)
+    topic: str = dspy.InputField()
+    structure: str = dspy.InputField(desc="tree structure of the discussion")
+    summary: str = dspy.OutputField(desc="a brief summary of the discussion")
 
 
 class ConvertUtteranceStyle(dspy.Signature):
@@ -38,17 +38,13 @@ class ConvertUtteranceStyle(dspy.Signature):
     Note that do not hallucinate and keep the citation index like [1] as it is. Also,
     """
 
-    expert = dspy.InputField(prefix="You are inivited as: ", format=str)
-    action = dspy.InputField(
-        prefix="You want to contribute to conversation by: ", format=str
-    )
-    prev = dspy.InputField(prefix="Previous speaker said: ", format=str)
-    content = dspy.InputField(
-        prefix="Question or response you want to say: ", format=str
-    )
-    utterance = dspy.OutputField(
-        prefix="Your utterance (keep the information as much as you can with citations, prefer shorter answers without loss of information): ",
-        format=str,
+    expert: str = dspy.InputField(desc="who you are invited as")
+    action: str = dspy.InputField(desc="how you want to contribute to the conversation")
+    prev: str = dspy.InputField(desc="what the previous speaker said")
+    content: str = dspy.InputField(desc="the question or response you want to say")
+    utterance: str = dspy.OutputField(
+        desc="your utterance, keeping as much of the information and its citations as you can, "
+        "and preferring shorter answers without loss of information"
     )
 
 
@@ -59,20 +55,15 @@ class GroundedQuestionGeneration(dspy.Signature):
     Use [1][2] in line to ground your question.
     """
 
-    topic = dspy.InputField(prefix="topic: ", format=str)
-    summary = dspy.InputField(prefix="Discussion history: \n", format=str)
-    information = dspy.InputField(prefix="Available information: \n", format=str)
-    last_utterance = dspy.InputField(
-        prefix="Last utterance in the conversation: \n", format=str
-    )
-    output = dspy.OutputField(
-        prefix="Now give next discussion focus in the format of one sentence question:\n",
-        format=str,
-    )
+    topic: str = dspy.InputField()
+    summary: str = dspy.InputField(desc="discussion history")
+    information: str = dspy.InputField(desc="available information")
+    last_utterance: str = dspy.InputField(desc="last utterance in the conversation")
+    question: str = dspy.OutputField(desc="the next discussion focus, as a one sentence question")
 
 
 class GroundedQuestionGenerationModule(dspy.Module):
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         self.engine = engine
         self.gen_focus = dspy.Predict(GroundedQuestionGeneration)
         self.polish_style = dspy.Predict(ConvertUtteranceStyle)
@@ -90,13 +81,13 @@ class GroundedQuestionGenerationModule(dspy.Module):
         )
         summary = knowledge_base.get_knowledge_base_summary()
         last_utterance, _ = extract_and_remove_citations(last_conv_turn.utterance)
-        with dspy.settings.context(lm=self.engine, show_guidelines=False):
+        with dspy.settings.context(lm=self.engine):
             raw_utterance = self.gen_focus(
                 topic=topic,
                 summary=summary,
                 information=information,
                 last_utterance=last_utterance,
-            ).output
+            ).question
             utterance = self.polish_style(
                 expert="Roundtable conversation moderator",
                 action="Raising a new question by natural transit from previous utterance.",

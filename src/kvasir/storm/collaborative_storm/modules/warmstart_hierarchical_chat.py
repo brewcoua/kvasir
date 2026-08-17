@@ -12,7 +12,7 @@ import concurrent.futures
 import dspy
 import logging
 from threading import Lock
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 from .callback import BaseCallbackHandler
 from .collaborative_storm_utils import _get_answer_question_module_instance
@@ -41,14 +41,10 @@ class WarmStartModerator(dspy.Signature):
     The output should only include the next question for the current expert. Do not include any other information or preamble.
     """
 
-    topic = dspy.InputField(prefix="Topic for roundtable discussion: ", format=str)
-    history = dspy.InputField(
-        prefix="Experts you have already interacted with: ", format=str
-    )
-    current_expert = dspy.InputField(prefix="Expert you are talking with:", format=str)
-    question = dspy.OutputField(
-        prefix="Next question for the expert you are talking with: ", format=str
-    )
+    topic: str = dspy.InputField(desc="topic for roundtable discussion")
+    history: str = dspy.InputField(desc="experts you have already interacted with")
+    current_expert: str = dspy.InputField(desc="the expert you are talking with")
+    question: str = dspy.OutputField(desc="the next question for that expert")
 
 
 class SectionToConvTranscript(dspy.Signature):
@@ -62,31 +58,29 @@ class SectionToConvTranscript(dspy.Signature):
     2. Provide a brief and engaging answer (with all inline citations from original text) derived from the section serving as pointers and avoid too much details.
     """
 
-    topic = dspy.InputField(prefix="topic:", format=str)
-    section_name = dspy.InputField(prefix="section name:", format=str)
-    section_content = dspy.InputField(prefix="section content:", format=str)
-    question = dspy.OutputField(prefix="Now give engaging question only.\nQuestion:")
-    answer = dspy.OutputField(
-        prefix="Now give engaging answer only with all inline citations from original text.\nAnswer:"
+    topic: str = dspy.InputField()
+    section_name: str = dspy.InputField()
+    section_content: str = dspy.InputField()
+    question: str = dspy.OutputField(desc="the engaging question")
+    answer: str = dspy.OutputField(
+        desc="the engaging answer, with all inline citations from the original text"
     )
 
 
 class ReportToConversation(dspy.Module):
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         self.engine = engine
         self.section_to_conv_transcript = dspy.Predict(SectionToConvTranscript)
 
     def forward(self, knowledge_base: KnowledgeBase):
         def process_node(node, topic):
-            with dspy.settings.context(lm=self.engine, show_guidelines=False):
+            with dspy.settings.context(lm=self.engine):
                 output = self.section_to_conv_transcript(
                     topic=topic,
                     section_name=node.get_path_from_root(),
                     section_content=node.synthesize_output,
                 )
-                question = output.question.replace("Question:", "").strip()
-                answer = output.answer.replace("Answer:", "").strip()
-                return question, answer
+                return output.question.strip(), output.answer.strip()
 
         conversations = []
         nodes = knowledge_base.collect_all_nodes()
@@ -134,7 +128,7 @@ class ReportToConversation(dspy.Module):
 class WarmStartConversation(dspy.Module):
     def __init__(
         self,
-        question_asking_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        question_asking_lm: dspy.LM,
         generate_expert_module: GenerateExpertModule,
         answer_question_module: AnswerQuestionModule,
         logging_wrapper: LoggingWrapper,
@@ -275,17 +269,14 @@ class GenerateWarmStartOutline(dspy.Signature):
      The organization of outline should adopt wikiepdia style.
     """
 
-    topic = dspy.InputField(prefix="The topic discussed: ", format=str)
-    draft = dspy.InputField(prefix="Draft outline you can reference to: ", format=str)
-    conv = dspy.InputField(prefix="Discussion history:\n", format=str)
-    outline = dspy.OutputField(
-        prefix='Write the conversation outline (Use "#" Title" to indicate section title, "##" Title" to indicate subsection title, ...):\n',
-        format=str,
-    )
+    topic: str = dspy.InputField(desc="the topic discussed")
+    draft: str = dspy.InputField(desc="a draft outline you can reference")
+    conv: str = dspy.InputField(desc="discussion history")
+    outline: str = dspy.OutputField(desc="the conversation outline")
 
 
 class GenerateWarmStartOutlineModule(dspy.Module):
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         self.engine = engine
         self.gen_outline = dspy.Predict(GenerateWarmStartOutline)
         self.draft_outline = dspy.Predict(WritePageOutline)

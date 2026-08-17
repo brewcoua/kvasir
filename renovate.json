@@ -10,8 +10,8 @@
       "pinDigests": true
     },
     {
-      "description": "dspy-ai 2.4.9 is what the fork in src/kvasir/storm was written against, and its API changed substantially afterwards. Raising it is a project, not a dependency bump.",
-      "matchPackageNames": ["dspy-ai"],
+      "description": "dspy shapes the prompts the fork in src/kvasir/storm sends, so a minor bump can change what the models are asked. Raising it wants a run against a real gateway, not an automatic merge.",
+      "matchPackageNames": ["dspy"],
       "enabled": false
     }
   ]

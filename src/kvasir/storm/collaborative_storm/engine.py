@@ -35,22 +35,22 @@ class CollaborativeStormLMConfigs(LMConfigs):
         self.question_asking_lm = None
         self.knowledge_base_lm = None
 
-    def set_question_answering_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_question_answering_lm(self, model: dspy.LM):
         self.question_answering_lm = model
 
-    def set_discourse_manage_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_discourse_manage_lm(self, model: dspy.LM):
         self.discourse_manage_lm = model
 
-    def set_utterance_polishing_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_utterance_polishing_lm(self, model: dspy.LM):
         self.utterance_polishing_lm = model
 
-    def set_warmstart_outline_gen_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_warmstart_outline_gen_lm(self, model: dspy.LM):
         self.warmstart_outline_gen_lm = model
 
-    def set_question_asking_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_question_asking_lm(self, model: dspy.LM):
         self.question_asking_lm = model
 
-    def set_knowledge_base_lm(self, model: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def set_knowledge_base_lm(self, model: dspy.LM):
         self.knowledge_base_lm = model
 
     def collect_and_reset_lm_usage(self):

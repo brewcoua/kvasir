@@ -13,10 +13,10 @@ from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
+import dspy
 import pytest
 
 from kvasir.storm import runtime
-from kvasir.storm.gateway import GatewayError
 from kvasir.storm.lm import GatewayModel
 
 
@@ -115,14 +115,14 @@ def _model(gateway: _Gateway, **kwargs: Any) -> GatewayModel:
     )
 
 
-def test_a_call_reaches_chat_completions_with_the_model_name_verbatim(gateway: _Gateway) -> None:
+def test_a_call_reaches_chat_completions_with_the_routed_model_name(gateway: _Gateway) -> None:
     assert _model(gateway)(prompt="hello") == ["an answer"]
 
     path, body, headers = gateway.requests[0]
     assert path == "/v1/chat/completions"
-    # litellm used to consume the leading segment as a provider hint, so this arrived as
-    # "ollama/strong:cloud".
-    assert body["model"] == "openai/ollama/strong:cloud"
+    # dspy routes on the first segment and consumes it. Everything after it is the gateway's to
+    # interpret, which is why the configured name carries an `openai/` prefix it never sees.
+    assert body["model"] == "ollama/strong:cloud"
     assert body["messages"] == [{"role": "user", "content": "hello"}]
     assert body["max_tokens"] == 700
     assert headers["Authorization"] == "Bearer a-real-key"
@@ -136,8 +136,7 @@ def test_credentials_are_not_sent_as_generation_parameters(gateway: _Gateway) ->
 
 
 def test_usage_reaches_the_sink_with_the_model_role(gateway: _Gateway) -> None:
-    model = _model(gateway)
-    model.role = "article_gen"
+    model = _model(gateway, role="article_gen")
     sink = _Sink()
 
     with runtime.record_usage_into(sink):
@@ -192,8 +191,9 @@ def test_a_server_error_is_retried() -> None:
 
 
 def test_a_bad_request_is_not_retried() -> None:
-    with _Gateway(statuses=[400]) as refusing:
-        with pytest.raises(GatewayError):
+    """litellm's own retries would take a 400 four times over; ours must not."""
+    with _Gateway(statuses=[400] * 4) as refusing:
+        with pytest.raises(dspy.LMInvalidRequestError):
             _model(refusing)(prompt="hello")
 
         assert len(refusing.requests) == 1

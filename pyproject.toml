@@ -14,7 +14,7 @@ dependencies = [
     # than pulled in through a published package. See src/kvasir/storm/NOTICE.
     "backoff==2.2.1",
     "beautifulsoup4==4.15.0",
-    "dspy-ai==2.4.9",
+    "dspy==3.3.0",
     "numpy==2.4.6",
 ]
 

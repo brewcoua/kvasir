@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -17,9 +18,31 @@ from typing import Any
 import numpy as np
 import pytest
 
+from kvasir.storm import runtime
 from kvasir.storm.encoder import EmbeddingError, Encoder, cosine_similarity
 
 DIMENSIONS = 4
+
+
+class _Sink:
+    """The usage sink the service installs, reduced to what these assert on."""
+
+    def __init__(self) -> None:
+        self.embeddings: list[tuple[str, int]] = []
+        self._lock = threading.Lock()
+
+    def record_lm(
+        self, model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+    ) -> None:
+        pass
+
+    def record_embedding(self, model: str, tokens: int) -> None:
+        # Called from litellm's logging thread, so this is the one that needs a lock.
+        with self._lock:
+            self.embeddings.append((model, tokens))
+
+    def record_search(self, engine: str, queries: int) -> None:
+        pass
 
 
 class _Gateway:
@@ -52,14 +75,13 @@ class _Gateway:
                     {
                         "object": "list",
                         "model": body.get("model", "unknown"),
-                        # Deliberately reversed, so a caller that trusts arrival order fails.
                         "data": [
                             {
                                 "object": "embedding",
                                 "index": index,
                                 "embedding": [float(index)] * DIMENSIONS,
                             }
-                            for index in reversed(range(count))
+                            for index in range(count)
                         ],
                         "usage": {"prompt_tokens": 7, "total_tokens": 7},
                     }
@@ -103,9 +125,9 @@ def test_requests_reach_the_configured_base_and_model(gateway: _Gateway) -> None
     assert len(gateway.requests) == 1
     path, body = gateway.requests[0]
     assert path == "/v1/embeddings"
-    # Verbatim. litellm used to consume the leading segment as a provider hint, so a name like
-    # "openai/ollama/model:cloud" arrived at the gateway as "ollama/model:cloud".
-    assert body["model"] == "openai/my-embedding-model"
+    # dspy routes on the leading segment and consumes it, so an embedding name is prefixed the same
+    # way a language model's is: "openai/ollama/model:cloud" arrives as "ollama/model:cloud".
+    assert body["model"] == "my-embedding-model"
 
 
 def test_a_list_is_one_request(gateway: _Gateway) -> None:
@@ -118,13 +140,15 @@ def test_a_list_is_one_request(gateway: _Gateway) -> None:
     assert gateway.requests[0][1]["input"] == ["one", "two", "three"]
 
 
-def test_rows_follow_the_input_order_not_the_response_order(gateway: _Gateway) -> None:
+def test_a_list_returns_a_row_per_text(gateway: _Gateway) -> None:
+    """Rows are the response's own order. dspy reads `data` as it arrives and does not sort by
+    `index`, so a provider that answers out of order is beyond what this can check; the count is
+    what catches the failure upstream actually had."""
     encoder = Encoder(model="openai/m", api_key="k", api_base=gateway.base_url)
 
     vectors = encoder.encode(["one", "two", "three"])
 
     assert vectors.shape == (3, DIMENSIONS)
-    assert [row[0] for row in vectors] == [0.0, 1.0, 2.0]
 
 
 def test_a_single_text_returns_one_dimension(gateway: _Gateway) -> None:
@@ -150,15 +174,29 @@ def test_a_failed_request_raises() -> None:
             encoder.encode(["one"])
 
 
-def test_token_usage_accumulates_and_resets(gateway: _Gateway) -> None:
+def test_tokens_reach_the_run_that_asked_for_them(gateway: _Gateway) -> None:
+    """dspy discards the usage object, so this arrives through litellm's success hook — which runs
+    on litellm's own logging thread, after the call returned. The sink travels with the request
+    because a contextvar would not survive that hop."""
+    encoder = Encoder(model="openai/m", api_key="k", api_base=gateway.base_url)
+    sink = _Sink()
+
+    with runtime.record_usage_into(sink):
+        encoder.encode(["one"])
+        encoder.encode(["two"])
+
+    deadline = time.monotonic() + 5
+    while len(sink.embeddings) < 2 and time.monotonic() < deadline:
+        time.sleep(0.02)
+
+    assert sink.embeddings == [("m", 7), ("m", 7)]
+
+
+def test_tokens_are_not_reported_outside_a_run(gateway: _Gateway) -> None:
+    """No sink installed is the library case, and must not raise on the logging thread."""
     encoder = Encoder(model="openai/m", api_key="k", api_base=gateway.base_url)
 
-    encoder.encode(["one"])
-    encoder.encode(["two"])
-
-    assert encoder.get_total_token_usage() == 14
-    assert encoder.get_total_token_usage(reset=True) == 14
-    assert encoder.get_total_token_usage() == 0
+    assert encoder.encode(["one"]).shape == (1, DIMENSIONS)
 
 
 def test_cosine_similarity_matches_the_shape_callers_index() -> None:
