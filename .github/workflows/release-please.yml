@@ -67,14 +67,19 @@ jobs:
 
       - id: meta
         uses: docker/metadata-action@v6
+        env:
+          # buildx pushes an OCI index here, since it attaches an attestation manifest, and GHCR
+          # reads the package description from an annotation on the index, not from the config
+          # labels. Without index in this list the package page has no description.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index,manifest
         with:
           images: ghcr.io/brewcoua/kvasir
-          # No moving latest. A tag that changes underneath a deployment defeats digest pinning.
-          # This is load-bearing: the action defaults to latest=auto, which tags latest on any
-          # semver push, so the tag list below is not enough on its own.
-          flavor: latest=false
+          # latest is spelled out because latest=auto keys off the event ref, which is a branch
+          # push here rather than a tag push, so it would never fire.
           tags: |
             type=semver,pattern={{version}},value=${{ needs.release.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.tag_name }}
+            type=raw,value=latest
             type=sha,format=long
 
       - id: build
@@ -88,6 +93,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           provenance: mode=max
           sbom: true
           cache-from: type=gha
@@ -143,6 +149,7 @@ jobs:
 
           \`\`\`
           docker pull ghcr.io/brewcoua/kvasir:${VERSION}
+          docker pull ghcr.io/brewcoua/kvasir:latest
           \`\`\`
 
           Pin the digest:

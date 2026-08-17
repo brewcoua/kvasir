@@ -6,6 +6,7 @@
       "package-name": "kvasir",
       "changelog-path": "CHANGELOG.md",
       "include-v-in-tag": true,
+      "include-component-in-tag": false,
       "extra-files": ["owui/pipe.py", "src/kvasir/__init__.py"]
     }
   }
