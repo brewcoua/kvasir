@@ -14,11 +14,11 @@ Open WebUI keeps functions in its own database. It reads this file once, at impo
 3. Paste the raw URL and import:
 
    ```
-   https://raw.githubusercontent.com/brewcoua/kvasir/master/owui/pipe.py
+   https://github.com/brewcoua/kvasir/releases/latest/download/pipe.py
    ```
 
-   Importing runs the file's code on your server, so read it first, and pin a tag or a commit in
-   place of `master` if you would rather not track the branch.
+   Importing runs the file's code on your server, so read it first. That URL follows whatever the
+   newest release is; swap `latest/download` for `download/v0.1.0` to pin one.
 4. On the create page, set the id to `kvasir`. The id prefixes both models, so this is what makes
    them `kvasir.storm` and `kvasir.co-storm`. The name and description come from the file's
    header, so leave them.

@@ -1,0 +1,153 @@
+name: release
+
+# Commits accumulate on master and release-please keeps a release PR up to date. Nothing ships
+# until that PR is merged, which is what creates the tag and the GitHub Release.
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      # A PR opened by GITHUB_TOKEN does not trigger pull_request workflows, so the release PR
+      # would merge without ci.yml ever running. Authenticating as a GitHub App fixes that
+      # without tying releases to a personal PAT.
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  image:
+    # The tag is pushed by the job above, and a tag pushed by Actions does not trigger a
+    # tag-filtered workflow. Chaining off release_created is what replaces that trigger.
+    needs: release
+    if: needs.release.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Required for the signed provenance attestation buildx attaches.
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      # Build the tagged commit, not whatever master points at by now.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag_name }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/brewcoua/kvasir
+          # No moving latest. A tag that changes underneath a deployment defeats digest pinning.
+          # This is load-bearing: the action defaults to latest=auto, which tags latest on any
+          # semver push, so the tag list below is not enough on its own.
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.release.outputs.tag_name }}
+            type=sha,format=long
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          # amd64 only. The known consumer is amd64, and arm64 would have to build under
+          # emulation, which roughly doubles the release time. The base and tool images are
+          # multi-arch, so adding linux/arm64 back here is the only change it would take.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ghcr.io/brewcoua/kvasir
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  assets:
+    needs: [release, image]
+    if: needs.release.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag_name }}
+
+      # The App token is revoked when its job ends and cannot cross jobs. Uploading an asset and
+      # editing release notes need to trigger nothing, so the built-in token is enough here.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release.outputs.tag_name }}
+          VERSION: ${{ needs.release.outputs.version }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh release upload "$TAG" owui/pipe.py --clobber
+
+          # Read the generated changelog back and append to it, rather than replacing the notes.
+          {
+            gh release view "$TAG" --json body -q .body
+            cat <<EOF
+
+          ## Container image
+
+          \`\`\`
+          docker pull ghcr.io/brewcoua/kvasir:${VERSION}
+          \`\`\`
+
+          Pin the digest:
+
+          \`\`\`
+          ghcr.io/brewcoua/kvasir@${DIGEST}
+          \`\`\`
+
+          ## Open WebUI
+
+          Import From Link:
+
+          \`\`\`
+          https://github.com/${REPO}/releases/download/${TAG}/pipe.py
+          \`\`\`
+          EOF
+          } > notes.md
+
+          gh release edit "$TAG" --notes-file notes.md
