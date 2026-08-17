@@ -105,10 +105,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Required to sign the provenance attestation for pipe.py.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.release.outputs.tag_name }}
+
+      # Importing the pipe executes it on the operator's Open WebUI server, and it is fetched by
+      # URL rather than from a checkout, so the asset needs something binding it to the commit it
+      # came from. Verify with:
+      #   gh attestation verify pipe.py --repo brewcoua/kvasir
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: owui/pipe.py
 
       # The App token is revoked when its job ends and cannot cross jobs. Uploading an asset and
       # editing release notes need to trigger nothing, so the built-in token is enough here.
@@ -146,6 +157,13 @@ jobs:
 
           \`\`\`
           https://github.com/${REPO}/releases/download/${TAG}/pipe.py
+          \`\`\`
+
+          Importing runs the file on your server. Verify its provenance first:
+
+          \`\`\`
+          gh release download ${TAG} -p pipe.py -R ${REPO}
+          gh attestation verify pipe.py -R ${REPO}
           \`\`\`
           EOF
           } > notes.md
