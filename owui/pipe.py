@@ -3,7 +3,7 @@ title: kvasir
 author: brewcoua
 author_url: https://github.com/brewcoua/kvasir
 x-release-please-start-version
-version: 0.3.0
+version: 0.4.0
 x-release-please-end
 license: MIT
 description: Stanford STORM and Co-STORM, as two models backed by a kvasir service.

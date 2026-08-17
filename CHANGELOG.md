@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/brewcoua/kvasir/compare/v0.3.0...v0.4.0) (2026-08-17)
+
+
+### Features
+
+* answer owui task calls without a run ([bea8292](https://github.com/brewcoua/kvasir/commit/bea8292c13d44219546da152f045da5277d129a0))
+
 ## [0.3.0](https://github.com/brewcoua/kvasir/compare/v0.2.0...v0.3.0) (2026-08-17)
 
 
