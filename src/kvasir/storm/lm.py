@@ -12,6 +12,9 @@ in scope.
 
 import logging
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 import backoff
@@ -20,6 +23,12 @@ import dspy
 from . import runtime
 
 logger = logging.getLogger(__name__)
+
+# How long one call may spend retrying a gateway that keeps failing. A run is minutes to tens of
+# minutes of work, so waiting out an outage costs less than losing it.
+RETRY_SECONDS = 1000
+
+_retry_seconds: ContextVar[float] = ContextVar("retry_seconds", default=RETRY_SECONDS)
 
 # What a later attempt can plausibly fix. A bad request, an auth failure or a context-length
 # overflow is deterministic, so it fails immediately rather than after sixteen minutes of backoff —
@@ -30,6 +39,21 @@ RETRYABLE = (
     dspy.LMTimeoutError,
     dspy.LMTransportError,
 )
+
+
+@contextmanager
+def retry_budget(seconds: float) -> Iterator[None]:
+    """Cap how long a call made from this context retries for.
+
+    A contextvar rather than a constructor argument, because it travels into `asyncio.to_thread`
+    and the pipeline's pools with the rest of the context, and because it is a property of what the
+    caller is waiting for rather than of the model. Nobody waits out an outage for a chat title.
+    """
+    token = _retry_seconds.set(seconds)
+    try:
+        yield
+    finally:
+        _retry_seconds.reset(token)
 
 
 def _log_retry(details: dict) -> None:
@@ -70,7 +94,10 @@ class GatewayModel(dspy.LM):
 
         return usage
 
-    @backoff.on_exception(backoff.expo, RETRYABLE, max_time=1000, on_backoff=_log_retry)
+    # `max_time` is read once per call, so the budget is whatever the caller set.
+    @backoff.on_exception(
+        backoff.expo, RETRYABLE, max_time=_retry_seconds.get, on_backoff=_log_retry
+    )
     def forward(self, prompt: str | None = None, messages: Any = None, **kwargs: Any) -> Any:
         response = super().forward(prompt=prompt, messages=messages, **kwargs)
 

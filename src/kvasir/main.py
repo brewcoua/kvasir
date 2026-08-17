@@ -30,12 +30,16 @@ from kvasir.models import (
     SessionInfo,
     SessionRequest,
     StepRequest,
+    TaskRequest,
+    TaskResponse,
 )
 from kvasir.progress import ProgressStream
 from kvasir.research import run_research
+from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import Run, RunNotFound, RunRegistry
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.sse import HEADERS, MEDIA_TYPE, frame
+from kvasir.storm.lm import retry_budget
 from kvasir.storm.runtime import configure_concurrency
 
 READINESS_TIMEOUT_SECONDS = 5.0
@@ -167,6 +171,24 @@ async def session_report(session_id: str) -> Response:
         "costorm",
         f"report {session_id}",
     )
+
+
+@app.post("/v1/tasks")
+async def task(request: TaskRequest) -> TaskResponse:
+    """One short completion on the fast model, for a client's own housekeeping.
+
+    Open WebUI generates a chat title, tags and follow-up prompts by asking whichever model the
+    chat is using, which for a kvasir chat is the pipe. Those are not research: sent to
+    `/v1/research` they each take a run slot, and with one slot they collide with the very run they
+    are summarising. Deliberately not `_streamed` — no run is registered and no slot is claimed.
+    """
+    settings: Settings = app.state.settings
+    model = build_task_model(settings)
+    # Blocking, like every other way this service reaches the gateway. The budget is copied into
+    # the thread with the rest of the context.
+    with retry_budget(TASK_RETRY_SECONDS):
+        replies = await asyncio.to_thread(model, messages=request.messages)
+    return TaskResponse(content=replies[0] if replies else "")
 
 
 @app.get("/v1/runs")

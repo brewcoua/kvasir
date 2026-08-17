@@ -161,9 +161,9 @@ class Events:
         return [data["description"] for data in self.of("status")]
 
 
-async def run(pipe, body, events=None, metadata=None, call=None, user=None):
+async def run(pipe, body, events=None, metadata=None, call=None, user=None, task=None):
     chunks = []
-    async for chunk in pipe.pipe(body, events, call, metadata, user):
+    async for chunk in pipe.pipe(body, events, call, metadata, user, task):
         chunks.append(chunk)
     return "".join(chunks)
 
@@ -177,6 +177,19 @@ def costorm(text):
 
 
 METADATA = {"chat_id": "chat-1"}
+
+# Open WebUI's own title prompt, trimmed. The shape is what matters: a long instruction addressed
+# to the model, with the real conversation buried in it, arriving as an ordinary user message.
+TITLE_PROMPT = """### Task:
+Generate a concise title summarizing the chat history.
+
+### Output:
+JSON format: { "title": "your concise title here" }
+
+### Chat History:
+<chat_history>
+USER: The Kvasir stone
+</chat_history>"""
 
 
 def test_it_exposes_both_models():
@@ -246,13 +259,45 @@ async def test_the_usage_footer_can_be_turned_off(pipe):
 
 
 @pytest.mark.asyncio
-async def test_the_first_message_names_the_chat(pipe):
+async def test_it_leaves_the_title_and_tags_to_open_webui(pipe):
+    """Open WebUI generates both by asking this pipe, and its answers overwrite ours anyway."""
     events = Events()
 
     await run(pipe, storm("The Kvasir stone"), events)
 
-    assert events.of("chat:title") == [{"title": "The Kvasir stone"}]
-    assert events.of("chat:tags") == [{"tags": ["kvasir", "storm"]}]
+    assert events.of("chat:title") == []
+    assert events.of("chat:tags") == []
+
+
+@pytest.mark.asyncio
+async def test_a_task_goes_to_the_fast_model_and_takes_no_run(pipe, monkeypatch):
+    """Open WebUI asks the chat's own model for the title, the tags and the follow-up prompts.
+
+    Answered as research those are three more runs, and with one run slot they are refused by the
+    run they describe.
+    """
+    researched = []
+    monkeypatch.setattr(main, "run_research", lambda *args: researched.append(args) or RESULT)
+    monkeypatch.setattr(
+        main, "build_task_model", lambda settings: lambda messages: ['{"title": "Kvasir Stone"}']
+    )
+    body = storm(TITLE_PROMPT)
+
+    answer = await run(pipe, body, task="title_generation")
+
+    assert answer == '{"title": "Kvasir Stone"}'
+    assert researched == []
+
+
+@pytest.mark.asyncio
+async def test_a_failed_task_is_silent(pipe, monkeypatch):
+    def failing(settings):
+        raise RuntimeError("the gateway refused")
+
+    monkeypatch.setattr(main, "build_task_model", failing)
+
+    # An unnamed chat is better than an error bubble in the conversation.
+    assert await run(pipe, storm(TITLE_PROMPT), task="title_generation") == ""
 
 
 @pytest.mark.asyncio
@@ -283,7 +328,6 @@ async def test_a_confirmed_follow_up_researches_again(pipe):
     body["messages"].insert(0, {"role": "assistant", "content": "an article"})
 
     assert "# Discovery" in await run(pipe, body, call=call)
-    # A renamed chat is the user's, so a follow-up leaves the title alone.
 
 
 @pytest.mark.asyncio
@@ -416,7 +460,6 @@ async def test_the_first_message_warm_starts_and_takes_a_turn(pipe, engine):
     # Both calls share one reasoning block rather than opening a second.
     assert answer.count("<think>") == 1
     assert "- gathering background" in answer
-    assert events.of("chat:tags") == [{"tags": ["kvasir", "co-storm"]}]
     assert [data["source"]["name"] for data in events.of("source")] == ["[1] Provenance"]
 
 

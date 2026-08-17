@@ -60,8 +60,22 @@ one silent block at the end.
 - **The run reports what it spent.** A collapsed footer gives the run id, per-stage timings, tokens
   and cost, split by role. A gateway that prices nothing shows `cost not reported`, which is not
   the same as free. Turn it off with `SHOW_USAGE`.
-- **The chat names itself** after the topic, on the first message only.
 - **A toast fires** on completion and on failure.
+
+## Titles, tags and follow-ups
+
+Open WebUI writes the chat title, its tags and the suggested follow-up prompts by asking the chat's
+own model, which for a kvasir chat is this function. Answered as research, each of those would be a
+whole run: minutes of work to name a chat, and with the default single run slot they are refused by
+the very run they are describing, so the title ends up summarising `all run slots are busy`.
+
+The function recognises them by Open WebUI's `__task__` parameter and sends them to
+`POST /v1/tasks` instead, which is one completion on the fast model and takes no run slot. A task
+that fails returns nothing rather than an error in the conversation: an unnamed chat is the worst
+case.
+
+Alternatively, point Open WebUI at a different model for this entirely, under **Admin Settings**,
+**Interface**, **Task Model**. Then these requests never reach the function.
 
 ## STORM
 
@@ -112,7 +126,7 @@ reply, under one reasoning block.
 | `ADVANCE_AFTER_WARM_START` | `true` | Take one agent turn straight after warm start, so the first reply has something to read rather than only a list of experts. |
 | `CONFIRM_RERUN` | `true` | Ask before researching again in a chat that already holds an article. |
 | `SHOW_USAGE` | `true` | Append what the run spent. |
-| `SET_CHAT_TITLE` | `true` | Name the chat after the topic. |
+| `TASK_TIMEOUT_SECONDS` | `120` | Timeout for one of Open WebUI's own task calls. |
 
 Empty and zero mean "leave it to the service", so its defaults stay in one place rather than being
 shadowed here.

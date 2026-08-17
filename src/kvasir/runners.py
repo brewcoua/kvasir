@@ -43,6 +43,13 @@ _STORM_ROLES = {
     "article_polish": ("fast", 4000),
 }
 
+# Room for a handful of follow-up questions, which is the largest of the three things Open WebUI
+# asks a task call for. A title needs a fraction of it.
+TASK_MAX_TOKENS = 1000
+# A client asking for a chat title has its own short timeout and has given up long before the
+# default budget runs out, so retrying past this only leaves a thread spinning on a dead gateway.
+TASK_RETRY_SECONDS = 30.0
+
 _COSTORM_ROLES = {
     "question_answering": ("strong", 1000),
     "discourse_manage": ("fast", 500),
@@ -71,6 +78,15 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
         temperature=1.0,
         top_p=0.9,
     )
+
+
+def build_task_model(settings: Settings) -> GatewayModel:
+    """The fast model, for a short auxiliary call that belongs to no run.
+
+    Nothing binds a usage sink around it, so what it spends is reported nowhere. That is deliberate:
+    a client's housekeeping is not part of any run's accounting.
+    """
+    return _language_model(settings, role="task", tier="fast", max_tokens=TASK_MAX_TOKENS)
 
 
 def _encoder(settings: Settings) -> Encoder:

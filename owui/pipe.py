@@ -107,9 +107,12 @@ class Pipe:
             default=True,
             description="Append what the run spent: stage timings, tokens and cost.",
         )
-        SET_CHAT_TITLE: bool = Field(
-            default=True,
-            description="Name the chat after the topic, on the first message only.",
+        TASK_TIMEOUT_SECONDS: int = Field(
+            default=120,
+            description=(
+                "Timeout for one of Open WebUI's own task calls — title, tags, follow-ups. These "
+                "are one fast-model completion, not a run, so the timeout is an ordinary one."
+            ),
         )
 
     class UserValves(BaseModel):
@@ -138,7 +141,15 @@ class Pipe:
         __event_call__: Emit = None,
         __metadata__: dict[str, Any] | None = None,
         __user__: dict[str, Any] | None = None,
+        __task__: str | None = None,
     ) -> AsyncIterator[str]:
+        # Open WebUI asks the chat's own model to write the title, the tags and the follow-up
+        # prompts. Answered as research, each of those is a run of its own, and with one run slot
+        # they are refused by the very run they are describing. They go to the fast model instead.
+        if __task__:
+            yield await self._task(body)
+            return
+
         kind = str(body.get("model") or "").rsplit(".", 1)[-1]
         options = _Options(self.valves, __user__)
         chat = _Chat(__event_emitter__)
@@ -183,6 +194,24 @@ class Pipe:
             heartbeat.cancel()
             await status.done()
 
+    async def _task(self, body: dict[str, Any]) -> str:
+        """Hand one of Open WebUI's task prompts to the fast model, verbatim.
+
+        Returns an empty string on any failure. Open WebUI parses the reply as JSON and drops what
+        it cannot read, so a lost title is a chat that keeps its default name — not worth surfacing
+        an error into the conversation for.
+        """
+        timeout = aiohttp.ClientTimeout(total=self.valves.TASK_TIMEOUT_SECONDS)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as http:
+                payload = {"messages": body.get("messages") or []}
+                async with http.post(self._url("/v1/tasks"), json=payload) as response:
+                    if response.status != 200:
+                        return ""
+                    return str((await response.json()).get("content") or "")
+        except (TimeoutError, aiohttp.ClientError):
+            return ""
+
     # -- STORM ---------------------------------------------------------------------------------
 
     async def _storm(
@@ -207,7 +236,6 @@ class Pipe:
                 yield "Cancelled. Start a new chat, or confirm to research again."
                 return
 
-        await chat.begin(body, STORM, topic, self.valves.SET_CHAT_TITLE)
         await status.say(f"Researching {topic}")
 
         out: dict[str, Any] = {}
@@ -265,7 +293,6 @@ class Pipe:
                 if message.strip().lstrip("/").lower() in (ADVANCE, REPORT):
                     yield "No round table in this chat yet. Send a topic to start one."
                     return
-                await chat.begin(body, CO_STORM, message, self.valves.SET_CHAT_TITLE)
                 start = self._start(http, session_id, message, options, chat, status, think)
                 async for chunk in start:
                     yield chunk
@@ -509,16 +536,14 @@ class _Status:
 
 
 class _Chat:
-    """The events that decorate the chat rather than the message: title, tags, sources, toasts."""
+    """The events that decorate the chat rather than the message: sources and toasts.
+
+    It used to set the chat title and tags too. Open WebUI generates both itself, by asking this
+    pipe for them — see `Pipe._task` — and its answers overwrite anything emitted here anyway.
+    """
 
     def __init__(self, emitter: Emit) -> None:
         self._emitter = emitter
-
-    async def begin(self, body: dict[str, Any], kind: str, topic: str, title: bool) -> None:
-        await self._emit({"type": "chat:tags", "data": {"tags": ["kvasir", kind]}})
-        # Only the opening message: renaming the chat on every turn would fight the user.
-        if title and not _has_answer(body):
-            await self._emit({"type": "chat:title", "data": {"title": topic[:60]}})
 
     async def sources(self, citations: list[dict[str, Any]] | None) -> None:
         """One source event per citation, so Open WebUI renders the chips and the sources panel.

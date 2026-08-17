@@ -21,6 +21,18 @@ class ResearchRequest(BaseModel):
     model_strong: str | None = None
 
 
+class TaskRequest(BaseModel):
+    """Body of `POST /v1/tasks`. OpenAI-shaped chat messages, forwarded to the fast model as-is."""
+
+    messages: list[dict[str, str]] = Field(min_length=1)
+
+
+class TaskResponse(BaseModel):
+    """Payload of `POST /v1/tasks`. One completion, unparsed."""
+
+    content: str
+
+
 class Citation(BaseModel):
     """One source, numbered as the article's `[n]` markers reference it."""
 

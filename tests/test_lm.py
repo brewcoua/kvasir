@@ -16,7 +16,7 @@ from typing import Any
 import dspy
 import pytest
 
-from kvasir.storm import runtime
+from kvasir.storm import lm, runtime
 from kvasir.storm.lm import GatewayModel
 
 
@@ -188,6 +188,15 @@ def test_a_server_error_is_retried() -> None:
         assert _model(flaky)(prompt="hello") == ["an answer"]
 
         assert len(flaky.requests) == 2
+
+
+def test_the_caller_can_shorten_the_retry_budget() -> None:
+    """A run waits out a gateway outage; a chat title is not worth sixteen minutes of a thread."""
+    with _Gateway(statuses=[500] * 8) as down:
+        with pytest.raises(dspy.LMServerError), lm.retry_budget(0.0):
+            _model(down)(prompt="hello")
+
+        assert len(down.requests) == 1
 
 
 def test_a_bad_request_is_not_retried() -> None:

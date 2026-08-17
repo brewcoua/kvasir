@@ -60,6 +60,10 @@ errors a later attempt can plausibly fix: `LMRateLimitError`, `LMServerError`, `
 `LMTransportError`. Everything else — a bad request, an auth failure, a context-length overflow —
 fails on the first try.
 
+How long it retries for is the caller's, through `lm.retry_budget`. A run is worth waiting out a
+gateway outage for and gets the default of 1000 seconds; a `/v1/tasks` call is a chat client naming
+a chat and gets 30, because the client has given up long before that and only the thread is left.
+
 Cost is read in three places, in order: what dspy computed for a model it recognises
 (`_hidden_params.response_cost`), a LiteLLM proxy's `x-litellm-response-cost` header as litellm
 passes it through, and a `cost` in the `usage` object, as a number or split into `prompt_cost` and

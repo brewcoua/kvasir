@@ -7,8 +7,9 @@ import logging
 from dataclasses import replace
 
 import pytest
+import uvicorn
 
-from kvasir import logs
+from kvasir import __main__, logs
 from kvasir.config import Settings
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
@@ -138,3 +139,26 @@ def test_configuring_twice_does_not_duplicate_lines(emit):
     logging.getLogger("kvasir.test").info("once")
 
     assert len(lines()) == 1
+
+
+def test_the_entrypoint_configures_logging_before_uvicorn_can(emit, monkeypatch, capsys):
+    """Started as `uvicorn kvasir.main:app`, uvicorn pins its own handler on `uvicorn.access` and
+    stops it propagating, so the access log printed as plain text next to everyone else's JSON.
+
+    `emit` is taken only for its teardown, which puts the root handlers back.
+    """
+    for name, value in MINIMAL.items():
+        monkeypatch.setenv(name, value)
+    seen = {}
+
+    def fake_run(target, **kwargs):
+        # Uvicorn's loggers reach the root handler only because it installs none of its own.
+        seen["log_config"] = kwargs["log_config"]
+        logging.getLogger("uvicorn.access").info('127.0.0.1 - "GET /v1/runs HTTP/1.1" 200')
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+
+    __main__.main()
+
+    assert seen["log_config"] is None
+    assert json.loads(capsys.readouterr().err.splitlines()[0])["logger"] == "uvicorn.access"

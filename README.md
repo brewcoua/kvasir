@@ -128,6 +128,11 @@ The same data is available as JSON.
 | `GET /v1/runs` | Every run the process remembers, newest first. |
 | `GET /v1/runs/{id}` | One run, with per-stage timings, usage and recent events. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a snapshot. |
+| `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
+
+`POST /v1/tasks` is the one route that is not a run: it registers nothing and takes no slot. It
+exists because a chat client generates a title, tags and follow-up prompts by asking whichever
+model the chat uses, and those must not queue behind — or displace — the research they describe.
 
 A run is `queued`, `running`, `done`, `failed` or `rejected`. `rejected` means it never got a slot,
 so a 429 is visible as a run rather than only as a status code.
@@ -172,6 +177,11 @@ dspy too.
 Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
 
+Every line, including uvicorn's access log. Start the service as `python -m kvasir` rather than
+`uvicorn kvasir.main:app` to get that: the module configures logging first and tells uvicorn to
+install none of its own, which is what stops the access log printing as plain text. The image does
+this already.
+
 `OPENAI_API_KEY` and `OPENAI_API_BASE` keep those names because they are the conventional spelling
 for an OpenAI-compatible endpoint, which is what the gateway serves. Both are passed explicitly to
 every model and to the encoder; neither is exported back into the environment, so there is no path
@@ -195,8 +205,9 @@ by role and by model, which is enough to decide whether the defaults suit you. N
 
 One Pipe function lives under [`owui/`](owui/), exposing STORM and Co-STORM as two
 models. It writes a run's progress into the message as it happens, turns sources into citations,
-and reports what the run spent. Installation instructions and a valve reference are in
-[`owui/README.md`](owui/README.md).
+and reports what the run spent. Open WebUI's own title, tag and follow-up generation is routed to
+`POST /v1/tasks`, so naming a chat does not cost a run. Installation instructions and a valve
+reference are in [`owui/README.md`](owui/README.md).
 
 ## Development
 

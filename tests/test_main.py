@@ -124,6 +124,47 @@ def test_research_rejects_an_empty_topic(client):
     assert client.post("/v1/research", json={"topic": ""}).status_code == 422
 
 
+def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
+    seen = {}
+
+    def fake_model(settings):
+        assert settings.model_fast == ENVIRONMENT["KVASIR_MODEL_FAST"]
+
+        def call(messages):
+            seen["messages"] = messages
+            return ['{"title": "Local LLM Research"}']
+
+        return call
+
+    monkeypatch.setattr(main, "build_task_model", fake_model)
+    messages = [{"role": "user", "content": "### Task: Generate a concise title"}]
+    response = client.post("/v1/tasks", json={"messages": messages})
+
+    assert response.status_code == 200
+    assert response.json() == {"content": '{"title": "Local LLM Research"}'}
+    assert seen["messages"] == messages
+
+
+def test_a_task_takes_no_run_and_no_slot(client, monkeypatch):
+    monkeypatch.setattr(main, "build_task_model", lambda settings: lambda messages: ["ok"])
+    # Standing in for the run this task is describing: with one slot, a task routed through
+    # /v1/research would be refused by it. Held for the whole call, so a slot taken and released
+    # would not go unnoticed either.
+    assert main.app.state.run_slots.acquire(blocking=False)
+
+    try:
+        response = client.post("/v1/tasks", json={"messages": [{"role": "user", "content": "x"}]})
+    finally:
+        main.app.state.run_slots.release()
+
+    assert response.status_code == 200
+    assert client.get("/v1/runs").json() == []
+
+
+def test_a_task_needs_at_least_one_message(client):
+    assert client.post("/v1/tasks", json={"messages": []}).status_code == 422
+
+
 def test_a_slot_is_released_after_every_run(client, monkeypatch):
     monkeypatch.setattr(main, "run_research", lambda *args: RESULT)
 

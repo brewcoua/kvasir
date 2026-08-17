@@ -163,6 +163,15 @@
         padding: 0.15rem 0;
         border-bottom: 1px solid var(--line);
       }
+      /* A topic can be a whole prompt, and an event detail can be a paragraph. Keep the line
+         breaks that are in the text, and let a long unbroken run of characters break anywhere
+         rather than push the panel sideways. The list keeps its one-line ellipsis. */
+      .heading,
+      .error,
+      .events li {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
       .stage {
         color: var(--accent);
       }
@@ -283,7 +292,7 @@
         const panel = el("detail");
         panel.replaceChildren();
 
-        const heading = node("p");
+        const heading = node("p", "heading");
         heading.append(node("span", `state ${run.state}`, run.state));
         heading.append(text(` · ${run.topic}`));
         panel.append(heading);

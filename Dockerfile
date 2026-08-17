@@ -39,5 +39,6 @@ USER 65532:65532
 
 EXPOSE 8080
 
-# 0.0.0.0 binds inside the container only. Nothing here is exposed to a network by itself.
-CMD ["uvicorn", "kvasir.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Not `uvicorn kvasir.main:app`: the module configures logging before uvicorn can install its own,
+# which is what keeps the access log in the same format as everything else. See kvasir/__main__.py.
+CMD ["python", "-m", "kvasir"]
