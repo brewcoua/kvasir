@@ -22,8 +22,8 @@ class ConvSimulator(dspy.Module):
 
     def __init__(
         self,
-        topic_expert_engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
-        question_asker_engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        topic_expert_engine: dspy.LM,
+        question_asker_engine: dspy.LM,
         retriever: Retriever,
         max_search_queries_per_turn: int,
         search_top_k: int,
@@ -87,7 +87,7 @@ class WikiWriter(dspy.Module):
 
     The asked question will be used to start a next round of information seeking."""
 
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         super().__init__()
         self.ask_question_with_persona = dspy.ChainOfThought(AskQuestionWithPersona)
         self.ask_question = dspy.ChainOfThought(AskQuestion)
@@ -132,9 +132,9 @@ class AskQuestion(dspy.Signature):
     Please only ask a question at a time and don't ask what you have asked before. Your questions should be related to the topic you want to write.
     """
 
-    topic = dspy.InputField(prefix="Topic you want to write: ", format=str)
-    conv = dspy.InputField(prefix="Conversation history:\n", format=str)
-    question = dspy.OutputField(format=str)
+    topic: str = dspy.InputField(desc="topic you want to write about")
+    conv: str = dspy.InputField(desc="conversation history")
+    question: str = dspy.OutputField(desc="a single question, or the closing thanks")
 
 
 class AskQuestionWithPersona(dspy.Signature):
@@ -144,39 +144,30 @@ class AskQuestionWithPersona(dspy.Signature):
     Please only ask a question at a time and don't ask what you have asked before. Your questions should be related to the topic you want to write.
     """
 
-    topic = dspy.InputField(prefix="Topic you want to write: ", format=str)
-    persona = dspy.InputField(
-        prefix="Your persona besides being a Wikipedia writer: ", format=str
-    )
-    conv = dspy.InputField(prefix="Conversation history:\n", format=str)
-    question = dspy.OutputField(format=str)
+    topic: str = dspy.InputField(desc="topic you want to write about")
+    persona: str = dspy.InputField(desc="your persona besides being a Wikipedia writer")
+    conv: str = dspy.InputField(desc="conversation history")
+    question: str = dspy.OutputField(desc="a single question, or the closing thanks")
 
 
 class QuestionToQuery(dspy.Signature):
-    """You want to answer the question using Google search. What do you type in the search box?
-    Write the queries you will use in the following format:
-    - query 1
-    - query 2
-    ...
-    - query n"""
+    """You want to answer the question using Google search. What do you type in the search box?"""
 
-    topic = dspy.InputField(prefix="Topic you are discussing about: ", format=str)
-    question = dspy.InputField(prefix="Question you want to answer: ", format=str)
-    queries = dspy.OutputField(format=str)
+    topic: str = dspy.InputField(desc="topic you are discussing about")
+    question: str = dspy.InputField(desc="question you want to answer")
+    queries: list[str] = dspy.OutputField(desc="the search queries you will use")
 
 
 class AnswerQuestion(dspy.Signature):
     """You are an expert who can use information effectively. You are chatting with a Wikipedia writer who wants to write a Wikipedia page on topic you know. You have gathered the related information and will now use the information to form a response.
     Make your response as informative as possible, ensuring that every sentence is supported by the gathered information. If the [gathered information] is not directly related to the [topic] or [question], provide the most relevant answer based on the available information. If no appropriate answer can be formulated, respond with, “I cannot answer this question based on the available information,” and explain any limitations or gaps.
+    Try to use as many different sources as possible, and do not hallucinate.
     """
 
-    topic = dspy.InputField(prefix="Topic you are discussing about:", format=str)
-    conv = dspy.InputField(prefix="Question:\n", format=str)
-    info = dspy.InputField(prefix="Gathered information:\n", format=str)
-    answer = dspy.OutputField(
-        prefix="Now give your response. (Try to use as many different sources as possible and add do not hallucinate.)\n",
-        format=str,
-    )
+    topic: str = dspy.InputField(desc="topic you are discussing about")
+    conv: str = dspy.InputField(desc="the question")
+    info: str = dspy.InputField(desc="gathered information")
+    answer: str = dspy.OutputField()
 
 
 class TopicExpert(dspy.Module):
@@ -189,7 +180,7 @@ class TopicExpert(dspy.Module):
 
     def __init__(
         self,
-        engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        engine: dspy.LM,
         max_search_queries: int,
         search_top_k: int,
         retriever: Retriever,
@@ -203,13 +194,9 @@ class TopicExpert(dspy.Module):
         self.search_top_k = search_top_k
 
     def forward(self, topic: str, question: str, ground_truth_url: str):
-        with dspy.settings.context(lm=self.engine, show_guidelines=False):
+        with dspy.settings.context(lm=self.engine):
             # Identify: Break down question into queries.
             queries = self.generate_queries(topic=topic, question=question).queries
-            queries = [
-                q.replace("-", "").strip().strip('"').strip('"').strip()
-                for q in queries.split("\n")
-            ]
             queries = queries[: self.max_search_queries]
             # Search
             searched_results: List[Information] = self.retriever.retrieve(
@@ -256,8 +243,8 @@ class StormKnowledgeCurationModule(KnowledgeCurationModule):
         self,
         retriever: Retriever,
         persona_generator: Optional[StormPersonaGenerator],
-        conv_simulator_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
-        question_asker_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        conv_simulator_lm: dspy.LM,
+        question_asker_lm: dspy.LM,
         max_search_queries_per_turn: int,
         search_top_k: int,
         max_conv_turn: int,

@@ -1,23 +1,35 @@
-"""The only language model wrapper in the fork: chat completions against the gateway.
+"""The only language model wrapper in the fork: a `dspy.LM` that reports what a run spent.
 
 Upstream carried a copy of dspy's `LM` class, a text-completion path, an in-process LRU cache and
 several wrappers for providers deprecated after v1.1.0. Nothing here called any of it: every model
 is built by `kvasir.runners` as a chat model pointed at one gateway.
 
-The surface below is what dspy 2.4.9 reads off a language model — `__call__` returning a list of
-strings, `kwargs`, and `history` — so this stays a drop-in for `dspy.settings.context(lm=...)`.
+What is left is the accounting dspy does not do. dspy tracks usage per call and litellm prices what
+it recognises, but neither knows which STORM stage is spending, and a self-hosted gateway prices its
+own models. `forward` is the one seam where the response, the role and the run's usage sink are all
+in scope.
 """
 
 import logging
 import threading
+from typing import Any
 
 import backoff
-import httpx
+import dspy
 
 from . import runtime
-from .gateway import GatewayError, RetryableGatewayError, post, response_cost
 
 logger = logging.getLogger(__name__)
+
+# What a later attempt can plausibly fix. A bad request, an auth failure or a context-length
+# overflow is deterministic, so it fails immediately rather than after sixteen minutes of backoff —
+# which is what litellm's own `num_retries` does, since it retries a 400 as readily as a 429.
+RETRYABLE = (
+    dspy.LMRateLimitError,
+    dspy.LMServerError,
+    dspy.LMTimeoutError,
+    dspy.LMTransportError,
+)
 
 
 def _log_retry(details: dict) -> None:
@@ -28,44 +40,24 @@ def _log_retry(details: dict) -> None:
     )
 
 
-class GatewayModel:
-    """A chat model on an OpenAI-compatible gateway.
+class GatewayModel(dspy.LM):
+    """A chat model on an OpenAI-compatible gateway, tagged with the role it serves.
 
-    `api_key` and `api_base` are kept in `kwargs` rather than as attributes because
-    `LMConfigs.to_dict` and `LMConfigs.log` serialise that dict, and both strip keys beginning with
+    `api_key` and `api_base` are passed through to `dspy.LM`, which keeps them in `kwargs`. That is
+    also what `LMConfigs.to_dict` and `LMConfigs.log` serialise, and both strip keys beginning with
     `api_` to keep credentials out of session files and run configuration.
     """
 
-    def __init__(
-        self,
-        model: str,
-        api_key: str | None = None,
-        api_base: str | None = None,
-        temperature: float = 0.0,
-        max_tokens: int = 1000,
-        **kwargs,
-    ):
-        self.model = model
-        self.kwargs = dict(
-            temperature=temperature,
-            max_tokens=max_tokens,
-            api_key=api_key,
-            api_base=api_base,
-            **kwargs,
-        )
-        self.history = []
+    def __init__(self, model: str, role: str | None = None, **kwargs: Any):
+        # The gateway caches responses, and dspy's on-disk cache would be a second place to
+        # invalidate. Retrying is `forward`'s, which is selective about what it retries.
+        super().__init__(model=model, cache=False, num_retries=0, **kwargs)
+        self.role = role
         self._token_usage_lock = threading.Lock()
         self.prompt_tokens = 0
         self.completion_tokens = 0
 
-    def log_usage(self, response):
-        usage_data = response.get("usage")
-        if usage_data:
-            with self._token_usage_lock:
-                self.prompt_tokens += usage_data.get("prompt_tokens", 0)
-                self.completion_tokens += usage_data.get("completion_tokens", 0)
-
-    def get_usage_and_reset(self):
+    def get_usage_and_reset(self) -> dict[str, dict[str, int]]:
         """Get the total tokens used and reset the token usage."""
         usage = {
             self.model: {
@@ -78,60 +70,58 @@ class GatewayModel:
 
         return usage
 
-    # Upstream left the only live wrapper as the only one without a retry: every other @backoff in
-    # this file was on a class deprecated after v1.1.0. A rate limit or a dropped connection
-    # therefore failed the whole stage on the first try.
-    @backoff.on_exception(
-        backoff.expo,
-        (httpx.TransportError, RetryableGatewayError),
-        max_time=1000,
-        on_backoff=_log_retry,
-    )
-    def _request(self, payload: dict) -> tuple[httpx.Response, dict]:
-        response = post("/chat/completions", self._api_base, self.kwargs.get("api_key"), payload)
-        return response, response.json()
+    @backoff.on_exception(backoff.expo, RETRYABLE, max_time=1000, on_backoff=_log_retry)
+    def forward(self, prompt: str | None = None, messages: Any = None, **kwargs: Any) -> Any:
+        response = super().forward(prompt=prompt, messages=messages, **kwargs)
 
-    @property
-    def _api_base(self) -> str:
-        api_base = self.kwargs.get("api_base")
-        if not api_base:
-            raise GatewayError(f"no api_base configured for {self.model}")
-        return api_base
+        usage = getattr(response, "usage", None) or {}
+        if not isinstance(usage, dict):
+            usage = dict(usage)
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
 
-    def __call__(self, prompt=None, messages=None, **kwargs):
-        messages = messages or [{"role": "user", "content": prompt}]
-        kwargs = {**self.kwargs, **kwargs}
-        # Transport, not generation parameters.
-        params = {key: value for key, value in kwargs.items() if not key.startswith("api_")}
+        with self._token_usage_lock:
+            self.prompt_tokens += prompt_tokens
+            self.completion_tokens += completion_tokens
 
-        response, body = self._request(dict(model=self.model, messages=messages, **params))
-
-        self.log_usage(body)
-        usage = body.get("usage") or {}
-        cost = response_cost(response, body)
         runtime.record_lm_usage(
             self.model,
-            # Set by whatever built this model, so a run can be read as which stage spent what.
-            getattr(self, "role", None),
-            usage.get("prompt_tokens", 0),
-            usage.get("completion_tokens", 0),
-            cost,
+            self.role,
+            prompt_tokens,
+            completion_tokens,
+            response_cost(response),
         )
-        outputs = [
-            choice["message"]["content"] if "message" in choice else choice["text"]
-            for choice in body["choices"]
-        ]
+        return response
 
-        self.history.append(
-            dict(
-                prompt=prompt,
-                messages=messages,
-                kwargs=params,
-                response=body,
-                outputs=outputs,
-                usage=dict(usage),
-                cost=cost,
-            )
-        )
 
-        return outputs
+def response_cost(response: Any) -> float:
+    """What the call cost, or 0.0 when nothing reports one.
+
+    litellm prices the models it has in its map, which a self-hosted gateway's names are not in, so
+    three sources are tried. A LiteLLM proxy returns a header, which litellm passes through; Bifrost
+    puts a cost in the usage object, either as a number or split into prompt and completion. A
+    gateway that reports nothing leaves the run's cost at zero, which is not the same as free.
+    """
+    hidden = getattr(response, "_hidden_params", None) or {}
+
+    cost = _number(hidden.get("response_cost"))
+    if cost:
+        return cost
+
+    headers = hidden.get("additional_headers") or {}
+    for key, value in headers.items():
+        if key.endswith("x-litellm-response-cost"):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                break
+
+    usage = getattr(response, "usage", None) or {}
+    reported = usage.get("cost") if isinstance(usage, dict) else getattr(usage, "cost", None)
+    if isinstance(reported, dict):
+        return _number(reported.get("prompt_cost")) + _number(reported.get("completion_cost"))
+    return _number(reported)
+
+
+def _number(value: object) -> float:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else 0.0

@@ -93,10 +93,14 @@ def record_lm_usage(
         sink.record_lm(model, role, prompt_tokens, completion_tokens, cost)
 
 
-def record_embedding_usage(model: str, tokens: int) -> None:
-    sink = _usage_sink.get()
-    if sink is not None:
-        sink.record_embedding(model, tokens)
+def current_usage_sink() -> UsageSink | None:
+    """The sink this thread reports to, for handing to code that runs on someone else's thread.
+
+    Embedding usage is reported by a litellm callback, which runs on litellm's own logging thread
+    and so starts with an empty context. The sink is read here, while still in the caller's, and
+    travels with the request.
+    """
+    return _usage_sink.get()
 
 
 def record_search_usage(engine: str, queries: int) -> None:
@@ -128,9 +132,9 @@ __all__ = [
     "DEFAULT_MAX_THREADS",
     "UsageSink",
     "configure_concurrency",
+    "current_usage_sink",
     "fetch_slot",
     "max_threads",
-    "record_embedding_usage",
     "record_lm_usage",
     "record_search_usage",
     "record_usage_into",

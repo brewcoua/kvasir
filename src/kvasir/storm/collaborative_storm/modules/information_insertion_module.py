@@ -4,9 +4,8 @@ import numpy as np
 import re
 
 from concurrent.futures import as_completed
-from typing import List, Union, Dict, Optional
+from typing import List, Literal, Union, Dict, Optional
 
-from .collaborative_storm_utils import trim_output_after_hint
 from ... import runtime
 from ...dataclass import KnowledgeNode, KnowledgeBase
 from ...encoder import Encoder, cosine_similarity
@@ -20,40 +19,34 @@ class InsertInformation(dspy.Signature):
     To decide the best placement of the information, you will be navigated in this tree based data structure layer by layer.
     You will be presented with the question and query leads to ththeis information, and tree structure.
 
-    Output should strictly follow one of options presetned below with no other information.
+    Choose one of:
     - 'insert': to place the information under the current node.
-    - 'step: [child node name]': to step into a specified child node.
-    - 'create: [new child node name]': to create new child node and insert the info under it.
-
-    Example outputs:
-    - insert
-    - step: node2
-    - create: node3
+    - 'step': to step into one of the current node's children, named by node_name.
+    - 'create': to create a new child node named by node_name and insert the info under it.
     """
 
-    intent = dspy.InputField(
-        prefix="Question and query leads to this info: ", format=str
+    intent: str = dspy.InputField(desc="question and query that lead to this info")
+    structure: str = dspy.InputField(desc="tree structure")
+    action: Literal["insert", "step", "create"] = dspy.OutputField()
+    node_name: str = dspy.OutputField(
+        desc="the child node to step into, or the new node to create; empty for 'insert'"
     )
-    structure = dspy.InputField(prefix="Tree structure: \n", format=str)
-    choice = dspy.OutputField(prefix="Choice:\n", format=str)
 
 
 class InsertInformationCandidateChoice(dspy.Signature):
     """Your job is to insert the given information to the knowledge base. The knowledge base is a tree based data structure to organize the collection information. Each knowledge node contains information derived from themantically similar question or intent.
-    You will be presented with the question and query leads to this information, and candidate choices of placement. In these choices, -> denotes parent-child relationship. Note that reasonable may not be in these choices.
-
-    If there exists reasonable choice, output "Best placement: [choice index]"; otherwise, output "No reasonable choice".
+    You will be presented with the question and query leads to this information, and candidate choices of placement. In these choices, -> denotes parent-child relationship. Note that a reasonable placement may not be among these choices.
     """
 
-    intent = dspy.InputField(
-        prefix="Question and query leads to this info: ", format=str
+    intent: str = dspy.InputField(desc="question and query that lead to this info")
+    choices: str = dspy.InputField(desc="candidate placements")
+    best_placement: Optional[int] = dspy.OutputField(
+        desc="the index of the best placement, or null when none of them is reasonable"
     )
-    choices = dspy.InputField(prefix="Candidate placement:\n", format=str)
-    decision = dspy.OutputField(prefix="Decision:\n", format=str)
 
 
 class InsertInformationModule(dspy.Module):
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel], encoder: Encoder):
+    def __init__(self, engine: dspy.LM, encoder: Encoder):
         self.engine = engine
         self.encoder = encoder
         self.insert_info = dspy.ChainOfThought(InsertInformation)
@@ -84,28 +77,10 @@ class InsertInformationModule(dspy.Module):
         navigated_path = " -> ".join(knowledge_node.get_path_from_root())
         structure += f"Path you have nagivated: {navigated_path}"
 
-        # get predicted action
         with dspy.settings.context(lm=self.engine):
-            predicted_action = self.insert_info(
-                intent=intent, structure=structure
-            ).choice
+            prediction = self.insert_info(intent=intent, structure=structure)
 
-        # parse action
-        cleaned_predicted_action = trim_output_after_hint(
-            predicted_action, "Choice:"
-        ).strip()
-        cleaned_predicted_action = cleaned_predicted_action.strip("-").strip()
-        if cleaned_predicted_action.startswith("insert"):
-            return "insert", ""
-        elif cleaned_predicted_action.startswith("step:"):
-            node_name = trim_output_after_hint(cleaned_predicted_action, "step:")
-            return "step", node_name
-        elif cleaned_predicted_action.startswith("create:"):
-            node_name = trim_output_after_hint(cleaned_predicted_action, "create:")
-            return "create", node_name
-        raise Exception(
-            f"Undefined predicted action in knowledge navigation. {predicted_action}"
-        )
+        return prediction.action, prediction.node_name.strip()
 
     def layer_by_layer_navigation_placement(
         self,
@@ -164,15 +139,6 @@ class InsertInformationModule(dspy.Module):
         else:
             return outlines
 
-    def _parse_selected_index(self, string: str):
-        match = re.search(r"\[(\d+)\]", string)
-        if match:
-            return int(match.group(1))
-        try:
-            return int(string.strip())
-        except ValueError:
-            return None
-
     def choose_candidate_from_embedding_ranking(
         self,
         question: str,
@@ -193,23 +159,20 @@ class InsertInformationModule(dspy.Module):
                 for idx, candidate in enumerate(considered_candidates)
             ]
         )
-        with dspy.settings.context(lm=self.engine, show_guidelines=False):
-            decision = self.candidate_choosing(
+        with dspy.settings.context(lm=self.engine):
+            best_placement = self.candidate_choosing(
                 intent=self._construct_intent(question=question, query=query),
                 choices=choices_string,
-            ).decision
-            decision = trim_output_after_hint(decision, hint="Decision:")
-            if "Best placement:" in decision:
-                decision = trim_output_after_hint(decision, hint="Best placement:")
-                selected_index = self._parse_selected_index(decision)
-                if selected_index is not None:
-                    selected_index = selected_index - 1
-                    if selected_index < len(sorted_candidates) and selected_index >= 0:
-                        return dspy.Prediction(
-                            information_placement=sorted_candidates[selected_index],
-                            note=f"Choosing from:\n{considered_candidates}",
-                        )
-            return None
+            ).best_placement
+        if best_placement is not None:
+            # The choices are numbered from one.
+            selected_index = best_placement - 1
+            if 0 <= selected_index < len(sorted_candidates):
+                return dspy.Prediction(
+                    information_placement=sorted_candidates[selected_index],
+                    note=f"Choosing from:\n{considered_candidates}",
+                )
+        return None
 
     def _info_list_to_intent_mapping(self, information_list: List[Information]):
         intent_to_placement_dict = {}
@@ -317,25 +280,21 @@ class InsertInformationModule(dspy.Module):
 class ExpandSection(dspy.Signature):
     """Your task is to expand a section in the mind map by creating new subsections under the given section.
     You will be given a list of question and query that are used to collect information.
-    Output should be subsection names where each section should serve as a coherent and themantic organization of information and corresponding citation numbers. These subsection names are preferred to be concise and precise.
-    Output follows the format below:
-    subsection 1
-    subsection 2
-    subsection 3
+    Each subsection should serve as a coherent and themantic organization of information and corresponding citation numbers. These subsection names are preferred to be concise and precise.
     """
 
-    section = dspy.InputField(prefix="The section you need to expand: ", format=str)
-    info = dspy.InputField(prefix="The collected information:\n", format=str)
-    output = dspy.OutputField(
-        prefix="Now provide the expanded subsection names (If there's no need to expand current section as itself serves good organization, then output None):\n",
-        format=str,
+    section: str = dspy.InputField(desc="the section you need to expand")
+    info: str = dspy.InputField(desc="the collected information")
+    subsections: list[str] = dspy.OutputField(
+        desc="the expanded subsection names, or an empty list when the section already "
+        "serves as a good organization and needs no expanding"
     )
 
 
 class ExpandNodeModule(dspy.Module):
     def __init__(
         self,
-        engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        engine: dspy.LM,
         information_insert_module: dspy.Module,
         node_expansion_trigger_count: int,
     ):
@@ -356,20 +315,11 @@ class ExpandNodeModule(dspy.Module):
     def _get_expand_subnode_names(self, node, knowledge_base):
         information = self._get_cited_info_meta_string(node, knowledge_base)
         node_path = node.get_path_from_root()
-        with dspy.settings.context(lm=self.engine, show_guidelines=False):
-            output = self.expand_section(section=node_path, info=information).output
-        subsections = []
-        if "\n" in output and output != "None":
-            subsections = output.split("\n")
-            # remove any integer followed by a dot and a space, a leading dashline,
-            # or a specific hint at the start of the string
-            subsections = [
-                re.sub(r"^\d+\.\s|-|" + re.escape(node.name), "", text)
-                .replace("*", "")
-                .strip()
-                for text in subsections
-            ]
-        return subsections
+        with dspy.settings.context(lm=self.engine):
+            subsections = self.expand_section(
+                section=node_path, info=information
+            ).subsections
+        return [name.strip() for name in subsections if name.strip()]
 
     def _find_first_node_to_expand(
         self, root: KnowledgeNode, expanded_nodes: List[KnowledgeNode]

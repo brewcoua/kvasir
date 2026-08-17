@@ -1,6 +1,4 @@
 import dspy
-import re
-from typing import Union
 
 
 class GenerateExpertGeneral(dspy.Signature):
@@ -8,17 +6,14 @@ class GenerateExpertGeneral(dspy.Signature):
     Each expert should represent a different perspective, role, or affiliation related to this topic.
     You can use the background information provided about the topic for inspiration. For each expert, add a description of their expertise and what they will focus on during the discussion.
     No need to include speakers name in the output.
-    Strictly follow format below:
-    1. [speaker 1 role]: [speaker 1 short description]
-    2. [speaker 2 role]: [speaker 2 short description]
     """
 
-    topic = dspy.InputField(prefix="Topic of interest:", format=str)
-    background_info = dspy.InputField(
-        prefix="Background information about the topic:\n", format=str
+    topic: str = dspy.InputField(desc="topic of interest")
+    background_info: str = dspy.InputField(desc="background information about the topic")
+    topN: int = dspy.InputField(desc="number of speakers needed")
+    experts: list[str] = dspy.OutputField(
+        desc="one expert per item, written as 'role: short description'"
     )
-    topN = dspy.InputField(prefix="Number of speakers needed: ", format=str)
-    experts = dspy.OutputField(format=str)
 
 
 class GenerateExpertWithFocus(dspy.Signature):
@@ -28,20 +23,19 @@ class GenerateExpertWithFocus(dspy.Signature):
     For example, if the discussion focus is about a recent event at a specific university, consider inviting students, faculty members, journalists covering the event, university officials, and local community members.
     Use the background information provided about the topic for inspiration. For each speaker, add a description of their interests and what they will focus on during the discussion.
     No need to include speakers name in the output.
-    Strictly follow format below:
-    1. [speaker 1 role]: [speaker 1 short description]
-    2. [speaker 2 role]: [speaker 2 short description]
     """
 
-    topic = dspy.InputField(prefix="Topic of interest:", format=str)
-    background_info = dspy.InputField(prefix="Background information:\n", format=str)
-    focus = dspy.InputField(prefix="Discussion focus: ", format=str)
-    topN = dspy.InputField(prefix="Number of speakers needed: ", format=str)
-    experts = dspy.OutputField(format=str)
+    topic: str = dspy.InputField(desc="topic of interest")
+    background_info: str = dspy.InputField(desc="background information")
+    focus: str = dspy.InputField(desc="discussion focus")
+    topN: int = dspy.InputField(desc="number of speakers needed")
+    experts: list[str] = dspy.OutputField(
+        desc="one speaker per item, written as 'role: short description'"
+    )
 
 
 class GenerateExpertModule(dspy.Module):
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         self.engine = engine
         self.generate_expert_general = dspy.Predict(GenerateExpertGeneral)
         self.generate_expert_w_focus = dspy.ChainOfThought(GenerateExpertWithFocus)
@@ -58,26 +52,20 @@ class GenerateExpertModule(dspy.Module):
     def forward(
         self, topic: str, num_experts: int, background_info: str = "", focus: str = ""
     ):
-        with dspy.settings.context(lm=self.engine, show_guidelines=False):
+        with dspy.settings.context(lm=self.engine):
             if not focus:
-                output = self.generate_expert_general(
+                experts = self.generate_expert_general(
                     topic=topic, background_info=background_info, topN=num_experts
                 ).experts
             else:
                 background_info = self.trim_background(
                     background=background_info, max_words=100
                 )
-                output = self.generate_expert_w_focus(
+                experts = self.generate_expert_w_focus(
                     topic=topic,
                     background_info=background_info,
                     focus=focus,
                     topN=num_experts,
                 ).experts
-        output = output.replace("*", "").replace("[", "").replace("]", "")
-        expert_list = []
-        for s in output.split("\n"):
-            match = re.search(r"\d+\.\s*(.*)", s)
-            if match:
-                expert_list.append(match.group(1))
-        expert_list = [expert.strip() for expert in expert_list if expert.strip()]
-        return dspy.Prediction(experts=expert_list, raw_output=output)
+        expert_list = [expert.strip() for expert in experts if expert.strip()]
+        return dspy.Prediction(experts=expert_list)

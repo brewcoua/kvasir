@@ -1,5 +1,5 @@
 import dspy
-from typing import Union
+
 from ...dataclass import KnowledgeBase
 
 
@@ -8,13 +8,13 @@ class KnowledgeBaseSummmary(dspy.Signature):
     You will be presented with these sections where "#" denotes level of section.
     """
 
-    topic = dspy.InputField(prefix="topic: ", format=str)
-    structure = dspy.InputField(prefix="Tree structure: \n", format=str)
-    output = dspy.OutputField(prefix="Now give brief summary:\n", format=str)
+    topic: str = dspy.InputField()
+    structure: str = dspy.InputField(desc="tree structure of the discussion")
+    summary: str = dspy.OutputField(desc="a brief summary of the discussion")
 
 
 class KnowledgeBaseSummaryModule(dspy.Module):
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         self.engine = engine
         self.gen_summary = dspy.Predict(KnowledgeBaseSummmary)
 
@@ -25,8 +25,8 @@ class KnowledgeBaseSummaryModule(dspy.Module):
             include_hash_tag=True,
             include_node_content_count=False,
         )
-        with dspy.settings.context(lm=self.engine, show_guidelines=False):
+        with dspy.settings.context(lm=self.engine):
             summary = self.gen_summary(
                 topic=knowledge_base.topic, structure=structure
-            ).output
+            ).summary
         return summary

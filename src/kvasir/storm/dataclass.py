@@ -2,7 +2,7 @@ import dspy
 import numpy as np
 import re
 import threading
-from typing import Set, Dict, List, Optional, Union, Tuple
+from typing import Set, Dict, List, Optional, Tuple
 
 from .encoder import Encoder
 from .interface import Information
@@ -308,7 +308,7 @@ class KnowledgeBase:
     def __init__(
         self,
         topic: str,
-        knowledge_base_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        knowledge_base_lm: dspy.LM,
         node_expansion_trigger_count: int,
         encoder: Encoder,
     ):
@@ -374,7 +374,7 @@ class KnowledgeBase:
     def from_dict(
         cls,
         data: Dict,
-        knowledge_base_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        knowledge_base_lm: dspy.LM,
         node_expansion_trigger_count: int,
         encoder: Encoder,
     ):

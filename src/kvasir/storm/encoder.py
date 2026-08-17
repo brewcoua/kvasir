@@ -1,28 +1,36 @@
-import threading
-from typing import List, Optional, Union
+"""Embeddings, through dspy.
 
+Upstream had two unrelated embedding paths, one hardcoded to `text-embedding-3-small` behind an
+`ENCODER_API_TYPE` environment variable, the other a local sentence-transformer. Both are one
+`dspy.Embedder` now, pointed at the gateway, so nothing here speaks HTTP.
+
+What is left around it is what dspy does not do: a count check, because upstream returned fewer
+vectors than it was given texts, and the token accounting a run is read by.
+"""
+
+import threading
+from typing import Any, List, Optional, Union
+
+import dspy
 import numpy as np
 
 from . import runtime
-from .gateway import post
 
 
 class EmbeddingError(RuntimeError):
-    """An embedding request failed.
+    """An embedding request failed, or answered with the wrong number of vectors.
 
     Upstream logged per-text failures and carried on, returning fewer vectors than it was given
-    texts and, worse, misaligning the ones it did return against the input order. Callers index the
-    result positionally, so a short array silently attributes the wrong text to the wrong vector.
+    texts. Callers index the result positionally, so a short array silently attributes the wrong
+    text to the wrong vector.
     """
 
 
 class Encoder:
     """Embeddings from an OpenAI-compatible endpoint.
 
-    Upstream chose between two hardcoded model names on an ENCODER_API_TYPE environment variable
-    and dropped `api_base` for the openai branch, so the only way to reach a gateway was to set
-    OPENAI_API_BASE and hope litellm read it. Both are arguments here, and the model name reaches
-    the gateway verbatim.
+    The model name routes the way a language model's does: dspy consumes the leading `/`-separated
+    segment, so the name carries an `openai/` prefix the gateway never sees.
     """
 
     def __init__(
@@ -32,24 +40,15 @@ class Encoder:
         api_base: Optional[str] = None,
     ):
         self.embedding_model_name = model
-        self.api_key = api_key
-        self.api_base = api_base
-        self.total_token_usage = 0
-        self._token_usage_lock = threading.Lock()
-
-    def get_total_token_usage(self, reset: bool = False) -> int:
-        with self._token_usage_lock:
-            token_usage = self.total_token_usage
-            if reset:
-                self.total_token_usage = 0
-        return token_usage
+        # The gateway caches, so caching here would be a second place to invalidate.
+        self.embedder = dspy.Embedder(model, caching=False, api_key=api_key, api_base=api_base)
+        _register_usage_callback()
 
     def encode(self, texts: Union[str, List[str]], max_workers: int = 5) -> np.ndarray:
         """Embed one text into a 1-D array, or a list of texts into a 2-D array, row per text.
 
         `max_workers` is accepted and ignored. Upstream issued one request per text across a thread
-        pool; a list goes in a single request now, which is both faster and what the endpoints
-        expect. The argument stays so existing call sites keep working.
+        pool; dspy batches a list instead. The argument stays so existing call sites keep working.
         """
         if isinstance(texts, str):
             return self._embed([texts])[0]
@@ -58,36 +57,67 @@ class Encoder:
         return self._embed(texts)
 
     def _embed(self, texts: List[str]) -> np.ndarray:
-        if not self.api_base:
-            raise EmbeddingError(f"no api_base configured for {self.embedding_model_name}")
         try:
-            response = post(
-                "/embeddings",
-                self.api_base,
-                self.api_key,
-                {"model": self.embedding_model_name, "input": texts},
-            )
-            body = response.json()
+            # The sink is read here, in the caller's context, because the callback that reports
+            # usage runs on litellm's logging thread and would not find it there.
+            embeddings = self.embedder(texts, metadata={_SINK_KEY: runtime.current_usage_sink()})
         except Exception as exc:
             raise EmbeddingError(
                 f"embedding {len(texts)} text(s) with {self.embedding_model_name} failed: {exc}"
             ) from exc
 
-        # Nothing promises the response preserves input order, and a short response is what
-        # upstream turned into silently misaligned vectors.
-        data = sorted(body["data"], key=lambda item: item["index"])
-        if len(data) != len(texts):
+        # dspy hands back the provider's rows in the order they arrived and counts nothing, so a
+        # short response would otherwise reach a caller that indexes it positionally.
+        if len(embeddings) != len(texts):
             raise EmbeddingError(
-                f"{self.embedding_model_name} returned {len(data)} embeddings "
+                f"{self.embedding_model_name} returned {len(embeddings)} embeddings "
                 f"for {len(texts)} text(s)"
             )
 
-        tokens = (body.get("usage") or {}).get("total_tokens", 0)
-        with self._token_usage_lock:
-            self.total_token_usage += tokens
-        runtime.record_embedding_usage(self.embedding_model_name, tokens)
+        return embeddings
 
-        return np.array([item["embedding"] for item in data])
+
+_SINK_KEY = "kvasir_usage_sink"
+_callback_lock = threading.Lock()
+_callback: Any = None
+
+
+def _register_usage_callback() -> None:
+    """Register the embedding usage hook once, on the first `Encoder`.
+
+    `dspy.Embedder` returns vectors and nothing else, so what a call spent is visible only to
+    litellm's success hook, and litellm dispatches to `CustomLogger` subclasses alone. The hook runs
+    on litellm's logging thread, after the call has returned, which is why the sink travels with the
+    request rather than being looked up here.
+
+    Registered on construction rather than at import, because importing this module must not reach
+    into litellm's global state, and a process that never embeds never needs the hook.
+    """
+    global _callback
+    with _callback_lock:
+        if _callback is not None:
+            return
+
+        import litellm
+        from litellm.integrations.custom_logger import CustomLogger
+
+        class _EmbeddingUsage(CustomLogger):  # type: ignore[misc]
+            def log_success_event(
+                self, kwargs: dict, response_obj: Any, start_time: Any, end_time: Any
+            ) -> None:
+                if "embedding" not in str(kwargs.get("call_type", "")):
+                    return
+                metadata = (kwargs.get("litellm_params") or {}).get("metadata") or {}
+                sink = metadata.get(_SINK_KEY)
+                if sink is None:
+                    return
+                usage = getattr(response_obj, "usage", None)
+                tokens = int(dict(usage).get("total_tokens", 0)) if usage else 0
+                # The routed name, without the provider prefix dspy consumed.
+                sink.record_embedding(str(kwargs.get("model", "")), tokens)
+
+        _callback = _EmbeddingUsage()
+        litellm.callbacks = [*litellm.callbacks, _callback]
 
 
 def cosine_similarity(queries: np.ndarray, corpus: np.ndarray) -> np.ndarray:

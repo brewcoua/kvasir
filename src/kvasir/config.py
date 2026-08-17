@@ -17,7 +17,7 @@ from pathlib import Path
 
 from kvasir.storm.runtime import DEFAULT_MAX_THREADS
 
-DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 _REQUIRED = (
     "OPENAI_API_KEY",
@@ -67,12 +67,13 @@ class Settings:
         return cls(
             openai_api_key=env["OPENAI_API_KEY"].strip(),
             openai_api_base=env["OPENAI_API_BASE"].strip().rstrip("/"),
-            # Model names carry a routing prefix and must reach the gateway verbatim. Nothing here
-            # normalises, validates or strips them.
-            model_fast=env["KVASIR_MODEL_FAST"].strip(),
-            model_strong=env["KVASIR_MODEL_STRONG"].strip(),
-            embedding_model=env.get("KVASIR_EMBEDDING_MODEL", "").strip()
-            or DEFAULT_EMBEDDING_MODEL,
+            model_fast=_model(env, "KVASIR_MODEL_FAST"),
+            model_strong=_model(env, "KVASIR_MODEL_STRONG"),
+            embedding_model=(
+                _model(env, "KVASIR_EMBEDDING_MODEL")
+                if env.get("KVASIR_EMBEDDING_MODEL", "").strip()
+                else DEFAULT_EMBEDDING_MODEL
+            ),
             searxng_url=env["KVASIR_SEARXNG_URL"].strip().rstrip("/"),
             data_dir=Path(env.get("KVASIR_DATA_DIR", "").strip() or "/data"),
             session_ttl_hours=_positive_int(env, "KVASIR_SESSION_TTL_HOURS", 168),
@@ -89,6 +90,25 @@ class Settings:
             # readable. `text` is for reading them by eye during development.
             log_format=_log_format(env),
         )
+
+
+def _model(env: Mapping[str, str], name: str) -> str:
+    """A model name, checked for the provider prefix dspy requires. Language models and the
+    embedding model alike: both are reached through dspy.
+
+    dspy routes on the leading `/`-separated segment and consumes it, so `openai/gpt-4o-mini`
+    reaches the gateway as `gpt-4o-mini`, and everything after that first segment is passed through
+    untouched: `openai/ollama/model:cloud` asks the gateway for `ollama/model:cloud`. A name without
+    a prefix is rejected here rather than silently prefixed, because a name being rewritten out of
+    sight is exactly what makes this confusing.
+    """
+    value = env[name].strip()
+    if "/" not in value:
+        raise ConfigError(
+            f"{name} must name a provider, as in openai/{value}: dspy routes on the "
+            f"first path segment and sends the rest to the gateway"
+        )
+    return value
 
 
 def _log_format(env: Mapping[str, str]) -> str:

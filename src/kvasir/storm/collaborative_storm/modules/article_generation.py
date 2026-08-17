@@ -1,6 +1,6 @@
 import dspy
 from concurrent.futures import as_completed
-from typing import Set, Union
+from typing import Set
 
 from .collaborative_storm_utils import clean_up_section
 from ... import runtime
@@ -12,7 +12,7 @@ class ArticleGenerationModule(dspy.Module):
 
     def __init__(
         self,
-        engine: Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        engine: dspy.LM,
     ):
         super().__init__()
         self.write_section = dspy.Predict(WriteSection)
@@ -56,7 +56,7 @@ class ArticleGenerationModule(dspy.Module):
             synthesize_output = clean_up_section(
                 self.write_section(
                     topic=topic, info=information, section=node.name
-                ).output
+                ).written_section
             )
         node.synthesize_output = synthesize_output
         node.need_regenerate_synthesize_output = False
@@ -115,10 +115,10 @@ class WriteSection(dspy.Signature):
     Use [1], [2], ..., [n] in line (for example, "The capital of the United States is Washington, D.C.[1][3]."). You DO NOT need to include a References or Sources section to list the sources at the end.
     """
 
-    info = dspy.InputField(prefix="The collected information:\n", format=str)
-    topic = dspy.InputField(prefix="The topic of the page: ", format=str)
-    section = dspy.InputField(prefix="The section you need to write: ", format=str)
-    output = dspy.OutputField(
-        prefix="Write the section with proper inline citations (Start your writing. Don't include the page title, section name, or try to write other sections. Do not start the section with topic name.):\n",
-        format=str,
+    info: str = dspy.InputField(desc="the collected information")
+    topic: str = dspy.InputField(desc="the topic of the page")
+    section: str = dspy.InputField(desc="the section you need to write")
+    written_section: str = dspy.OutputField(
+        desc="the section, with proper inline citations. Do not include the page title or the "
+        "section name, do not start with the topic name, and do not write other sections.",
     )

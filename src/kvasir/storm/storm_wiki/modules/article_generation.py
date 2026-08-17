@@ -1,7 +1,7 @@
 import copy
 import logging
 from concurrent.futures import as_completed
-from typing import List, Union
+from typing import List
 
 import dspy
 
@@ -20,7 +20,7 @@ class StormArticleGenerationModule(ArticleGenerationModule):
 
     def __init__(
         self,
-        article_gen_lm=Union[dspy.dsp.LM, dspy.dsp.HFModel],
+        article_gen_lm=dspy.LM,
         encoder=None,
         retrieve_top_k: int = 5,
         max_thread_num: int = 10,
@@ -166,7 +166,7 @@ class StormArticleGenerationModule(ArticleGenerationModule):
 class ConvToSection(dspy.Module):
     """Use the information collected from the information-seeking conversation to write a section."""
 
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         super().__init__()
         self.write_section = dspy.Predict(WriteSection)
         self.engine = engine
@@ -183,7 +183,7 @@ class ConvToSection(dspy.Module):
 
         with dspy.settings.context(lm=self.engine):
             section = ArticleTextProcessing.clean_up_section(
-                self.write_section(topic=topic, info=info, section=section).output
+                self.write_section(topic=topic, info=info, section=section).written_section
             )
 
         return dspy.Prediction(section=section)
@@ -197,10 +197,9 @@ class WriteSection(dspy.Signature):
         2. Use [1], [2], ..., [n] in line (for example, "The capital of the United States is Washington, D.C.[1][3]."). You DO NOT need to include a References or Sources section to list the sources at the end.
     """
 
-    info = dspy.InputField(prefix="The collected information:\n", format=str)
-    topic = dspy.InputField(prefix="The topic of the page: ", format=str)
-    section = dspy.InputField(prefix="The section you need to write: ", format=str)
-    output = dspy.OutputField(
-        prefix="Write the section with proper inline citations (Start your writing with # section title. Don't include the page title or try to write other sections):\n",
-        format=str,
+    info: str = dspy.InputField(desc="the collected information")
+    topic: str = dspy.InputField(desc="the topic of the page")
+    section: str = dspy.InputField(desc="the section you need to write")
+    written_section: str = dspy.OutputField(
+        desc="the section, with proper inline citations. Start with the # section title. Do not include the page title or write other sections.",
     )

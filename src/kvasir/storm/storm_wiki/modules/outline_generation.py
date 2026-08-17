@@ -14,7 +14,7 @@ class StormOutlineGenerationModule(OutlineGenerationModule):
     curation stage, generate outline for the article.
     """
 
-    def __init__(self, outline_gen_lm: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, outline_gen_lm: dspy.LM):
         super().__init__()
         self.outline_gen_lm = outline_gen_lm
         self.write_outline = WriteOutline(engine=self.outline_gen_lm)
@@ -75,7 +75,7 @@ class StormOutlineGenerationModule(OutlineGenerationModule):
 class WriteOutline(dspy.Module):
     """Generate the outline for the Wikipedia page."""
 
-    def __init__(self, engine: Union[dspy.dsp.LM, dspy.dsp.HFModel]):
+    def __init__(self, engine: dspy.LM):
         super().__init__()
         self.draft_page_outline = dspy.Predict(WritePageOutline)
         self.write_page_outline = dspy.Predict(WritePageOutlineFromConv)
@@ -133,8 +133,8 @@ class WritePageOutline(dspy.Signature):
     3. Do not include topic name itself in the outline.
     """
 
-    topic = dspy.InputField(prefix="The topic you want to write: ", format=str)
-    outline = dspy.OutputField(prefix="Write the Wikipedia page outline:\n", format=str)
+    topic: str = dspy.InputField(desc="the topic you want to write about")
+    outline: str = dspy.OutputField(desc="the Wikipedia page outline")
 
 
 class NaiveOutlineGen(dspy.Module):
@@ -158,10 +158,9 @@ class WritePageOutlineFromConv(dspy.Signature):
     3. Do not include topic name itself in the outline.
     """
 
-    topic = dspy.InputField(prefix="The topic you want to write: ", format=str)
-    conv = dspy.InputField(prefix="Conversation history:\n", format=str)
-    old_outline = dspy.OutputField(prefix="Current outline:\n", format=str)
-    outline = dspy.OutputField(
-        prefix='Write the Wikipedia page outline (Use "#" Title" to indicate section title, "##" Title" to indicate subsection title, ...):\n',
-        format=str,
-    )
+    topic: str = dspy.InputField(desc="the topic you want to write about")
+    conv: str = dspy.InputField(desc="conversation history")
+    # Upstream declared this an output field while every caller passes it in. Under the old template
+    # engine that only meant the value was rendered into the prompt anyway; dspy refuses it now.
+    old_outline: str = dspy.InputField(desc="the current outline, to be improved")
+    outline: str = dspy.OutputField(desc="the improved Wikipedia page outline")
