@@ -405,6 +405,34 @@ signatures now carry types and descriptions rather than prompt prefixes, and dsp
 them into prompts and parse the answers back. Where upstream picked structure out of prose with
 regexes, the output field states its type instead.
 
+### Evaluate research
+
+[`eval/questions.toml`](eval/questions.toml) holds 20 questions: 10 reports, 6 rankings and 4
+tables. Each lists the output type its wording asks for and a few checks a reader of the question
+would need answered. To evaluate, start the service, then run:
+
+```bash
+uv run python -m kvasir.deep.evaluate data/eval/baseline
+```
+
+It researches each question through the service at `http://localhost:8000` (`--url` to change),
+without clarifications, and saves each result as `<id>.json`. A saved result is not researched
+again, so an interrupted evaluation resumes; `--only <id>...` limits it to some questions. A run
+takes minutes, so the full set takes hours on a local model.
+
+Every saved result is then scored, with the strong model as judge:
+
+- **Output.** Whether the brief chose the expected output type.
+- **Checks.** A yes or no for each of the question's checks, against the report.
+- **Citations.** Each cited sentence of the final report, against the quotes of the claims read
+  from the sources it cites. Verification already removed what it judged unsupported, so this
+  measures what slipped past it.
+
+Scores, with every failed check and unsupported sentence and the judge's reason, go to
+`scores.json` beside the results. A summary table is printed. The judge samples at temperature
+1.0 like every role, so a score can move by a check or two between two scorings of the same
+result.
+
 ## Licence
 
 Dual MIT and Apache-2.0, at your option. See [LICENSE-MIT](LICENSE-MIT) and

@@ -3,3 +3,35 @@
 use_default_settings: true
 search:
   formats: [html, json]
+
+# Every web search engine that needs no API key, on top of the defaults. A run sends many queries
+# in a few minutes, and one engine alone soon answers with a CAPTCHA or a suspension, which leaves
+# the run with nothing. Engines that only serve Chinese or Korean pages are left off: their results
+# would not match an English question. An engine that fails is reported by SearXNG and skipped.
+engines:
+  - {name: bing, disabled: false}
+  - {name: google, disabled: false}
+  - {name: duckduckgo web, disabled: false}
+  - {name: qwant, disabled: false}
+  - {name: startpage, disabled: false, inactive: false}
+  - {name: mojeek, disabled: false, inactive: false}
+  - {name: dogpile, disabled: false, inactive: false}
+  - {name: yahoo, disabled: false}
+  - {name: yandex, disabled: false}
+  - {name: yep, disabled: false}
+  - {name: seznam, disabled: false}
+  - {name: swisscows, disabled: false, inactive: false}
+  - {name: privacywall, disabled: false}
+  - {name: mwmbl, disabled: false}
+  - {name: wiby, disabled: false}
+  - {name: fireball, disabled: false}
+  - {name: gmx, disabled: false}
+  - {name: tusksearch, disabled: false}
+  - {name: crowdview, disabled: false}
+  - {name: encyclosearch, disabled: false}
+  - {name: searchmysite, disabled: false}
+  - {name: resulthunter, disabled: false}
+  - {name: zapmeta, disabled: false}
+  - {name: wikibooks, disabled: false}
+  - {name: wikivoyage, disabled: false}
+  - {name: wikiversity, disabled: false}

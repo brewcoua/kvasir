@@ -1,0 +1,208 @@
+# Questions for `python -m kvasir.deep.evaluate`. Each names the output its wording should lead the
+# brief to choose, and checks a judge answers yes or no against the finished report. Checks ask
+# what a reader of the question needs, not for facts the run could only get from memory.
+
+[[question]]
+id = "jwst-cooling"
+question = "How does the James Webb Space Telescope keep its infrared instruments cold enough to work?"
+output = "report"
+checks = [
+  "Explains the role of the sunshield.",
+  "Mentions the cryocooler used for the mid-infrared instrument (MIRI).",
+  "Gives at least one operating temperature in kelvin or degrees.",
+]
+
+[[question]]
+id = "blackout-2003"
+question = "What caused the 2003 Northeast blackout in North America?"
+output = "report"
+checks = [
+  "Names FirstEnergy, or the Ohio utility where the failure began.",
+  "Mentions the failure of an alarm or monitoring software.",
+  "Mentions transmission lines sagging into trees.",
+  "States roughly how many people lost power.",
+]
+
+[[question]]
+id = "antikythera"
+question = "Why did the Antikythera mechanism take so long to understand?"
+output = "report"
+checks = [
+  "Mentions that the device was corroded or broken into fragments.",
+  "Mentions X-ray or CT imaging as a turning point.",
+  "Describes what the mechanism computed, such as astronomical positions or eclipses.",
+]
+
+[[question]]
+id = "four-day-week"
+question = "What do trial results say for and against a four-day work week?"
+output = "report"
+checks = [
+  "Names at least one specific trial, with its country or year.",
+  "Reports a finding about productivity or revenue.",
+  "Reports a finding about wellbeing or burnout.",
+  "Gives at least one argument or finding against it.",
+]
+
+[[question]]
+id = "cold-heat-pumps"
+question = "How well do air-source heat pumps work in very cold climates?"
+output = "report"
+checks = [
+  "Explains that efficiency (COP) falls as the outdoor temperature drops.",
+  "Gives a COP or efficiency figure at a stated cold temperature.",
+  "Mentions backup heating or models designed for cold climates.",
+]
+
+[[question]]
+id = "fasting"
+question = "Is intermittent fasting better for weight loss than daily calorie restriction?"
+output = "report"
+checks = [
+  "Refers to randomised controlled trials or meta-analyses.",
+  "States whether the weight loss of the two approaches differs.",
+  "Mentions a limitation of the evidence, such as trial length or size.",
+]
+
+[[question]]
+id = "rosetta-stone"
+question = "How did the Rosetta Stone help decipher Egyptian hieroglyphs?"
+output = "report"
+checks = [
+  "Mentions that it carries the same text in three scripts.",
+  "Names Jean-François Champollion.",
+  "Mentions cartouches or royal names as a key to the decipherment.",
+]
+
+[[question]]
+id = "honeybees"
+question = "What are the main causes of honeybee colony losses?"
+output = "report"
+checks = [
+  "Mentions Varroa mites or the viruses they carry.",
+  "Mentions pesticides, such as neonicotinoids.",
+  "Mentions loss of forage or habitat, or poor nutrition.",
+  "Gives a loss rate or a number of colonies lost.",
+]
+
+[[question]]
+id = "rust-borrow-checker"
+question = "How does Rust's borrow checker prevent data races?"
+output = "report"
+checks = [
+  "Explains ownership.",
+  "States the rule of one mutable reference or any number of shared references.",
+  "Mentions the Send or Sync traits.",
+  "States that the checks happen at compile time.",
+]
+
+[[question]]
+id = "aral-sea"
+question = "What happened to the Aral Sea, and why?"
+output = "report"
+checks = [
+  "Names the diversion of the Amu Darya and Syr Darya rivers for irrigation.",
+  "Quantifies how much the sea shrank.",
+  "Mentions the Kok-Aral dam or the partial recovery of the North Aral Sea.",
+  "Mentions an effect on health, fishing or the local economy.",
+]
+
+[[question]]
+id = "cli-languages"
+question = "Rank Python, Go and Rust for writing command-line tools on startup time, ease of distribution and library ecosystem."
+output = "ranking"
+checks = [
+  "Includes a table covering Python, Go and Rust.",
+  "Compares the three on startup time, distribution and ecosystem.",
+  "States a final order from best to worst.",
+]
+
+[[question]]
+id = "home-server-boards"
+question = "Rank the Raspberry Pi 5, Orange Pi 5 and Radxa Rock 5B as home servers on price, performance and software support."
+output = "ranking"
+checks = [
+  "Includes a table covering all three boards.",
+  "Compares the three on price, performance and software support.",
+  "States a final order from best to worst.",
+]
+
+[[question]]
+id = "laptop-analytics"
+question = "Rank SQLite, PostgreSQL and DuckDB for analytical queries on a laptop on query speed, setup effort and SQL features."
+output = "ranking"
+checks = [
+  "Includes a table covering SQLite, PostgreSQL and DuckDB.",
+  "Compares the three on query speed, setup effort and SQL features.",
+  "States a final order from best to worst.",
+]
+
+[[question]]
+id = "open-models-24gb"
+question = "Rank the best open-weight language models that run on a single 24 GB GPU on reasoning, coding and speed."
+output = "ranking"
+checks = [
+  "Ranks at least three options, each an open-weight language model.",
+  "Every ranked option is a model rather than a benchmark, website or article.",
+  "States a final order from best to worst.",
+]
+
+[[question]]
+id = "remote-work-cities"
+question = "Rank Lisbon, Berlin and Madrid for a remote worker on cost of living, internet speed and weather."
+output = "ranking"
+checks = [
+  "Includes a table covering Lisbon, Berlin and Madrid.",
+  "Compares the three on cost of living, internet speed and weather.",
+  "States a final order from best to worst.",
+]
+
+[[question]]
+id = "password-managers"
+question = "Rank the best password managers on security track record, price and whether they are open source."
+output = "ranking"
+checks = [
+  "Ranks at least three password managers.",
+  "States for each option whether it is open source.",
+  "States a final order from best to worst.",
+]
+
+[[question]]
+id = "messengers"
+question = "Compare Signal, WhatsApp and Telegram on end-to-end encryption, metadata collection and open source code."
+output = "table"
+checks = [
+  "Includes a table covering Signal, WhatsApp and Telegram.",
+  "States whether Telegram chats are end-to-end encrypted by default.",
+  "Compares the three on metadata collection.",
+]
+
+[[question]]
+id = "battery-chemistry"
+question = "Compare LFP and NMC lithium batteries for home energy storage on cycle life, energy density, safety and cost."
+output = "table"
+checks = [
+  "Includes a table covering LFP and NMC.",
+  "Gives a cycle life figure or range for at least one chemistry.",
+  "States which chemistry is safer, or less prone to thermal runaway.",
+]
+
+[[question]]
+id = "orchestrators"
+question = "Compare Kubernetes, Nomad and Docker Swarm on learning curve, scalability and ecosystem."
+output = "table"
+checks = [
+  "Includes a table covering Kubernetes, Nomad and Docker Swarm.",
+  "Compares the three on learning curve.",
+  "Compares the three on ecosystem or community.",
+]
+
+[[question]]
+id = "fediverse"
+question = "Compare Mastodon, Misskey and Pixelfed on purpose, features and number of users."
+output = "table"
+checks = [
+  "Includes a table covering Mastodon, Misskey and Pixelfed.",
+  "States what kind of content Pixelfed is for.",
+  "Gives a user count for at least one of them.",
+]

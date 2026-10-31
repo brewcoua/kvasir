@@ -1,7 +1,7 @@
 # Deep research pipeline: plan
 
 Status: phases 0 to 5 built (report output, clarify, dashboard, verification, ranking and
-table, Open WebUI). Written 2026-10-31.
+table, Open WebUI), and the phase 6 harness (`python -m kvasir.deep.evaluate`). Written 2026-10-31.
 
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
 rank, and its prompts ask for a Wikipedia page. This plan adds a second pipeline, `deep`, for
