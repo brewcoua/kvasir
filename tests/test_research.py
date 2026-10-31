@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
+
+import httpx
 import pytest
 from dspy.utils.dummies import DummyLM
 
@@ -54,17 +57,81 @@ def test_split_cuts_between_lines_and_hard_cuts_a_long_line():
     assert split("abcdefghij", size=4) == ["abcd", "efgh", "ij"]
 
 
-def test_a_page_that_is_not_html_is_refused(monkeypatch):
-    class Response:
-        headers = {"content-type": "application/pdf"}
-        text = ""
+def pdf(*lines: str) -> bytes:
+    """A one-page PDF showing `lines` one under the other."""
+    shown = " 0 -14 Td ".join(f"({line}) Tj" for line in lines)
+    stream = f"BT /F1 12 Tf 72 720 Td {shown} ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R"
+        b" /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref,
+    )
+    return bytes(out)
 
-        def raise_for_status(self):
-            pass
 
-    monkeypatch.setattr(fetch.httpx, "get", lambda url, **kwargs: Response())
-    with pytest.raises(FetchError, match="not HTML"):
+def serve(monkeypatch, content_type, body):
+    """Answer every fetch with `body`."""
+
+    def stream(method, url, **kwargs):
+        headers = {"content-type": content_type} if content_type else {}
+        return contextlib.nullcontext(
+            httpx.Response(200, headers=headers, content=body, request=httpx.Request(method, url))
+        )
+
+    monkeypatch.setattr(fetch.httpx, "stream", stream)
+
+
+@pytest.mark.parametrize("content_type", ["application/pdf", "application/octet-stream", None])
+def test_a_pdf_is_read_by_its_type_or_its_header(monkeypatch, content_type):
+    serve(monkeypatch, content_type, pdf("Kvasir measured the compu-", "tation in 1904."))
+
+    text = fetch.fetch_text("https://example.org/a")
+
+    assert text == "Kvasir measured the computation in 1904."
+    assert pipeline._quoted("measured the computation", text)
+
+
+def test_an_unreadable_pdf_is_refused(monkeypatch):
+    serve(monkeypatch, "application/pdf", pdf("Kvasir")[:40])
+    with pytest.raises(FetchError, match="unreadable PDF"):
         fetch.fetch_text("https://example.org/a.pdf")
+
+
+def test_a_pdf_without_text_is_refused(monkeypatch):
+    serve(monkeypatch, "application/pdf", pdf())
+    with pytest.raises(FetchError, match="no text layer"):
+        fetch.fetch_text("https://example.org/a.pdf")
+
+
+@pytest.mark.parametrize(
+    ("content_type", "body"), [("image/png", b"\x89PNG"), ("application/octet-stream", b"PK")]
+)
+def test_a_page_that_is_neither_html_nor_pdf_is_refused(monkeypatch, content_type, body):
+    serve(monkeypatch, content_type, body)
+    with pytest.raises(FetchError, match="not HTML or PDF"):
+        fetch.fetch_text("https://example.org/a")
+
+
+def test_a_download_stops_at_the_byte_cap(monkeypatch):
+    serve(monkeypatch, "text/html", b"<p>" + b"a" * 100 + b"</p>")
+    monkeypatch.setattr(fetch, "MAX_BYTES", 10)
+
+    assert fetch.fetch_text("https://example.org/a") == "aaaaaaa"
 
 
 def test_render_numbers_sources_by_page_and_drops_made_up_ids():

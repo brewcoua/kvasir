@@ -19,6 +19,7 @@ dependencies = [
     "beautifulsoup4==4.15.0",
     "dspy==3.3.0",
     "numpy==2.4.6",
+    "pypdf==6.21.4",
 ]
 
 [project.urls]

@@ -75,7 +75,7 @@ by `mypy` like the rest of the service.
 | File | Holds |
 | --- | --- |
 | `deep/store.py` | `Source`, `Claim` (id, text, quote, url, entities, confidence, round), and lookups by entity and by embedding |
-| `deep/fetch.py` | page download with `httpx`, inside `runtime.fetch_slot()`; text extraction with `beautifulsoup4`; splitting into pieces |
+| `deep/fetch.py` | page download with `httpx`, inside `runtime.fetch_slot()`; text extraction with `beautifulsoup4`, and with `pypdf` for PDFs; splitting into pieces |
 | `deep/signatures.py` | one `dspy.Signature` per model step: `Brief`, `PlanQueries`, `Intake`, `RebuildNotes`, `Criteria`, `Entities`, `RankCriterion`, `Outline`, `WriteSection`, `Verify` |
 | `deep/pipeline.py` | `run_deep_research(settings, request, stream) -> DeepResearchResult`, the stage order and the budgets |
 | `deep/render.py` | markdown, the ranking table, and the citation list |
@@ -208,7 +208,9 @@ SearXNG.
    dropping scripts, styles and navigation. `trafilatura` extracts main content better but was
    removed from the fork with its dependency tree. Proposed: `beautifulsoup4` first, and switch only
    if intake shows it reading menus and footers.
-2. **PDFs.** Many company and sector sources are PDFs. Proposed: skip them in phase 1 and decide
-   after seeing how many results are PDFs.
+2. **PDFs.** Many company and sector sources are PDFs. Decided: read their text layer with
+   `pypdf`, which is BSD-licensed and pure Python. PyMuPDF is AGPL. A PDF that is scanned,
+   encrypted or cut off at the 20 MB download cap falls back to its search snippet. There is no
+   OCR.
 3. **Keeping a run's evidence.** Runs live in memory only. Proposed: return the store in the result
    and persist nothing.
