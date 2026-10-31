@@ -66,9 +66,10 @@ _COSTORM_ROLES = {
 _RESEARCH_ROLES = {
     "clarify": ("fast", 500),
     "brief": ("strong", 1000),
+    "decompose": ("strong", 600),
     "plan": ("fast", 500),
     "intake": ("fast", 2000),
-    "notes": ("fast", 2000),
+    "check": ("strong", 800),
     "criteria": ("strong", 1000),
     "entities": ("strong", 600),
     "assess": ("fast", 600),

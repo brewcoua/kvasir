@@ -11,9 +11,9 @@ import datetime
 import logging
 import re
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from statistics import mean
-from typing import Any
+from typing import Any, TypeVar
 
 import dspy  # type: ignore[import-untyped]
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
@@ -25,24 +25,27 @@ from kvasir.deep.render import matrix, render
 from kvasir.deep.signatures import (
     Assess,
     Brief,
+    CheckAnswer,
     Clarify,
     Criteria,
+    Decompose,
     Entities,
     Intake,
     Outline,
     PlanQueries,
     RankCriterion,
-    RebuildNotes,
+    SearchFor,
     Verify,
     WriteSection,
 )
-from kvasir.deep.store import Claim, closest, nearest
+from kvasir.deep.store import Claim, Question, closest, nearest
 from kvasir.models import (
     Cell,
     Clarification,
     Criterion,
     RemovedSentence,
     ResearchClaim,
+    ResearchQuestion,
     ResearchRequest,
     ResearchResult,
     Row,
@@ -50,33 +53,48 @@ from kvasir.models import (
 from kvasir.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.runners import build_research_models, build_research_tools
 from kvasir.storm import runtime
-from kvasir.storm.encoder import Encoder
+from kvasir.storm.encoder import Encoder, cosine_similarity
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG
 
-MAX_ROUNDS = 4
-QUERIES_PER_ROUND = 4
-RESULTS_PER_QUERY = 3
 # Pieces of one page kept by the embedding filter, the only ones a model reads.
 PIECES_PER_PAGE = 3
-# A round that adds fewer claims than this has saturated what searching can find.
-MIN_NEW_CLAIMS = 5
+# The query shape for each attempt at a question, the last repeated: a question the plain words
+# do not answer gets the words its answer would contain, then a primary source, then the broader
+# topic. Whether `site:` and `filetype:` work depends on the engines SearXNG uses.
+QUERY_SHAPES = (
+    "general: the plain words someone would search for",
+    "specific: the exact terms, names, figures or year the answer would contain",
+    "a primary source: add site: and the official domain, or filetype:pdf for a report or paper",
+    "a step back: the broader topic the answer sits in",
+)
+# Questions the first split of the brief adds at most.
+FIRST_QUESTIONS = 6
+# Questions in the ledger at most. Follow-ups past this are dropped: the budget could not search
+# for them anyway.
+MAX_QUESTIONS = 24
+# Follow-ups one answered question adds at most.
+FOLLOW_UPS = 2
+# Above this cosine similarity, a new question is taken to repeat one in the ledger.
+DUPLICATE_QUESTION = 0.9
+# Claims a question is judged on, the closest to it.
+CLAIMS_PER_QUESTION = 8
+# Searches in a row that add no claim before the research stops: one empty search is the cue to
+# try another shape, not to stop, so this waits for several.
+STALL_SEARCHES = 4
+# Searches in a row that fail before the run stops, rather than write from no evidence.
+FAILED_SEARCHES = 3
 # Claims given to one section, the closest to its title.
 CLAIMS_PER_SECTION = 15
 # How much of each earlier section a later one sees, to avoid repeating it without filling the
 # context with it.
 EARLIER_SECTION_CHARACTERS = 400
-# Options compared at most, when the run chooses them: assessing costs a call per option and
-# criterion, and ranking two per criterion.
-ENTITIES = 8
-# Criteria at most, when the run chooses them: each costs a call per option and two rankings.
-CRITERIA = 5
 # Searches whose snippets the criteria and the options are chosen from.
 BACKGROUND_QUERIES = 3
 # Claims shown when assessing one option on one criterion, the closest to the pair.
 CLAIMS_PER_CELL = 8
-# Empty cells searched for again, at most, so filling cannot take longer than the research did.
-FILL_CELLS = 8
+# Searches for the cells still empty after the research, on top of its budget.
+FILL_SEARCHES = 8
 
 SHAPES = {
     "report": "The first section gives the key findings. Each later section covers one part of "
@@ -95,9 +113,17 @@ NO_EVIDENCE = (
 
 logger = logging.getLogger(__name__)
 
+# Judges a question on the claims gathered so far, updating its status, claims and what it misses.
+Judge = Callable[[Question], None]
+T = TypeVar("T")
+
 
 class SearchUnavailable(RuntimeError):
-    """Every search of a step failed, so the run stops rather than write from no evidence."""
+    """Searches kept failing, so the run stops rather than write from no evidence."""
+
+    def __init__(self, searches: int, failures: list[str]) -> None:
+        self.failures = list(dict.fromkeys(failures))
+        super().__init__(f"{searches} searches in a row failed: {'; '.join(self.failures)}")
 
 
 def clarify(settings: Settings, question: str) -> list[str]:
@@ -114,7 +140,11 @@ def run_research(
     started = time.monotonic()
     models = build_research_models(settings, request.model_fast, request.model_strong)
     encoder, search = build_research_tools(settings)
-    max_rounds = request.max_rounds or MAX_ROUNDS
+    budget = _setting(request.max_searches, settings.research_max_searches)
+    per_query = _setting(request.results_per_query, settings.research_results_per_query)
+    attempts = _setting(request.max_attempts, settings.research_max_attempts)
+    follow_ups = _setting(request.follow_ups, settings.research_follow_ups)
+    max_depth = _setting(request.max_depth, settings.research_max_depth)
 
     # The model's sense of "now" is its training cutoff, so "best" would mean best then.
     today = datetime.date.today().isoformat()
@@ -139,7 +169,18 @@ def run_research(
     criteria = [Criterion(name=name) for name in request.criteria or named]
     entities = list(request.entities or [e for e in framed.entities if _names(e, asked)])
     if output != "report":
-        criteria, entities = _candidates(models, search, today, brief, criteria, entities, stream)
+        criteria, entities = _candidates(
+            models,
+            search,
+            today,
+            brief,
+            criteria,
+            entities,
+            _setting(request.max_criteria, settings.research_max_criteria),
+            _setting(request.max_entities, settings.research_max_entities),
+            per_query,
+            stream,
+        )
         if not (criteria and entities):
             stream.publish(BACKGROUND, "found nothing to compare, so writing a report instead")
             output = "report"
@@ -152,63 +193,38 @@ def run_research(
             )
 
     claims: list[Claim] = []
-    notes = ""
-    for round_number in range(1, max_rounds + 1):
-        stream.publish(RESEARCH, f"round {round_number} of at most {max_rounds}: planning searches")
-        queries = _predict(
-            models["plan"],
-            PlanQueries,
-            today=today,
-            brief=brief,
-            notes=notes,
-            count=request.queries_per_round or QUERIES_PER_ROUND,
-        ).queries[: request.queries_per_round or QUERIES_PER_ROUND]
+    stream.publish(RESEARCH, "splitting the brief into questions")
+    ledger: list[Question] = []
+    first = _predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
+    _add_questions(encoder, ledger, first or [request.question])
 
-        hits = _search(search, queries, request.results_per_query or RESULTS_PER_QUERY, seen)
-        stream.publish(
-            RESEARCH,
-            f"round {round_number}: fetching {len(hits)} pages from {len(queries)} searches",
-        )
-        pages = [
-            (hit, _relevant_pieces(encoder, brief, text))
-            for hit, text in zip(hits, _fetch_all(hits), strict=True)
-        ]
-        pieces = [
-            (page, part, hit, piece)
-            for page, (hit, parts) in enumerate(pages, 1)
-            for part, piece in enumerate(parts, 1)
-        ]
-        new: list[Claim] = []
-        # Intake is most of a run's time, so each piece is its own event: the page being read is
-        # what a follower wants to see, not the round.
-        for done, (page, part, hit, piece) in enumerate(pieces):
-            stream.publish(
-                RESEARCH,
-                f"round {round_number}: page {page}/{len(pages)}, "
-                f"part {part}/{len(pages[page - 1][1])}: {hit['title'] or hit['url']}",
-                done,
-                len(pieces),
-            )
-            new.extend(
-                _intake(
-                    models["intake"], brief, hit, piece, len(claims) + len(new) + 1, round_number
-                )
-            )
+    def check(question: Question) -> None:
+        asked = _check(models["check"], encoder, brief, claims, question)
+        if follow_ups and question.status == "answered" and question.depth < max_depth:
+            _add_questions(encoder, ledger, asked[:FOLLOW_UPS], question)
 
-        claims.extend(new)
-        stream.publish(
-            RESEARCH,
-            f"round {round_number}: {len(new)} new claims, {len(claims)} in all",
-            len(pieces),
-            len(pieces),
+    searched = 0
+
+    def research(questions: list[Question], budget: int, judge: Judge) -> None:
+        nonlocal searched
+        searched += _research(
+            models,
+            encoder,
+            search,
+            today,
+            brief,
+            questions,
+            claims,
+            seen,
+            budget,
+            per_query,
+            attempts,
+            judge,
+            searched,
+            stream,
         )
-        if new:
-            stream.publish(RESEARCH, f"round {round_number}: rebuilding the notes")
-            notes = _predict(
-                models["notes"], RebuildNotes, brief=brief, notes=notes, new_claims=_listed(new)
-            ).notes_out
-        if len(new) < MIN_NEW_CLAIMS:
-            break
+
+    research(ledger, budget, check)
 
     if not claims:
         # Writing sections from no evidence only produces paragraphs saying there is none.
@@ -218,20 +234,22 @@ def run_research(
             assumptions=list(framed.assumptions),
             citations=[],
             claims=[],
+            questions=_questions(ledger),
             output=output,
             duration_seconds=round(time.monotonic() - started, 1),
         )
 
     rows: list[Row] = []
     if output != "report":
-        rows = _assess(models, encoder, search, brief, claims, entities, criteria, seen, stream)
+        rows = _assess(models, encoder, brief, claims, entities, criteria, stream)
+        _fill(models["assess"], encoder, brief, claims, ledger, rows, research, stream)
         if output == "ranking":
             rows = _rank(models["judge"], brief, criteria, rows, stream)
             brief += f"\nOverall ranking, best first: {', '.join(row.entity for row in rows)}"
 
     stream.publish(WRITE, "outlining the report")
     titles: list[str] = _predict(
-        models["outline"], Outline, brief=brief, shape=SHAPES[output], notes=notes
+        models["outline"], Outline, brief=brief, shape=SHAPES[output], notes=_notes(ledger)
     ).sections
     sections: list[tuple[str, str]] = []
     for done, title in enumerate(titles):
@@ -257,6 +275,8 @@ def run_research(
     stream.publish(WRITE, "assembled the report", len(titles), len(titles))
     if rows:
         sections.insert(0, (TABLE_TITLES[output], matrix(rows, criteria)))
+    if left := _open_questions(ledger):
+        sections.append(("Open questions", left))
 
     by_id = {claim.id: claim for claim in claims}
     sections, removed = _verify(models["verify"], sections, by_id, stream)
@@ -267,6 +287,7 @@ def run_research(
         assumptions=list(framed.assumptions),
         citations=citations,
         claims=[ResearchClaim(**vars(claim)) for claim in claims],
+        questions=_questions(ledger),
         removed=removed,
         output=output,
         criteria=criteria if rows else [],
@@ -282,6 +303,9 @@ def _candidates(
     brief: str,
     criteria: list[Criterion],
     entities: list[str],
+    max_criteria: int,
+    max_entities: int,
+    per_query: int,
     stream: ProgressStream,
 ) -> tuple[list[Criterion], list[str]]:
     """The criteria and the options to compare, chosen from search snippets where not given."""
@@ -298,7 +322,7 @@ def _candidates(
         # Snippets only, and not marked seen: the research still reads these pages.
         background = "\n".join(
             f"{hit['title']}: {hit['description']}"
-            for hit in _search(search, queries, RESULTS_PER_QUERY, set())
+            for hit in _search(search, queries, per_query, set())
         )
         if not criteria:
             stream.publish(BACKGROUND, "choosing the criteria")
@@ -306,16 +330,17 @@ def _candidates(
                 models["criteria"], Criteria, brief=brief, background=background
             ).criteria
             criteria = [
-                Criterion(name=c.name, weight=min(max(c.weight, 1), 3)) for c in chosen[:CRITERIA]
+                Criterion(name=c.name, weight=min(max(c.weight, 1), 3))
+                for c in chosen[:max_criteria]
             ]
         if not entities:
             stream.publish(BACKGROUND, "choosing the options to compare")
             chosen = _predict(
-                models["entities"], Entities, brief=brief, background=background, count=ENTITIES
+                models["entities"], Entities, brief=brief, background=background, count=max_entities
             ).entities
             # A small model fills a list with plausible names, such as model sizes never released;
             # searching for those finds nothing. Only options the results mention are kept.
-            entities = [entity for entity in chosen if _names(entity, background)][:ENTITIES]
+            entities = [entity for entity in chosen if _names(entity, background)][:max_entities]
     # The first spelling of a name given twice wins.
     names = [_key(c.name) for c in criteria]
     criteria = [c for i, c in enumerate(criteria) if names[i] and names[i] not in names[:i]]
@@ -331,18 +356,13 @@ def _candidates(
 def _assess(
     models: dict[str, GatewayModel],
     encoder: Encoder,
-    search: SearXNG,
     brief: str,
     claims: list[Claim],
     entities: list[str],
     criteria: list[Criterion],
-    seen: set[str],
     stream: ProgressStream,
 ) -> list[Row]:
-    """Each option's finding on each criterion, searching again for some of those with none.
-
-    Adds the claims the searching finds to `claims`.
-    """
+    """Each option's finding on each criterion, from the claims the research gathered."""
     rows = [Row(entity=entity, cells=[]) for entity in entities]
     total = len(entities) * len(criteria)
     vectors = encoder.encode([c.text for c in claims])
@@ -351,28 +371,54 @@ def _assess(
         row.cells.append(
             _cell(models["assess"], encoder, vectors, brief, claims, row.entity, criterion.name)
         )
-
-    empty = [(row, i) for row in rows for i, cell in enumerate(row.cells) if not cell.claims]
-    empty = empty[:FILL_CELLS]
-    for done, (row, i) in enumerate(empty):
-        query = f"{row.entity} {row.cells[i].criterion}"
-        stream.publish(ASSESS, f"searching again for {query}", done, len(empty))
-        hits = _search(search, [query], 1, seen)
-        for hit, text in zip(hits, _fetch_all(hits), strict=True):
-            for piece in _relevant_pieces(encoder, query, text):
-                claims.extend(
-                    _intake(models["intake"], brief, hit, piece, len(claims) + 1, round_number=0)
-                )
-        vectors = encoder.encode([c.text for c in claims])
-        row.cells[i] = _cell(
-            models["assess"], encoder, vectors, brief, claims, row.entity, row.cells[i].criterion
-        )
-    if empty:
-        filled = sum(1 for row, i in empty if row.cells[i].claims)
-        stream.publish(
-            ASSESS, f"filled {filled} of {len(empty)} empty cells", len(empty), len(empty)
-        )
     return rows
+
+
+def _fill(
+    model: GatewayModel,
+    encoder: Encoder,
+    brief: str,
+    claims: list[Claim],
+    ledger: list[Question],
+    rows: list[Row],
+    research: Callable[[list[Question], int, Judge], None],
+    stream: ProgressStream,
+) -> None:
+    """Search for the empty cells of `rows` as questions of their own, and assess them again.
+
+    A cell's question is answered once assessing it finds a claim, so the assessment is its
+    judgement and no other call is needed.
+    """
+    cells = {
+        (row.entity, cell.criterion): (row, i) for row in rows for i, cell in enumerate(row.cells)
+    }
+    empty = [key for key, (row, i) in cells.items() if not row.cells[i].claims]
+    if not empty:
+        return
+    questions = [
+        Question(
+            id=len(ledger) + n,
+            text=f"{criterion} of {entity}",
+            cell=(entity, criterion),
+            judged_at=len(claims),
+        )
+        for n, (entity, criterion) in enumerate(empty, 1)
+    ]
+    ledger.extend(questions)
+
+    def judge(question: Question) -> None:
+        assert question.cell is not None
+        row, i = cells[question.cell]
+        vectors = encoder.encode([c.text for c in claims])
+        row.cells[i] = _cell(model, encoder, vectors, brief, claims, *question.cell)
+        question.judged_at = len(claims)
+        question.claims = row.cells[i].claims
+        question.status = "answered" if question.claims else "open"
+
+    stream.publish(ASSESS, f"searching for {len(empty)} empty cells")
+    research(questions, FILL_SEARCHES, judge)
+    filled = sum(1 for key in empty if cells[key][0].cells[cells[key][1]].claims)
+    stream.publish(ASSESS, f"filled {filled} of {len(empty)} empty cells")
 
 
 def _cell(
@@ -467,6 +513,218 @@ def _rank(
         2 * len(criteria),
     )
     return ranked
+
+
+def _research(
+    models: dict[str, GatewayModel],
+    encoder: Encoder,
+    search: SearXNG,
+    today: str,
+    brief: str,
+    questions: list[Question],
+    claims: list[Claim],
+    seen: set[str],
+    budget: int,
+    per_query: int,
+    max_attempts: int,
+    judge: Judge,
+    first_step: int,
+    stream: ProgressStream,
+) -> int:
+    """Search for `questions` one at a time, and return how many searches that took.
+
+    Stops when `budget` searches are spent, no question is left to search for, or
+    `STALL_SEARCHES` searches in a row find nothing. A question is judged again before it is
+    searched for whenever claims arrived since its last judgement, since a search for one question
+    often answers another. Adds what it finds to `claims`; `judge` may add to `questions`.
+    """
+    searches = stalled = failed = 0
+    failures: list[str] = []
+    while searches < budget and stalled < STALL_SEARCHES:
+        question = _pick(questions, max_attempts)
+        if question is None:
+            break
+        if question.judged_at < len(claims):
+            judge(question)
+            continue
+        searches += 1
+        stream.publish(RESEARCH, f"search {searches} of at most {budget}, for: {question.text}")
+        query = str(
+            _predict(
+                models["plan"],
+                SearchFor,
+                today=today,
+                brief=brief,
+                question=question.text,
+                tried="\n".join(question.queries) or "none",
+                missing=question.missing,
+                shape=QUERY_SHAPES[min(question.attempts, len(QUERY_SHAPES) - 1)],
+            ).query
+        ).strip()
+        try:
+            hits = _search(search, [query], per_query, seen)
+        except SearchUnavailable as exc:
+            # The attempt is not spent, since the query was never answered; the budget is.
+            failed += 1
+            failures += exc.failures
+            if failed == FAILED_SEARCHES:
+                raise SearchUnavailable(failed, failures) from None
+            continue
+        failed = 0
+        failures = []
+        question.queries.append(query)
+        new = _read(
+            models["intake"],
+            encoder,
+            brief,
+            question.text,
+            hits,
+            len(claims) + 1,
+            first_step + searches,
+            f"search {searches}",
+            stream,
+        )
+        claims.extend(new)
+        stalled = 0 if new else stalled + 1
+        if new:
+            judge(question)
+        if question.status == "open" and question.attempts >= max_attempts:
+            question.status = "unresolved"
+        stream.publish(
+            RESEARCH,
+            f"search {searches}: {len(new)} new claims, {len(claims)} in all; "
+            f"{question.text}: {question.status}",
+        )
+    return searches
+
+
+def _pick(questions: list[Question], max_attempts: int) -> Question | None:
+    """The question to search for next: the least tried of those not settled, shallowest first.
+
+    Least tried first, so every question gets a plain search before any gets a narrower one.
+    """
+    waiting = [
+        q
+        for q in questions
+        if q.status in ("open", "weak", "contradicted") and q.attempts < max_attempts
+    ]
+    return min(waiting, key=lambda q: (q.attempts, q.depth, q.id), default=None)
+
+
+def _check(
+    model: GatewayModel, encoder: Encoder, brief: str, claims: list[Claim], question: Question
+) -> list[str]:
+    """Judge `question` on its closest claims, and return the harder questions the judge asks.
+
+    A claim whose quote does not say what it claims is not counted, so a misquoted answer leaves
+    the question open and the next search looks for it again.
+    """
+    previous, question.judged_at = question.judged_at, len(claims)
+    shown = [
+        claims[i]
+        for i in closest(encoder, question.text, [c.text for c in claims], CLAIMS_PER_QUESTION)
+    ]
+    # Ids count up from 1 as claims arrive, so none above `previous` means the closest claims are
+    # the ones it was last judged on, and the verdict would not change.
+    if all(c.id <= previous for c in shown):
+        return []
+    try:
+        judged = _predict(
+            model, CheckAnswer, brief=brief, question=question.text, evidence=_quoted_claims(shown)
+        )
+    except AdapterParseError as exc:
+        logger.warning("could not read the judgement on %r: %s", question.text, exc)
+        return []
+    # Only ids it was shown: a small model otherwise cites claims from its own numbering.
+    ids = [c.id for c in shown if c.id in judged.claims]
+    if judged.status == "open" or not ids:
+        question.status, question.claims = "open", []
+    else:
+        question.status, question.claims = judged.status, ids
+    question.missing = "" if question.status == "answered" else str(judged.missing).strip()
+    return [str(q) for q in judged.follow_ups] if question.status == "answered" else []
+
+
+def _add_questions(
+    encoder: Encoder, ledger: list[Question], texts: list[str], parent: Question | None = None
+) -> None:
+    """Add to `ledger` those of `texts` that repeat no question in it, up to `MAX_QUESTIONS`."""
+    texts = [text.strip() for text in texts if text.strip()]
+    if not texts:
+        return
+    vectors = list(encoder.encode([q.text for q in ledger] + texts))
+    kept = vectors[: len(ledger)]
+    for text, vector in zip(texts, vectors[len(ledger) :], strict=True):
+        if len(ledger) >= MAX_QUESTIONS:
+            return
+        if kept and cosine_similarity([vector], kept).max() > DUPLICATE_QUESTION:
+            continue
+        ledger.append(
+            Question(
+                id=len(ledger) + 1,
+                text=text,
+                parent=parent.id if parent else None,
+                depth=parent.depth + 1 if parent else 0,
+            )
+        )
+        kept.append(vector)
+
+
+def _notes(ledger: list[Question]) -> str:
+    """The ledger as the outline reads it: each question, how far it got, and its claims."""
+    lines = []
+    for question in ledger:
+        if question.cell:
+            continue
+        line = f"- {question.text} ({question.status})"
+        if question.claims:
+            line += " " + "".join(f"[{i}]" for i in question.claims)
+        if question.missing:
+            line += f"; missing: {question.missing}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+# How the report names a question's status when the research did not settle it.
+UNSETTLED = {
+    "open": "not found",
+    "unresolved": "not found",
+    "weak": "partly answered",
+    "contradicted": "sources disagree",
+}
+
+
+def _open_questions(ledger: list[Question]) -> str:
+    """The questions the research did not settle, as a list for the end of the report.
+
+    Empty cells are left out: the table already shows them as a dash.
+    """
+    return "\n".join(
+        f"- {q.text} ({UNSETTLED[q.status]})"
+        for q in ledger
+        if q.status in UNSETTLED and q.cell is None
+    )
+
+
+def _questions(ledger: list[Question]) -> list[ResearchQuestion]:
+    return [
+        ResearchQuestion(
+            id=q.id,
+            text=q.text,
+            parent=q.parent,
+            depth=q.depth,
+            status=q.status,
+            claims=q.claims,
+            queries=q.queries,
+            missing=q.missing,
+        )
+        for q in ledger
+    ]
+
+
+def _setting(value: T | None, default: T) -> T:
+    """The request's value, or the configured default when the request leaves it out."""
+    return default if value is None else value
 
 
 def _names(entity: str, text: str) -> bool:
@@ -566,9 +824,7 @@ def _search(
             seen.add(hit["url"])
             hits.append(hit)
     if not hits and failures:
-        raise SearchUnavailable(
-            f"all {len(queries)} searches failed: {'; '.join(dict.fromkeys(failures))}"
-        )
+        raise SearchUnavailable(len(queries), failures)
     return hits
 
 
@@ -586,22 +842,65 @@ def _fetch_all(hits: list[dict[str, Any]]) -> Iterator[str]:
         yield from pool.map(fetch, hits)
 
 
-def _relevant_pieces(encoder: Encoder, brief: str, text: str) -> list[str]:
+def _read(
+    model: GatewayModel,
+    encoder: Encoder,
+    brief: str,
+    question: str,
+    hits: list[dict[str, Any]],
+    first_id: int,
+    step: int,
+    label: str,
+    stream: ProgressStream,
+) -> list[Claim]:
+    """The claims in the pieces of each page closest to `question`, the one it was found for.
+
+    Kept by the question rather than the brief: a page found for one narrow fact holds it in one
+    piece, which the brief would not rank first.
+    """
+    pages = [
+        (hit, _relevant_pieces(encoder, question, text))
+        for hit, text in zip(hits, _fetch_all(hits), strict=True)
+    ]
+    pieces = [
+        (page, part, hit, piece)
+        for page, (hit, parts) in enumerate(pages, 1)
+        for part, piece in enumerate(parts, 1)
+    ]
+    new: list[Claim] = []
+    # Intake is most of a run's time, so each piece is its own event: the page being read is what
+    # a follower wants to see.
+    for done, (page, part, hit, piece) in enumerate(pieces):
+        stream.publish(
+            RESEARCH,
+            f"{label}: page {page}/{len(pages)}, "
+            f"part {part}/{len(pages[page - 1][1])}: {hit['title'] or hit['url']}",
+            done,
+            len(pieces),
+        )
+        new.extend(_intake(model, brief, question, hit, piece, first_id + len(new), step))
+    return new
+
+
+def _relevant_pieces(encoder: Encoder, query: str, text: str) -> list[str]:
     pieces = split(text)
-    return [pieces[i] for i in closest(encoder, brief, pieces, PIECES_PER_PAGE)]
+    return [pieces[i] for i in closest(encoder, query, pieces, PIECES_PER_PAGE)]
 
 
 def _intake(
     model: GatewayModel,
     brief: str,
+    question: str,
     hit: dict[str, Any],
     piece: str,
     first_id: int,
-    round_number: int,
+    step: int,
 ) -> list[Claim]:
     """Claims whose quote really is in the piece. A paraphrased quote is not evidence."""
     try:
-        findings = _predict(model, Intake, brief=brief, title=hit["title"], text=piece).findings
+        findings = _predict(
+            model, Intake, brief=brief, question=question, title=hit["title"], text=piece
+        ).findings
     except AdapterParseError as exc:
         logger.warning("could not read the claims from %s: %s", hit["url"], exc)
         return []
@@ -618,7 +917,7 @@ def _intake(
                 url=hit["url"],
                 title=hit["title"],
                 confidence=finding.confidence,
-                round=round_number,
+                step=step,
             )
         )
     return claims

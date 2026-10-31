@@ -28,6 +28,13 @@ def test_defaults():
     assert settings.runs_db.name == "kvasir.db"
     assert settings.max_runs == 100
     assert settings.run_ttl_days == 30
+    assert settings.research_max_searches == 16
+    assert settings.research_results_per_query == 3
+    assert settings.research_max_attempts == 4
+    assert settings.research_follow_ups is True
+    assert settings.research_max_depth == 2
+    assert settings.research_max_entities == 8
+    assert settings.research_max_criteria == 5
 
 
 @pytest.mark.parametrize("name", sorted(MINIMAL))
@@ -174,6 +181,27 @@ def test_a_set_variable_wins_over_the_file_and_an_empty_one_does_not(tmp_path):
     assert settings.searxng_url == "http://file"
 
 
+@pytest.mark.parametrize(("value", "expected"), [("false", False), ("NO", False), ("1", True)])
+def test_a_boolean_setting_reads_its_usual_spellings(value, expected):
+    env = MINIMAL | {"KVASIR_RESEARCH_FOLLOW_UPS": value}
+
+    assert Settings.from_env(env).research_follow_ups is expected
+
+
+def test_a_boolean_setting_rejects_anything_else():
+    with pytest.raises(ConfigError, match="KVASIR_RESEARCH_FOLLOW_UPS must be true or false"):
+        Settings.from_env(MINIMAL | {"KVASIR_RESEARCH_FOLLOW_UPS": "maybe"})
+
+
+def test_a_boolean_in_the_config_file_is_read(tmp_path):
+    path = _write(tmp_path, "research_follow_ups = false\nresearch_max_searches = 8\n")
+
+    settings = Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path})
+
+    assert settings.research_follow_ups is False
+    assert settings.research_max_searches == 8
+
+
 def test_reasoning_effort_defaults_to_unset():
     assert Settings.from_env(MINIMAL).reasoning_effort is None
 
@@ -182,8 +210,8 @@ def test_reasoning_effort_defaults_to_unset():
     ("text", "message"),
     [
         ('model_fats = "openai/x"\n', "unknown keys in config file .*: model_fats"),
-        ("max_threads = [2]\n", "max_threads .* must be a string or an integer"),
-        ("max_threads = true\n", "max_threads .* must be a string or an integer"),
+        ("max_threads = [2]\n", "max_threads .* must be a string, an integer or a boolean"),
+        ("max_threads = true\n", "KVASIR_MAX_THREADS must be an integer, got 'true'"),
         ("model_fast = \n", "not valid TOML"),
     ],
 )

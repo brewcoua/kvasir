@@ -143,8 +143,8 @@ reply, under one reasoning block.
 | `CONFIRM_RERUN` | `true` | Ask before researching again in a chat that already holds an article. |
 | `SHOW_USAGE` | `true` | Append what the run spent. |
 | `CLARIFY` | `true` | Research: ask what a new question leaves open before starting. |
-| `MAX_ROUNDS` | `0` | Research: search rounds at most. `0` leaves it to the service. |
-| `QUERIES_PER_ROUND` | `0` | Research: searches per round. `0` leaves it to the service. |
+| `MAX_SEARCHES` | `0` | Research: searches in the run at most. `0` leaves it to the service. |
+| `FOLLOW_UPS` | `default` | Research: `on` lets an answered question add harder ones, `off` stops it. `default` leaves it to the service. |
 | `RESULTS_PER_QUERY` | `0` | Research: pages read per search. `0` leaves it to the service. |
 | `TASK_TIMEOUT_SECONDS` | `120` | Timeout for one of Open WebUI's own task calls, and for research's clarify call. |
 

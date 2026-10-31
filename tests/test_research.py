@@ -12,7 +12,7 @@ from kvasir.config import Settings
 from kvasir.deep import fetch, pipeline, verify
 from kvasir.deep.fetch import FetchError, extract, split
 from kvasir.deep.render import matrix, render
-from kvasir.deep.store import Claim
+from kvasir.deep.store import Claim, Question
 from kvasir.models import Cell, Clarification, Criterion, ResearchRequest, Row
 
 PAGE = (
@@ -42,9 +42,16 @@ class Stream:
         self.events.append((stage, detail))
 
 
+class Encoder:
+    """Every text the same vector, so nothing is closer than anything else and none repeats."""
+
+    def encode(self, texts):
+        return [[0.0]] * len(texts)
+
+
 def claim(id, url, quote="q"):
     return Claim(
-        id=id, text=f"claim {id}", quote=quote, url=url, title=url, confidence="high", round=1
+        id=id, text=f"claim {id}", quote=quote, url=url, title=url, confidence="high", step=1
     )
 
 
@@ -182,7 +189,8 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
                     "entities": [],
                 }
             ],
-            "plan": [{"queries": ["kvasir stone found"]}],
+            "decompose": [{"questions": ["When was the stone found?"]}],
+            "plan": [{"query": "kvasir stone found"}],
             "intake": [
                 {
                     "findings": [
@@ -196,7 +204,7 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
                 },
                 {"findings": []},
             ],
-            "notes": [{"notes_out": "Found in 1904 [1]."}],
+            "check": [{"status": "answered", "claims": [1, 7], "missing": "", "follow_ups": []}],
             "outline": [{"sections": ["Findings"]}],
             "write": [{"text": "It was found in 1904 [1][7]. It is made of gold [1]."}],
             "verify": [
@@ -209,7 +217,9 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         {"url": "https://a", "title": "A", "description": "snippet a", "snippets": []},
         {"url": "https://b", "title": "B", "description": "snippet b", "snippets": []},
     ]
-    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (Encoder(), Search(hits))
+    )
 
     def fake_fetch(url):
         if url == "https://b":
@@ -223,8 +233,8 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         settings, ResearchRequest(question="When was the Kvasir stone found?"), stream
     )
 
-    # The paraphrased "solid gold" quote is on no page, so it is not evidence. One new claim is
-    # below the saturation bar, so the run stops after one round rather than asking for a plan.
+    # The paraphrased "solid gold" quote is on no page, so it is not evidence. The one question is
+    # answered after one search, so the run asks for no other query.
     assert [(c.id, c.text, c.url) for c in result.claims] == [(1, "Found in 1904", "https://a")]
     assert result.report == "## Findings\n\nIt was found in 1904 [1]."
     assert [(r.sentence, r.reason) for r in result.removed] == [
@@ -234,10 +244,17 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         (1, "https://a", "found in   1904")
     ]
     assert result.assumptions == ["any source"]
+    assert [(q.text, q.status, q.claims, q.queries) for q in result.questions] == [
+        ("When was the stone found?", "answered", [1], ["kvasir stone found"])
+    ]
     assert [stage for stage, _ in stream.events][:2] == ["brief", "research"]
     # One event per piece read, each naming its page, the snippet fallback included.
-    assert ("research", "round 1: page 1/2, part 1/1: A") in stream.events
-    assert ("research", "round 1: page 2/2, part 1/1: B") in stream.events
+    assert ("research", "search 1: page 1/2, part 1/1: A") in stream.events
+    assert ("research", "search 1: page 2/2, part 1/1: B") in stream.events
+    assert (
+        "research",
+        "search 1: 1 new claims, 1 in all; When was the stone found?: answered",
+    ) in stream.events
     assert stream.events[-1] == ("verify", "removed 1 of 2 cited sentences")
 
 
@@ -295,19 +312,23 @@ def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
                     "entities": [],
                 }
             ],
-            "plan": [{"queries": ["q"]}],
+            "decompose": [{"questions": ["q?"]}],
+            "plan": [{"query": "q"}],
             "intake": [{"findings": []}],
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
-    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (Encoder(), Search(hits))
+    )
     monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
-    result = pipeline.run_research(settings, ResearchRequest(question="q", max_rounds=1), stream)
+    result = pipeline.run_research(settings, ResearchRequest(question="q", max_searches=1), stream)
 
     assert result.report == pipeline.NO_EVIDENCE
     assert result.citations == []
+    assert [(q.text, q.status) for q in result.questions] == [("q?", "open")]
     assert stream.events[-1] == ("write", "no evidence found, so nothing to write")
 
 
@@ -315,7 +336,7 @@ def test_unreadable_claims_cost_the_piece_not_the_run(monkeypatch):
     model = DummyLM([{"nonsense": "x"}] * 4)
     hit = {"url": "https://a", "title": "A"}
 
-    assert pipeline._intake(model, "brief", hit, "text", 1, 1) == []
+    assert pipeline._intake(model, "brief", "question", hit, "text", 1, 1) == []
 
 
 def test_clarifications_reach_the_brief_as_text():
@@ -397,11 +418,6 @@ def test_an_unreadable_verdict_keeps_the_sentence(monkeypatch):
     assert removed == []
 
 
-class Encoder:
-    def encode(self, texts):
-        return [[0.0]] * len(texts)
-
-
 def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings, monkeypatch):
     fake_models(
         monkeypatch,
@@ -417,8 +433,13 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
                     "entities": ["Alpha", "Beta", "alpha "],
                 }
             ],
-            # The background searches, then the first round's.
-            "plan": [{"queries": ["fast models"]}, {"queries": ["alpha beta speed"]}],
+            # The background searches, then the question's, then the empty cell's.
+            "plan": [
+                {"queries": ["fast models"]},
+                {"query": "alpha beta speed"},
+                {"query": "alpha cost"},
+            ],
+            "decompose": [{"questions": ["How fast is each?"]}],
             # Out of range weights are clamped to 1 to 3.
             "criteria": [
                 {"criteria": [{"name": "speed", "weight": 3}, {"name": "cost", "weight": 0}]}
@@ -439,15 +460,15 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
                     ]
                 }
             ],
-            "notes": [{"notes_out": "Speeds known [1][2]."}],
-            # Alpha on speed and cost, Beta on speed and cost, then Alpha's empty cost cell again.
+            "check": [{"status": "answered", "claims": [1, 2], "missing": "", "follow_ups": []}],
+            # Alpha on speed and cost, Beta on speed and cost. The search for Alpha's empty cost
+            # cell finds only the page already read, so the cell is not assessed again.
             "assess": [
                 {"finding": "50 tok/s", "claims": [1]},
                 {"finding": "", "claims": []},
                 # 9 does not exist, and 1 is about Alpha: neither is kept.
                 {"finding": "20 tok/s", "claims": [1, 2, 9]},
                 {"finding": "cheap", "claims": [2]},
-                {"finding": "", "claims": []},
             ],
             # Speed twice, the second pass reading the options in reverse. Only Beta has a cost
             # finding, so cost needs no judge: Beta is first and Alpha, with none, last.
@@ -459,9 +480,7 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
     )
     hits = [{"url": "https://a", "title": "A", "description": "speeds", "snippets": []}]
     monkeypatch.setattr(
-        pipeline,
-        "build_research_tools",
-        lambda settings: (Encoder(), Search(hits)),
+        pipeline, "build_research_tools", lambda settings: (Encoder(), Search(hits))
     )
     monkeypatch.setattr(
         pipeline, "fetch_text", lambda url: "Alpha runs at 50 tok/s. Beta runs at 20 tok/s."
@@ -470,7 +489,9 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
 
     result = pipeline.run_research(
         settings,
-        ResearchRequest(question="Which is faster, Alpha or Beta?", output="ranking"),
+        ResearchRequest(
+            question="Which is faster, Alpha or Beta?", output="ranking", max_attempts=1
+        ),
         stream,
     )
 
@@ -490,7 +511,7 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
         "| 2 | Beta | 20 tok/s [1] | cheap [1] |\n"
     )
     assert result.report.endswith("## Alpha\n\nAlpha is the fastest [1].")
-    # The page was read in the round, so the searches for the empty cells find nothing new.
+    # The page was read for the first question, so the search for the empty cell finds nothing.
     assert ("assess", "filled 0 of 1 empty cells") in stream.events
     assert ("assess", "ranked: Alpha, Beta") in stream.events
 
@@ -547,19 +568,22 @@ def test_criteria_and_options_named_in_the_question_are_final(settings, monkeypa
                     "entities": ["Pixel", "Galaxy S30", "iPhone"],
                 }
             ],
-            "plan": [{"queries": ["q"]}],
+            "decompose": [{"questions": ["q?"]}],
+            "plan": [{"query": "q"}],
             "intake": [{"findings": []}],
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
-    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (Encoder(), Search(hits))
+    )
     monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
     pipeline.run_research(
         settings,
         ResearchRequest(
-            question="Rank the Pixel and the iPhone on price and privacy", max_rounds=1
+            question="Rank the Pixel and the iPhone on price and privacy", max_searches=1
         ),
         stream,
     )
@@ -582,19 +606,22 @@ def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypa
                     "entities": [],
                 }
             ],
-            # The background searches, then the round's.
-            "plan": [{"queries": ["best phones"]}, {"queries": ["q"]}],
+            # The background searches, then the question's.
+            "plan": [{"queries": ["best phones"]}, {"query": "q"}],
+            "decompose": [{"questions": ["q?"]}],
             "entities": [{"entities": ["Pixel 10", "Phantom 9"]}],
             "intake": [{"findings": []}],
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "The Pixel 10 leads", "snippets": []}]
-    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (Encoder(), Search(hits))
+    )
     monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
     pipeline.run_research(
-        settings, ResearchRequest(question="Rank phones on price", max_rounds=1), stream
+        settings, ResearchRequest(question="Rank phones on price", max_searches=1), stream
     )
 
     assert ("background", "comparing 1 options on 1 criteria: Pixel 10") in stream.events
@@ -613,16 +640,186 @@ def test_a_run_whose_searches_all_fail_stops_with_the_reason(settings, monkeypat
                     "entities": [],
                 }
             ],
-            "plan": [{"queries": ["q1", "q2"]}],
+            "decompose": [{"questions": ["q?"]}],
+            "plan": [{"query": "q1"}, {"query": "q2"}, {"query": "q3"}],
         },
     )
     failing = Search([], ["brave: Suspended: too many requests", "duckduckgo: CAPTCHA"])
-    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, failing))
+    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (Encoder(), failing))
 
     with pytest.raises(pipeline.SearchUnavailable) as raised:
         pipeline.run_research(settings, ResearchRequest(question="q"), Stream())
 
-    # Each engine once, though both queries reported it.
+    # Each engine once, though every search reported it.
     assert str(raised.value) == (
-        "all 2 searches failed: brave: Suspended: too many requests; duckduckgo: CAPTCHA"
+        "3 searches in a row failed: brave: Suspended: too many requests; duckduckgo: CAPTCHA"
+    )
+
+
+class Pages:
+    """SearXNG answering each query with one page never seen before."""
+
+    failures: list[str] = []
+
+    def __init__(self):
+        self.queries = []
+
+    def __call__(self, query, exclude_urls):
+        self.queries.append(query)
+        url = f"https://example.org/{len(self.queries)}"
+        return [{"url": url, "title": url, "description": "", "snippets": []}]
+
+
+def loop(monkeypatch, questions, found, judge, budget=16, max_attempts=4, search=None):
+    """Run `_research` over `questions`, the model writing `query N` and reading `found`.
+
+    `found` maps a query number to the claim texts its page yields. Returns the search, the shapes
+    the model was asked for and the claims gathered.
+    """
+    shapes = []
+
+    def predict(model, signature, **inputs):
+        assert signature is pipeline.SearchFor
+        shapes.append(inputs["shape"])
+        return type("Prediction", (), {"query": f"query {len(shapes)}"})
+
+    def read(model, encoder, brief, question, hits, first_id, step, label, stream):
+        texts = found.get(len(shapes), []) if hits else []
+        return [claim(first_id + i, hits[0]["url"]) for i, _ in enumerate(texts)]
+
+    monkeypatch.setattr(pipeline, "_predict", predict)
+    monkeypatch.setattr(pipeline, "_read", read)
+    search = search or Pages()
+    claims: list[Claim] = []
+    searches = pipeline._research(
+        {"plan": None, "intake": None},
+        Encoder(),
+        search,
+        "2026-11-01",
+        "brief",
+        questions,
+        claims,
+        set(),
+        budget,
+        1,
+        max_attempts,
+        judge,
+        0,
+        Stream(),
+    )
+    return searches, shapes, claims
+
+
+def test_a_question_nothing_answers_is_tried_in_every_shape_then_given_up(monkeypatch):
+    question = Question(id=1, text="When?")
+
+    searches, shapes, _ = loop(monkeypatch, [question], {}, judge=lambda q: None)
+
+    assert searches == 4
+    assert shapes == list(pipeline.QUERY_SHAPES)
+    assert question.queries == ["query 1", "query 2", "query 3", "query 4"]
+    assert question.status == "unresolved"
+
+
+def test_the_budget_caps_the_searches(monkeypatch):
+    questions = [Question(id=1, text="a"), Question(id=2, text="b")]
+
+    searches, _, _ = loop(monkeypatch, questions, {}, judge=lambda q: None, budget=3)
+
+    assert searches == 3
+    # Each gets a plain search before either gets a narrower one.
+    assert [q.attempts for q in questions] == [2, 1]
+
+
+def test_a_question_another_search_answered_costs_no_search(monkeypatch):
+    first, second = Question(id=1, text="a"), Question(id=2, text="b")
+    judged = []
+
+    def judge(question):
+        judged.append(question.id)
+        question.judged_at = 1
+        question.status = "answered"
+
+    searches, _, _ = loop(monkeypatch, [first, second], {1: ["a and b"]}, judge)
+
+    assert searches == 1
+    assert judged == [1, 2]
+    assert second.queries == []
+
+
+def test_a_failed_search_spends_the_budget_but_not_the_attempt(monkeypatch):
+    class Flaky(Pages):
+        def __call__(self, query, exclude_urls):
+            self.failures = ["brave: CAPTCHA"] if len(self.queries) < 2 else []
+            hits = super().__call__(query, exclude_urls)
+            return [] if self.failures else hits
+
+    question = Question(id=1, text="When?")
+
+    searches, shapes, _ = loop(
+        monkeypatch, [question], {}, judge=lambda q: None, budget=3, search=Flaky()
+    )
+
+    assert searches == 3
+    # Two failures, then the one search answered: the plain shape each time.
+    assert shapes == [pipeline.QUERY_SHAPES[0]] * 3
+    assert question.queries == ["query 3"]
+
+
+def test_the_judge_counts_only_claims_it_was_shown(monkeypatch):
+    claims = [claim(1, "https://a"), claim(2, "https://b")]
+    question = Question(id=1, text="When?")
+    model = DummyLM(
+        [{"status": "answered", "claims": [2, 9], "missing": "", "follow_ups": ["Why?"]}]
+    )
+
+    asked = pipeline._check(model, Encoder(), "brief", claims, question)
+
+    assert (question.status, question.claims, question.judged_at) == ("answered", [2], 2)
+    assert asked == ["Why?"]
+    # Nothing new among the closest claims: no call, which would exhaust the fake.
+    assert pipeline._check(model, Encoder(), "brief", claims, question) == []
+
+
+def test_an_answer_resting_on_no_shown_claim_is_open(monkeypatch):
+    question = Question(id=1, text="When?")
+    model = DummyLM(
+        [{"status": "answered", "claims": [9], "missing": "the year", "follow_ups": ["Why?"]}]
+    )
+
+    asked = pipeline._check(model, Encoder(), "brief", [claim(1, "https://a")], question)
+
+    assert (question.status, question.claims, question.missing) == ("open", [], "the year")
+    assert asked == []
+
+
+def test_a_repeated_question_is_not_added(monkeypatch):
+    class Words:
+        def encode(self, texts):
+            return [[1.0, 0.0] if "year" in text else [0.0, 1.0] for text in texts]
+
+    ledger = [Question(id=1, text="Which year?")]
+    parent = ledger[0]
+
+    pipeline._add_questions(
+        Words(), ledger, ["The year it was found?", "Who found it?", " "], parent
+    )
+
+    assert [(q.id, q.text, q.parent, q.depth) for q in ledger] == [
+        (1, "Which year?", None, 0),
+        (2, "Who found it?", 1, 1),
+    ]
+
+
+def test_the_report_ends_with_what_the_research_did_not_settle():
+    ledger = [
+        Question(id=1, text="When?", status="answered"),
+        Question(id=2, text="Who?", status="unresolved"),
+        Question(id=3, text="Why?", status="weak"),
+        Question(id=4, text="Where?", status="contradicted"),
+        Question(id=5, text="cost of Alpha", status="open", cell=("Alpha", "cost")),
+    ]
+
+    assert pipeline._open_questions(ledger) == (
+        "- Who? (not found)\n- Why? (partly answered)\n- Where? (sources disagree)"
     )

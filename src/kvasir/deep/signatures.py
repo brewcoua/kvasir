@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import dspy  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
@@ -61,6 +63,36 @@ class PlanQueries(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc="search engine queries")
 
 
+class Decompose(dspy.Signature):
+    """Split a research brief into the questions a good answer has to settle.
+
+    Each question asks for one thing a source can state, such as a figure, a date, a cause or a
+    name. Together they cover the brief. Order them from the most central to the least. Ask, do
+    not answer: name no fact, example or figure the brief does not state, since what you recall
+    may be wrong and would steer the search towards it.
+    """
+
+    brief: str = dspy.InputField()
+    questions: list[str] = dspy.OutputField(desc="three to six questions")
+
+
+class SearchFor(dspy.Signature):
+    """Write one web search query that would find the answer to a research question.
+
+    Write it in the shape asked for. Do not repeat a query already tried; the missing part says
+    what the last search left out. When the brief is about the current state of things, name the
+    current year, since what you know may be out of date.
+    """
+
+    today: str = dspy.InputField(desc="today's date")
+    brief: str = dspy.InputField()
+    question: str = dspy.InputField()
+    tried: str = dspy.InputField(desc="queries already tried for this question, one per line")
+    missing: str = dspy.InputField(desc="what the last search left out, or empty")
+    shape: str = dspy.InputField(desc="the kind of query to write")
+    query: str = dspy.OutputField(desc="a search engine query")
+
+
 class ChosenCriterion(BaseModel):
     name: str
     weight: int
@@ -103,27 +135,35 @@ class Finding(BaseModel):
 class Intake(dspy.Signature):
     """Extract the facts in a piece of a web page that help answer a research brief.
 
-    Each claim is one self-contained fact. Its quote is copied exactly from the text, word for
-    word, short but enough to support the claim. Return an empty list if nothing in the text helps.
+    The page was found while searching for the question, so look for its answer first, then for
+    anything else the brief needs. Each claim is one self-contained fact. Its quote is copied
+    exactly from the text, word for word, short but enough to support the claim. Return an empty
+    list if nothing in the text helps.
     """
 
     brief: str = dspy.InputField()
+    question: str = dspy.InputField(desc="what the search that found the page was for")
     title: str = dspy.InputField()
     text: str = dspy.InputField(desc="a piece of the page")
     findings: list[Finding] = dspy.OutputField()
 
 
-class RebuildNotes(dspy.Signature):
-    """Rewrite the research notes to include new claims.
+class CheckAnswer(dspy.Signature):
+    """Decide how well the evidence answers one research question.
 
-    Keep them short: what is established, with claim ids in brackets, what is still missing, and
-    which lines of search led nowhere. Drop anything the brief does not need.
+    Count a claim only if its quote states what the claim says. answered: the counted claims
+    settle the question. weak: they settle part of it. contradicted: they disagree with each
+    other. open: no claim speaks to it. When answered, suggest harder questions an expert would
+    ask next about the same subject, which the brief would gain from.
     """
 
     brief: str = dspy.InputField()
-    notes: str = dspy.InputField(desc="the notes so far, or empty")
-    new_claims: str = dspy.InputField(desc="one claim per line, prefixed by its id in brackets")
-    notes_out: str = dspy.OutputField(desc="the rewritten notes, under 1000 words")
+    question: str = dspy.InputField()
+    evidence: str = dspy.InputField(desc="each claim with the quote it was read from")
+    status: Literal["answered", "weak", "contradicted", "open"] = dspy.OutputField()
+    claims: list[int] = dspy.OutputField(desc="ids of the claims counted as support")
+    missing: str = dspy.OutputField(desc="what is still missing, in a few words, or empty")
+    follow_ups: list[str] = dspy.OutputField(desc="at most two harder questions, or empty")
 
 
 class Assess(dspy.Signature):

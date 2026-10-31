@@ -129,9 +129,11 @@ there. A run's scratch directory also lives under `/tmp`.
 
 ## Research a question
 
-`POST /v1/research` answers a question with a cited report. It searches in rounds, reads each page in
-pieces small enough for a 16k context, keeps only claims whose quote appears word for word on the
-page, and writes the report one section at a time from those claims. Each sentence that cites a
+`POST /v1/research` answers a question with a cited report. It splits the brief into questions and
+searches for one at a time: a question the search leaves open is searched for again with a narrower
+query, and one it answers can add harder follow-ups. It reads each page in pieces small enough for
+a 16k context, keeps only claims whose quote appears word for word on the page, and writes the
+report one section at a time from those claims. Each sentence that cites a
 claim is then checked against the claim's quote, and taken out if the quote does not support it. See
 [`docs/deep-research-plan.md`](docs/deep-research-plan.md) for the design.
 
@@ -159,20 +161,27 @@ claim is then checked against the claim's quote, and taken out if the quote does
    `write` and `verify`; `background` and `assess` run only for a ranking or a table. The `done`
    frame carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief decided on
    your behalf), `citations`, `claims` (every claim gathered, each with its quote and source),
+   `questions` (each question searched for, with its status, queries and supporting claims),
    `removed` (each sentence verification took out, with its section and the reason), `output`,
    `criteria`, `matrix` and `duration_seconds`.
 
-Optional fields: `output`, `criteria`, `entities`, `max_rounds` (default 4), `queries_per_round`
-(4), `results_per_query` (3), `model_fast`, `model_strong`. A round that adds fewer than 5 claims
-ends the research early. A run that finds no claim at all says so in `report` and writes no
-sections.
+Optional fields: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`,
+`max_attempts`, `follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `model_fast`,
+`model_strong`. Each research field left out takes its `KVASIR_RESEARCH_*` default from
+[Configuration](#configuration). The research stops when the searches are spent, no question is left
+open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
+shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
+`filetype:pdf`), then the broader topic. The report ends with an "Open questions" section listing
+what the research did not settle. A run that finds no claim at all says so in `report` and writes
+no sections.
 
 ### Rank or compare options
 
 Ask for it in the question: "Rank the best phones of 2026 on price, performance and privacy". The
 brief reads the output type (`ranking`, `table` or `report`), the criteria and the options from the
 question. Criteria and options it names are used as given. What it leaves open the run chooses from
-a first search: at most 8 options, and 3 to 5 criteria weighted 1 to 3 by importance. Named
+a first search: at most `max_entities` options, and up to `max_criteria` criteria weighted 1 to 3
+by importance. Named
 criteria weigh 1 each. The request fields `output`, `criteria` and `entities` override the question,
 for clients that already have them as data.
 
@@ -183,8 +192,9 @@ curl -N -X POST localhost:8080/v1/research \
 ```
 
 The run then assesses each option on each criterion from the claims closest to that pair, keeping
-only claims that name the option. A cell with no such claim gets one more search, for at most 8
-cells. A ranking ranks the options with a finding on each criterion twice, the second time in
+only claims that name the option. Each cell with no such claim becomes a question of its own,
+searched for like the others with a budget of 8 more searches, and assessed again when a search adds
+claims. A ranking ranks the options with a finding on each criterion twice, the second time in
 reverse order, since models favour what they read first. Options with no finding tie for last place
 on that criterion. The overall order is the weighted mean of those places. An option the run chooses
 must appear in its first search's results.
@@ -331,6 +341,13 @@ is a complete file for a local Ollama.
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
 | `KVASIR_MAX_CONV_TURN` | `3` | Questions per perspective. |
 | `KVASIR_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
+| `KVASIR_RESEARCH_MAX_SEARCHES` | `16` | Research: searches in a run, before the 8 for empty cells. |
+| `KVASIR_RESEARCH_RESULTS_PER_QUERY` | `3` | Research: pages read per search. |
+| `KVASIR_RESEARCH_MAX_ATTEMPTS` | `4` | Research: queries tried on one question before it is given up. |
+| `KVASIR_RESEARCH_FOLLOW_UPS` | `true` | Research: whether an answered question can add harder ones. `true` or `false`. |
+| `KVASIR_RESEARCH_MAX_DEPTH` | `2` | Research: levels of follow-ups below the first questions. |
+| `KVASIR_RESEARCH_MAX_ENTITIES` | `8` | Research: options a ranking or table compares, when the run chooses them. |
+| `KVASIR_RESEARCH_MAX_CRITERIA` | `5` | Research: criteria, when the run chooses them. |
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
 | `LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 | `KVASIR_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body. Unset sends nothing. |

@@ -514,9 +514,7 @@
         display: grid;
         gap: 0.5rem;
       }
-      .launch textarea,
-      .launch input[type="number"],
-      .launch input[type="text"] {
+      .launch textarea {
         width: 100%;
         font: inherit;
         color: inherit;
@@ -538,14 +536,6 @@
         color: inherit;
         font-size: inherit;
         margin-right: 0.75rem;
-      }
-      .launch .fields {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-        gap: 0.5rem;
-      }
-      .launch .fields[hidden] {
-        display: none;
       }
       .launch .question {
         margin: 0 0 0.25rem;
@@ -647,6 +637,148 @@
         vertical-align: top;
         font-size: 0.85rem;
       }
+      header .icon {
+        margin: 0;
+        align-self: center;
+      }
+      .settings {
+        width: min(46rem, calc(100vw - 2rem));
+        height: min(34rem, calc(100vh - 2rem));
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+      }
+      .settings[open] {
+        display: flex;
+        flex-direction: column;
+      }
+      .settings::backdrop {
+        background: color-mix(in srgb, #000 40%, transparent);
+      }
+      .settings header {
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .settings header h2 {
+        font-size: 0.9rem;
+        margin: 0;
+        flex: 1;
+      }
+      .settings .layout {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 11rem 1fr;
+      }
+      .settings nav {
+        display: grid;
+        align-content: start;
+        gap: 0.15rem;
+        padding: 0.5rem;
+        border-right: 1px solid var(--line);
+      }
+      .settings nav button {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.5rem;
+        font: inherit;
+        color: var(--dim);
+        background: none;
+        border: 0;
+        border-radius: 4px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .settings nav button:hover {
+        color: var(--text);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      .settings nav button[aria-current="true"] {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .settings .panes {
+        overflow-y: auto;
+      }
+      .settings .pane {
+        display: grid;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+      }
+      .settings .pane[hidden] {
+        display: none;
+      }
+      .settings h3 {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+      .setting {
+        display: grid;
+        grid-template-columns: 1fr 8rem 3.5rem;
+        gap: 0.15rem 0.75rem;
+        align-items: center;
+      }
+      .setting.wide {
+        grid-template-columns: 1fr 16rem 3.5rem;
+      }
+      .setting input[type="number"],
+      .setting input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        color: inherit;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.3rem 0.5rem;
+      }
+      .setting input[type="checkbox"] {
+        justify-self: end;
+      }
+      .setting .hint {
+        grid-column: 1 / 3;
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--dim);
+      }
+      .setting .reset {
+        grid-row: 1;
+        grid-column: 3;
+        font: inherit;
+        font-size: 0.75rem;
+        color: var(--dim);
+        background: none;
+        border: 0;
+        cursor: pointer;
+        visibility: hidden;
+      }
+      .setting.changed .reset {
+        visibility: visible;
+      }
+      .setting.changed label::after {
+        content: " (changed)";
+        color: var(--accent);
+        font-size: 0.75rem;
+      }
+      @media (max-width: 40rem) {
+        .settings .layout {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+        }
+        .settings nav {
+          display: flex;
+          overflow-x: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .setting,
+        .setting.wide {
+          grid-template-columns: 1fr auto 3.5rem;
+        }
+      }
     </style>
   </head>
   <body>
@@ -666,6 +798,16 @@
           <option>navy</option>
         </select>
       </label>
+      <button type="button" class="icon" id="settings-open" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+            <path d="M2 4h6M11 4h3M2 8h2M7 8h7M2 12h8M13 12h1" />
+            <circle cx="9.5" cy="4" r="1.5" />
+            <circle cx="5.5" cy="8" r="1.5" />
+            <circle cx="11.5" cy="12" r="1.5" />
+          </g>
+        </svg>
+      </button>
     </header>
 
     <main>
@@ -678,24 +820,6 @@
               <label><input type="radio" name="kind" value="article" /> Article</label>
             </div>
             <textarea id="launch-text" rows="3" required></textarea>
-            <details>
-              <summary>Settings</summary>
-              <div class="fields" data-kind="research">
-                <label>Rounds <input type="number" min="1" name="max_rounds" /></label>
-                <label>Queries per round <input type="number" min="1" name="queries_per_round" /></label>
-                <label>Results per query <input type="number" min="1" name="results_per_query" /></label>
-              </div>
-              <div class="fields" data-kind="article" hidden>
-                <label>Results per search <input type="number" min="1" name="search_top_k" /></label>
-                <label>Turns per perspective <input type="number" min="1" name="max_conv_turn" /></label>
-                <label>Perspectives <input type="number" min="1" name="max_perspective" /></label>
-                <label><input type="checkbox" name="do_polish_article" checked /> Polish</label>
-              </div>
-              <div class="fields">
-                <label>Fast model <input type="text" name="model_fast" /></label>
-                <label>Strong model <input type="text" name="model_strong" /></label>
-              </div>
-            </details>
             <div id="clarify"></div>
             <p>
               <button type="submit" class="action" id="launch-start">Start</button>
@@ -741,6 +865,170 @@
       <div class="content" id="result-content"></div>
       <!-- Inside the dialog: a modal dialog sits above everything outside it. -->
       <div class="popover" id="popover" hidden></div>
+    </dialog>
+
+    <!-- Kept in localStorage, and only what the user changed: a field left alone follows the
+         configured default, read from /v1/defaults and shown as its value. -->
+    <dialog class="settings" id="settings" aria-labelledby="settings-title">
+      <header>
+        <h2 id="settings-title">Settings</h2>
+        <button type="button" class="action" id="settings-reset">Reset all</button>
+        <button type="button" class="action" id="settings-close">Close</button>
+      </header>
+      <div class="layout">
+        <nav aria-label="Setting categories">
+          <button type="button" data-pane="research" aria-current="true">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="7" cy="7" r="4.5" /><path d="M10.3 10.3 14 14" />
+              </g>
+            </svg>
+            Research
+          </button>
+          <button type="button" data-pane="ranking">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 13V9M8 13V3M13 13V6M1.5 14.5h13" />
+              </g>
+            </svg>
+            Ranking
+          </button>
+          <button type="button" data-pane="article">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 1.5h5.5L13 5v9.5H4zM9.5 1.5V5H13M6 8h5M6 10.5h5M6 13h3" />
+              </g>
+            </svg>
+            Article
+          </button>
+          <button type="button" data-pane="models">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="4" width="8" height="8" rx="1" /><path d="M6 2v2M10 2v2M6 12v2M10 12v2M2 6h2M2 10h2M12 6h2M12 10h2" />
+              </g>
+            </svg>
+            Models
+          </button>
+        </nav>
+        <div class="panes">
+          <section class="pane" data-pane="research">
+            <h3>Research</h3>
+            <div class="setting">
+              <label for="setting-max_searches">Searches</label>
+              <input id="setting-max_searches" type="number" min="1" name="max_searches" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset searches to the default">
+                Reset
+              </button>
+              <p class="hint">Searches in the whole run, before those for empty table cells.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-results_per_query">Pages per search</label>
+              <input id="setting-results_per_query" type="number" min="1" name="results_per_query" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset pages per search to the default">
+                Reset
+              </button>
+              <p class="hint">Results read from each search.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-max_attempts">Attempts per question</label>
+              <input id="setting-max_attempts" type="number" min="1" name="max_attempts" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset attempts per question to the default">
+                Reset
+              </button>
+              <p class="hint">Differently shaped queries tried before a question is given up.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-follow_ups">Follow-up questions</label>
+              <input id="setting-follow_ups" type="checkbox" name="follow_ups" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset follow-up questions to the default">
+                Reset
+              </button>
+              <p class="hint">Whether an answered question can add harder ones.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-max_depth">Follow-up depth</label>
+              <input id="setting-max_depth" type="number" min="1" name="max_depth" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset follow-up depth to the default">
+                Reset
+              </button>
+              <p class="hint">Levels of follow-ups below the first questions.</p>
+            </div>
+          </section>
+          <section class="pane" data-pane="ranking" hidden>
+            <h3>Ranking and comparison</h3>
+            <div class="setting">
+              <label for="setting-max_entities">Options</label>
+              <input id="setting-max_entities" type="number" min="1" name="max_entities" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset options to the default">
+                Reset
+              </button>
+              <p class="hint">Options compared at most, when the run chooses them.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-max_criteria">Criteria</label>
+              <input id="setting-max_criteria" type="number" min="1" name="max_criteria" data-for="research" />
+              <button type="button" class="reset" aria-label="Reset criteria to the default">
+                Reset
+              </button>
+              <p class="hint">Criteria at most, when the run chooses them.</p>
+            </div>
+          </section>
+          <section class="pane" data-pane="article" hidden>
+            <h3>Article</h3>
+            <div class="setting">
+              <label for="setting-search_top_k">Results per search</label>
+              <input id="setting-search_top_k" type="number" min="1" name="search_top_k" data-for="article" />
+              <button type="button" class="reset" aria-label="Reset results per search to the default">
+                Reset
+              </button>
+              <p class="hint">Search results per query.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-max_conv_turn">Turns per perspective</label>
+              <input id="setting-max_conv_turn" type="number" min="1" name="max_conv_turn" data-for="article" />
+              <button type="button" class="reset" aria-label="Reset turns per perspective to the default">
+                Reset
+              </button>
+              <p class="hint">Questions each perspective asks.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-max_perspective">Perspectives</label>
+              <input id="setting-max_perspective" type="number" min="1" name="max_perspective" data-for="article" />
+              <button type="button" class="reset" aria-label="Reset perspectives to the default">
+                Reset
+              </button>
+              <p class="hint">Perspectives researched.</p>
+            </div>
+            <div class="setting">
+              <label for="setting-do_polish_article">Polish</label>
+              <input id="setting-do_polish_article" type="checkbox" name="do_polish_article" data-for="article" />
+              <button type="button" class="reset" aria-label="Reset polish to the default">
+                Reset
+              </button>
+              <p class="hint">Run the polishing stage. Slower, better prose.</p>
+            </div>
+          </section>
+          <section class="pane" data-pane="models" hidden>
+            <h3>Models</h3>
+            <div class="setting wide">
+              <label for="setting-model_fast">Fast model</label>
+              <input id="setting-model_fast" type="text" name="model_fast" data-for="both" />
+              <button type="button" class="reset" aria-label="Reset fast model to the default">
+                Reset
+              </button>
+              <p class="hint">For research and articles. Passed to the gateway as written.</p>
+            </div>
+            <div class="setting wide">
+              <label for="setting-model_strong">Strong model</label>
+              <input id="setting-model_strong" type="text" name="model_strong" data-for="both" />
+              <button type="button" class="reset" aria-label="Reset strong model to the default">
+                Reset
+              </button>
+              <p class="hint">For research and articles. Passed to the gateway as written.</p>
+            </div>
+          </section>
+        </div>
+      </div>
     </dialog>
 
     <script>
@@ -1427,6 +1715,24 @@
           assumed.append(list);
           content.append(assumed);
         }
+        if (result.questions?.length > 0) {
+          const asked = document.createElement("details");
+          asked.append(node("summary", "", `Questions (${result.questions.length})`));
+          // Claim ids, like the removed sentences: they match the evidence table's # column.
+          const wrapper = table(
+            [["#", false], ["question", false], ["status", false], ["queries", false], ["claims", false]],
+            result.questions.map((question) => [
+              question.parent ? `${question.id} (after ${question.parent})` : question.id,
+              question.missing ? `${question.text} Missing: ${question.missing}` : question.text,
+              question.status,
+              question.queries.join("; "),
+              question.claims.join(", "),
+            ]),
+          );
+          wrapper.classList.add("claims");
+          asked.append(wrapper);
+          content.append(asked);
+        }
         if (result.outline) {
           const outline = document.createElement("details");
           outline.append(node("summary", "", "Outline"));
@@ -1590,9 +1896,6 @@
       }
 
       function showKind() {
-        for (const fields of form.querySelectorAll("[data-kind]")) {
-          fields.hidden = fields.dataset.kind !== kind();
-        }
         el("launch-text").placeholder = PLACEHOLDERS[kind()];
         resetClarify();
       }
@@ -1605,15 +1908,12 @@
           request.clarifications = clarifications;
         } else {
           request.topic = text;
-          request.do_polish_article = form.elements.do_polish_article.checked;
         }
-        // Only the settings shown for this kind, and only those filled in: the rest default.
-        const fields = form.querySelectorAll(
-          `[data-kind="${kind()}"] input:not([type=checkbox]), [name^=model_]`,
-        );
-        for (const input of fields) {
-          if (input.value.trim() === "") continue;
-          request[input.name] = input.type === "number" ? Number(input.value) : input.value.trim();
+        // Only the settings changed for this kind: the rest take the service's defaults.
+        const saved = overrides();
+        for (const input of settingInputs()) {
+          if (!(input.name in saved) || ![kind(), "both"].includes(input.dataset.for)) continue;
+          request[input.name] = saved[input.name];
         }
         return request;
       }
@@ -1717,6 +2017,76 @@
       el("launch-text").addEventListener("input", resetClarify);
       for (const radio of form.elements.kind) radio.addEventListener("change", showKind);
       showKind();
+
+      const SETTINGS_KEY = "settings";
+      // What each setting defaults to on the service, from /v1/defaults. Empty until it answers.
+      let defaults = {};
+      const overrides = () => JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}");
+      const settingInputs = () => el("settings").querySelectorAll("input[data-for]");
+
+      // A value equal to the default is not kept, so a later change of the default reaches it.
+      function keep(name, value) {
+        const saved = overrides();
+        if (value === undefined || value === defaults[name]) delete saved[name];
+        else saved[name] = value;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(saved));
+      }
+
+      function showSettings() {
+        const saved = overrides();
+        for (const input of settingInputs()) {
+          const fallback = defaults[input.name];
+          if (input.type === "checkbox") {
+            input.checked = saved[input.name] ?? fallback ?? false;
+          } else {
+            input.value = saved[input.name] ?? fallback ?? "";
+            input.placeholder = fallback ?? "";
+          }
+          input.closest(".setting").classList.toggle("changed", input.name in saved);
+        }
+      }
+
+      function changeSetting(input) {
+        if (input.type === "checkbox") keep(input.name, input.checked);
+        else if (input.value.trim() === "") keep(input.name, undefined);
+        // An out of range number stays on screen, marked invalid by the browser, and is not kept.
+        else if (!input.checkValidity()) return;
+        else keep(input.name, input.type === "number" ? Number(input.value) : input.value.trim());
+        input.closest(".setting").classList.toggle("changed", input.name in overrides());
+      }
+
+      function showPane(name) {
+        for (const pane of el("settings").querySelectorAll("section[data-pane]")) {
+          pane.hidden = pane.dataset.pane !== name;
+        }
+        for (const button of el("settings").querySelectorAll("nav [data-pane]")) {
+          button.setAttribute("aria-current", String(button.dataset.pane === name));
+        }
+      }
+
+      for (const input of settingInputs()) {
+        input.addEventListener("change", () => changeSetting(input));
+        input.closest(".setting").querySelector(".reset").addEventListener("click", () => {
+          keep(input.name, undefined);
+          showSettings();
+        });
+      }
+      for (const button of el("settings").querySelectorAll("nav [data-pane]")) {
+        button.addEventListener("click", () => showPane(button.dataset.pane));
+      }
+      el("settings-open").addEventListener("click", () => {
+        showSettings();
+        el("settings").showModal();
+      });
+      // Escape closes the dialog natively.
+      el("settings-close").addEventListener("click", () => el("settings").close());
+      el("settings-reset").addEventListener("click", () => {
+        localStorage.removeItem(SETTINGS_KEY);
+        showSettings();
+      });
+      json("/v1/defaults")
+        .then((answer) => (defaults = answer))
+        .catch((error) => console.warn("no defaults:", error));
 
       const theme = el("theme");
       theme.value = document.documentElement.dataset.theme;

@@ -79,7 +79,7 @@ Output = Literal["report", "ranking", "table"]
 class ResearchRequest(BaseModel):
     """Body of `POST /v1/research`.
 
-    The budgets fall back to the pipeline's defaults when omitted.
+    The budgets fall back to the configured defaults when omitted.
     """
 
     question: str = Field(min_length=1)
@@ -89,11 +89,39 @@ class ResearchRequest(BaseModel):
     # For a ranking or a table, chosen from a first search when omitted.
     criteria: list[str] | None = None
     entities: list[str] | None = None
-    max_rounds: int | None = Field(default=None, ge=1)
-    queries_per_round: int | None = Field(default=None, ge=1)
+    max_searches: int | None = Field(default=None, ge=1)
     results_per_query: int | None = Field(default=None, ge=1)
+    # Query shapes tried on one question before giving it up.
+    max_attempts: int | None = Field(default=None, ge=1)
+    # Whether an answered question may add harder ones, and how many levels deep.
+    follow_ups: bool | None = None
+    max_depth: int | None = Field(default=None, ge=1)
+    # For a ranking or a table, when the run chooses them.
+    max_entities: int | None = Field(default=None, ge=1)
+    max_criteria: int | None = Field(default=None, ge=1)
     model_fast: str | None = None
     model_strong: str | None = None
+
+
+class Defaults(BaseModel):
+    """Payload of `GET /v1/defaults`: what each optional run field takes when a request omits it.
+
+    Keyed by the request field's name, research's and article's together, for a client to show.
+    """
+
+    model_fast: str
+    model_strong: str
+    max_searches: int
+    results_per_query: int
+    max_attempts: int
+    follow_ups: bool
+    max_depth: int
+    max_entities: int
+    max_criteria: int
+    search_top_k: int
+    max_conv_turn: int
+    max_perspective: int
+    do_polish_article: bool
 
 
 class ResearchClaim(BaseModel):
@@ -105,7 +133,24 @@ class ResearchClaim(BaseModel):
     url: str
     title: str
     confidence: Literal["high", "medium", "low"]
-    round: int
+    # The search that found it. Defaulted, so a run stored when claims had rounds still loads.
+    step: int = 0
+
+
+class ResearchQuestion(BaseModel):
+    """One question the research searched for, and how far it got."""
+
+    id: int
+    text: str
+    # The question this one follows up on.
+    parent: int | None
+    depth: int
+    status: Literal["open", "weak", "answered", "contradicted", "unresolved"]
+    # The claims whose quotes support the answer.
+    claims: list[int]
+    queries: list[str]
+    # What the last judgement found missing.
+    missing: str
 
 
 class RemovedSentence(BaseModel):
@@ -153,6 +198,8 @@ class ResearchResult(BaseModel):
     citations: list[Citation]
     # Every claim gathered, cited or not, so a reader can audit the report against its evidence.
     claims: list[ResearchClaim]
+    # Every question searched for, in the order asked. Defaulted, so an older stored run loads.
+    questions: list[ResearchQuestion] = []
     # Defaulted, so a run stored before verification existed still loads.
     removed: list[RemovedSentence] = []
     output: Output = "report"

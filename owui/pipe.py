@@ -123,11 +123,14 @@ class Pipe:
                 "finds anything worth asking."
             ),
         )
-        MAX_ROUNDS: int = Field(
-            default=0, description="Research: search rounds at most. 0 uses the service default."
+        MAX_SEARCHES: int = Field(
+            default=0,
+            description="Research: searches in the run at most. 0 uses the service default.",
         )
-        QUERIES_PER_ROUND: int = Field(
-            default=0, description="Research: searches per round. 0 uses the service default."
+        FOLLOW_UPS: Literal["default", "on", "off"] = Field(
+            default="default",
+            description="Research: let an answered question add harder ones. default leaves it to "
+            "the service.",
         )
         RESULTS_PER_QUERY: int = Field(
             default=0, description="Research: pages read per search. 0 uses the service default."
@@ -332,11 +335,12 @@ class Pipe:
             optional = {
                 "model_fast": self.valves.MODEL_FAST,
                 "model_strong": self.valves.MODEL_STRONG,
-                "max_rounds": self.valves.MAX_ROUNDS,
-                "queries_per_round": self.valves.QUERIES_PER_ROUND,
+                "max_searches": self.valves.MAX_SEARCHES,
                 "results_per_query": self.valves.RESULTS_PER_QUERY,
             }
             request.update({name: value for name, value in optional.items() if value})
+            if self.valves.FOLLOW_UPS != "default":
+                request["follow_ups"] = self.valves.FOLLOW_UPS == "on"
 
             out: dict[str, Any] = {}
             yield think.start()

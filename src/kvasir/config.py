@@ -61,6 +61,13 @@ class Settings:
     search_top_k: int
     max_conv_turn: int
     max_perspective: int
+    research_max_searches: int
+    research_results_per_query: int
+    research_max_attempts: int
+    research_follow_ups: bool
+    research_max_depth: int
+    research_max_entities: int
+    research_max_criteria: int
     log_level: str
     log_format: str
     reasoning_effort: str | None
@@ -119,6 +126,15 @@ class Settings:
             search_top_k=_positive_int(env, "KVASIR_SEARCH_TOP_K", 3),
             max_conv_turn=_positive_int(env, "KVASIR_MAX_CONV_TURN", 3),
             max_perspective=_positive_int(env, "KVASIR_MAX_PERSPECTIVE", 3),
+            # The deep research pipeline's defaults, which a request overrides one by one. Searches
+            # are the budget: each costs about nine page reads.
+            research_max_searches=_positive_int(env, "KVASIR_RESEARCH_MAX_SEARCHES", 16),
+            research_results_per_query=_positive_int(env, "KVASIR_RESEARCH_RESULTS_PER_QUERY", 3),
+            research_max_attempts=_positive_int(env, "KVASIR_RESEARCH_MAX_ATTEMPTS", 4),
+            research_follow_ups=_bool(env, "KVASIR_RESEARCH_FOLLOW_UPS", True),
+            research_max_depth=_positive_int(env, "KVASIR_RESEARCH_MAX_DEPTH", 2),
+            research_max_entities=_positive_int(env, "KVASIR_RESEARCH_MAX_ENTITIES", 8),
+            research_max_criteria=_positive_int(env, "KVASIR_RESEARCH_MAX_CRITERIA", 5),
             log_level=(env.get("LOG_LEVEL", "").strip() or "INFO").upper(),
             # JSON by default: this runs as a container whose stdout goes to a log shipper, and
             # a run's lines interleave across threads, so they need to be parseable rather than
@@ -151,10 +167,14 @@ def _read_file(path: Path) -> dict[str, str]:
 
     values = {}
     for key, value in data.items():
-        # bool is an int subclass, and no setting is a boolean.
-        if isinstance(value, bool) or not isinstance(value, str | int):
-            raise ConfigError(f"{key} in config file {path} must be a string or an integer")
-        values[_env_name(key)] = str(value)
+        if isinstance(value, bool):
+            values[_env_name(key)] = "true" if value else "false"
+        elif isinstance(value, str | int):
+            values[_env_name(key)] = str(value)
+        else:
+            raise ConfigError(
+                f"{key} in config file {path} must be a string, an integer or a boolean"
+            )
     return values
 
 
@@ -202,6 +222,17 @@ def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
     if value < 1:
         raise ConfigError(f"{name} must be at least 1, got {value}")
     return value
+
+
+def _bool(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in ("true", "1", "yes"):
+        return True
+    if raw in ("false", "0", "no"):
+        return False
+    raise ConfigError(f"{name} must be true or false, got {raw!r}")
 
 
 def apply_environment() -> None:

@@ -26,6 +26,7 @@ from kvasir.models import (
     ArticleRequest,
     ClarifyRequest,
     ClarifyResponse,
+    Defaults,
     Error,
     ResearchRequest,
     RunDetail,
@@ -171,6 +172,27 @@ async def research(request: ResearchRequest) -> Response:
         [BRIEF, RESEARCH, WRITE, VERIFY]
         if request.output == "report"
         else [BRIEF, BACKGROUND, RESEARCH, ASSESS, WRITE, VERIFY],
+    )
+
+
+@app.get("/v1/defaults")
+async def defaults() -> Defaults:
+    """What a run's optional fields default to, as configured, for the runs page to show."""
+    settings: Settings = app.state.settings
+    return Defaults(
+        model_fast=settings.model_fast,
+        model_strong=settings.model_strong,
+        max_searches=settings.research_max_searches,
+        results_per_query=settings.research_results_per_query,
+        max_attempts=settings.research_max_attempts,
+        follow_ups=settings.research_follow_ups,
+        max_depth=settings.research_max_depth,
+        max_entities=settings.research_max_entities,
+        max_criteria=settings.research_max_criteria,
+        search_top_k=settings.search_top_k,
+        max_conv_turn=settings.max_conv_turn,
+        max_perspective=settings.max_perspective,
+        do_polish_article=ArticleRequest.model_fields["do_polish_article"].default,
     )
 
 

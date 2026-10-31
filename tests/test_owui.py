@@ -690,10 +690,12 @@ async def test_a_question_after_a_report_is_a_new_question(pipe, researcher):
 @pytest.mark.asyncio
 async def test_research_budgets_reach_the_service_only_when_set(pipe, researcher):
     researcher["questions"] = []
-    pipe.valves.MAX_ROUNDS = 2
+    pipe.valves.MAX_SEARCHES = 2
+    pipe.valves.FOLLOW_UPS = "off"
 
     await run(pipe, research("The Kvasir stone"))
 
     request = researcher["request"]
-    assert request.max_rounds == 2
-    assert request.queries_per_round is None
+    assert request.max_searches == 2
+    assert request.follow_ups is False
+    assert request.results_per_query is None

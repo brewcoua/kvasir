@@ -2,6 +2,10 @@
 
 Status: phases 0 to 5 built (report output, clarify, dashboard, verification, ranking and
 table, Open WebUI), and the phase 6 harness (`python -m kvasir.deep.evaluate`). Written 2026-10-31.
+Phases 7 to 9, [adaptive research](#adaptive-research), the
+[settings modal](#settings-modal) and the questions in the result, built 2026-11-01, without the
+baseline evaluation phase 7 asks for; phase 10 planned. The [Pipeline](#pipeline) section predates
+them: phase 7 replaced its `rounds` stage.
 
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
 rank, and its prompts ask for a Wikipedia page. This plan adds a second pipeline, `deep`, for
@@ -179,6 +183,126 @@ a launch panel. It stays one self-contained file with no external asset.
 The service has no authentication and binds `0.0.0.0`. A launch button changes nothing about who can
 start a run, since the API already allows it, but it makes it easier.
 
+## Adaptive research
+
+The rounds search a fixed number of times with broad queries, and stop when a round adds fewer than
+5 claims. A fact that only a specific query would find stays missing. The model works like an oral
+examiner instead: it asks about one thing at a time. A weak answer gets the question rephrased or
+narrowed, a strong one gets a harder follow-up, and the run stops when nothing worth asking is left
+or the budget is spent.
+
+### What the rounds get wrong
+
+| Problem | Where |
+| --- | --- |
+| What is missing exists only as free text in the notes, so the planner falls back to broad queries. | `RebuildNotes`, `PlanQueries` |
+| Page pieces are kept by closeness to the brief, not to the query that found the page, so a targeted search loses the fact it found. | `_relevant_pieces(encoder, brief, text)` in `pipeline.py` |
+| Intake reads the brief only. It does not know which question the page was fetched for. | `_intake` |
+| The stop rule counts claims, not what they answer: 5 off-topic claims continue, 3 that settle the main gap stop. | `MIN_NEW_CLAIMS` |
+| Whether a quote supports its claim is checked only after writing. A removed sentence leaves a gap nothing searches for again. | `_verify` |
+| The only targeted search is the ranking fill: one `entity criterion` query, one result, never reworded. | `_assess` |
+
+### Evidence
+
+| Rule | Evidence | Confidence |
+| --- | --- | --- |
+| Keep a queue of open questions. Add new ones only after removing duplicates; an action that adds nothing is skipped on the next step; a spent budget forces the answer. | Jina [node-DeepResearch](https://github.com/jina-ai/node-DeepResearch) README | medium |
+| Let a model judgement decide whether to search again. Token-level signals (FLARE, DRAGIN) need logits, which the gateway does not return. | Self-RAG, ReAct, Search-o1 | low: not read this session |
+| Verify retrieved evidence and feed the verdict back to retrieval. | [LLatrieval](https://arxiv.org/pdf/2311.07838) | low: abstract only |
+| Stop on novelty staying near zero over several steps, not on one weak step. | [arXiv 2608.15191](https://arxiv.org/pdf/2608.15191) | low: abstract only |
+| Too much and too little searching are two failure modes; prompted agents tend to stop early. | [DAS](https://alphaxiv.org/abs/2602.03304v1), [AgentCPM-Report](https://arxiv.org/pdf/2602.06540) | low: abstract only |
+| Pick the item that tells the most, stop once the estimate is certain enough. | Computerized adaptive testing; no source applies it to research agents | analogy, not evidence |
+
+No source found tracks each question's status, or checks quotes as they are gathered and sends
+failures back to the search. Both are this design's own, and the evaluation decides whether they
+help.
+
+### The ledger
+
+A `Question` in `deep/store.py`: id, text, parent id, depth, status, claim ids, queries tried,
+attempts, and what the last judgement found missing. Status is `open`, `weak`, `answered`,
+`contradicted` or `unresolved`.
+
+The notes become the ledger rendered in code: each question with its status, claim ids and what is
+missing. `RebuildNotes` goes, saving a call per round.
+
+For a ranking or a table, each cell still empty after the research becomes a question, searched
+for by the same loop with its own budget of 8 searches. Assessing the cell is its judgement, so it
+costs no `CheckAnswer` call.
+
+### The loop
+
+```
+decompose    model: brief -> 3 to 6 questions, the ledger's first entries
+repeat until the search budget is spent, nothing is open or weak, or 4 searches add no claim:
+  pick         code: the open or weak question with the fewest attempts, shallowest first
+  judge first  if claims arrived since its last judgement, judge it before spending a search
+  query        model: one query for that question, from the queries tried and what is missing
+  search       SearXNG, as now
+  fetch        as now
+  filter       pieces closest to the question, not the brief
+  intake       reads the question as well as the brief
+  judge        strong model: the question, and its closest claims with their quotes
+                 -> status, the ids of the claims whose quotes support the answer, what is
+                    missing, and, when answered and below the depth cap, up to 2 harder questions
+  dedupe       code: a new question too close by embedding to one in the ledger is dropped
+outline      from the ledger
+write        as now
+verify       as now
+render       adds an "Open questions" section from the unresolved questions
+```
+
+`query` is shaped by the question's attempt count, chosen in code; the model only writes the
+words.
+
+| Attempt | Query |
+| --- | --- |
+| 1 | general |
+| 2 | specific: exact terms, names, the year |
+| 3 | by source: `site:` an official source, or `filetype:pdf` |
+| 4 | a step back: the broader question the fact sits in |
+| after | the question is `unresolved` |
+
+The judge is the in-loop check. A claim it does not count as support does not answer the question,
+so a misquoted claim leaves the question weak and the next attempt searches for it. It costs one
+strong-model call per step. A separate check of each claim's quote at intake would cost one per
+piece, and intake is already about 144 calls a run, so it stays deferred.
+
+### Settings
+
+The request fields `max_rounds` and `queries_per_round` are removed; this is a breaking change,
+marked `feat!`.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `max_searches` | 16 | searches in the whole run, the same as 4 rounds of 4 today |
+| `results_per_query` | 3 | unchanged |
+| `max_attempts` | 4 | query shapes tried on one question before it is `unresolved` |
+| `follow_ups` | on | whether an answered question can add harder ones |
+| `max_depth` | 2 | how many levels of follow-ups below the first questions |
+
+## Settings modal
+
+The launch form's settings disclosure is replaced by a settings modal. Its values are kept in
+`localStorage` and sent with each run.
+
+- **Layout.** A `<dialog>`, like the result view. A sidebar lists the categories, each with an inline
+  SVG icon, since nothing loads from another origin. The pane shows the selected category's fields.
+- **Categories.** Research (the table above), Ranking (new `max_entities`, default 8,
+  and `max_criteria`, default 5, today the constants `ENTITIES` and `CRITERIA`), Article
+  (`search_top_k`, `max_conv_turn`, `max_perspective`, `do_polish_article`), Models (fast, strong).
+  The theme stays in the header.
+- **Defaults.** Each research default becomes a `Settings` field, so config sets it. The dashboard
+  reads the resolved values from a new `GET /v1/defaults` and shows them as each field's value.
+- **Overrides.** `localStorage` keeps only the fields the user changed, a value equal to the default
+  counting as unchanged, and each field has a reset.
+  A changed config default therefore reaches every field the user left alone.
+- **Precedence.** Request field, then config, then the code's constant. The dashboard's overrides
+  arrive as request fields.
+
+The Open WebUI pipe's valves follow: `MAX_ROUNDS` and `QUERIES_PER_ROUND` go, `MAX_SEARCHES` and
+`FOLLOW_UPS` arrive.
+
 ## Build order
 
 Each phase ends with its tests passing (dspy's `DummyLM` for model calls, a fake `httpx` for pages,
@@ -201,6 +325,19 @@ SearXNG.
 6. **Evaluation.** About 20 questions, a judge rubric, and a citation check, then the deferred
    experiments: thinking per step, `dspy.RLM` (present in the pinned dspy 3.3.0), MiniCheck,
    pairwise against listwise.
+7. **Adaptive loop.** First save a baseline: `data/eval/baseline/` is empty, so nothing yet shows
+   what the rounds score. Then the ledger, `Decompose`, `Judge`, the query shapes, filtering and
+   intake by question, the budget and the stall stop, the settings above as request fields and
+   `Settings` fields, and the pipe's valves. Remove the rounds and `RebuildNotes`. Done
+   when the checklist and citation scores match or beat the baseline at no more searches.
+8. **Settings modal.** `GET /v1/defaults`, the modal, the `localStorage` overrides, and the
+   launch form's disclosure removed. Done when a value changed in the modal survives a reload,
+   reaches the request, and its reset brings back the config default.
+9. **Ledger in the result.** Unresolved questions in the report, the ledger in the `done` frame,
+   progress events naming the question being searched, and the ledger in the run detail.
+10. **Repair.** A sentence `verify` removes reopens its question; one bounded search, then that
+    section alone is written again. Done when the evaluation shows fewer removed sentences without
+    a lower citation score.
 
 ## Open decisions
 

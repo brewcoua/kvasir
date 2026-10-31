@@ -55,6 +55,20 @@ def test_healthz_checks_no_dependency(client):
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
+def test_defaults_report_the_configuration(environment, monkeypatch):
+    monkeypatch.setenv("KVASIR_RESEARCH_MAX_SEARCHES", "9")
+    monkeypatch.setenv("KVASIR_RESEARCH_FOLLOW_UPS", "false")
+
+    with TestClient(main.app) as client:
+        defaults = client.get("/v1/defaults").json()
+
+    assert defaults["max_searches"] == 9
+    assert defaults["follow_ups"] is False
+    assert defaults["model_fast"] == ENVIRONMENT["KVASIR_MODEL_FAST"]
+    assert defaults["do_polish_article"] is True
+    assert defaults["search_top_k"] == 3
+
+
 def test_startup_fails_loudly_on_missing_configuration(monkeypatch):
     for name in ENVIRONMENT:
         monkeypatch.delenv(name, raising=False)
