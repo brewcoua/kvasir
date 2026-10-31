@@ -25,6 +25,64 @@ and no container image. This repository supplies the missing middle: a small Fas
 
 No paid search credential is needed, and no database, cache or queue.
 
+## Quickstart
+
+Run kvasir from a checkout with [uv](https://docs.astral.sh/uv/), against a local
+[Ollama](https://ollama.com/) and a throwaway SearXNG. This needs uv, Ollama, and podman or docker
+for SearXNG only.
+
+1. Pull the models the example configuration names:
+
+   ```bash
+   ollama pull qwen3.8:27b
+   ollama pull nomic-embed-text
+   ```
+
+   Ollama loads a model with a 4096-token context by default, which is too small for the article
+   and polish prompts. Start it with a larger one, for example `OLLAMA_CONTEXT_LENGTH=16384 ollama
+   serve`, or set that variable in its service unit. A larger context takes more memory, so more of
+   the model may run on the CPU.
+
+2. Start SearXNG with JSON output enabled, from the repository root:
+
+   ```bash
+   podman run -d --name searxng -p 127.0.0.1:8888:8080 \
+     -e SEARXNG_SECRET="$(openssl rand -hex 32)" -e FORCE_OWNERSHIP=false \
+     -v ./searxng/settings.yml:/etc/searxng/settings.yml:ro,Z \
+     docker.io/searxng/searxng:latest
+   ```
+
+   `docker` takes the same arguments. [`searxng/settings.yml`](searxng/settings.yml) only adds
+   `json` to the default formats. Check it answers in JSON:
+
+   ```bash
+   curl -s 'localhost:8888/search?q=test&format=json' | head -c 100
+   ```
+
+   Remove it with `podman rm -f searxng`.
+
+3. Configure and start kvasir:
+
+   ```bash
+   cp kvasir.example.toml kvasir.toml
+   uv run python -m kvasir
+   ```
+
+   Edit `kvasir.toml` to use other models. See [Configuration](#configuration) for every key.
+
+4. Check both dependencies are reachable:
+
+   ```console
+   $ curl -s localhost:8080/readyz
+   {"gateway":true,"searxng":true}
+   ```
+
+Then [research a topic](#research-a-topic). On one local model a run takes much longer than through
+a hosted gateway.
+
+kvasir binds `0.0.0.0:8080` and has no authentication, so on a laptop it is reachable from the local
+network.
+
 ## Run it
 
 ```bash
@@ -146,8 +204,14 @@ survive a restart.
 
 ## Configuration
 
-Everything is environment variables. The first five are required and the service will not start
-without them.
+Everything is an environment variable, or a key in a TOML file. The first five are required and the
+service will not start without them.
+
+The file is `$KVASIR_CONFIG`, or `kvasir.toml` in the working directory when that is unset. Its keys
+are the variable names in lower case without `KVASIR_`, so `KVASIR_MODEL_FAST` is `model_fast` and
+`OPENAI_API_BASE` is `openai_api_base`. A variable that is set wins over the file. An unknown key, or
+a `KVASIR_CONFIG` that cannot be read, stops startup. [`kvasir.example.toml`](kvasir.example.toml)
+is a complete file for a local Ollama.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -166,6 +230,13 @@ without them.
 | `KVASIR_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
 | `LOG_LEVEL` | `INFO` | Standard logging level. |
 | `LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
+| `KVASIR_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body. Unset sends nothing. |
+| `KVASIR_CONFIG` | `kvasir.toml` | Config file. Environment only. |
+
+Set `KVASIR_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts against
+each role's token budget, which is a few hundred tokens for the outline and article roles, so the
+answer is cut off before it starts. It goes in the request body rather than through litellm's own
+parameter, which litellm refuses for a model it does not know.
 
 `KVASIR_MODEL_FAST` and `KVASIR_MODEL_STRONG` must name a provider first: dspy routes on the leading
 `/`-separated segment and consumes it, and everything after it reaches the gateway untouched. For an

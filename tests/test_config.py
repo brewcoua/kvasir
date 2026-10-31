@@ -121,3 +121,77 @@ def test_settings_are_frozen():
 
     with pytest.raises(AttributeError):
         settings.model_fast = "other"  # type: ignore[misc]
+
+
+def _write(tmp_path, text):
+    path = tmp_path / "kvasir.toml"
+    path.write_text(text)
+    return str(path)
+
+
+def test_the_config_file_stands_in_for_the_environment(tmp_path):
+    path = _write(
+        tmp_path,
+        """
+openai_api_key = "file-key"
+openai_api_base = "http://localhost:11434/v1"
+model_fast = "openai/qwen3.8:27b"
+model_strong = "openai/qwen3.8:27b"
+searxng_url = "http://localhost:8888"
+max_threads = 2
+log_format = "text"
+reasoning_effort = "none"
+""",
+    )
+
+    settings = Settings.from_env({"KVASIR_CONFIG": path})
+
+    assert settings.openai_api_key == "file-key"
+    assert settings.model_strong == "openai/qwen3.8:27b"
+    assert settings.max_threads == 2
+    assert settings.log_format == "text"
+    assert settings.reasoning_effort == "none"
+
+
+def test_a_set_variable_wins_over_the_file_and_an_empty_one_does_not(tmp_path):
+    path = _write(tmp_path, 'model_fast = "openai/from-file"\nsearxng_url = "http://file"\n')
+
+    env = MINIMAL | {"KVASIR_CONFIG": path, "KVASIR_SEARXNG_URL": ""}
+    settings = Settings.from_env(env)
+
+    assert settings.model_fast == MINIMAL["KVASIR_MODEL_FAST"]
+    assert settings.searxng_url == "http://file"
+
+
+def test_reasoning_effort_defaults_to_unset():
+    assert Settings.from_env(MINIMAL).reasoning_effort is None
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ('model_fats = "openai/x"\n', "unknown keys in config file .*: model_fats"),
+        ("max_threads = [2]\n", "max_threads .* must be a string or an integer"),
+        ("max_threads = true\n", "max_threads .* must be a string or an integer"),
+        ("model_fast = \n", "not valid TOML"),
+    ],
+)
+def test_an_unusable_config_file_is_rejected(tmp_path, text, message):
+    with pytest.raises(ConfigError, match=message):
+        Settings.from_env(MINIMAL | {"KVASIR_CONFIG": _write(tmp_path, text)})
+
+
+def test_a_missing_config_file_is_an_error_rather_than_ignored(tmp_path):
+    with pytest.raises(ConfigError, match="cannot read config file"):
+        Settings.from_env(MINIMAL | {"KVASIR_CONFIG": str(tmp_path / "absent.toml")})
+
+
+def test_kvasir_toml_is_found_in_the_working_directory(tmp_path, monkeypatch, default_config_file):
+    _write(tmp_path, 'searxng_url = "http://from-cwd"\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("KVASIR_SEARXNG_URL", raising=False)
+    for name, value in MINIMAL.items():
+        if name != "KVASIR_SEARXNG_URL":
+            monkeypatch.setenv(name, value)
+
+    assert Settings.from_env().searxng_url == "http://from-cwd"

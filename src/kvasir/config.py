@@ -1,7 +1,8 @@
-"""Environment parsing. The only place in the service that reads os.environ.
+"""Configuration parsing. The only place in the service that reads os.environ or the config file.
 
-All configuration is environment variables, and missing required values raise at startup rather
-than on the first request.
+Configuration is environment variables, optionally backed by a TOML file whose keys are the
+`Settings` field names. A variable that is set wins over the file. Missing required values raise at
+startup rather than on the first request.
 
 OPENAI_API_KEY and OPENAI_API_BASE keep those names because they are the conventional spelling for
 an OpenAI-compatible endpoint, which is what the gateway serves. They are read here and passed
@@ -11,8 +12,9 @@ explicitly to the models and the encoder; nothing exports them back into the env
 from __future__ import annotations
 
 import os
+import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 from kvasir.storm.runtime import DEFAULT_MAX_THREADS
@@ -26,6 +28,13 @@ _REQUIRED = (
     "KVASIR_MODEL_STRONG",
     "KVASIR_SEARXNG_URL",
 )
+
+
+# Read when KVASIR_CONFIG is unset, if it exists, so a local start needs no variable at all.
+DEFAULT_CONFIG_FILE = Path("kvasir.toml")
+
+# Keep their conventional names; every other setting is KVASIR_ followed by its field name.
+_UNPREFIXED = ("OPENAI_API_KEY", "OPENAI_API_BASE", "LOG_LEVEL", "LOG_FORMAT")
 
 
 class ConfigError(Exception):
@@ -51,6 +60,7 @@ class Settings:
     max_perspective: int
     log_level: str
     log_format: str
+    reasoning_effort: str | None
 
     @property
     def sessions_dir(self) -> Path:
@@ -58,7 +68,20 @@ class Settings:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
-        env = os.environ if env is None else env
+        """Resolve from `env`, defaulting to os.environ, over the config file.
+
+        The file is KVASIR_CONFIG if set. `kvasir.toml` in the working directory is only picked up
+        for os.environ, so a mapping passed in is never mixed with whatever file sits nearby.
+        """
+        if env is None:
+            env = os.environ
+            path = env.get("KVASIR_CONFIG", "").strip() or (
+                DEFAULT_CONFIG_FILE if DEFAULT_CONFIG_FILE.is_file() else None
+            )
+        else:
+            path = env.get("KVASIR_CONFIG", "").strip() or None
+        if path is not None:
+            env = _read_file(Path(path)) | {k: v for k, v in env.items() if v.strip()}
 
         missing = [name for name in _REQUIRED if not env.get(name, "").strip()]
         if missing:
@@ -89,7 +112,38 @@ class Settings:
             # a run's lines interleave across threads, so they need to be parseable rather than
             # readable. `text` is for reading them by eye during development.
             log_format=_log_format(env),
+            # Sent only when set. Unset leaves the gateway's default, which for a thinking model
+            # served by Ollama spends each role's token budget on reasoning before any answer.
+            reasoning_effort=env.get("KVASIR_REASONING_EFFORT", "").strip() or None,
         )
+
+
+def _env_name(key: str) -> str:
+    name = key.upper()
+    return name if name in _UNPREFIXED else f"KVASIR_{name}"
+
+
+def _read_file(path: Path) -> dict[str, str]:
+    """The config file as the environment variables it stands for."""
+    try:
+        data = tomllib.loads(path.read_text())
+    except OSError as exc:
+        raise ConfigError(f"cannot read config file {path}: {exc.strerror}") from None
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"config file {path} is not valid TOML: {exc}") from None
+
+    known = {field.name for field in fields(Settings)}
+    unknown = sorted(set(data) - known)
+    if unknown:
+        raise ConfigError(f"unknown keys in config file {path}: {', '.join(unknown)}")
+
+    values = {}
+    for key, value in data.items():
+        # bool is an int subclass, and no setting is a boolean.
+        if isinstance(value, bool) or not isinstance(value, str | int):
+            raise ConfigError(f"{key} in config file {path} must be a string or an integer")
+        values[_env_name(key)] = str(value)
+    return values
 
 
 def _model(env: Mapping[str, str], name: str) -> str:

@@ -7,7 +7,7 @@ handler installed later in the lifespan and printed as plain text next to everyt
 With `log_config=None` the uvicorn loggers keep propagating and land on that handler like any other.
 
 The lifespan still calls `logs.configure`, so the app is self-sufficient under a test client.
-Reading the settings twice costs nothing: `Settings.from_env` is pure.
+Reading the settings twice costs nothing: `Settings.from_env` has no side effect.
 """
 
 from __future__ import annotations

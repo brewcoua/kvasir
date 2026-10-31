@@ -77,6 +77,13 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
         # simulated conversations diverging, which temperature 0 would suppress.
         temperature=1.0,
         top_p=0.9,
+        # In the body rather than as litellm's own `reasoning_effort`, which litellm refuses for a
+        # model it has no entry for, such as anything served by Ollama.
+        **(
+            {"extra_body": {"reasoning_effort": settings.reasoning_effort}}
+            if settings.reasoning_effort
+            else {}
+        ),
     )
 
 

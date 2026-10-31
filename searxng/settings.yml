@@ -1,0 +1,5 @@
+# The README's quickstart SearXNG. kvasir reads results as JSON, which SearXNG serves only when
+# listed here. The secret comes from SEARXNG_SECRET on the command line.
+use_default_settings: true
+search:
+  formats: [html, json]

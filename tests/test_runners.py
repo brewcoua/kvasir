@@ -168,3 +168,17 @@ def test_a_session_file_carries_no_credential(settings):
     assert MINIMAL["OPENAI_API_KEY"] not in json.dumps(state)
     for role in COSTORM_ROLES:
         assert not [key for key in state["lm_config"][role] if key.startswith("api_")]
+
+
+def test_reasoning_effort_is_not_sent_unless_set(storm):
+    for role in STORM_ROLES:
+        assert "extra_body" not in getattr(storm.lm_configs, role).kwargs, role
+
+
+def test_reasoning_effort_reaches_every_role_in_the_body(tmp_path):
+    settings = Settings.from_env(MINIMAL | {"KVASIR_REASONING_EFFORT": "none"})
+    storm = build_storm_runner(settings, tmp_path)
+    costorm = build_costorm_runner(settings, "a narrow topic")
+
+    for model in _models(storm.lm_configs, STORM_ROLES) + _models(costorm.lm_config, COSTORM_ROLES):
+        assert model.kwargs["extra_body"] == {"reasoning_effort": "none"}

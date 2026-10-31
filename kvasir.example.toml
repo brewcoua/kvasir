@@ -1,0 +1,17 @@
+# Copy to kvasir.toml, which is read from the working directory when KVASIR_CONFIG is unset.
+# Keys are the README's variables in lower case, without KVASIR_. A variable that is set wins.
+# These values run against a local Ollama and the SearXNG from the README's quickstart.
+
+openai_api_base = "http://localhost:11434/v1"
+openai_api_key = "ollama"  # required, ignored by Ollama
+model_fast = "openai/qwen3.8:27b"
+model_strong = "openai/qwen3.8:27b"
+embedding_model = "openai/nomic-embed-text:latest"
+# Thinking tokens count against each role's token budget, which leaves no room for the answer.
+reasoning_effort = "none"
+searxng_url = "http://localhost:8888"
+
+data_dir = "data"
+# Ollama answers one request at a time by default, so a wide pool only queues.
+max_threads = 2
+log_format = "text"
