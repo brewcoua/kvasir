@@ -84,8 +84,14 @@ class SearXNG(dspy.Retrieve):
                 with runtime.fetch_slot():
                     # A timeout, because upstream had none: a stalled instance held a pipeline
                     # thread and one of the process's fetch permits indefinitely.
+                    # SearXNG answers its base URL with a 308 to /search, and httpx does not
+                    # follow redirects unless asked, which left every query reading an HTML page.
                     response = httpx.get(
-                        self.searxng_api_url, headers=headers, params=params, timeout=30.0
+                        self.searxng_api_url,
+                        headers=headers,
+                        params=params,
+                        timeout=30.0,
+                        follow_redirects=True,
                     )
                 results = response.json()
 

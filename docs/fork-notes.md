@@ -233,6 +233,12 @@ succeeded.
   Model output is `"Name: description"`, and descriptions routinely contain a colon of their own, so
   a second colon raised `ValueError` and failed the turn. It uses `str.partition`, which also
   handles output with no colon at all.
+- `SearXNG.forward` did not follow redirects. Current SearXNG answers its base URL with a 308 to
+  `/search`, so every query read an HTML page, failed to parse, and the run collected no source. It
+  passes `follow_redirects=True`.
+- `StormInformationTable.retrieve_information` ranked snippets even when there were none. An empty
+  table's `(0, 0)` embedding failed the similarity product and with it the run. It returns no
+  information, and the section is written without any.
 
 ## Co-STORM session restore
 
@@ -319,7 +325,8 @@ class SearXNG(dspy.Retrieve):
 
 It raises `RuntimeError("You must supply searxng_api_url")` when the URL is empty. The instance must
 have the JSON output format enabled; one serving HTML only returns an empty result set rather than
-failing.
+failing. The base URL and `/search` both work, since the redirect from one to the other is
+followed.
 
 ### `dspy` is pinned at 3.3.0
 

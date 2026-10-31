@@ -46,7 +46,7 @@ def _searxng(monkeypatch, on_request):
     """A SearXNG retriever whose outbound request is `on_request` rather than a real one."""
     monkeypatch.setattr(
         "kvasir.storm.rm.httpx.get",
-        lambda url, headers=None, params=None, timeout=None: on_request(),
+        lambda url, **kwargs: on_request(),
     )
     return SearXNG(searxng_api_url="http://searxng.invalid")
 

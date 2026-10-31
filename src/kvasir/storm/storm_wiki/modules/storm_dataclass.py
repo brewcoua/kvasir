@@ -125,6 +125,10 @@ class StormInformationTable(InformationTable):
     def retrieve_information(
         self, queries: Union[List[str], str], search_top_k
     ) -> List[Information]:
+        # A research stage that found no source leaves nothing to rank, and an empty corpus has no
+        # embedding width for the similarity product to agree with.
+        if not self.collected_snippets:
+            return []
         selected_urls = []
         selected_snippets = []
         if type(queries) is str:

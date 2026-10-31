@@ -139,3 +139,42 @@ def test_a_finished_run_survives_an_unwritable_record(tmp_path):
     assert not (tmp_path / "run_config.json").exists()
     # The second artefact is written even though the first could not be.
     assert (tmp_path / "llm_call_history.jsonl").exists()
+
+
+def test_searxng_follows_its_redirect_to_search(monkeypatch):
+    """SearXNG answers its base URL with a 308 to /search, which httpx does not follow by default,
+    so every query came back as an HTML page and the run collected nothing."""
+    from kvasir.storm.rm import SearXNG
+
+    sent = {}
+
+    class _Response:
+        def json(self):
+            return {"results": [{"url": "https://example.invalid/a", "content": "about a"}]}
+
+    def get(url, **kwargs):
+        sent.update(kwargs)
+        return _Response()
+
+    monkeypatch.setattr("kvasir.storm.rm.httpx.get", get)
+    results = SearXNG(searxng_api_url="http://searxng.invalid")("a")
+
+    assert sent["follow_redirects"] is True
+    assert [result["url"] for result in results] == ["https://example.invalid/a"]
+
+
+def test_a_section_query_against_nothing_collected_retrieves_nothing():
+    """A research stage that found no source left an empty table, whose (0, 0) embedding failed
+    the similarity product and with it the whole run."""
+    import numpy as np
+
+    from kvasir.storm.storm_wiki.modules.storm_dataclass import StormInformationTable
+
+    class _Encoder:
+        def encode(self, texts):
+            return np.ones(768) if isinstance(texts, str) else np.empty((0, 0))
+
+    table = StormInformationTable([])
+    table.prepare_table_for_retrieval(_Encoder())
+
+    assert table.retrieve_information("History", search_top_k=3) == []
