@@ -6,14 +6,18 @@ x-release-please-start-version
 version: 0.4.0
 x-release-please-end
 license: MIT
-description: Stanford STORM and Co-STORM, as two models backed by a kvasir service.
+description: Cited research, STORM and Co-STORM, as three models backed by a kvasir service.
 """
 
 # Import this into Open WebUI under Admin, Functions, Import From Link, with the id `kvasir`. It
 # is read once and not reconciled from git, so repeat it after changing this file.
 #
-# One function, two models. Open WebUI namespaces a pipe as <function id>.<pipe id>, so the ids
-# below become `kvasir.storm` and `kvasir.co-storm`.
+# One function, three models. Open WebUI namespaces a pipe as <function id>.<pipe id>, so the ids
+# below become `kvasir.storm`, `kvasir.co-storm` and `kvasir.research`.
+#
+# Research answers a question with a cited report. Its first reply may be clarifying questions;
+# the next message answers them, or says `go`, and starts the run. The pipe keeps no state, so it
+# finds those questions by reading the chat back.
 #
 # STORM ignores conversation history: it researches a topic from scratch, so only the last user
 # message is used and a follow-up starts a new run. Co-STORM keys its session by the chat id, so
@@ -28,6 +32,7 @@ description: Stanford STORM and Co-STORM, as two models backed by a kvasir servi
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Literal
@@ -38,8 +43,12 @@ from pydantic import BaseModel, Field
 HEARTBEAT_SECONDS = 15
 STORM = "storm"
 CO_STORM = "co-storm"
+RESEARCH = "research"
 ADVANCE = "next"
 REPORT = "report"
+SKIP = "go"
+# The first line of a clarifying reply, which the next message looks for to know it answers one.
+CLARIFY_OPENER = "Before researching this, a few questions:"
 
 Emit = Callable[[dict[str, Any]], Awaitable[Any]] | None
 
@@ -53,8 +62,8 @@ class Pipe:
         RESEARCH_TIMEOUT_SECONDS: int = Field(
             default=3600,
             description=(
-                "Total timeout for one STORM run. A default run takes minutes to tens of minutes, "
-                "so this is deliberately far longer than a normal HTTP client default."
+                "Total timeout for one STORM or research run. A run takes minutes to tens of "
+                "minutes, so this is deliberately far longer than a normal HTTP client default."
             ),
         )
         SESSION_TIMEOUT_SECONDS: int = Field(
@@ -107,6 +116,22 @@ class Pipe:
             default=True,
             description="Append what the run spent: stage timings, tokens and cost.",
         )
+        CLARIFY: bool = Field(
+            default=True,
+            description=(
+                "Research: ask what the question leaves open before starting, when the service "
+                "finds anything worth asking."
+            ),
+        )
+        MAX_ROUNDS: int = Field(
+            default=0, description="Research: search rounds at most. 0 uses the service default."
+        )
+        QUERIES_PER_ROUND: int = Field(
+            default=0, description="Research: searches per round. 0 uses the service default."
+        )
+        RESULTS_PER_QUERY: int = Field(
+            default=0, description="Research: pages read per search. 0 uses the service default."
+        )
         TASK_TIMEOUT_SECONDS: int = Field(
             default=120,
             description=(
@@ -132,7 +157,11 @@ class Pipe:
         self.valves = self.Valves()
 
     def pipes(self) -> list[dict[str, str]]:
-        return [{"id": STORM, "name": "STORM"}, {"id": CO_STORM, "name": "Co-STORM"}]
+        return [
+            {"id": STORM, "name": "STORM"},
+            {"id": CO_STORM, "name": "Co-STORM"},
+            {"id": RESEARCH, "name": "Research"},
+        ]
 
     async def pipe(
         self,
@@ -157,17 +186,23 @@ class Pipe:
         think = _Reasoning()
 
         message = _last_user_message(body)
+        prompt = {
+            STORM: "a topic to research",
+            CO_STORM: "a topic for the round table",
+            RESEARCH: "a question to research",
+        }.get(kind, "a topic to research")
         if not message:
-            prompt = "a topic to research" if kind == STORM else "a topic for the round table"
             message = await _ask(__event_call__, f"Send {prompt}.")
         if not message:
-            yield f"Send {'a topic to research' if kind == STORM else 'a topic'}."
+            yield f"Send {'a topic' if kind == CO_STORM else prompt}."
             return
 
         heartbeat = asyncio.create_task(status.beat())
         try:
             if kind == CO_STORM:
                 work = self._costorm(body, message, options, chat, status, think, __metadata__)
+            elif kind == RESEARCH:
+                work = self._research(body, message, options, chat, status, think)
             else:
                 work = self._storm(body, message, options, chat, status, think, __event_call__)
             async for chunk in work:
@@ -268,6 +303,62 @@ class Pipe:
         request: dict[str, Any] = {"topic": topic, "do_polish_article": options.polish}
         request.update({name: value for name, value in optional.items() if value})
         return request
+
+    # -- Research ------------------------------------------------------------------------------
+
+    async def _research(
+        self,
+        body: dict[str, Any],
+        message: str,
+        options: "_Options",
+        chat: "_Chat",
+        status: "_Status",
+        think: "_Reasoning",
+    ) -> AsyncIterator[str]:
+        question, clarifications = _clarified(body, message)
+        timeout = aiohttp.ClientTimeout(total=self.valves.RESEARCH_TIMEOUT_SECONDS)
+        async with aiohttp.ClientSession(timeout=timeout) as http:
+            if question is None:
+                question = message
+                if self.valves.CLARIFY:
+                    await status.say("Checking whether the question needs clarifying")
+                    questions = await self._clarify(http, question)
+                    if questions:
+                        yield _clarifying(questions)
+                        return
+
+            await status.say(f"Researching {question}")
+            request: dict[str, Any] = {"question": question, "clarifications": clarifications}
+            optional = {
+                "model_fast": self.valves.MODEL_FAST,
+                "model_strong": self.valves.MODEL_STRONG,
+                "max_rounds": self.valves.MAX_ROUNDS,
+                "queries_per_round": self.valves.QUERIES_PER_ROUND,
+                "results_per_query": self.valves.RESULTS_PER_QUERY,
+            }
+            request.update({name: value for name, value in optional.items() if value})
+
+            out: dict[str, Any] = {}
+            yield think.start()
+            async for line in self._call(http, "POST", "/v1/research", request, think, status, out):
+                yield line
+            yield think.close()
+
+            result = out["result"]
+            yield result.get("report", "")
+            yield _research_notes(result)
+            await chat.sources(result.get("citations"))
+            yield await self._spent(http, out.get("run_id"), options)
+
+    async def _clarify(self, http: aiohttp.ClientSession, question: str) -> list[str]:
+        # One fast-model call, so it gets the task timeout rather than the run's.
+        timeout = aiohttp.ClientTimeout(total=self.valves.TASK_TIMEOUT_SECONDS)
+        async with http.post(
+            self._url("/v1/research/clarify"), json={"question": question}, timeout=timeout
+        ) as response:
+            if response.status != 200:
+                raise _ServiceError(response.status, await response.text())
+            return list((await response.json()).get("questions") or [])
 
     # -- Co-STORM ------------------------------------------------------------------------------
 
@@ -668,12 +759,64 @@ def _has_answer(body: dict[str, Any]) -> bool:
 def _last_user_message(body: dict[str, Any]) -> str:
     for message in reversed(body.get("messages") or []):
         if message.get("role") == "user":
-            content = message.get("content")
-            if isinstance(content, str):
-                return content.strip()
-            # Multimodal messages carry a list of parts; only the text matters for a topic.
-            if isinstance(content, list):
-                return " ".join(
-                    part.get("text", "") for part in content if part.get("type") == "text"
-                ).strip()
+            return _text(message.get("content"))
     return ""
+
+
+def _text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    # Multimodal messages carry a list of parts; only the text matters for a topic.
+    if isinstance(content, list):
+        return " ".join(
+            part.get("text", "") for part in content if part.get("type") == "text"
+        ).strip()
+    return ""
+
+
+def _clarified(body: dict[str, Any], message: str) -> tuple[str | None, list[dict[str, str]]]:
+    """The question a message answers clarifying questions for, and the answers, if it does.
+
+    `None` when the reply before it was not a clarifying one: the message is a new question.
+    """
+    messages = body.get("messages") or []
+    if len(messages) < 3 or messages[-2].get("role") != "assistant":
+        return None, []
+    asked = _text(messages[-2].get("content"))
+    if not asked.startswith(CLARIFY_OPENER):
+        return None, []
+    question = _text(messages[-3].get("content"))
+    if message.strip().lstrip("/").lower() == SKIP:
+        return question, []
+    questions = re.findall(r"^\d+\. (.+)$", asked, re.MULTILINE)
+    # One answer to all of them: a reply to a numbered list rarely keeps to its numbering.
+    return question, [{"question": "\n".join(questions), "answer": message}]
+
+
+def _clarifying(questions: list[str]) -> str:
+    listed = "\n".join(f"{number}. {question}" for number, question in enumerate(questions, 1))
+    return (
+        f"{CLARIFY_OPENER}\n\n{listed}\n\n"
+        f"Answer them in one message, or reply `{SKIP}` to research without answering."
+    )
+
+
+def _research_notes(result: dict[str, Any]) -> str:
+    """What the brief assumed and what verification removed, collapsed under the report."""
+    notes = ""
+    assumptions = result.get("assumptions") or []
+    if assumptions:
+        listed = "\n".join(f"- {assumption}" for assumption in assumptions)
+        notes += (
+            f"\n\n<details>\n<summary>Assumed ({len(assumptions)})</summary>\n\n"
+            f"{listed}\n\n</details>"
+        )
+    removed = result.get("removed") or []
+    if removed:
+        listed = "\n".join(f"- {r['sentence']} _{r['reason']}_" for r in removed)
+        notes += (
+            f"\n\n<details>\n<summary>Removed by verification ({len(removed)})</summary>\n\n"
+            f"Each sentence cited claims whose quotes did not support it. Its [n] markers are "
+            f"claim ids, not source numbers.\n\n{listed}\n\n</details>"
+        )
+    return notes

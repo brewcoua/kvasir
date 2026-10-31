@@ -15,7 +15,15 @@ import pytest
 import uvicorn
 
 from kvasir import main
-from kvasir.models import ArticleResult, Citation, Report, SessionInfo, Turn
+from kvasir.models import (
+    ArticleResult,
+    Citation,
+    RemovedSentence,
+    Report,
+    ResearchResult,
+    SessionInfo,
+    Turn,
+)
 
 PIPE_PATH = Path(__file__).parents[1] / "owui" / "pipe.py"
 
@@ -44,6 +52,17 @@ AGENT_TURN = Turn(
     utterance_type="Support",
     citations=[Citation(index=1, url="https://example.org/a", title="Provenance", snippet="s")],
     mind_map_reorganised=True,
+)
+
+RESEARCH = ResearchResult(
+    report="# The Kvasir stone\n\nIt was catalogued in 1783 [1].",
+    assumptions=["Taken to mean the runestone, not the mead."],
+    citations=[Citation(index=1, url="https://example.org/a", title="Parish survey", snippet="s")],
+    claims=[],
+    removed=[
+        RemovedSentence(section="Origin", sentence="It is Roman [4].", reason="no quote says so")
+    ],
+    duration_seconds=300.0,
 )
 
 USER_TURN = Turn(
@@ -192,10 +211,11 @@ USER: The Kvasir stone
 </chat_history>"""
 
 
-def test_it_exposes_both_models():
+def test_it_exposes_the_three_models():
     assert load_pipe().Pipe().pipes() == [
         {"id": "storm", "name": "STORM"},
         {"id": "co-storm", "name": "Co-STORM"},
+        {"id": "research", "name": "Research"},
     ]
 
 
@@ -563,3 +583,117 @@ async def test_an_empty_message_asks_for_a_topic(pipe, engine):
     body = {"model": "kvasir.co-storm", "messages": []}
 
     assert await run(pipe, body, None, METADATA) == "Send a topic."
+
+
+# -- Research ----------------------------------------------------------------------------------
+
+
+def research(*messages):
+    roles = ["user", "assistant"]
+    return {
+        "model": "kvasir.research",
+        "messages": [
+            {"role": roles[number % 2], "content": text} for number, text in enumerate(messages)
+        ],
+    }
+
+
+@pytest.fixture
+def researcher(service, monkeypatch):
+    """Fakes clarify and the research run, recording what the pipe asked of each."""
+    calls = {"questions": ["Which stone do you mean?", "From what period?"]}
+
+    def clarify(settings, question):
+        calls["clarified"] = question
+        return calls["questions"]
+
+    def run_research(settings, request, stream):
+        stream.publish("research", "searching")
+        calls["request"] = request
+        return RESEARCH
+
+    monkeypatch.setattr(main, "clarify", clarify)
+    monkeypatch.setattr(main, "run_research", run_research)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_a_new_question_gets_clarifying_questions_and_no_run(pipe, researcher):
+    events = Events()
+    answer = await run(pipe, research("The Kvasir stone"), events)
+
+    assert researcher["clarified"] == "The Kvasir stone"
+    assert "request" not in researcher
+    assert answer.startswith("Before researching this, a few questions:")
+    assert "1. Which stone do you mean?\n2. From what period?" in answer
+    assert "<think>" not in answer
+    assert events.of("notification") == []
+
+
+@pytest.mark.asyncio
+async def test_the_reply_answers_the_questions_and_starts_the_run(pipe, researcher):
+    asked = await run(pipe, research("The Kvasir stone"))
+    events = Events()
+
+    answer = await run(
+        pipe, research("The Kvasir stone", asked, "The runestone, Viking age"), events
+    )
+
+    request = researcher["request"]
+    assert request.question == "The Kvasir stone"
+    assert [(c.question, c.answer) for c in request.clarifications] == [
+        ("Which stone do you mean?\nFrom what period?", "The runestone, Viking age")
+    ]
+    assert answer.index("</think>") < answer.index("# The Kvasir stone")
+    assert "<summary>Assumed (1)</summary>" in answer
+    assert "It is Roman [4]. _no quote says so_" in answer
+    assert [s["source"]["name"] for s in events.of("source")] == ["[1] Parish survey"]
+
+
+@pytest.mark.asyncio
+async def test_go_researches_without_answers(pipe, researcher):
+    asked = await run(pipe, research("The Kvasir stone"))
+
+    await run(pipe, research("The Kvasir stone", asked, "Go"))
+
+    assert researcher["request"].question == "The Kvasir stone"
+    assert researcher["request"].clarifications == []
+
+
+@pytest.mark.asyncio
+async def test_a_clear_question_researches_right_away(pipe, researcher):
+    researcher["questions"] = []
+
+    answer = await run(pipe, research("The Kvasir stone"))
+
+    assert researcher["request"].question == "The Kvasir stone"
+    assert "# The Kvasir stone" in answer
+
+
+@pytest.mark.asyncio
+async def test_clarifying_can_be_turned_off(pipe, researcher):
+    pipe.valves.CLARIFY = False
+
+    await run(pipe, research("The Kvasir stone"))
+
+    assert "clarified" not in researcher
+    assert researcher["request"].clarifications == []
+
+
+@pytest.mark.asyncio
+async def test_a_question_after_a_report_is_a_new_question(pipe, researcher):
+    await run(pipe, research("The Kvasir stone", "# A report", "And the Rök stone?"))
+
+    assert researcher["clarified"] == "And the Rök stone?"
+
+
+@pytest.mark.asyncio
+async def test_research_budgets_reach_the_service_only_when_set(pipe, researcher):
+    researcher["questions"] = []
+    pipe.valves.MAX_ROUNDS = 2
+
+    await run(pipe, research("The Kvasir stone"))
+
+    request = researcher["request"]
+    assert request.max_rounds == 2
+    assert request.queries_per_round is None

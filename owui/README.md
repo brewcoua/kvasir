@@ -1,8 +1,8 @@
 # Open WebUI function
 
-One Pipe function, `pipe.py`, that drives a [kvasir](../README.md) service and exposes two models:
-**STORM** researches a topic and returns a cited article, **Co-STORM** holds a round-table
-conversation.
+One Pipe function, `pipe.py`, that drives a [kvasir](../README.md) service and exposes three models:
+**Research** answers a question with a cited report, **STORM** researches a topic and returns a
+cited article, **Co-STORM** holds a round-table conversation.
 
 ## Install
 
@@ -27,14 +27,14 @@ Open WebUI keeps functions in its own database. It reads this file once, at impo
    gh release download --pattern pipe.py --repo brewcoua/kvasir
    gh attestation verify pipe.py --repo brewcoua/kvasir
    ```
-4. On the create page, set the id to `kvasir`. The id prefixes both models, so this is what makes
-   them `kvasir.storm` and `kvasir.co-storm`. The name and description come from the file's
+4. On the create page, set the id to `kvasir`. The id prefixes every model, so this is what makes
+   them `kvasir.research`, `kvasir.storm` and `kvasir.co-storm`. The name and description come from the file's
    header, so leave them.
 5. Save, then set `KVASIR_URL` under the function's valves, unless the default
    `http://kvasir:8080` already resolves.
 6. Enable the function.
 
-Verify: **STORM** and **Co-STORM** appear in the model picker. Send a short topic to STORM. Within
+Verify: **Research**, **STORM** and **Co-STORM** appear in the model picker. Send a short topic to STORM. Within
 a few seconds the status line should read `research: identifying perspectives` and a collapsible
 block below it should start filling with stage lines. If neither appears, the service is
 unreachable, and the chat will say so rather than hang.
@@ -77,6 +77,22 @@ case.
 Alternatively, point Open WebUI at a different model for this entirely, under **Admin Settings**,
 **Interface**, **Task Model**. Then these requests never reach the function.
 
+## Research
+
+A new question first goes to `POST /v1/research/clarify`, one fast-model call. If the service finds
+something worth asking, the reply is a numbered list of questions and no run starts. Answer them
+in one message, or reply `go` to research without answering. Either starts the run on the
+original question, with your reply passed as the answer to all the listed questions. If there is
+nothing to ask, the run starts straight away. Turn the questions off with `CLARIFY`.
+
+The function keeps no state. It recognises a reply to its questions because the previous assistant
+message opens with `Before researching this, a few questions:`, so any other message, including
+one after a finished report, is a new question.
+
+The reply is the report, which may open with a ranking or comparison table, followed by two
+collapsed blocks: what the brief assumed, and the sentences verification removed with the reason
+for each. Sources become citations, as for STORM.
+
 ## STORM
 
 The last message is the topic, and conversation history is deliberately ignored: STORM researches
@@ -115,7 +131,7 @@ reply, under one reasoning block.
 | Valve | Default | Effect |
 | --- | --- | --- |
 | `KVASIR_URL` | `http://kvasir:8080` | Base URL of the service. |
-| `RESEARCH_TIMEOUT_SECONDS` | `3600` | Total timeout for one STORM run. |
+| `RESEARCH_TIMEOUT_SECONDS` | `3600` | Total timeout for one STORM or research run. |
 | `SESSION_TIMEOUT_SECONDS` | `1800` | Total timeout for one Co-STORM call. Warm start is the slow one. |
 | `MODEL_FAST` | empty | Overrides the service's fast model. Empty leaves it to the service. |
 | `MODEL_STRONG` | empty | Overrides the service's strong model. |
@@ -126,7 +142,11 @@ reply, under one reasoning block.
 | `ADVANCE_AFTER_WARM_START` | `true` | Take one agent turn straight after warm start, so the first reply has something to read rather than only a list of experts. |
 | `CONFIRM_RERUN` | `true` | Ask before researching again in a chat that already holds an article. |
 | `SHOW_USAGE` | `true` | Append what the run spent. |
-| `TASK_TIMEOUT_SECONDS` | `120` | Timeout for one of Open WebUI's own task calls. |
+| `CLARIFY` | `true` | Research: ask what a new question leaves open before starting. |
+| `MAX_ROUNDS` | `0` | Research: search rounds at most. `0` leaves it to the service. |
+| `QUERIES_PER_ROUND` | `0` | Research: searches per round. `0` leaves it to the service. |
+| `RESULTS_PER_QUERY` | `0` | Research: pages read per search. `0` leaves it to the service. |
+| `TASK_TIMEOUT_SECONDS` | `120` | Timeout for one of Open WebUI's own task calls, and for research's clarify call. |
 
 Empty and zero mean "leave it to the service", so its defaults stay in one place rather than being
 shadowed here.

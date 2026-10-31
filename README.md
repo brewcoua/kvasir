@@ -377,8 +377,8 @@ by stage, by role and by model, which is enough to decide whether the defaults s
 
 ## Open WebUI
 
-One Pipe function lives under [`owui/`](owui/), exposing STORM and Co-STORM as two
-models. It writes a run's progress into the message as it happens, turns sources into citations,
+One Pipe function lives under [`owui/`](owui/), exposing research, STORM and Co-STORM
+as three models. Research asks its clarifying questions as a first reply. It writes a run's progress into the message as it happens, turns sources into citations,
 and reports what the run spent. Open WebUI's own title, tag and follow-up generation is routed to
 `POST /v1/tasks`, so naming a chat does not cost a run. Installation instructions and a valve
 reference are in [`owui/README.md`](owui/README.md).
