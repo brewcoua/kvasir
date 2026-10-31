@@ -1332,6 +1332,22 @@
           evidence.append(wrapper);
           content.append(evidence);
         }
+        if (result.removed?.length > 0) {
+          const removed = document.createElement("details");
+          removed.append(
+            node("summary", "", `Removed by verification (${result.removed.length} sentences)`),
+          );
+          // The markers here are claim ids, as the writer wrote them, so they match the evidence
+          // table's # column rather than the source numbers above.
+          removed.append(node("p", "meta", "[n] is the claim id in the evidence table."));
+          const wrapper = table(
+            [["section", false], ["sentence", false], ["reason", false]],
+            result.removed.map((item) => [item.section, item.sentence, item.reason]),
+          );
+          wrapper.classList.add("claims");
+          removed.append(wrapper);
+          content.append(removed);
+        }
         el("popover").hidden = true;
         el("result").showModal();
         el("result-content").scrollTop = 0;

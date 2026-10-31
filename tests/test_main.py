@@ -152,7 +152,7 @@ def test_research_streams_progress_then_the_report(client, monkeypatch):
     assert seen["request"].clarifications[0].answer == "Europe"
     [run] = client.get("/v1/runs").json()
     assert run["kind"] == "research"
-    assert run["planned_stages"] == ["brief", "research", "write"]
+    assert run["planned_stages"] == ["brief", "research", "write", "verify"]
 
 
 def test_research_rejects_an_empty_question(client):

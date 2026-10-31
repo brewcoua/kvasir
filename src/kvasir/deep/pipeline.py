@@ -18,6 +18,7 @@ import dspy  # type: ignore[import-untyped]
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 
 from kvasir.config import Settings
+from kvasir.deep import verify
 from kvasir.deep.fetch import FetchError, fetch_text, split
 from kvasir.deep.render import render
 from kvasir.deep.signatures import (
@@ -27,11 +28,18 @@ from kvasir.deep.signatures import (
     Outline,
     PlanQueries,
     RebuildNotes,
+    Verify,
     WriteSection,
 )
 from kvasir.deep.store import Claim, closest
-from kvasir.models import Clarification, ResearchClaim, ResearchRequest, ResearchResult
-from kvasir.progress import BRIEF, RESEARCH, WRITE, ProgressStream
+from kvasir.models import (
+    Clarification,
+    RemovedSentence,
+    ResearchClaim,
+    ResearchRequest,
+    ResearchResult,
+)
+from kvasir.progress import BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.runners import build_research_models, build_research_tools
 from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder
@@ -184,14 +192,57 @@ def run_research(
         sections.append((title, text))
     stream.publish(WRITE, "assembled the report", len(titles), len(titles))
 
-    report, citations = render(sections, {claim.id: claim for claim in claims})
+    by_id = {claim.id: claim for claim in claims}
+    sections, removed = _verify(models["verify"], sections, by_id, stream)
+
+    report, citations = render(sections, by_id)
     return ResearchResult(
         report=report,
         assumptions=list(framed.assumptions),
         citations=citations,
         claims=[ResearchClaim(**vars(claim)) for claim in claims],
+        removed=removed,
         duration_seconds=round(time.monotonic() - started, 1),
     )
+
+
+def _verify(
+    model: GatewayModel,
+    sections: list[tuple[str, str]],
+    claims: dict[int, Claim],
+    stream: ProgressStream,
+) -> tuple[list[tuple[str, str]], list[RemovedSentence]]:
+    total = sum(verify.count(text) for _, text in sections)
+    done = 0
+    stream.publish(VERIFY, f"checking {total} cited sentences against their quotes", 0, total)
+
+    def check(sentence: str, evidence: list[Claim]) -> tuple[bool, str]:
+        try:
+            verdict = _predict(model, Verify, sentence=sentence, evidence=_quoted_claims(evidence))
+        except AdapterParseError as exc:
+            # Unchecked rather than removed: a verdict that cannot be read says nothing about
+            # the sentence.
+            logger.warning("could not read the verdict on %r: %s", sentence, exc)
+            return True, ""
+        return bool(verdict.supported), str(verdict.reason)
+
+    def checked() -> None:
+        nonlocal done
+        done += 1
+        stream.publish(VERIFY, f"checked {done} of {total} cited sentences", done, total)
+
+    verified: list[tuple[str, str]] = []
+    removed: list[RemovedSentence] = []
+    for title, text in sections:
+        kept, dropped = verify.verify(title, text, claims, check, checked)
+        verified.append((title, kept))
+        removed.extend(dropped)
+    stream.publish(VERIFY, f"removed {len(removed)} of {total} cited sentences", total, total)
+    return verified, removed
+
+
+def _quoted_claims(claims: list[Claim]) -> str:
+    return "\n".join(f"[{claim.id}] {claim.text}\n    quote: {claim.quote}" for claim in claims)
 
 
 def _predict(model: GatewayModel, signature: type[dspy.Signature], **inputs: Any) -> Any:

@@ -25,6 +25,7 @@ POLISH = "polish"
 
 BRIEF = "brief"
 WRITE = "write"
+VERIFY = "verify"
 
 WARM_START = "warm_start"
 TURN = "turn"

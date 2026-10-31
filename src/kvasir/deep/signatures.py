@@ -107,3 +107,17 @@ class WriteSection(dspy.Signature):
     earlier_sections: str = dspy.InputField(desc="the start of each section already written")
     evidence: str = dspy.InputField(desc="one claim per line, prefixed by its id in brackets")
     text: str = dspy.OutputField(desc="the section's paragraphs, in markdown")
+
+
+class Verify(dspy.Signature):
+    """Decide whether a sentence from a report is supported by the evidence it cites.
+
+    Supported means every fact in the sentence is stated in the quotes, or follows directly from
+    them. A sentence that adds a number, a name or a comparison the quotes do not contain is not
+    supported. Wording may differ.
+    """
+
+    sentence: str = dspy.InputField()
+    evidence: str = dspy.InputField(desc="each cited claim, with the quote it was read from")
+    supported: bool = dspy.OutputField()
+    reason: str = dspy.OutputField(desc="one short sentence")

@@ -71,6 +71,7 @@ _RESEARCH_ROLES = {
     "notes": ("fast", 2000),
     "outline": ("strong", 500),
     "write": ("strong", 2000),
+    "verify": ("fast", 600),
 }
 
 

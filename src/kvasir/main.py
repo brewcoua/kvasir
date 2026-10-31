@@ -38,7 +38,16 @@ from kvasir.models import (
     TaskRequest,
     TaskResponse,
 )
-from kvasir.progress import ARTICLE, BRIEF, OUTLINE, POLISH, RESEARCH, WRITE, ProgressStream
+from kvasir.progress import (
+    ARTICLE,
+    BRIEF,
+    OUTLINE,
+    POLISH,
+    RESEARCH,
+    VERIFY,
+    WRITE,
+    ProgressStream,
+)
 from kvasir.run_store import RunStore
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import Run, RunNotFound, RunRegistry
@@ -156,7 +165,7 @@ async def research(request: ResearchRequest) -> Response:
         f"research {request.question!r}",
         "research",
         request.question,
-        [BRIEF, RESEARCH, WRITE],
+        [BRIEF, RESEARCH, WRITE, VERIFY],
     )
 
 

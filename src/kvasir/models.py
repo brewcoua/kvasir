@@ -100,6 +100,15 @@ class ResearchClaim(BaseModel):
     round: int
 
 
+class RemovedSentence(BaseModel):
+    """A sentence verification took out of the report, and why."""
+
+    section: str
+    # As written, so its `[n]` markers are claim ids rather than source numbers.
+    sentence: str
+    reason: str
+
+
 class ResearchResult(BaseModel):
     """Payload of the `done` event of a research run."""
 
@@ -109,6 +118,8 @@ class ResearchResult(BaseModel):
     citations: list[Citation]
     # Every claim gathered, cited or not, so a reader can audit the report against its evidence.
     claims: list[ResearchClaim]
+    # Defaulted, so a run stored before verification existed still loads.
+    removed: list[RemovedSentence] = []
     duration_seconds: float
 
 

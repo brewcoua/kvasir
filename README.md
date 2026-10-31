@@ -131,7 +131,8 @@ there. A run's scratch directory also lives under `/tmp`.
 
 `POST /v1/research` answers a question with a cited report. It searches in rounds, reads each page in
 pieces small enough for a 16k context, keeps only claims whose quote appears word for word on the
-page, and writes the report one section at a time from those claims. See
+page, and writes the report one section at a time from those claims. Each sentence that cites a
+claim is then checked against the claim's quote, and taken out if the quote does not support it. See
 [`docs/deep-research-plan.md`](docs/deep-research-plan.md) for the design.
 
 1. Optionally, ask what the question leaves open. This is one fast-model call, like `/v1/tasks`: it
@@ -154,9 +155,10 @@ page, and writes the report one section at a time from those claims. See
           "clarifications": [{"question": "What hardware?", "answer": "One 24 GB GPU"}]}'
    ```
 
-   It streams like an article run. Stages are `brief`, `research` and `write`. The `done` frame
-   carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief decided on your
-   behalf), `citations`, `claims` (every claim gathered, each with its quote and source) and
+   It streams like an article run. Stages are `brief`, `research`, `write` and `verify`. The
+   `done` frame carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief
+   decided on your behalf), `citations`, `claims` (every claim gathered, each with its quote and
+   source), `removed` (each sentence verification took out, with its section and the reason) and
    `duration_seconds`.
 
 Optional fields: `max_rounds` (default 4), `queries_per_round` (4), `results_per_query` (3),

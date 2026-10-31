@@ -6,7 +6,7 @@ import pytest
 from dspy.utils.dummies import DummyLM
 
 from kvasir.config import Settings
-from kvasir.deep import fetch, pipeline
+from kvasir.deep import fetch, pipeline, verify
 from kvasir.deep.fetch import FetchError, extract, split
 from kvasir.deep.render import render
 from kvasir.deep.store import Claim
@@ -110,7 +110,11 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
             ],
             "notes": [{"notes_out": "Found in 1904 [1]."}],
             "outline": [{"sections": ["Findings"]}],
-            "write": [{"text": "It was found in 1904 [1][7]."}],
+            "write": [{"text": "It was found in 1904 [1][7]. It is made of gold [1]."}],
+            "verify": [
+                {"supported": True, "reason": "the quote gives the year"},
+                {"supported": False, "reason": "the quote says nothing about gold"},
+            ],
         },
     )
     hits = [
@@ -137,6 +141,9 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
     # below the saturation bar, so the run stops after one round rather than asking for a plan.
     assert [(c.id, c.text, c.url) for c in result.claims] == [(1, "Found in 1904", "https://a")]
     assert result.report == "## Findings\n\nIt was found in 1904 [1]."
+    assert [(r.sentence, r.reason) for r in result.removed] == [
+        ("It is made of gold [1].", "the quote says nothing about gold")
+    ]
     assert [(c.index, c.url, c.snippet) for c in result.citations] == [
         (1, "https://a", "found in   1904")
     ]
@@ -145,7 +152,7 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
     # One event per piece read, each naming its page, the snippet fallback included.
     assert ("research", "round 1: page 1/2, part 1/1: A") in stream.events
     assert ("research", "round 1: page 2/2, part 1/1: B") in stream.events
-    assert stream.events[-1] == ("write", "assembled the report")
+    assert stream.events[-1] == ("verify", "removed 1 of 2 cited sentences")
 
 
 @pytest.mark.parametrize(
@@ -230,3 +237,69 @@ def test_clarify_asks_at_most_three_questions(settings, monkeypatch):
     fake_models(monkeypatch, {"clarify": [{"questions": ["a?", "b?", "c?", "d?"]}]})
 
     assert pipeline.clarify(settings, "best battery makers") == ["a?", "b?", "c?"]
+
+
+def test_a_sentence_keeps_the_markers_after_its_full_stop():
+    line = "Qwen fits in 24 GB [1]. It runs at 30 tok/s, e.g. on a 3090. [2][3] Unsure."
+
+    assert verify.sentences(line) == [
+        "Qwen fits in 24 GB [1].",
+        "It runs at 30 tok/s, e.g. on a 3090. [2][3]",
+        "Unsure.",
+    ]
+
+
+def test_verification_removes_only_unsupported_cited_sentences():
+    claims = {1: claim(1, "https://a"), 2: claim(2, "https://b")}
+    text = "\n".join(
+        [
+            "Intro without citation.",
+            "Supported [1]. Unsupported [2]. Invented [9].",
+            "- Only unsupported [2].",
+            "- Kept item [1].",
+            "| Model | VRAM [2] |",
+            "### Heading [2]",
+        ]
+    )
+    asked = []
+
+    def check(sentence, evidence):
+        asked.append((sentence, [c.id for c in evidence]))
+        return (1 in [c.id for c in evidence], "no support")
+
+    kept, removed = verify.verify("Findings", text, claims, check)
+
+    assert kept == "\n".join(
+        [
+            "Intro without citation.",
+            "Supported [1].",
+            "- Kept item [1].",
+            "| Model | VRAM [2] |",
+            "### Heading [2]",
+        ]
+    )
+    assert [(r.sentence, r.reason) for r in removed] == [
+        ("Unsupported [2].", "no support"),
+        ("Invented [9].", "cites no claim the research gathered"),
+        ("Only unsupported [2].", "no support"),
+    ]
+    # An invented id costs no model call.
+    assert [sentence for sentence, _ in asked] == [
+        "Supported [1].",
+        "Unsupported [2].",
+        "Only unsupported [2].",
+        "Kept item [1].",
+    ]
+    assert verify.count(text) == 5
+
+
+def test_an_unreadable_verdict_keeps_the_sentence(monkeypatch):
+    model = DummyLM([{"nonsense": "x"}] * 4)
+    stream = Stream()
+
+    sections, removed = pipeline._verify(
+        model, [("S", "A fact [1].")], {1: claim(1, "https://a")}, stream
+    )
+
+    assert sections == [("S", "A fact [1].")]
+    assert removed == []
