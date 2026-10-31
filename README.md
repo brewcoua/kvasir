@@ -7,6 +7,10 @@ citations by simulating multi-perspective research conversations. Co-STORM is it
 sibling, a turn-based round table between you and several agents that accumulates a shared mind
 map.
 
+Alongside them, kvasir runs its own deep research pipeline, built for a small local model: it
+answers a question with a report whose every citation points to a quote read on the page. See
+[Research a question](#research-a-question).
+
 Upstream ships a Python library and a Streamlit demo labelled for local development, but no server
 and no container image. This repository supplies the missing middle: a small FastAPI service, a
 `linux/amd64` image on GHCR, and an Open WebUI Pipe function.
@@ -122,6 +126,41 @@ The image runs as uid 65532 under a read-only root filesystem. Only `/data` and 
 writable. `/tmp` is required, not optional: dspy creates a disk cache directory while it is being
 imported, whether or not caching is on, and `src/kvasir/storm/__init__.py` points `DSPY_CACHEDIR`
 there. A run's scratch directory also lives under `/tmp`.
+
+## Research a question
+
+`POST /v1/research` answers a question with a cited report. It searches in rounds, reads each page in
+pieces small enough for a 16k context, keeps only claims whose quote appears word for word on the
+page, and writes the report one section at a time from those claims. See
+[`docs/deep-research-plan.md`](docs/deep-research-plan.md) for the design.
+
+1. Optionally, ask what the question leaves open. This is one fast-model call, like `/v1/tasks`: it
+   registers no run and takes no slot.
+
+   ```bash
+   curl -s -X POST localhost:8080/v1/research/clarify \
+     -H 'content-type: application/json' \
+     -d '{"question": "Which open-weight LLMs are best for local coding?"}'
+   ```
+
+   The answer is `{"questions": [...]}`, at most three, and empty when the question is clear.
+
+2. Start the run, with any answers:
+
+   ```bash
+   curl -N -X POST localhost:8080/v1/research \
+     -H 'content-type: application/json' \
+     -d '{"question": "Which open-weight LLMs are best for local coding?",
+          "clarifications": [{"question": "What hardware?", "answer": "One 24 GB GPU"}]}'
+   ```
+
+   It streams like an article run. Stages are `brief`, `research` and `write`. The `done` frame
+   carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief decided on your
+   behalf), `citations`, `claims` (every claim gathered, each with its quote and source) and
+   `duration_seconds`.
+
+Optional fields: `max_rounds` (default 4), `queries_per_round` (4), `results_per_query` (3),
+`model_fast`, `model_strong`. A round that adds fewer than 5 claims ends the research early.
 
 ## Write an article
 

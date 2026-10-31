@@ -23,6 +23,9 @@ OUTLINE = "outline"
 ARTICLE = "article"
 POLISH = "polish"
 
+BRIEF = "brief"
+WRITE = "write"
+
 WARM_START = "warm_start"
 TURN = "turn"
 MIND_MAP = "mind_map"

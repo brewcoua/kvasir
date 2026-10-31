@@ -17,15 +17,19 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
 
 from kvasir import conversation, logs
 from kvasir.article import run_article
 from kvasir.config import Settings, apply_environment
+from kvasir.deep.pipeline import clarify, run_research
 from kvasir.models import (
     ArticleRequest,
+    ClarifyRequest,
+    ClarifyResponse,
     Error,
+    ResearchRequest,
     RunDetail,
+    RunResult,
     RunStarted,
     RunSummary,
     SessionInfo,
@@ -34,7 +38,7 @@ from kvasir.models import (
     TaskRequest,
     TaskResponse,
 )
-from kvasir.progress import ARTICLE, OUTLINE, POLISH, RESEARCH, ProgressStream
+from kvasir.progress import ARTICLE, BRIEF, OUTLINE, POLISH, RESEARCH, WRITE, ProgressStream
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import Run, RunNotFound, RunRegistry
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
@@ -133,6 +137,32 @@ async def article(request: ArticleRequest) -> Response:
         request.topic,
         [RESEARCH, OUTLINE, ARTICLE] + ([POLISH] if request.do_polish_article else []),
     )
+
+
+@app.post("/v1/research")
+async def research(request: ResearchRequest) -> Response:
+    """Run the deep research pipeline and stream progress until the report is ready."""
+    settings: Settings = app.state.settings
+    return _streamed(
+        lambda stream: run_research(settings, request, stream),
+        f"research {request.question!r}",
+        "research",
+        request.question,
+        [BRIEF, RESEARCH, WRITE],
+    )
+
+
+@app.post("/v1/research/clarify")
+async def research_clarify(request: ClarifyRequest) -> ClarifyResponse:
+    """Questions to ask before researching, or none. One fast-model call.
+
+    Like `/v1/tasks`, no run is registered and no slot is claimed: the user is still deciding
+    whether to start one.
+    """
+    settings: Settings = app.state.settings
+    with retry_budget(TASK_RETRY_SECONDS):
+        questions = await asyncio.to_thread(clarify, settings, request.question)
+    return ClarifyResponse(questions=questions)
 
 
 @app.post("/v1/session")
@@ -268,7 +298,7 @@ async def _bad_session_id(request: Request, exc: SessionIdError) -> JSONResponse
 
 
 def _streamed(
-    work: Callable[[ProgressStream], BaseModel],
+    work: Callable[[ProgressStream], RunResult],
     description: str,
     kind: str,
     topic: str,
@@ -295,14 +325,14 @@ def _streamed(
 
 
 async def _events(
-    work: Callable[[ProgressStream], BaseModel],
+    work: Callable[[ProgressStream], RunResult],
     description: str,
     record: Run,
     run_slots: threading.BoundedSemaphore,
 ) -> AsyncIterator[str]:
     stream = ProgressStream()
 
-    def run() -> BaseModel:
+    def run() -> RunResult:
         started = time.monotonic()
         try:
             # Entered on the worker thread, so the run identity is scoped to this run rather than

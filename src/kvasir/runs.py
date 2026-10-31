@@ -24,13 +24,12 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel
-
 from kvasir import logs
 from kvasir.models import (
     ModelUsage,
     Progress,
     RunDetail,
+    RunResult,
     RunSpan,
     RunStage,
     RunStatus,
@@ -139,7 +138,7 @@ class Run:
     ended_at: float | None = None
     error: str | None = None
     planned_stages: list[str] = field(default_factory=list)
-    result: BaseModel | None = None
+    result: RunResult | None = None
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _stages: dict[str, _Stage] = field(default_factory=dict, repr=False)
@@ -178,7 +177,7 @@ class Run:
         """Record a run that never got a slot, so saturation is visible rather than only a 429."""
         self._finish(REJECTED, "all run slots are busy")
 
-    def set_result(self, result: BaseModel) -> None:
+    def set_result(self, result: RunResult) -> None:
         with self._lock:
             self.result = result
 

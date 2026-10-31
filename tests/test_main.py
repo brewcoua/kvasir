@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kvasir import main
-from kvasir.models import ArticleResult, Citation, Report, SessionInfo, Turn
+from kvasir.models import ArticleResult, Citation, Report, ResearchResult, SessionInfo, Turn
 
 ENVIRONMENT = {
     "OPENAI_API_KEY": "key",
@@ -124,6 +124,53 @@ def test_article_reports_a_failure_as_an_error_event(client, monkeypatch):
 
 def test_article_rejects_an_empty_topic(client):
     assert client.post("/v1/article", json={"topic": ""}).status_code == 422
+
+
+def test_research_streams_progress_then_the_report(client, monkeypatch):
+    seen = {}
+
+    def fake_run(settings, request, stream):
+        seen["request"] = request
+        stream.publish("brief", "writing the research brief")
+        return ResearchResult(
+            report="## Findings\n\nText [1].",
+            assumptions=["Europe"],
+            citations=RESULT.citations,
+            claims=[],
+            duration_seconds=1.0,
+        )
+
+    monkeypatch.setattr(main, "run_research", fake_run)
+    body = {
+        "question": "Which battery makers lead?",
+        "clarifications": [{"question": "Region?", "answer": "Europe"}],
+    }
+    events = parse(client.post("/v1/research", json=body).text)
+
+    assert [name for name, _ in events] == ["run", "progress", "done"]
+    assert events[-1][1]["report"].startswith("## Findings")
+    assert seen["request"].clarifications[0].answer == "Europe"
+    [run] = client.get("/v1/runs").json()
+    assert run["kind"] == "research"
+    assert run["planned_stages"] == ["brief", "research", "write"]
+
+
+def test_research_rejects_an_empty_question(client):
+    assert client.post("/v1/research", json={"question": ""}).status_code == 422
+
+
+def test_clarify_answers_without_a_run_or_a_slot(client, monkeypatch):
+    monkeypatch.setattr(main, "clarify", lambda settings, question: ["Which region?"])
+    # Held for the whole call, as for a task: clarifying must work while a run is in flight.
+    assert main.app.state.run_slots.acquire(blocking=False)
+
+    try:
+        response = client.post("/v1/research/clarify", json={"question": "best makers"})
+    finally:
+        main.app.state.run_slots.release()
+
+    assert response.json() == {"questions": ["Which region?"]}
+    assert client.get("/v1/runs").json() == []
 
 
 def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):

@@ -60,6 +60,20 @@ _COSTORM_ROLES = {
 }
 
 
+# The deep research pipeline's steps. Extraction and planning are many small calls and go to the
+# fast model; the brief, the outline and the prose a reader sees go to the strong one. Intake and
+# notes return lists of claims, which need more room than a plan's handful of queries.
+_RESEARCH_ROLES = {
+    "clarify": ("fast", 500),
+    "brief": ("strong", 1000),
+    "plan": ("fast", 500),
+    "intake": ("fast", 2000),
+    "notes": ("fast", 2000),
+    "outline": ("strong", 500),
+    "write": ("strong", 2000),
+}
+
+
 def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -> GatewayModel:
     """A model bound to the gateway.
 
@@ -94,6 +108,22 @@ def build_task_model(settings: Settings) -> GatewayModel:
     a client's housekeeping is not part of any run's accounting.
     """
     return _language_model(settings, role="task", tier="fast", max_tokens=TASK_MAX_TOKENS)
+
+
+def build_research_models(
+    settings: Settings, model_fast: str | None = None, model_strong: str | None = None
+) -> dict[str, GatewayModel]:
+    """One model per deep research step, keyed by step."""
+    settings = _with_model_overrides(settings, model_fast, model_strong)
+    return {
+        role: _language_model(settings, role, tier, max_tokens)
+        for role, (tier, max_tokens) in _RESEARCH_ROLES.items()
+    }
+
+
+def build_research_tools(settings: Settings) -> tuple[Encoder, SearXNG]:
+    """The encoder and the search engine, for the deep research pipeline. It caps results itself."""
+    return _encoder(settings), _retriever(settings, settings.search_top_k)
 
 
 def _encoder(settings: Settings) -> Encoder:

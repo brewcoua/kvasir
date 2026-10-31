@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -53,6 +54,64 @@ class ArticleResult(BaseModel):
     duration_seconds: float
 
 
+class Clarification(BaseModel):
+    """One question `/v1/research/clarify` asked, and the user's answer to it."""
+
+    question: str
+    answer: str
+
+
+class ClarifyRequest(BaseModel):
+    """Body of `POST /v1/research/clarify`."""
+
+    question: str = Field(min_length=1)
+
+
+class ClarifyResponse(BaseModel):
+    """Payload of `POST /v1/research/clarify`. Empty when the question needs no clarifying."""
+
+    questions: list[str]
+
+
+class ResearchRequest(BaseModel):
+    """Body of `POST /v1/research`.
+
+    The budgets fall back to the pipeline's defaults when omitted.
+    """
+
+    question: str = Field(min_length=1)
+    clarifications: list[Clarification] = []
+    max_rounds: int | None = Field(default=None, ge=1)
+    queries_per_round: int | None = Field(default=None, ge=1)
+    results_per_query: int | None = Field(default=None, ge=1)
+    model_fast: str | None = None
+    model_strong: str | None = None
+
+
+class ResearchClaim(BaseModel):
+    """One piece of evidence, with the verbatim quote it was read from."""
+
+    id: int
+    text: str
+    quote: str
+    url: str
+    title: str
+    confidence: Literal["high", "medium", "low"]
+    round: int
+
+
+class ResearchResult(BaseModel):
+    """Payload of the `done` event of a research run."""
+
+    report: str
+    # What the brief had to decide that the question and the clarifications left open.
+    assumptions: list[str]
+    citations: list[Citation]
+    # Every claim gathered, cited or not, so a reader can audit the report against its evidence.
+    claims: list[ResearchClaim]
+    duration_seconds: float
+
+
 class SessionRequest(BaseModel):
     """Body of `POST /v1/session`. The id is the caller's, so Open WebUI can key it by chat id."""
 
@@ -94,6 +153,10 @@ class SessionInfo(BaseModel):
     turn_count: int
     experts: list[str]
     updated_at: float
+
+
+# What a run can produce, as its `done` event and its detail carry it.
+RunResult = ArticleResult | ResearchResult | Turn | Report | SessionInfo
 
 
 class Progress(BaseModel):
@@ -200,7 +263,7 @@ class RunDetail(RunStatus):
 
     events: list[Progress]
     # What the run returned, once it has.
-    result: ArticleResult | Turn | Report | SessionInfo | None
+    result: RunResult | None
 
 
 class RunStarted(BaseModel):
