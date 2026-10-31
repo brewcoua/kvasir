@@ -43,7 +43,7 @@ def _run(
     )
     runner.run(
         topic=request.topic,
-        callback_handler=StormProgressHandler(stream),
+        callback_handler=StormProgressHandler(stream, runner.args.max_conv_turn),
         do_polish_article=request.do_polish_article,
     )
 

@@ -104,7 +104,9 @@ def test_research_streams_progress_then_the_article(client, monkeypatch):
     events = parse(response.text)
     assert [name for name, _ in events] == ["run", "progress", "progress", "done"]
     assert events[0][1]["run_id"]
-    assert events[1][1] == {"stage": "research", "detail": "asking questions"}
+    assert events[1][1]["stage"] == "research"
+    assert events[1][1]["detail"] == "asking questions"
+    assert events[1][1]["at"] > 0
     assert events[-1][1]["article"] == RESULT.article
     assert events[-1][1]["citations"][0]["index"] == 1
 
@@ -287,7 +289,9 @@ def test_report_streams_markdown_and_citations(client, sessions, monkeypatch):
     events = parse(client.post("/v1/session/chat-1/report").text)
 
     assert events[0][0] == "run"
-    assert ("progress", {"stage": "article", "detail": "writing the report"}) in events
+    assert ("article", "writing the report") in [
+        (data["stage"], data["detail"]) for name, data in events if name == "progress"
+    ]
     assert events[-1][0] == "done"
     assert events[-1][1]["report"] == "# Report"
     assert events[-1][1]["citations"][0]["url"] == "https://example.org/a"

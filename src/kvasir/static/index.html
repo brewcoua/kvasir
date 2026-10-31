@@ -183,6 +183,163 @@
         color: var(--bad);
         margin-top: 0.5rem;
       }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+        gap: 0.5rem;
+        margin: 0.75rem 0;
+      }
+      .tile {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.4rem 0.6rem;
+      }
+      .tile .label {
+        display: block;
+        color: var(--dim);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .tile .value {
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .tile .sub {
+        display: block;
+        color: var(--dim);
+        font-size: 0.75rem;
+      }
+      h3 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--dim);
+        margin: 1rem 0 0.35rem;
+      }
+      .steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .steps li {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.05rem 0.6rem;
+        font-size: 0.8rem;
+        color: var(--dim);
+      }
+      .steps li.done {
+        color: var(--ok);
+      }
+      .steps li.current {
+        color: var(--busy);
+        border-color: var(--busy);
+        font-weight: 600;
+      }
+      .now {
+        margin: 0.5rem 0 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      progress {
+        width: 100%;
+        height: 0.4rem;
+        accent-color: var(--accent);
+      }
+      .track {
+        position: relative;
+        min-width: 8rem;
+        height: 0.7rem;
+        background: color-mix(in srgb, var(--line) 50%, transparent);
+        border-radius: 2px;
+      }
+      .track span {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        min-width: 2px;
+        background: var(--accent);
+        border-radius: 2px;
+      }
+      .track span.open {
+        background: var(--busy);
+      }
+      td.track-cell {
+        width: 40%;
+      }
+      .action {
+        font: inherit;
+        font-size: 0.8rem;
+        color: inherit;
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.15rem 0.6rem;
+        cursor: pointer;
+      }
+      .action:hover {
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      /* Fixed beside the page rather than over it, so the run stays readable while the result is
+         open. */
+      .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(46rem, 92vw);
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        box-shadow: -8px 0 24px rgb(0 0 0 / 12%);
+        z-index: 10;
+      }
+      .drawer[hidden] {
+        display: none;
+      }
+      .drawer header {
+        gap: 0.5rem;
+      }
+      .drawer header h2 {
+        font-size: 0.9rem;
+        margin: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .drawer .content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem 1.25rem;
+      }
+      .prose {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.6rem 0.75rem;
+        margin: 0;
+        font: inherit;
+      }
+      .citations {
+        padding-left: 1.5rem;
+        font-size: 0.85rem;
+      }
+      .citations a {
+        color: var(--accent);
+        overflow-wrap: anywhere;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--dim);
+        margin: 0.5rem 0;
+      }
     </style>
   </head>
   <body>
@@ -203,19 +360,53 @@
       </section>
     </main>
 
+    <aside class="drawer" id="drawer" hidden aria-labelledby="drawer-title">
+      <header>
+        <h2 id="drawer-title">Result</h2>
+        <button type="button" class="action" id="drawer-copy">Copy</button>
+        <button type="button" class="action" id="drawer-close" aria-label="Close">Close</button>
+      </header>
+      <div class="content" id="drawer-content"></div>
+    </aside>
+
     <script>
       const LIST_INTERVAL_MS = 3000;
+      const CLOCK_INTERVAL_MS = 1000;
 
       let selected = null;
       let source = null;
+      // The latest snapshot or status of the selected run, for placing events and the clock.
+      let current = null;
 
       const el = (id) => document.getElementById(id);
       const text = (value) => document.createTextNode(String(value));
+      const now = () => Date.now() / 1000;
+      const count = (value) => Number(value).toLocaleString();
+
+      function duration(total) {
+        if (total < 60) return `${total.toFixed(1)}s`;
+        const whole = Math.floor(total);
+        const minutes = Math.floor(whole / 60);
+        if (minutes < 60) return `${minutes}m ${whole % 60}s`;
+        return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+      }
 
       function seconds(from, to) {
         if (!from) return "";
-        const end = to ?? Date.now() / 1000;
-        return `${(end - from).toFixed(1)}s`;
+        return duration((to ?? now()) - from);
+      }
+
+      // A span that keeps counting while the run is open. The clock tick below updates it.
+      function clock(from, to) {
+        const span = node("span", "clock", seconds(from, to));
+        if (from && to === null) span.dataset.from = from;
+        return span;
+      }
+
+      function tick() {
+        for (const span of document.querySelectorAll(".clock[data-from]")) {
+          span.textContent = seconds(Number(span.dataset.from), null);
+        }
       }
 
       function node(tag, className, content) {
@@ -229,6 +420,15 @@
         const response = await fetch(path);
         if (!response.ok) throw new Error(`${path}: ${response.status}`);
         return response.json();
+      }
+
+      function progressBar(event) {
+        if (!event || event.total === null || event.done === null || event.total === 0) return null;
+        const bar = document.createElement("progress");
+        bar.max = event.total;
+        bar.value = Math.min(event.done, event.total);
+        bar.title = `${event.done}/${event.total}`;
+        return bar;
       }
 
       function drawRuns(runs) {
@@ -246,47 +446,249 @@
 
           const meta = node("span", "meta");
           meta.append(node("span", `state ${run.state}`, run.state));
-          meta.append(text(` · ${run.kind} · ${seconds(run.started_at, run.ended_at)}`));
+          if (run.state === "running" && run.stage) meta.append(text(` · ${run.stage}`));
+          meta.append(text(` · ${run.kind} · `));
+          meta.append(clock(run.started_at, run.ended_at));
+          const tokens = run.usage.prompt_tokens + run.usage.completion_tokens;
+          if (tokens > 0) meta.append(text(` · ${count(tokens)} tok`));
           button.append(meta);
+
+          if (run.state === "running") {
+            const bar = progressBar(run.latest);
+            if (bar) button.append(bar);
+          }
 
           button.addEventListener("click", () => select(run.id));
           list.append(button);
         }
       }
 
-      function usageTable(title, rows) {
-        const table = document.createElement("table");
-        const head = table.insertRow();
-        for (const [label, numeric] of [
-          [title, false],
-          ["calls", true],
-          ["in", true],
-          ["out", true],
-          ["cost", true],
-        ]) {
+      function table(headings, rows) {
+        const element = document.createElement("table");
+        const head = element.insertRow();
+        for (const [label, numeric] of headings) {
           const cell = document.createElement("th");
           if (numeric) cell.className = "n";
           cell.append(text(label));
           head.append(cell);
         }
-        for (const [name, usage] of Object.entries(rows)) {
-          const row = table.insertRow();
-          row.insertCell().append(text(name));
-          for (const value of [
-            usage.calls,
-            usage.prompt_tokens,
-            usage.completion_tokens,
-            usage.cost.toFixed(4),
-          ]) {
+        for (const values of rows) {
+          const row = element.insertRow();
+          values.forEach((value, index) => {
             const cell = row.insertCell();
-            cell.className = "n";
-            cell.append(text(value));
-          }
+            if (headings[index][1]) cell.className = "n";
+            if (value instanceof Node) {
+              if (value.classList.contains("track")) cell.className = "track-cell";
+              cell.append(value);
+            } else {
+              cell.append(text(value));
+            }
+          });
         }
         const wrapper = node("div", "scroll");
-        wrapper.append(table);
+        wrapper.append(element);
         return wrapper;
       }
+
+      const USAGE_HEADINGS = [
+        ["calls", true],
+        ["in", true],
+        ["out", true],
+        ["reasoning", true],
+        ["cost", true],
+      ];
+
+      function usageCells(usage) {
+        return [
+          count(usage.calls),
+          count(usage.prompt_tokens),
+          count(usage.completion_tokens),
+          count(usage.reasoning_tokens),
+          usage.cost.toFixed(4),
+        ];
+      }
+
+      function usageTable(title, rows) {
+        return table(
+          [[title, false], ...USAGE_HEADINGS],
+          Object.entries(rows).map(([name, usage]) => [name, ...usageCells(usage)]),
+        );
+      }
+
+      function tile(label, value, sub) {
+        const element = node("div", "tile");
+        element.append(node("span", "label", label));
+        const shown = node("span", "value");
+        shown.append(value instanceof Node ? value : text(value));
+        element.append(shown);
+        if (sub) element.append(node("span", "sub", sub));
+        return element;
+      }
+
+      function tiles(run) {
+        const usage = run.usage;
+        const row = node("div", "tiles");
+        row.append(
+          tile("elapsed", clock(run.started_at, run.ended_at)),
+          tile("tokens in", count(usage.prompt_tokens)),
+          tile(
+            "tokens out",
+            count(usage.completion_tokens),
+            usage.reasoning_tokens ? `${count(usage.reasoning_tokens)} reasoning` : undefined,
+          ),
+          tile("cost", usage.cost.toFixed(4)),
+          tile("searches", count(usage.searches)),
+          tile("embedding", count(usage.embedding_tokens), "tokens"),
+        );
+        return row;
+      }
+
+      // Planned stages in order, then any the plan did not name, so Co-STORM shows what it saw.
+      function steps(run) {
+        const seen = run.stages.map((stage) => stage.name);
+        const names = [...run.planned_stages, ...seen.filter((n) => !run.planned_stages.includes(n))];
+        if (names.length === 0) return null;
+        const list = node("ol", "steps");
+        for (const name of names) {
+          let state = "";
+          if (name === run.stage && run.ended_at === null) state = "current";
+          else if (seen.includes(name)) state = "done";
+          list.append(node("li", state, name));
+        }
+        return list;
+      }
+
+      function timeline(run) {
+        const start = run.started_at;
+        const end = run.ended_at ?? now();
+        const width = Math.max(end - start, 0.001);
+        const byStage = run.usage.by_stage;
+
+        const rows = run.stages.map((stage) => {
+          const track = node("div", "track");
+          for (const span of stage.spans) {
+            const bar = node("span", span.ended_at === null ? "open" : "");
+            const left = ((span.started_at - start) / width) * 100;
+            const right = (((span.ended_at ?? end) - start) / width) * 100;
+            bar.style.left = `${left}%`;
+            bar.style.width = `${Math.max(right - left, 0)}%`;
+            track.append(bar);
+          }
+          const usage = byStage[stage.name];
+          return [
+            stage.name,
+            track,
+            duration(stage.seconds),
+            ...(usage ? usageCells(usage) : ["", "", "", "", ""]),
+          ];
+        });
+        // Calls made before the first stage was announced.
+        if (byStage.unstaged) {
+          rows.push(["unstaged", node("div", "track"), "", ...usageCells(byStage.unstaged)]);
+        }
+        return table(
+          [["stage", false], ["timeline", false], ["time", true], ...USAGE_HEADINGS],
+          rows,
+        );
+      }
+
+      function drawLive(run) {
+        current = run;
+        const live = el("live");
+        if (!live) return;
+        live.replaceChildren();
+
+        live.append(tiles(run));
+        if (run.error) live.append(node("p", "error", run.error));
+
+        const stepList = steps(run);
+        if (stepList) live.append(stepList);
+        if (run.latest && run.ended_at === null) {
+          const latest = node("p", "now");
+          latest.append(node("span", "stage", run.latest.stage));
+          latest.append(text(` ${run.latest.detail}`));
+          live.append(latest);
+          const bar = progressBar(run.latest);
+          if (bar) live.append(bar);
+        }
+
+        if (run.stages.length > 0) {
+          live.append(node("h3", "", "Stages"));
+          live.append(timeline(run));
+        }
+        if (Object.keys(run.usage.by_role).length > 0) {
+          live.append(node("h3", "", "By role"));
+          live.append(usageTable("role", run.usage.by_role));
+        }
+        if (Object.keys(run.usage.by_model).length > 0) {
+          live.append(node("h3", "", "By model"));
+          live.append(usageTable("model", run.usage.by_model));
+        }
+      }
+
+      function citations(list) {
+        const ordered = node("ol", "citations");
+        for (const citation of list) {
+          const item = document.createElement("li");
+          item.value = citation.index;
+          // Search results are untrusted: only a web link becomes clickable.
+          if (/^https?:/i.test(citation.url)) {
+            const link = node("a", "", citation.title || citation.url);
+            link.href = citation.url;
+            link.target = "_blank";
+            link.rel = "noreferrer noopener";
+            item.append(link);
+          } else {
+            item.append(text(citation.title || citation.url));
+          }
+          if (citation.snippet) item.append(node("div", "meta", citation.snippet));
+          ordered.append(item);
+        }
+        return ordered;
+      }
+
+      // One field holds the main text, whichever kind of run produced it.
+      const resultText = (result) =>
+        result.article ?? result.report ?? result.utterance ?? JSON.stringify(result, null, 2);
+
+      function openResult(run) {
+        const result = run.result;
+        el("drawer-title").textContent = run.topic;
+        const content = el("drawer-content");
+        content.replaceChildren();
+        if (result.role) content.append(node("p", "meta", result.role));
+        content.append(node("pre", "prose", resultText(result)));
+
+        if (result.outline) {
+          const outline = document.createElement("details");
+          outline.append(node("summary", "", "Outline"));
+          outline.append(node("pre", "prose", result.outline));
+          content.append(outline);
+        }
+        if (result.citations?.length > 0) {
+          const sources = document.createElement("details");
+          sources.append(node("summary", "", `Sources (${result.citations.length})`));
+          sources.append(citations(result.citations));
+          content.append(sources);
+        }
+        el("drawer").hidden = false;
+        content.scrollTop = 0;
+      }
+
+      function closeResult() {
+        el("drawer").hidden = true;
+      }
+
+      el("drawer-close").addEventListener("click", closeResult);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeResult();
+      });
+      el("drawer-copy").addEventListener("click", async () => {
+        const copy = el("drawer-copy");
+        await navigator.clipboard.writeText(el("drawer-content").querySelector(".prose").textContent);
+        copy.textContent = "Copied";
+        setTimeout(() => (copy.textContent = "Copy"), 1500);
+      });
 
       function drawDetail(run) {
         const panel = el("detail");
@@ -294,48 +696,36 @@
 
         const heading = node("p", "heading");
         heading.append(node("span", `state ${run.state}`, run.state));
-        heading.append(text(` · ${run.topic}`));
+        heading.append(text(` · ${run.kind} · ${run.topic}`));
         panel.append(heading);
 
-        const usage = run.usage;
-        panel.append(
-          node(
-            "p",
-            "meta",
-            `${usage.prompt_tokens + usage.completion_tokens} tokens · ` +
-              `${usage.cost.toFixed(4)} cost · ${usage.embedding_tokens} embedding tokens · ` +
-              `${usage.searches} searches`,
-          ),
-        );
+        const live = node("div");
+        live.id = "live";
+        panel.append(live);
+        drawLive(run);
 
-        if (run.error) panel.append(node("p", "error", run.error));
-
-        if (run.stages.length > 0) {
-          const stages = document.createElement("table");
-          for (const stage of run.stages) {
-            const row = stages.insertRow();
-            row.insertCell().append(text(stage.name));
-            const cell = row.insertCell();
-            cell.className = "n";
-            cell.append(text(seconds(stage.started_at, stage.ended_at)));
-          }
-          const wrapper = node("div", "scroll");
-          wrapper.append(stages);
-          panel.append(wrapper);
+        if (run.result) {
+          const open = node("button", "action", "View result");
+          open.type = "button";
+          open.addEventListener("click", () => openResult(run));
+          const row = node("p");
+          row.append(open);
+          panel.append(row);
         }
 
-        if (Object.keys(usage.by_role).length > 0) panel.append(usageTable("role", usage.by_role));
-        if (Object.keys(usage.by_model).length > 0)
-          panel.append(usageTable("model", usage.by_model));
-
+        panel.append(node("h3", "", "Events"));
         const events = node("ul", "events");
         events.id = "events";
         for (const event of run.events) events.append(eventItem(event));
         panel.append(events);
+        events.scrollTop = events.scrollHeight;
       }
 
       function eventItem(event) {
         const item = document.createElement("li");
+        if (current?.started_at) {
+          item.append(node("span", "meta", `+${(event.at - current.started_at).toFixed(1)}s `));
+        }
         item.append(node("span", "stage", event.stage));
         item.append(text(` ${event.detail}`));
         return item;
@@ -347,10 +737,17 @@
         source.addEventListener("snapshot", (message) => {
           const run = JSON.parse(message.data);
           if (run.id !== selected) return;
+          current = run;
           drawDetail(run);
           // The server closes the stream once the run is over. EventSource would reconnect for
           // ever otherwise, since it treats any close as a connection to retry.
           if (run.ended_at !== null) source.close();
+        });
+
+        // Usage and stage timings, after each event and at intervals while nothing happens.
+        source.addEventListener("status", (message) => {
+          const run = JSON.parse(message.data);
+          if (run.id === selected) drawLive(run);
         });
 
         source.addEventListener("progress", (message) => {
@@ -364,7 +761,11 @@
       async function select(runId) {
         if (source) source.close();
         selected = runId;
-        drawDetail(await json(`/v1/runs/${runId}`));
+        current = null;
+        closeResult();
+        const run = await json(`/v1/runs/${runId}`);
+        current = run;
+        drawDetail(run);
         follow(runId);
         refresh();
       }
@@ -382,6 +783,7 @@
 
       refresh();
       setInterval(refresh, LIST_INTERVAL_MS);
+      setInterval(tick, CLOCK_INTERVAL_MS);
     </script>
   </body>
 </html>

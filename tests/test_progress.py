@@ -110,10 +110,16 @@ def test_frame_is_terminated_by_a_blank_line():
 
 
 def test_frame_payload_is_json():
-    text = frame("progress", Progress(stage=RESEARCH, detail="asking"))
+    text = frame("progress", Progress(stage=RESEARCH, detail="asking", at=1.0, done=1, total=4))
     data = text.splitlines()[1].removeprefix("data: ")
 
-    assert json.loads(data) == {"stage": RESEARCH, "detail": "asking"}
+    assert json.loads(data) == {
+        "stage": RESEARCH,
+        "detail": "asking",
+        "at": 1.0,
+        "done": 1,
+        "total": 4,
+    }
 
 
 def test_newlines_in_a_payload_cannot_end_the_frame_early():
@@ -124,3 +130,21 @@ def test_newlines_in_a_payload_cannot_end_the_frame_early():
     assert json.loads(text.splitlines()[1].removeprefix("data: "))["message"] == (
         "line one\nline two"
     )
+
+
+@pytest.mark.asyncio
+async def test_handler_reports_how_far_through_a_stage_the_run_is():
+    stream = ProgressStream()
+    handler = StormProgressHandler(stream, max_conv_turn=3)
+
+    handler.on_identify_perspective_end(perspectives=["a", "b"])
+    handler.on_dialogue_turn_end(dlg_turn=object())
+    handler.on_information_gathering_end()
+    handler.on_article_generation_start(sections=["x", "y"])
+    handler.on_section_generation_end(section="x")
+    stream.close()
+
+    counts = [(event.done, event.total) for event in await drain(stream)]
+
+    # Turns are bounded by perspectives times turns, then closed at what actually happened.
+    assert counts == [(None, None), (1, 6), (1, 1), (0, 2), (1, 2)]

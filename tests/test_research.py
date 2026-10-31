@@ -7,6 +7,8 @@ stages are no longer recovered by slicing the run up and reloading each stage's 
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from kvasir import research
@@ -19,6 +21,7 @@ class _Runner:
 
     def __init__(self, output_dir):
         self.article_output_dir = str(output_dir)
+        self.args = SimpleNamespace(max_conv_turn=3)
         self.calls = []
         self.post_run_calls = 0
         output_dir.mkdir(parents=True, exist_ok=True)

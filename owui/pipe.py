@@ -635,8 +635,10 @@ def _spent(run: dict[str, Any]) -> str:
     # Zero is what a gateway that prices nothing reports, which is not the same as free.
     priced = f"${cost:.4f}" if cost else "cost not reported"
 
+    # `seconds` sums a stage's spans. An older service reports only the first entry and last exit.
     stages = "\n".join(
-        f"| {stage['name']} | {_duration((stage.get('ended_at') or 0) - stage['started_at'])} |"
+        f"| {stage['name']} | "
+        f"{_duration(stage.get('seconds', (stage.get('ended_at') or 0) - stage['started_at']))} |"
         for stage in run.get("stages") or []
         if stage.get("ended_at")
     )

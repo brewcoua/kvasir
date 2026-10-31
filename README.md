@@ -138,7 +138,7 @@ event: run
 data: {"run_id": "0f3c9a1b7e42"}
 
 event: progress
-data: {"stage": "research", "detail": "completed conversation turn 3"}
+data: {"stage": "research", "detail": "completed conversation turn 3", "at": 1793475466.3, "done": 3, "total": 12}
 
 event: done
 data: {"article": "...", "outline": "...", "citations": [...], "duration_seconds": 412}
@@ -146,6 +146,10 @@ data: {"article": "...", "outline": "...", "citations": [...], "duration_seconds
 
 Stages are `research`, `outline`, `article` and `polish`. A run takes minutes to tens of minutes,
 so use a client that streams, and set a generous timeout.
+
+`at` is the Unix time of the event. `done` and `total` count progress through the stage when it has
+a countable unit, and are null otherwise: sections in `article`, conversation turns in `research`.
+The research `total` is an upper bound, since a conversation can end early.
 
 Every streaming response opens with a `run` frame. Use its `run_id` to follow the run at
 `/v1/runs/{id}` if the client stops reading, and to attribute cost afterwards. A client that does
@@ -175,17 +179,19 @@ once at startup, with no scheduler and no background task.
 
 ## Watch what is running
 
-`GET /` serves a single page listing runs, and for a selected run its stages with timings, its token
-and cost tally split by role and by model, and its event log. It is one self-contained file with no
-external asset, since the image is read-only and offline.
+`GET /` serves a single page listing runs. For a selected run it shows elapsed time, totals for
+tokens in and out, reasoning tokens, cost, searches and embedding tokens, then the stages on a
+timeline with each stage's duration and usage, the usage split by role and by model, the result once
+the run finishes, and the event log. Figures update live while the run is in progress. It is one
+self-contained file with no external asset, since the image is read-only and offline.
 
 The same data is available as JSON.
 
 | Request | Effect |
 | --- | --- |
 | `GET /v1/runs` | Every run the process remembers, newest first. |
-| `GET /v1/runs/{id}` | One run, with per-stage timings, usage and recent events. |
-| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a snapshot. |
+| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, recent events and its result. |
+| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` after each `progress` and every 2 seconds in between. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
 `POST /v1/tasks` is the one route that is not a run: it registers nothing and takes no slot. It
@@ -194,6 +200,13 @@ model the chat uses, and those must not queue behind — or displace — the res
 
 A run is `queued`, `running`, `done`, `failed` or `rejected`. `rejected` means it never got a slot,
 so a 429 is visible as a run rather than only as a status code.
+
+Usage is split three ways: `by_model`, `by_role` and `by_stage`. A call counts toward the stage the
+run was in when the call finished, and calls made before the first progress event count as
+`unstaged`. Co-STORM can change stage while a call is in flight, so its stage split is approximate.
+`reasoning_tokens` is part of `completion_tokens`, not added to it, and stays zero when the gateway
+does not report it. A stage entered more than once has one span per entry, and its `seconds` sums
+them.
 
 Cost comes from what the call reports. Three shapes are read, in order: the cost dspy itself
 computes for a model it recognises, a LiteLLM proxy's `x-litellm-response-cost` response header, and
@@ -268,7 +281,7 @@ tokens or wall-clock time on a default run can be given. The defaults come from 
 examples rather than from measurement.
 
 Measure against your own gateway. `GET /v1/runs/{id}` reports a finished run's tokens and cost split
-by role and by model, which is enough to decide whether the defaults suit you. Note that
+by stage, by role and by model, which is enough to decide whether the defaults suit you. Note that
 `max_conv_turn` and `max_perspective` multiply: the research stage is roughly
 `max_perspective * max_conv_turn` conversations.
 

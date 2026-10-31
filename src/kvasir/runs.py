@@ -21,16 +21,22 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
+
+from pydantic import BaseModel
 
 from kvasir import logs
 from kvasir.models import (
     ModelUsage,
     Progress,
     RunDetail,
+    RunSpan,
     RunStage,
+    RunStatus,
     RunSummary,
     RunUsage,
+    StageUsage,
 )
 from kvasir.storm import runtime
 
@@ -45,7 +51,13 @@ DONE = "done"
 FAILED = "failed"
 REJECTED = "rejected"
 
+# Where usage lands when it arrives before the first progress event names a stage.
+UNSTAGED = "unstaged"
+
 _current: ContextVar[Run | None] = ContextVar("current_run", default=None)
+
+# Ends a watcher's stream. Distinct from None, which a watcher with a heartbeat yields when idle.
+_END: Any = object()
 
 
 class RunNotFound(Exception):
@@ -57,12 +69,18 @@ class _Usage:
     calls: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    reasoning_tokens: int = 0
     cost: float = 0.0
+    embedding_tokens: int = 0
+    searches: int = 0
 
-    def add(self, prompt_tokens: int, completion_tokens: int, cost: float) -> None:
+    def add(
+        self, prompt_tokens: int, completion_tokens: int, reasoning_tokens: int, cost: float
+    ) -> None:
         self.calls += 1
         self.prompt_tokens += prompt_tokens
         self.completion_tokens += completion_tokens
+        self.reasoning_tokens += reasoning_tokens
         self.cost += cost
 
     def model(self) -> ModelUsage:
@@ -70,14 +88,37 @@ class _Usage:
             calls=self.calls,
             prompt_tokens=self.prompt_tokens,
             completion_tokens=self.completion_tokens,
+            reasoning_tokens=self.reasoning_tokens,
             cost=round(self.cost, 6),
+        )
+
+    def stage(self) -> StageUsage:
+        return StageUsage(
+            **self.model().model_dump(),
+            embedding_tokens=self.embedding_tokens,
+            searches=self.searches,
         )
 
 
 @dataclass
 class _Stage:
-    started_at: float
-    ended_at: float | None = None
+    spans: list[RunSpan] = field(default_factory=list)
+
+    def enter(self, now: float) -> None:
+        self.spans.append(RunSpan(started_at=now, ended_at=None))
+
+    def leave(self, now: float) -> None:
+        if self.spans[-1].ended_at is None:
+            self.spans[-1].ended_at = now
+
+    def model(self, name: str, now: float) -> RunStage:
+        return RunStage(
+            name=name,
+            started_at=self.spans[0].started_at,
+            ended_at=self.spans[-1].ended_at,
+            seconds=round(sum((span.ended_at or now) - span.started_at for span in self.spans), 1),
+            spans=[span.model_copy() for span in self.spans],
+        )
 
 
 @dataclass
@@ -97,12 +138,15 @@ class Run:
     started_at: float | None = None
     ended_at: float | None = None
     error: str | None = None
+    planned_stages: list[str] = field(default_factory=list)
+    result: BaseModel | None = None
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _stages: dict[str, _Stage] = field(default_factory=dict, repr=False)
     _events: deque[Progress] = field(default_factory=lambda: deque(maxlen=MAX_EVENTS), repr=False)
     _by_model: dict[str, _Usage] = field(default_factory=dict, repr=False)
     _by_role: dict[str, _Usage] = field(default_factory=dict, repr=False)
+    _by_stage: dict[str, _Usage] = field(default_factory=dict, repr=False)
     _embedding_tokens: int = field(default=0, repr=False)
     _searches: int = field(default=0, repr=False)
     _watchers: list[_Watcher] = field(default_factory=list, repr=False)
@@ -134,44 +178,62 @@ class Run:
         """Record a run that never got a slot, so saturation is visible rather than only a 429."""
         self._finish(REJECTED, "all run slots are busy")
 
+    def set_result(self, result: BaseModel) -> None:
+        with self._lock:
+            self.result = result
+
     def _finish(self, state: str, error: str | None) -> None:
         with self._lock:
             self.state = state
             self.error = error
             self.ended_at = time.time()
             if self.stage is not None:
-                self._stages[self.stage].ended_at = self.ended_at
-        self._notify()
+                self._stages[self.stage].leave(self.ended_at)
+        self._notify(_END)
 
-    def record_progress(self, stage: str, detail: str) -> None:
+    def record_progress(self, event: Progress) -> None:
         with self._lock:
-            if stage != self.stage:
+            if event.stage != self.stage:
                 if self.stage is not None:
-                    self._stages[self.stage].ended_at = time.time()
-                # Re-entering a stage extends the one already there rather than starting a second:
-                # Co-STORM alternates between two stages for the length of a session.
-                self._stages.setdefault(stage, _Stage(started_at=time.time())).ended_at = None
-                self.stage = stage
-            event = Progress(stage=stage, detail=detail)
+                    self._stages[self.stage].leave(event.at)
+                # Re-entering a stage adds a span to the one already there: Co-STORM alternates
+                # between two stages for the length of a session.
+                self._stages.setdefault(event.stage, _Stage()).enter(event.at)
+                self.stage = event.stage
             self._events.append(event)
         self._notify(event)
 
     def record_lm(
-        self, model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+        self,
+        model: str,
+        role: str | None,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cost: float,
+        reasoning_tokens: int = 0,
     ) -> None:
         with self._lock:
-            self._by_model.setdefault(model, _Usage()).add(prompt_tokens, completion_tokens, cost)
-            self._by_role.setdefault(role or "unattributed", _Usage()).add(
-                prompt_tokens, completion_tokens, cost
-            )
+            # Attributed to the stage the run is in now. Co-STORM can switch stages while a call is
+            # in flight, so its split is close rather than exact.
+            for usage in (
+                self._by_model.setdefault(model, _Usage()),
+                self._by_role.setdefault(role or "unattributed", _Usage()),
+                self._stage_usage(),
+            ):
+                usage.add(prompt_tokens, completion_tokens, reasoning_tokens, cost)
 
     def record_embedding(self, model: str, tokens: int) -> None:
         with self._lock:
             self._embedding_tokens += tokens
+            self._stage_usage().embedding_tokens += tokens
 
     def record_search(self, engine: str, queries: int) -> None:
         with self._lock:
             self._searches += queries
+            self._stage_usage().searches += queries
+
+    def _stage_usage(self) -> _Usage:
+        return self._by_stage.setdefault(self.stage or UNSTAGED, _Usage())
 
     def summary(self) -> RunSummary:
         with self._lock:
@@ -186,34 +248,44 @@ class Run:
                 ended_at=self.ended_at,
                 error=self.error,
                 usage=self._usage(),
+                planned_stages=self.planned_stages,
+                latest=self._events[-1] if self._events else None,
+            )
+
+    def status(self) -> RunStatus:
+        summary = self.summary()
+        with self._lock:
+            now = self.ended_at or time.time()
+            return RunStatus(
+                **dict(summary),
+                stages=[stage.model(name, now) for name, stage in self._stages.items()],
             )
 
     def detail(self) -> RunDetail:
-        summary = self.summary()
+        status = self.status()
         with self._lock:
-            return RunDetail(
-                **summary.model_dump(),
-                stages=[
-                    RunStage(name=name, started_at=stage.started_at, ended_at=stage.ended_at)
-                    for name, stage in self._stages.items()
-                ],
-                events=list(self._events),
-            )
+            return RunDetail(**dict(status), events=list(self._events), result=self.result)
 
     def _usage(self) -> RunUsage:
         return RunUsage(
             prompt_tokens=sum(usage.prompt_tokens for usage in self._by_model.values()),
             completion_tokens=sum(usage.completion_tokens for usage in self._by_model.values()),
+            reasoning_tokens=sum(usage.reasoning_tokens for usage in self._by_model.values()),
             cost=round(sum(usage.cost for usage in self._by_model.values()), 6),
             embedding_tokens=self._embedding_tokens,
             searches=self._searches,
             by_model={name: usage.model() for name, usage in self._by_model.items()},
             by_role={name: usage.model() for name, usage in self._by_role.items()},
+            by_stage={name: usage.stage() for name, usage in self._by_stage.items()},
         )
 
-    def watch(self) -> _Watcher:
-        """Follow this run live. Give the watcher back with `unwatch` when done."""
-        watcher = _Watcher()
+    def watch(self, heartbeat: float | None = None) -> _Watcher:
+        """Follow this run live. Give the watcher back with `unwatch` when done.
+
+        With a heartbeat, the watcher also yields None after that many idle seconds, so a follower
+        can refresh what changes between events, such as usage during a long silent stage.
+        """
+        watcher = _Watcher(heartbeat)
         with self._lock:
             self._watchers.append(watcher)
         return watcher
@@ -223,7 +295,7 @@ class Run:
             if watcher in self._watchers:
                 self._watchers.remove(watcher)
 
-    def _notify(self, event: Progress | None = None) -> None:
+    def _notify(self, event: Any) -> None:
         with self._lock:
             watchers = list(self._watchers)
         for watcher in watchers:
@@ -237,18 +309,23 @@ class _Watcher:
     the loop it was created on and hands the event over through it.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, heartbeat: float | None) -> None:
         self._loop = asyncio.get_running_loop()
-        self._queue: asyncio.Queue[Progress | None] = asyncio.Queue()
+        self._queue: asyncio.Queue[Any] = asyncio.Queue()
+        self._heartbeat = heartbeat
 
-    def push(self, event: Progress | None) -> None:
-        # None means the run reached a terminal state, which ends the stream.
+    def push(self, event: Any) -> None:
+        # `_END` means the run reached a terminal state, which ends the stream.
         self._loop.call_soon_threadsafe(self._queue.put_nowait, event)
 
-    async def __aiter__(self) -> AsyncIterator[Progress]:
+    async def __aiter__(self) -> AsyncIterator[Progress | None]:
         while True:
-            event = await self._queue.get()
-            if event is None:
+            try:
+                event = await asyncio.wait_for(self._queue.get(), self._heartbeat)
+            except TimeoutError:
+                yield None
+                continue
+            if event is _END:
                 return
             yield event
 
@@ -261,8 +338,8 @@ class RunRegistry:
         self._runs: dict[str, Run] = {}
         self._limit = limit
 
-    def start(self, kind: str, topic: str) -> Run:
-        run = Run(id=uuid4().hex[:12], kind=kind, topic=topic)
+    def start(self, kind: str, topic: str, planned_stages: list[str] | None = None) -> Run:
+        run = Run(id=uuid4().hex[:12], kind=kind, topic=topic, planned_stages=planned_stages or [])
         with self._lock:
             self._runs[run.id] = run
             while len(self._runs) > self._limit:
@@ -288,8 +365,8 @@ def _current_run(run: Run) -> Iterator[None]:
         _current.reset(token)
 
 
-def record_progress(stage: str, detail: str) -> None:
+def record_progress(event: Progress) -> None:
     """Attribute a progress event to whichever run this thread is working on, if any."""
     run = _current.get()
     if run is not None:
-        run.record_progress(stage, detail)
+        run.record_progress(event)

@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kvasir import main, runs
-from kvasir.models import ResearchResult
+from kvasir.models import Progress, ResearchResult
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
@@ -171,8 +171,8 @@ def test_a_watcher_follows_a_run_from_another_thread():
 
         def work():
             with run.active():
-                run.record_progress("research", "asking questions")
-                run.record_progress("article", "writing")
+                run.record_progress(Progress(stage="research", detail="asking questions"))
+                run.record_progress(Progress(stage="article", detail="writing"))
 
         worker = threading.Thread(target=work)
         worker.start()
@@ -192,6 +192,77 @@ def test_watching_a_finished_run_does_not_hang(client, monkeypatch):
 
     assert [name for name, _ in frames] == ["snapshot"]
     assert frames[0][1]["state"] == "done"
+
+
+def test_a_reentered_stage_sums_its_spans():
+    """Co-STORM alternates stages, so first entry to last exit would overstate both."""
+    run = runs.Run(id="r", kind="costorm", topic="t")
+    for stage, at in (("turn", 0.0), ("mind_map", 10.0), ("turn", 12.0), ("mind_map", 20.0)):
+        run.record_progress(Progress(stage=stage, detail=stage, at=at))
+
+    stages = {stage.name: stage for stage in run.status().stages}
+    assert stages["turn"].seconds == 18.0
+    assert len(stages["turn"].spans) == 2
+    assert stages["mind_map"].spans[0].ended_at == 12.0
+
+
+def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
+    def fake_run(settings, request, stream):
+        runtime.record_lm_usage("m", "conv_simulator", 30, 5, 0.0)
+        stream.publish("research", "asking questions")
+        runtime.record_lm_usage("m", "conv_simulator", 10, 5, 0.001)
+        runtime.record_search_usage("SearXNG", 2)
+        stream.publish("article", "writing")
+        runtime.record_lm_usage("m", "article_gen", 100, 40, 0.002, reasoning_tokens=25)
+        runtime.current_usage_sink().record_embedding("e", 300)
+        return RESULT
+
+    monkeypatch.setattr(main, "run_research", fake_run)
+    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+
+    usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
+    by_stage = usage["by_stage"]
+    assert by_stage["unstaged"]["prompt_tokens"] == 30
+    assert by_stage["research"]["prompt_tokens"] == 10
+    assert by_stage["research"]["searches"] == 2
+    assert by_stage["article"]["completion_tokens"] == 40
+    assert by_stage["article"]["reasoning_tokens"] == 25
+    assert by_stage["article"]["embedding_tokens"] == 300
+    assert usage["reasoning_tokens"] == 25
+
+
+def test_a_finished_run_carries_its_result_and_plan(client, monkeypatch):
+    def fake_run(settings, request, stream):
+        stream.publish("article", "finished a (1/2)", 1, 2)
+        return RESULT
+
+    monkeypatch.setattr(main, "run_research", fake_run)
+    events = parse(
+        client.post("/v1/research", json={"topic": "x", "do_polish_article": False}).text
+    )
+
+    detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
+    assert detail["result"]["article"] == RESULT.article
+    assert detail["planned_stages"] == ["research", "outline", "article"]
+    assert (detail["latest"]["done"], detail["latest"]["total"]) == (1, 2)
+    # The list stays light: the result is only on the detail.
+    assert "result" not in client.get("/v1/runs").json()[0]
+
+
+def test_a_watcher_with_a_heartbeat_yields_when_idle():
+    """What lets a follower refresh usage during a stage that publishes nothing."""
+
+    async def scenario():
+        run = runs.Run(id="r", kind="storm", topic="t")
+        watcher = run.watch(heartbeat=0.01)
+        received = []
+        async for event in watcher:
+            received.append(event)
+            if len(received) == 2:
+                run._finish(runs.DONE, None)
+        return received
+
+    assert asyncio.run(scenario()) == [None, None]
 
 
 def test_the_registry_forgets_the_oldest():

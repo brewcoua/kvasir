@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from pydantic import BaseModel, Field
 
 
@@ -99,6 +101,12 @@ class Progress(BaseModel):
 
     stage: str
     detail: str
+    # Unix time the event was published, so a client can place it on a timeline.
+    at: float = Field(default_factory=time.time)
+    # How far through the stage the run is, when the stage has a countable unit such as sections.
+    # `total` is an upper bound for research turns, since a conversation may end early.
+    done: int | None = None
+    total: int | None = None
 
 
 class Error(BaseModel):
@@ -113,21 +121,33 @@ class ModelUsage(BaseModel):
     calls: int
     prompt_tokens: int
     completion_tokens: int
+    # Part of `completion_tokens`, not in addition to it. Zero when the gateway does not report it.
+    reasoning_tokens: int
     # Whatever the gateway reported per call. Zero on a cache hit, and zero for a gateway that
     # reports no cost at all, which is not the same as free.
     cost: float
 
 
+class StageUsage(ModelUsage):
+    """What one stage spent, including what is not a completion."""
+
+    embedding_tokens: int
+    searches: int
+
+
 class RunUsage(BaseModel):
-    """A run's totals, and the two breakdowns worth having."""
+    """A run's totals, and the breakdowns worth having."""
 
     prompt_tokens: int
     completion_tokens: int
+    reasoning_tokens: int
     cost: float
     embedding_tokens: int
     searches: int
     by_model: dict[str, ModelUsage]
     by_role: dict[str, ModelUsage]
+    # Keyed by the stage the run was in when the call was made.
+    by_stage: dict[str, StageUsage]
 
 
 class RunSummary(BaseModel):
@@ -143,21 +163,44 @@ class RunSummary(BaseModel):
     ended_at: float | None
     error: str | None
     usage: RunUsage
+    # The stages a run of this kind goes through, in order, when that is known up front.
+    planned_stages: list[str]
+    latest: Progress | None
 
 
-class RunStage(BaseModel):
-    """When a run entered a stage, and when it left. `ended_at` is null while it is still there."""
+class RunSpan(BaseModel):
+    """One stretch of time spent in a stage. `ended_at` is null while the run is still in it."""
 
-    name: str
     started_at: float
     ended_at: float | None
 
 
-class RunDetail(RunSummary):
-    """One run, as `GET /v1/runs/{id}` returns it."""
+class RunStage(BaseModel):
+    """Time spent in one stage.
+
+    A stage can be entered more than once, as Co-STORM alternates between two, so `seconds` sums
+    the spans rather than measuring from the first entry to the last exit.
+    """
+
+    name: str
+    started_at: float
+    ended_at: float | None
+    seconds: float
+    spans: list[RunSpan]
+
+
+class RunStatus(RunSummary):
+    """A run's live state, as the `status` event of `GET /v1/runs/{id}/events` carries it."""
 
     stages: list[RunStage]
+
+
+class RunDetail(RunStatus):
+    """One run, as `GET /v1/runs/{id}` returns it."""
+
     events: list[Progress]
+    # What the run returned, once it has.
+    result: ResearchResult | Turn | Report | SessionInfo | None
 
 
 class RunStarted(BaseModel):

@@ -37,7 +37,9 @@ class ProgressStream:
         self._loop = asyncio.get_running_loop()
         self._queue: asyncio.Queue[Progress | None] = asyncio.Queue()
 
-    def publish(self, stage: str, detail: str) -> None:
+    def publish(
+        self, stage: str, detail: str, done: int | None = None, total: int | None = None
+    ) -> None:
         """Queue an event, and log it. Safe to call from any thread.
 
         Setting the stage here rather than at each call site keeps the two in step: a progress
@@ -45,9 +47,9 @@ class ProgressStream:
         spawns afterwards inherit it.
         """
         logs.set_stage(stage)
-        runs.record_progress(stage, detail)
+        event = Progress(stage=stage, detail=detail, done=done, total=total)
+        runs.record_progress(event)
         logger.info("%s", detail)
-        event = Progress(stage=stage, detail=detail)
         self._loop.call_soon_threadsafe(self._queue.put_nowait, event)
 
     def close(self) -> None:
@@ -65,14 +67,19 @@ class ProgressStream:
 class StormProgressHandler(BaseCallbackHandler):
     """Publishes STORM's callbacks onto a `ProgressStream`.
 
-    Called from STORM's own worker threads, so it holds nothing but two counters, both guarded
-    because sections and conversation turns are both produced concurrently.
+    Called from STORM's own worker threads, so it holds nothing but counters, guarded because
+    sections and conversation turns are both produced concurrently.
+
+    `max_conv_turn` bounds the research stage: each perspective holds a conversation of at most
+    that many turns. A conversation can end early, so the turn total is an upper bound.
     """
 
-    def __init__(self, stream: ProgressStream) -> None:
+    def __init__(self, stream: ProgressStream, max_conv_turn: int | None = None) -> None:
         self._stream = stream
+        self._max_conv_turn = max_conv_turn
         self._lock = threading.Lock()
         self._turns = 0
+        self._turns_total: int | None = None
         self._sections = 0
         self._sections_done = 0
 
@@ -80,6 +87,8 @@ class StormProgressHandler(BaseCallbackHandler):
         self._stream.publish(RESEARCH, "identifying perspectives")
 
     def on_identify_perspective_end(self, perspectives: list[str], **kwargs: Any) -> None:
+        if self._max_conv_turn is not None:
+            self._turns_total = len(perspectives) * self._max_conv_turn
         self._stream.publish(RESEARCH, f"identified {len(perspectives)} perspectives")
 
     def on_information_gathering_start(self, **kwargs: Any) -> None:
@@ -89,10 +98,15 @@ class StormProgressHandler(BaseCallbackHandler):
         with self._lock:
             self._turns += 1
             turns = self._turns
-        self._stream.publish(RESEARCH, f"completed conversation turn {turns}")
+        self._stream.publish(
+            RESEARCH, f"completed conversation turn {turns}", turns, self._turns_total
+        )
 
     def on_information_gathering_end(self, **kwargs: Any) -> None:
-        self._stream.publish(RESEARCH, f"gathered information over {self._turns} turns")
+        # Closes the bar: conversations that ended early leave the upper bound unreached.
+        self._stream.publish(
+            RESEARCH, f"gathered information over {self._turns} turns", self._turns, self._turns
+        )
 
     def on_information_organization_start(self, **kwargs: Any) -> None:
         self._stream.publish(OUTLINE, "organising what was found")
@@ -105,7 +119,9 @@ class StormProgressHandler(BaseCallbackHandler):
 
     def on_article_generation_start(self, sections: list[str], **kwargs: Any) -> None:
         self._sections = len(sections)
-        self._stream.publish(ARTICLE, f"writing {self._sections} sections with citations")
+        self._stream.publish(
+            ARTICLE, f"writing {self._sections} sections with citations", 0, self._sections
+        )
 
     def on_section_generation_start(self, section: str, **kwargs: Any) -> None:
         self._stream.publish(ARTICLE, f"writing {section}")
@@ -116,7 +132,9 @@ class StormProgressHandler(BaseCallbackHandler):
         with self._lock:
             self._sections_done += 1
             done = self._sections_done
-        self._stream.publish(ARTICLE, f"finished {section} ({done}/{self._sections})")
+        self._stream.publish(
+            ARTICLE, f"finished {section} ({done}/{self._sections})", done, self._sections
+        )
 
     def on_article_generation_end(self, **kwargs: Any) -> None:
         self._stream.publish(ARTICLE, "assembled the article")

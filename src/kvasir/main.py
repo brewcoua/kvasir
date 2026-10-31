@@ -33,7 +33,7 @@ from kvasir.models import (
     TaskRequest,
     TaskResponse,
 )
-from kvasir.progress import ProgressStream
+from kvasir.progress import ARTICLE, OUTLINE, POLISH, RESEARCH, ProgressStream
 from kvasir.research import run_research
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import Run, RunNotFound, RunRegistry
@@ -43,6 +43,9 @@ from kvasir.storm.lm import retry_budget
 from kvasir.storm.runtime import configure_concurrency
 
 READINESS_TIMEOUT_SECONDS = 5.0
+# How often a follower gets a fresh status while nothing else happens. Tokens are spent between
+# progress events, and the polishing stage publishes none for minutes.
+STATUS_INTERVAL_SECONDS = 2.0
 INDEX = Path(__file__).parent / "static" / "index.html"
 
 logger = logging.getLogger("kvasir")
@@ -128,6 +131,7 @@ async def research(request: ResearchRequest) -> Response:
         f"research {request.topic!r}",
         "storm",
         request.topic,
+        [RESEARCH, OUTLINE, ARTICLE] + ([POLISH] if request.do_polish_article else []),
     )
 
 
@@ -207,7 +211,8 @@ async def run_events(run_id: str) -> Response:
     """Follow a run live, including one this client did not start.
 
     Opens with a snapshot, so a client attaching midway sees what it missed rather than only what
-    happens next.
+    happens next. Each progress event is followed by a status, as is every idle interval, so usage
+    and stage timings stay current between snapshots.
     """
     return StreamingResponse(_watch(_run(run_id)), media_type=MEDIA_TYPE, headers=HEADERS)
 
@@ -223,13 +228,15 @@ def _run(run_id: str) -> Run:
 async def _watch(record: Run) -> AsyncIterator[str]:
     # Registered before the snapshot is taken, so a run that finishes in between still delivers its
     # terminal event rather than leaving the client waiting on one that already happened.
-    watcher = record.watch()
+    watcher = record.watch(heartbeat=STATUS_INTERVAL_SECONDS)
     try:
         detail = record.detail()
         yield frame("snapshot", detail)
         if detail.ended_at is None:
             async for event in watcher:
-                yield frame("progress", event)
+                if event is not None:
+                    yield frame("progress", event)
+                yield frame("status", record.status())
             yield frame("snapshot", record.detail())
     finally:
         record.unwatch(watcher)
@@ -261,7 +268,11 @@ async def _bad_session_id(request: Request, exc: SessionIdError) -> JSONResponse
 
 
 def _streamed(
-    work: Callable[[ProgressStream], BaseModel], description: str, kind: str, topic: str
+    work: Callable[[ProgressStream], BaseModel],
+    description: str,
+    kind: str,
+    topic: str,
+    planned_stages: list[str] | None = None,
 ) -> Response:
     """Run blocking work in a thread, streaming progress until it produces a result.
 
@@ -270,7 +281,7 @@ def _streamed(
     """
     # Registered before the slot is claimed, so a refusal is a run that shows up as rejected rather
     # than a 429 with nothing behind it. Saturation is the case where the registry earns its keep.
-    run = app.state.runs.start(kind, topic)
+    run = app.state.runs.start(kind, topic, planned_stages)
     if not app.state.run_slots.acquire(blocking=False):
         run.reject()
         logger.warning("rejected %s: every run slot is busy", description)
@@ -298,7 +309,10 @@ async def _events(
             # shared with the event loop, and the pipeline's pools inherit it with the context.
             with record.active():
                 logger.info("started %s", description)
-                return work(stream)
+                result = work(stream)
+                # Before the run ends, so the closing snapshot already carries it.
+                record.set_result(result)
+                return result
         finally:
             logger.info("finished %s in %.1fs", description, time.monotonic() - started)
             # Ends the iteration below even when the work raises.

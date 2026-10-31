@@ -61,7 +61,13 @@ class UsageSink(Protocol):
     """Where the pipeline reports what a run spent. Implemented outside this package."""
 
     def record_lm(
-        self, model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+        self,
+        model: str,
+        role: str | None,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cost: float,
+        reasoning_tokens: int = 0,
     ) -> None: ...
 
     def record_embedding(self, model: str, tokens: int) -> None: ...
@@ -85,12 +91,22 @@ def record_usage_into(sink: UsageSink) -> Iterator[None]:
 
 
 def record_lm_usage(
-    model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+    model: str,
+    role: str | None,
+    prompt_tokens: int,
+    completion_tokens: int,
+    cost: float,
+    reasoning_tokens: int = 0,
 ) -> None:
-    """Report one completion. A no-op when nothing is listening, which is the library case."""
+    """Report one completion. A no-op when nothing is listening, which is the library case.
+
+    `reasoning_tokens` is the part of `completion_tokens` a reasoning model spent thinking.
+    """
     sink = _usage_sink.get()
     if sink is not None:
-        sink.record_lm(model, role, prompt_tokens, completion_tokens, cost)
+        sink.record_lm(
+            model, role, prompt_tokens, completion_tokens, cost, reasoning_tokens=reasoning_tokens
+        )
 
 
 def current_usage_sink() -> UsageSink | None:

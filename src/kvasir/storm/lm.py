@@ -104,8 +104,9 @@ class GatewayModel(dspy.LM):
         usage = getattr(response, "usage", None) or {}
         if not isinstance(usage, dict):
             usage = dict(usage)
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
+        # A gateway may send a key with a null value, which `.get(key, 0)` would pass through.
+        prompt_tokens = usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("completion_tokens") or 0
 
         with self._token_usage_lock:
             self.prompt_tokens += prompt_tokens
@@ -117,8 +118,17 @@ class GatewayModel(dspy.LM):
             prompt_tokens,
             completion_tokens,
             response_cost(response),
+            reasoning_tokens=_reasoning_tokens(usage),
         )
         return response
+
+
+def _reasoning_tokens(usage: dict) -> int:
+    """The OpenAI shape, `completion_tokens_details.reasoning_tokens`, as a dict or an object."""
+    details = usage.get("completion_tokens_details")
+    if isinstance(details, dict):
+        return details.get("reasoning_tokens") or 0
+    return getattr(details, "reasoning_tokens", None) or 0
 
 
 def response_cost(response: Any) -> float:

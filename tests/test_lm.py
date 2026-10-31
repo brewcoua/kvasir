@@ -86,11 +86,19 @@ class _Sink:
 
     def __init__(self) -> None:
         self.lm: list[tuple[str, str | None, int, int, float]] = []
+        self.reasoning: list[int] = []
 
     def record_lm(
-        self, model: str, role: str | None, prompt_tokens: int, completion_tokens: int, cost: float
+        self,
+        model: str,
+        role: str | None,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cost: float,
+        reasoning_tokens: int = 0,
     ) -> None:
         self.lm.append((model, role, prompt_tokens, completion_tokens, cost))
+        self.reasoning.append(reasoning_tokens)
 
     def record_embedding(self, model: str, tokens: int) -> None:
         pass
@@ -143,6 +151,22 @@ def test_usage_reaches_the_sink_with_the_model_role(gateway: _Gateway) -> None:
         model(prompt="hello")
 
     assert sink.lm == [("openai/ollama/strong:cloud", "article_gen", 11, 5, 0.0)]
+    assert sink.reasoning == [0]
+
+
+def test_reasoning_tokens_reach_the_sink() -> None:
+    usage = {
+        "prompt_tokens": 11,
+        "completion_tokens": 50,
+        "completion_tokens_details": {"reasoning_tokens": 42},
+    }
+    with _Gateway(usage=usage) as g:
+        sink = _Sink()
+        with runtime.record_usage_into(sink):
+            _model(g)(prompt="hello")
+
+    assert sink.lm[0][3] == 50
+    assert sink.reasoning == [42]
 
 
 def test_token_usage_accumulates_and_resets(gateway: _Gateway) -> None:
