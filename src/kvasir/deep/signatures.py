@@ -93,7 +93,8 @@ class WriteSection(dspy.Signature):
 
     Use only the evidence. Cite every factual sentence with the bracketed ids of the claims that
     support it, such as [3] or [3][7]. Say plainly what the evidence does not settle. Do not repeat
-    what earlier sections said. Do not write the section title.
+    what earlier sections said. Do not write the section title. Mark a sub-section with a `###`
+    heading, not a line of bold text.
     """
 
     brief: str = dspy.InputField()

@@ -4,13 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>kvasir runs</title>
+    <!-- Before the first paint, so a stored theme does not flash the default one. -->
+    <script>
+      document.documentElement.dataset.theme = localStorage.getItem("theme") ?? "system";
+    </script>
     <!--
       Everything is inline. The image is read-only and has no outbound network, so a stylesheet or
       script from anywhere else would simply fail to load.
     -->
     <style>
-      :root {
-        color-scheme: light dark;
+      /* `system` follows the OS between light and dark. Every other theme is fixed. */
+      :root,
+      [data-theme="light"] {
+        color-scheme: light;
         --bg: #fbfbfa;
         --panel: #ffffff;
         --line: #e3e2df;
@@ -22,7 +28,9 @@
         --busy: #e08c00;
       }
       @media (prefers-color-scheme: dark) {
-        :root {
+        :root:not([data-theme]),
+        :root[data-theme="system"] {
+          color-scheme: dark;
           --bg: #16161a;
           --panel: #1e1e23;
           --line: #33333b;
@@ -33,6 +41,78 @@
           --bad: #ff8787;
           --busy: #ffc078;
         }
+      }
+      [data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #16161a;
+        --panel: #1e1e23;
+        --line: #33333b;
+        --text: #eceaea;
+        --dim: #9a978f;
+        --accent: #748ffc;
+        --ok: #69db7c;
+        --bad: #ff8787;
+        --busy: #ffc078;
+      }
+      [data-theme="paper"] {
+        color-scheme: light;
+        --bg: #f3eee3;
+        --panel: #faf7f0;
+        --line: #ddd4c1;
+        --text: #2b2622;
+        --dim: #776d60;
+        --accent: #9c3b26;
+        --ok: #4b7536;
+        --bad: #b3261e;
+        --busy: #a8670f;
+      }
+      [data-theme="riso"] {
+        color-scheme: light;
+        --bg: #f6f2ea;
+        --panel: #fffdf7;
+        --line: #e4dbcc;
+        --text: #1d2a6b;
+        --dim: #66688a;
+        --accent: #d61f7f;
+        --ok: #00805a;
+        --bad: #e0401f;
+        --busy: #c46a00;
+      }
+      [data-theme="amber"] {
+        color-scheme: dark;
+        --bg: #0f0c08;
+        --panel: #17130d;
+        --line: #33291b;
+        --text: #ffcf70;
+        --dim: #b08a48;
+        --accent: #ffb000;
+        --ok: #c7df6e;
+        --bad: #ff6f4f;
+        --busy: #ff9a1f;
+      }
+      [data-theme="moss"] {
+        color-scheme: dark;
+        --bg: #131913;
+        --panel: #1a221b;
+        --line: #2d392e;
+        --text: #e2e8da;
+        --dim: #94a18f;
+        --accent: #a3c96f;
+        --ok: #7fd49a;
+        --bad: #f08a7a;
+        --busy: #e6c165;
+      }
+      [data-theme="navy"] {
+        color-scheme: dark;
+        --bg: #0d1424;
+        --panel: #131c32;
+        --line: #26324f;
+        --text: #e5e9f3;
+        --dim: #8c97b2;
+        --accent: #e6c27d;
+        --ok: #7fd6a4;
+        --bad: #ff8a8a;
+        --busy: #f2b45c;
       }
       * {
         box-sizing: border-box;
@@ -67,6 +147,16 @@
           grid-template-columns: 1fr;
         }
       }
+      .theme {
+        margin-left: auto;
+      }
+      .theme select {
+        font: inherit;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+      }
       .panel {
         background: var(--panel);
         border: 1px solid var(--line);
@@ -82,23 +172,41 @@
         padding: 0.6rem 0.85rem;
         border-bottom: 1px solid var(--line);
       }
-      .runs button {
-        display: block;
-        width: 100%;
+      .runs .entry {
+        display: flex;
+        align-items: flex-start;
+        border-bottom: 1px solid var(--line);
+      }
+      .runs .entry:hover {
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      .runs .entry:has([aria-current="true"]) {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .runs .pick {
+        flex: 1;
+        min-width: 0;
         text-align: left;
         background: none;
         border: 0;
-        border-bottom: 1px solid var(--line);
         padding: 0.6rem 0.85rem;
         color: inherit;
         font: inherit;
         cursor: pointer;
       }
-      .runs button:hover {
-        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      .icon {
+        display: inline-flex;
+        margin: 0.55rem 0.6rem 0 0;
+        padding: 0.25rem;
+        color: var(--dim);
+        background: none;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
       }
-      .runs button[aria-current="true"] {
-        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      .icon:hover {
+        color: var(--accent);
+        border-color: var(--line);
       }
       .topic {
         display: block;
@@ -134,8 +242,16 @@
       th,
       td {
         text-align: left;
-        padding: 0.25rem 0.5rem 0.25rem 0;
+        padding: 0.25rem 0.5rem;
         border-bottom: 1px solid var(--line);
+      }
+      th:first-child,
+      td:first-child {
+        padding-left: 0;
+      }
+      th:last-child,
+      td:last-child {
+        padding-right: 0;
       }
       th {
         color: var(--dim);
@@ -145,7 +261,6 @@
       td.n,
       th.n {
         text-align: right;
-        padding-right: 0;
       }
       .scroll {
         overflow-x: auto;
@@ -284,28 +399,27 @@
       .action:hover {
         background: color-mix(in srgb, var(--accent) 8%, transparent);
       }
-      /* Fixed beside the page rather than over it, so the run stays readable while the result is
-         open. */
-      .drawer {
-        position: fixed;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: min(46rem, 92vw);
+      /* The whole page, so a long report reads at a comfortable width. */
+      .result {
+        width: 100vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .result[open] {
         display: flex;
         flex-direction: column;
-        background: var(--panel);
-        border-left: 1px solid var(--line);
-        box-shadow: -8px 0 24px rgb(0 0 0 / 12%);
-        z-index: 10;
       }
-      .drawer[hidden] {
-        display: none;
-      }
-      .drawer header {
+      .result header {
         gap: 0.5rem;
+        background: var(--panel);
       }
-      .drawer header h2 {
+      .result header h2 {
         font-size: 0.9rem;
         margin: 0;
         flex: 1;
@@ -313,10 +427,61 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .drawer .content {
+      .result .content {
         flex: 1;
         overflow-y: auto;
-        padding: 1rem 1.25rem;
+        padding: 1.5rem 1.25rem 3rem;
+      }
+      .result .page {
+        max-width: 48rem;
+        margin: 0 auto;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+      .cite {
+        display: inline-flex;
+        gap: 0.3em;
+        align-items: baseline;
+        margin: 0 0.1em;
+        padding: 0 0.4em;
+        border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        font-size: 0.75em;
+        line-height: 1.5;
+        white-space: nowrap;
+        text-decoration: none;
+        vertical-align: 0.1em;
+      }
+      .cite .n {
+        font-weight: 600;
+      }
+      .cite .host {
+        color: var(--dim);
+      }
+      .popover {
+        position: fixed;
+        z-index: 1;
+        max-width: 26rem;
+        padding: 0.5rem 0.7rem;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        pointer-events: none;
+      }
+      .popover[hidden] {
+        display: none;
+      }
+      .popover strong {
+        display: block;
+      }
+      .popover .quote {
+        margin-top: 0.35rem;
+        font-style: italic;
       }
       .prose {
         white-space: pre-wrap;
@@ -331,7 +496,8 @@
         padding-left: 1.5rem;
         font-size: 0.85rem;
       }
-      .citations a {
+      .citations a,
+      .claims a {
         color: var(--accent);
         overflow-wrap: anywhere;
       }
@@ -413,6 +579,39 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 0.85em;
       }
+      .markdown p,
+      .markdown ul,
+      .markdown ol,
+      .markdown pre,
+      .markdown blockquote,
+      .markdown .scroll {
+        margin: 0 0 0.85rem;
+      }
+      .markdown li + li,
+      .markdown li > ul,
+      .markdown li > ol {
+        margin-top: 0.25rem;
+      }
+      .markdown li > ul,
+      .markdown li > ol {
+        margin-bottom: 0;
+      }
+      .markdown pre {
+        overflow-x: auto;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+      }
+      .markdown blockquote {
+        padding-left: 0.85rem;
+        border-left: 3px solid var(--line);
+        color: var(--dim);
+      }
+      .markdown hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 1.25rem 0;
+      }
       .claims td {
         vertical-align: top;
         font-size: 0.85rem;
@@ -423,6 +622,19 @@
     <header>
       <h1>kvasir</h1>
       <span class="meta" id="summary">loading…</span>
+      <label class="meta theme">
+        Theme
+        <select id="theme">
+          <option>system</option>
+          <option>light</option>
+          <option>dark</option>
+          <option>paper</option>
+          <option>riso</option>
+          <option>amber</option>
+          <option>moss</option>
+          <option>navy</option>
+        </select>
+      </label>
     </header>
 
     <main>
@@ -474,14 +686,31 @@
       </section>
     </main>
 
-    <aside class="drawer" id="drawer" hidden aria-labelledby="drawer-title">
+    <!-- A page with lines of text, drawn inline because nothing loads from another origin. -->
+    <template id="result-icon">
+      <button type="button" class="icon" title="View result" aria-label="View result">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path
+            d="M4 1.5h5.5L13 5v9.5H4zM9.5 1.5V5H13M6 8h5M6 10.5h5M6 13h3"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.2"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+    </template>
+
+    <dialog class="result" id="result" aria-labelledby="result-title">
       <header>
-        <h2 id="drawer-title">Result</h2>
-        <button type="button" class="action" id="drawer-copy">Copy</button>
-        <button type="button" class="action" id="drawer-close" aria-label="Close">Close</button>
+        <h2 id="result-title">Result</h2>
+        <button type="button" class="action" id="result-copy">Copy</button>
+        <button type="button" class="action" id="result-close">Close</button>
       </header>
-      <div class="content" id="drawer-content"></div>
-    </aside>
+      <div class="content" id="result-content"></div>
+      <!-- Inside the dialog: a modal dialog sits above everything outside it. -->
+      <div class="popover" id="popover" hidden></div>
+    </dialog>
 
     <script>
       const LIST_INTERVAL_MS = 3000;
@@ -553,7 +782,8 @@
           return;
         }
         for (const run of runs) {
-          const button = document.createElement("button");
+          const entry = node("div", "entry");
+          const button = node("button", "pick");
           button.type = "button";
           button.setAttribute("aria-current", String(run.id === selected));
           button.append(node("span", "topic", run.topic));
@@ -573,7 +803,13 @@
           }
 
           button.addEventListener("click", () => select(run.id));
-          list.append(button);
+          entry.append(button);
+          if (run.has_result) {
+            const open = el("result-icon").content.firstElementChild.cloneNode(true);
+            open.addEventListener("click", async () => openResult(await json(`/v1/runs/${run.id}`)));
+            entry.append(open);
+          }
+          list.append(entry);
         }
       }
 
@@ -795,74 +1031,255 @@
       const INLINE =
         /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\((https?:[^)\s]+)\)|\[(\d+)\]/g;
 
+      // The citations of the result on show, by number, for the badges and their popover.
+      let sources = new Map();
+
+      function host(url) {
+        try {
+          return new URL(url).hostname.replace(/^www\./, "");
+        } catch {
+          return url;
+        }
+      }
+
+      function badge(number) {
+        const anchor = node("a", "cite");
+        anchor.href = `#cite-${number}`;
+        anchor.dataset.cite = number;
+        anchor.append(node("span", "n", number));
+        const citation = sources.get(Number(number));
+        if (citation) anchor.append(node("span", "host", host(citation.url)));
+        return anchor;
+      }
+
+      function showPopover(anchor) {
+        const citation = sources.get(Number(anchor.dataset.cite));
+        const popover = el("popover");
+        if (!citation) return;
+        popover.replaceChildren(
+          node("strong", "", citation.title || host(citation.url)),
+          node("div", "meta", citation.url),
+        );
+        if (citation.snippet) popover.append(node("div", "quote", citation.snippet));
+        popover.hidden = false;
+        const box = anchor.getBoundingClientRect();
+        const width = popover.offsetWidth;
+        const height = popover.offsetHeight;
+        popover.style.left = `${Math.max(8, Math.min(box.left, innerWidth - width - 8))}px`;
+        popover.style.top = `${box.bottom + height + 12 < innerHeight ? box.bottom + 6 : box.top - height - 6}px`;
+      }
+
+      for (const [kind, show] of [
+        ["mouseover", true],
+        ["focusin", true],
+        ["mouseout", false],
+        ["focusout", false],
+      ]) {
+        el("result-content").addEventListener(kind, (event) => {
+          const anchor = event.target.closest?.(".cite");
+          if (!anchor) return;
+          if (show) showPopover(anchor);
+          else el("popover").hidden = true;
+        });
+      }
+      el("result-content").addEventListener("scroll", () => (el("popover").hidden = true));
+
+      // Emphasis can hold a citation or a link, so its content is parsed too.
+      function nest(tag, source) {
+        const element = node(tag);
+        element.append(...inline(source));
+        return element;
+      }
+
       function inline(source) {
         const parts = [];
         let last = 0;
         for (const match of source.matchAll(INLINE)) {
           parts.push(text(source.slice(last, match.index)));
           const [, bold, italic, code, label, url, cite] = match;
-          if (bold !== undefined) parts.push(node("strong", "", bold));
-          else if (italic !== undefined) parts.push(node("em", "", italic));
+          if (bold !== undefined) parts.push(nest("strong", bold));
+          else if (italic !== undefined) parts.push(nest("em", italic));
           else if (code !== undefined) parts.push(node("code", "", code));
           else if (label !== undefined) parts.push(link(label, url));
-          else {
-            const anchor = node("a", "", `[${cite}]`);
-            anchor.href = `#cite-${cite}`;
-            parts.push(anchor);
-          }
+          else parts.push(badge(cite));
           last = match.index + match[0].length;
         }
         parts.push(text(source.slice(last)));
         return parts;
       }
 
-      // Headings, paragraphs and lists: what the pipelines write.
-      function markdown(source) {
-        const root = node("div", "markdown");
-        let paragraph = [];
-        let list = null;
-        const flush = () => {
-          if (paragraph.length > 0) {
-            const element = node("p");
-            element.append(...inline(paragraph.join(" ")));
-            root.append(element);
+      const FENCE = /^\s*(```|~~~)/;
+      const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
+      const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/;
+      const ITEM = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+      const QUOTE = /^\s{0,3}>\s?(.*)$/;
+      // A line that is nothing but bold text. Models write these as sub-headings.
+      const BOLD_LINE = /^\s*\*\*([^*]+)\*\*:?\s*$/;
+      const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+      // Two trailing spaces or a backslash: a line break that stays inside the paragraph.
+      const HARD_BREAK = /(?: {2,}|\\)$/;
+
+      const indentOf = (spaces) => spaces.replace(/\t/g, "    ").length;
+      const isTable = (lines, i) =>
+        lines[i].includes("|") && lines[i + 1]?.includes("|") && TABLE_RULE.test(lines[i + 1]);
+      const cells = (row) =>
+        row
+          .trim()
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map((cell) => cell.trim());
+
+      function startsBlock(lines, i) {
+        const line = lines[i];
+        return (
+          line.trim() === "" ||
+          [FENCE, RULE, HEADING, ITEM, QUOTE, BOLD_LINE].some((pattern) => pattern.test(line)) ||
+          isTable(lines, i)
+        );
+      }
+
+      // Lines joined by spaces, except where a line ends in a hard break.
+      function lineRun(element, lines) {
+        lines.forEach((line, index) => {
+          element.append(...inline(line.replace(HARD_BREAK, "").trim()));
+          if (index < lines.length - 1) {
+            element.append(HARD_BREAK.test(line) ? document.createElement("br") : text(" "));
           }
-          paragraph = [];
-          list = null;
+        });
+        return element;
+      }
+
+      function tableBlock(lines, i, root) {
+        const align = cells(lines[i + 1]).map((rule) =>
+          rule.endsWith(":") ? (rule.startsWith(":") ? "center" : "right") : "",
+        );
+        const element = document.createElement("table");
+        const row = (values, tag) => {
+          const tr = element.insertRow();
+          values.forEach((value, index) => {
+            const cell = document.createElement(tag);
+            if (align[index]) cell.style.textAlign = align[index];
+            cell.append(...inline(value));
+            tr.append(cell);
+          });
         };
-        for (const line of source.split("\n")) {
-          const heading = line.match(/^(#{1,6})\s+(.*)$/);
-          const item = line.match(/^\s*(?:([-*])|\d+\.)\s+(.*)$/);
-          if (heading) {
+        row(cells(lines[i]), "th");
+        i += 2;
+        while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") {
+          row(cells(lines[i]), "td");
+          i++;
+        }
+        const wrapper = node("div", "scroll");
+        wrapper.append(element);
+        root.append(wrapper);
+        return i;
+      }
+
+      // Nesting follows indentation. A blank line ends the list unless more of it follows.
+      function listBlock(lines, i, root) {
+        const stack = [];
+        let pending = null;
+        const flush = () => {
+          if (pending) lineRun(pending.item, pending.lines);
+          pending = null;
+        };
+        while (i < lines.length) {
+          const line = lines[i];
+          const match = !RULE.test(line) && line.match(ITEM);
+          if (match) {
             flush();
-            const element = node(`h${Math.min(heading[1].length + 1, 4)}`);
-            element.append(...inline(heading[2]));
-            root.append(element);
-          } else if (item) {
-            if (paragraph.length > 0) flush();
-            const tag = item[1] ? "ul" : "ol";
-            if (!list || list.tagName.toLowerCase() !== tag) {
-              list = node(tag);
-              root.append(list);
+            const depth = indentOf(match[1]);
+            const tag = /\d/.test(match[2]) ? "ol" : "ul";
+            while (stack.length > 0 && stack.at(-1).depth > depth) stack.pop();
+            let top = stack.at(-1);
+            if (!top || top.depth < depth || top.list.tagName.toLowerCase() !== tag) {
+              if (top?.depth === depth) stack.pop();
+              const list = node(tag);
+              if (tag === "ol" && parseInt(match[2], 10) !== 1) list.start = parseInt(match[2], 10);
+              (stack.at(-1)?.item ?? root).append(list);
+              top = { depth, list, item: null };
+              stack.push(top);
             }
-            const element = node("li");
-            element.append(...inline(item[2]));
-            list.append(element);
+            top.item = node("li");
+            top.list.append(top.item);
+            pending = { item: top.item, lines: [match[3]] };
+            i++;
           } else if (line.trim() === "") {
-            flush();
+            let next = i + 1;
+            while (next < lines.length && lines[next].trim() === "") next++;
+            const more =
+              next < lines.length &&
+              (ITEM.test(lines[next]) || (indentOf(lines[next].match(/^\s*/)[0]) >= 2 && pending));
+            if (!more) break;
+            i = next;
+          } else if (startsBlock(lines, i) && indentOf(line.match(/^\s*/)[0]) < 2) {
+            break;
           } else {
-            list = null;
-            paragraph.push(line.trim());
+            pending?.lines.push(line);
+            i++;
           }
         }
         flush();
+        return i;
+      }
+
+      // Everything is built from text nodes, so nothing in the markdown is ever parsed as HTML.
+      function blocks(lines, root) {
+        let i = 0;
+        while (i < lines.length) {
+          const line = lines[i];
+          let match;
+          if (line.trim() === "") {
+            i++;
+          } else if ((match = line.match(FENCE))) {
+            const body = [];
+            i++;
+            while (i < lines.length && !lines[i].trim().startsWith(match[1])) body.push(lines[i++]);
+            i++;
+            const pre = node("pre");
+            pre.append(node("code", "", body.join("\n")));
+            root.append(pre);
+          } else if (RULE.test(line)) {
+            root.append(node("hr"));
+            i++;
+          } else if ((match = line.match(HEADING))) {
+            const element = node(`h${Math.min(match[1].length + 1, 4)}`);
+            element.append(...inline(match[2]));
+            root.append(element);
+            i++;
+          } else if ((match = line.match(BOLD_LINE))) {
+            const element = node("h4");
+            element.append(...inline(match[1].trim()));
+            root.append(element);
+            i++;
+          } else if (isTable(lines, i)) {
+            i = tableBlock(lines, i, root);
+          } else if (ITEM.test(line)) {
+            i = listBlock(lines, i, root);
+          } else if (QUOTE.test(line)) {
+            const inner = [];
+            while (i < lines.length && QUOTE.test(lines[i])) inner.push(lines[i++].match(QUOTE)[1]);
+            const quote = node("blockquote");
+            blocks(inner, quote);
+            root.append(quote);
+          } else {
+            const paragraph = [line];
+            i++;
+            while (i < lines.length && !startsBlock(lines, i)) paragraph.push(lines[i++]);
+            root.append(lineRun(node("p"), paragraph));
+          }
+        }
         return root;
+      }
+
+      function markdown(source) {
+        return blocks(source.replace(/\r\n?/g, "\n").split("\n"), node("div", "markdown"));
       }
 
       // Every claim the run gathered, so any cited sentence can be checked against its quote.
       function claimTable(claims) {
         return table(
-          [["#", true], ["claim", false], ["quote", false], ["source", false], ["confidence", false]],
+          [["#", false], ["claim", false], ["quote", false], ["source", false], ["confidence", false]],
           claims.map((claim) => [
             claim.id,
             claim.text,
@@ -878,9 +1295,10 @@
       function openResult(run) {
         const result = run.result;
         shown = result;
-        el("drawer-title").textContent = run.topic;
-        const content = el("drawer-content");
-        content.replaceChildren();
+        sources = new Map((result.citations ?? []).map((citation) => [citation.index, citation]));
+        el("result-title").textContent = run.topic;
+        const content = node("div", "page");
+        el("result-content").replaceChildren(content);
         if (result.role) content.append(node("p", "meta", result.role));
         content.append(markdown(resultText(result)));
 
@@ -914,20 +1332,17 @@
           evidence.append(wrapper);
           content.append(evidence);
         }
-        el("drawer").hidden = false;
-        content.scrollTop = 0;
+        el("popover").hidden = true;
+        el("result").showModal();
+        el("result-content").scrollTop = 0;
       }
 
-      function closeResult() {
-        el("drawer").hidden = true;
-      }
+      // Escape closes the dialog natively.
+      const closeResult = () => el("result").close();
 
-      el("drawer-close").addEventListener("click", closeResult);
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeResult();
-      });
-      el("drawer-copy").addEventListener("click", async () => {
-        const copy = el("drawer-copy");
+      el("result-close").addEventListener("click", closeResult);
+      el("result-copy").addEventListener("click", async () => {
+        const copy = el("result-copy");
         await navigator.clipboard.writeText(resultText(shown));
         copy.textContent = "Copied";
         setTimeout(() => (copy.textContent = "Copy"), 1500);
@@ -942,11 +1357,6 @@
         heading.append(text(` · ${run.kind} · ${run.topic}`));
         panel.append(heading);
 
-        const live = node("div");
-        live.id = "live";
-        panel.append(live);
-        drawLive(run);
-
         if (run.result) {
           const open = node("button", "action", "View result");
           open.type = "button";
@@ -955,6 +1365,11 @@
           row.append(open);
           panel.append(row);
         }
+
+        const live = node("div");
+        live.id = "live";
+        panel.append(live);
+        drawLive(run);
 
         panel.append(node("h3", "", "Events"));
         const events = node("ul", "events");
@@ -1169,6 +1584,13 @@
       el("launch-text").addEventListener("input", resetClarify);
       for (const radio of form.elements.kind) radio.addEventListener("change", showKind);
       showKind();
+
+      const theme = el("theme");
+      theme.value = document.documentElement.dataset.theme;
+      theme.addEventListener("change", () => {
+        document.documentElement.dataset.theme = theme.value;
+        localStorage.setItem("theme", theme.value);
+      });
 
       refresh();
       setInterval(refresh, LIST_INTERVAL_MS);

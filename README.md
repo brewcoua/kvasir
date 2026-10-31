@@ -224,8 +224,12 @@ questions first; answer what you can, or skip. For a selected run it shows elaps
 tokens in and out, reasoning tokens, cost, searches and embedding tokens, then the stages on a
 timeline with each stage's duration and usage, the most recent model calls with a clock on any still
 waiting, the usage split by role and by model, the result once
-the run finishes, and the event log. Figures update live while the run is in progress. It is one
-self-contained file with no external asset, since the image is read-only and offline.
+the run finishes, and the event log. Figures update live while the run is in progress. A run with a
+result has an icon in the list that opens it directly. The result opens over the whole page, with
+each `[n]` shown as a badge naming the source's site; hovering or focusing one shows its title, URL
+and quote. The theme selector in the header offers `system`, `light`, `dark`, `paper`, `riso`,
+`amber`, `moss` and `navy`, and the choice is kept in the browser. It is one self-contained file
+with no external asset, since the image is read-only and offline.
 
 The same data is available as JSON.
 
