@@ -23,9 +23,11 @@ class Brief(dspy.Signature):
     """Turn a research question and its clarifications into a research brief.
 
     The brief states what to find out, the scope, and what a good answer contains. Record every
-    choice the question and the clarifications left open as an assumption.
+    choice the question and the clarifications left open as an assumption. A question about what
+    is best, latest or current is about the state of things on the given date.
     """
 
+    today: str = dspy.InputField(desc="today's date")
     question: str = dspy.InputField()
     clarifications: str = dspy.InputField(desc="questions asked and the answers given, or none")
     brief: str = dspy.OutputField(desc="one paragraph")
@@ -36,9 +38,11 @@ class PlanQueries(dspy.Signature):
     """Plan the next web searches for a research brief.
 
     The notes say what is known and what is missing. Search for what is missing. Do not repeat a
-    search the notes show was already done.
+    search the notes show was already done. When the brief is about the current state of things,
+    name the current year in the query, since what you know may be out of date.
     """
 
+    today: str = dspy.InputField(desc="today's date")
     brief: str = dspy.InputField()
     notes: str = dspy.InputField(desc="what is known so far, or empty at the start")
     count: int = dspy.InputField(desc="how many queries to return")

@@ -65,6 +65,12 @@ def test_render_numbers_sources_by_page_and_drops_made_up_ids():
     assert [(c.index, c.url) for c in citations] == [(1, "https://b"), (2, "https://a")]
 
 
+def test_render_drops_a_heading_that_repeats_the_section_title():
+    report, _ = render([("Key Findings", "### Key Findings\n\nText.\n\n### Detail\n\nMore.")], {})
+
+    assert report == "## Key Findings\n\nText.\n\n### Detail\n\nMore."
+
+
 @pytest.fixture
 def settings():
     return Settings.from_env(
@@ -137,9 +143,73 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
     assert result.assumptions == ["any source"]
     assert [stage for stage, _ in stream.events][:2] == ["brief", "research"]
     # One event per piece read, each naming its page, the snippet fallback included.
-    assert ("research", "round 1: reading A") in stream.events
-    assert ("research", "round 1: reading B") in stream.events
+    assert ("research", "round 1: page 1/2, part 1/1: A") in stream.events
+    assert ("research", "round 1: page 2/2, part 1/1: B") in stream.events
     assert stream.events[-1] == ("write", "assembled the report")
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        # Each one a quote gpt-oss wrote that the page supports, from a live run.
+        "trained using the Fill\u2011in\u2011the\u2011Middle objective",
+        "a context window of 16,384 tokens with a sliding window",
+        "43/43 layers to GPU): 27.63 tokens per second\nllama-2-13b-chat.ggmlv3.q8_0.bin",
+        "13B, quantised ... RAM allocation 7.1 GB",
+    ],
+)
+def test_a_quote_matches_despite_punctuation_and_ellipses(quote):
+    page = (
+        "Grouped Query Attention , a context window of 16,384 tokens with a sliding window "
+        "attention, and was trained using the Fill-in-the-Middle objective.\n"
+        "13B, quantised to 4 bits, llama-2-13b.bin RAM allocation 7.1 GB\n"
+        "- llama-2-13b-chat.ggmlv3.q4_0.bin (43/43 layers to GPU): 27.63 tokens per second\n"
+        "- llama-2-13b-chat.ggmlv3.q8_0.bin (43/43 layers to GPU): 19.94 tokens per second"
+    )
+
+    assert pipeline._quoted(quote, page)
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "a context window of 32,768 tokens",
+        # Fragments out of order.
+        "RAM allocation 7.1 GB ... 13B, quantised",
+        # A word that only appears inside a longer one.
+        "4 bit",
+        "",
+        "...",
+    ],
+)
+def test_a_quote_not_on_the_page_is_refused(quote):
+    page = "13B, quantised to 4 bits, RAM allocation 7.1 GB. A context window of 16,384 tokens."
+
+    assert not pipeline._quoted(quote, page)
+
+
+def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
+    # No outline or write replies: asking for either would exhaust the fake and fail the test.
+    fake_models(
+        monkeypatch,
+        {
+            "brief": [{"brief": "b", "assumptions": []}],
+            "plan": [{"queries": ["q"]}],
+            "intake": [{"findings": []}],
+        },
+    )
+    hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
+    )
+    monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
+    stream = Stream()
+
+    result = pipeline.run_research(settings, ResearchRequest(question="q", max_rounds=1), stream)
+
+    assert result.report == pipeline.NO_EVIDENCE
+    assert result.citations == []
+    assert stream.events[-1] == ("write", "no evidence found, so nothing to write")
 
 
 def test_unreadable_claims_cost_the_piece_not_the_run(monkeypatch):

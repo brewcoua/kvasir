@@ -7,6 +7,7 @@ enough. Calls are sequential: a local server answers one at a time, so fanning o
 
 from __future__ import annotations
 
+import datetime
 import logging
 import re
 import time
@@ -50,6 +51,11 @@ CLAIMS_PER_SECTION = 15
 # context with it.
 EARLIER_SECTION_CHARACTERS = 400
 
+NO_EVIDENCE = (
+    "## No findings\n\nNo page read during the research supported a claim about this question. "
+    "Try rephrasing it, or answering the clarifying questions."
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,10 +75,14 @@ def run_research(
     encoder, search = build_research_tools(settings)
     max_rounds = request.max_rounds or MAX_ROUNDS
 
+    # The model's sense of "now" is its training cutoff, so "best" would mean best then.
+    today = datetime.date.today().isoformat()
+
     stream.publish(BRIEF, "writing the research brief")
     framed = _predict(
         models["brief"],
         Brief,
+        today=today,
         question=request.question,
         clarifications=_clarifications(request.clarifications),
     )
@@ -86,6 +96,7 @@ def run_research(
         queries = _predict(
             models["plan"],
             PlanQueries,
+            today=today,
             brief=brief,
             notes=notes,
             count=request.queries_per_round or QUERIES_PER_ROUND,
@@ -96,18 +107,23 @@ def run_research(
             RESEARCH,
             f"round {round_number}: fetching {len(hits)} pages from {len(queries)} searches",
         )
-        pieces = [
-            (hit, piece)
+        pages = [
+            (hit, _relevant_pieces(encoder, brief, text))
             for hit, text in zip(hits, _fetch_all(hits), strict=True)
-            for piece in _relevant_pieces(encoder, brief, text)
+        ]
+        pieces = [
+            (page, part, hit, piece)
+            for page, (hit, parts) in enumerate(pages, 1)
+            for part, piece in enumerate(parts, 1)
         ]
         new: list[Claim] = []
         # Intake is most of a run's time, so each piece is its own event: the page being read is
         # what a follower wants to see, not the round.
-        for done, (hit, piece) in enumerate(pieces):
+        for done, (page, part, hit, piece) in enumerate(pieces):
             stream.publish(
                 RESEARCH,
-                f"round {round_number}: reading {hit['title'] or hit['url']}",
+                f"round {round_number}: page {page}/{len(pages)}, "
+                f"part {part}/{len(pages[page - 1][1])}: {hit['title'] or hit['url']}",
                 done,
                 len(pieces),
             )
@@ -131,6 +147,17 @@ def run_research(
             ).notes_out
         if len(new) < MIN_NEW_CLAIMS:
             break
+
+    if not claims:
+        # Writing sections from no evidence only produces paragraphs saying there is none.
+        stream.publish(WRITE, "no evidence found, so nothing to write")
+        return ResearchResult(
+            report=NO_EVIDENCE,
+            assumptions=list(framed.assumptions),
+            citations=[],
+            claims=[],
+            duration_seconds=round(time.monotonic() - started, 1),
+        )
 
     stream.publish(WRITE, "outlining the report")
     titles: list[str] = _predict(models["outline"], Outline, brief=brief, notes=notes).sections
@@ -229,11 +256,10 @@ def _intake(
     except AdapterParseError as exc:
         logger.warning("could not read the claims from %s: %s", hit["url"], exc)
         return []
-    haystack = _normalised(piece)
     claims: list[Claim] = []
     for finding in findings:
-        if not finding.quote.strip() or _normalised(finding.quote) not in haystack:
-            logger.info("dropped a claim whose quote is not on %s", hit["url"])
+        if not _quoted(finding.quote, piece):
+            logger.info("dropped a claim whose quote is not on %s: %r", hit["url"], finding.quote)
             continue
         claims.append(
             Claim(
@@ -249,5 +275,29 @@ def _intake(
     return claims
 
 
-def _normalised(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip().lower()
+def _quoted(quote: str, text: str) -> bool:
+    """Whether `quote` is in `text` word for word, an ellipsis standing for words left out.
+
+    Words only: models write a non-breaking hyphen where the page has a hyphen, join list items
+    without their bullets, and the extracted text has a break wherever the page had an inline tag,
+    as in "attention , a". None of that changes what the quote says.
+    """
+    haystack = _words(text)
+    fragments = [_words(part) for part in re.split(r"\.\.\.|…", quote)]
+    fragments = [fragment for fragment in fragments if fragment]
+    if not fragments:
+        return False
+    position = 0
+    for fragment in fragments:
+        found = haystack.find(fragment, position)
+        if found < 0:
+            return False
+        # Back one, so the next fragment can start at the space this one ended on.
+        position = found + len(fragment) - 1
+    return True
+
+
+def _words(text: str) -> str:
+    # Padded, so a fragment matches whole words only: "4 bit" is not found in "14 bits".
+    words = re.findall(r"\w+", text.lower())
+    return f" {' '.join(words)} "

@@ -40,7 +40,16 @@ def render(sections: list[tuple[str, str]], claims: dict[int, Claim]) -> tuple[s
         return "".join(markers)
 
     body = "\n\n".join(
-        f"## {title}\n\n" + _REPEAT.sub(r"\1", _MARKER.sub(renumber, text.strip()))
+        f"## {title}\n\n"
+        + _REPEAT.sub(r"\1", _MARKER.sub(renumber, _untitled(title, text.strip())))
         for title, text in sections
     )
     return body, citations
+
+
+def _untitled(title: str, text: str) -> str:
+    """The section without a first heading repeating its title, which models add anyway."""
+    first, _, rest = text.partition("\n")
+    if first.startswith("#") and first.lstrip("#").strip().lower() == title.strip().lower():
+        return rest.strip()
+    return text

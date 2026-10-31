@@ -160,7 +160,8 @@ page, and writes the report one section at a time from those claims. See
    `duration_seconds`.
 
 Optional fields: `max_rounds` (default 4), `queries_per_round` (4), `results_per_query` (3),
-`model_fast`, `model_strong`. A round that adds fewer than 5 claims ends the research early.
+`model_fast`, `model_strong`. A round that adds fewer than 5 claims ends the research early. A run
+that finds no claim at all says so in `report` and writes no sections.
 
 ## Write an article
 
