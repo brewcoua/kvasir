@@ -15,11 +15,11 @@ import pytest
 import uvicorn
 
 from kvasir import main
-from kvasir.models import Citation, Report, ResearchResult, SessionInfo, Turn
+from kvasir.models import ArticleResult, Citation, Report, SessionInfo, Turn
 
 PIPE_PATH = Path(__file__).parents[1] / "owui" / "pipe.py"
 
-RESULT = ResearchResult(
+RESULT = ArticleResult(
     article="# Discovery\n\nThe stone was catalogued in 1783 [1].",
     outline="# Discovery",
     citations=[
@@ -82,7 +82,7 @@ def service(monkeypatch, tmp_path):
         stream.publish("polish", "polishing the article")
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
+    monkeypatch.setattr(main, "run_article", fake_run)
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -277,7 +277,7 @@ async def test_a_task_goes_to_the_fast_model_and_takes_no_run(pipe, monkeypatch)
     run they describe.
     """
     researched = []
-    monkeypatch.setattr(main, "run_research", lambda *args: researched.append(args) or RESULT)
+    monkeypatch.setattr(main, "run_article", lambda *args: researched.append(args) or RESULT)
     monkeypatch.setattr(
         main, "build_task_model", lambda settings: lambda messages: ['{"title": "Kvasir Stone"}']
     )
@@ -335,7 +335,7 @@ async def test_a_failed_run_closes_the_reasoning_block(pipe, monkeypatch):
     def failing_run(settings, request, stream):
         raise RuntimeError("searxng returned nothing")
 
-    monkeypatch.setattr(main, "run_research", failing_run)
+    monkeypatch.setattr(main, "run_article", failing_run)
     events = Events()
 
     answer = await run(pipe, storm("x"), events)
@@ -390,7 +390,7 @@ async def test_only_the_last_user_message_is_researched(pipe, monkeypatch):
         sent["topic"] = request.topic
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", capture)
+    monkeypatch.setattr(main, "run_article", capture)
     await run(
         pipe,
         {
@@ -415,7 +415,7 @@ async def test_unset_valves_leave_the_defaults_to_the_service(pipe, monkeypatch)
         sent["request"] = request
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", capture)
+    monkeypatch.setattr(main, "run_article", capture)
     await run(pipe, storm("x"))
 
     request = sent["request"]
@@ -432,7 +432,7 @@ async def test_a_user_valve_overrides_the_admin_one(pipe, monkeypatch):
         sent["request"] = request
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", capture)
+    monkeypatch.setattr(main, "run_article", capture)
     pipe.valves.SEARCH_TOP_K = 3
     user = {"valves": {"SEARCH_TOP_K": 9, "POLISH": "off"}}
 

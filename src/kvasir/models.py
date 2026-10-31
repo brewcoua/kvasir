@@ -7,8 +7,8 @@ import time
 from pydantic import BaseModel, Field
 
 
-class ResearchRequest(BaseModel):
-    """Body of `POST /v1/research`.
+class ArticleRequest(BaseModel):
+    """Body of `POST /v1/article`.
 
     Every field but the topic falls back to the configured default when omitted.
     """
@@ -44,7 +44,7 @@ class Citation(BaseModel):
     snippet: str
 
 
-class ResearchResult(BaseModel):
+class ArticleResult(BaseModel):
     """Payload of the `done` event."""
 
     article: str
@@ -200,7 +200,7 @@ class RunDetail(RunStatus):
 
     events: list[Progress]
     # What the run returned, once it has.
-    result: ResearchResult | Turn | Report | SessionInfo | None
+    result: ArticleResult | Turn | Report | SessionInfo | None
 
 
 class RunStarted(BaseModel):

@@ -11,8 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from kvasir import research
-from kvasir.models import ResearchRequest
+from kvasir import article
+from kvasir.models import ArticleRequest
 from kvasir.progress import ARTICLE, POLISH, ProgressStream
 
 
@@ -48,19 +48,19 @@ class _Runner:
 @pytest.fixture
 def runner(monkeypatch, tmp_path):
     built = _Runner(tmp_path / "out")
-    monkeypatch.setattr(research, "build_storm_runner", lambda *args, **kwargs: built)
+    monkeypatch.setattr(article, "build_storm_runner", lambda *args, **kwargs: built)
     return built
 
 
 async def _run(request, stream):
-    return research.run_research(object(), request, stream)
+    return article.run_article(object(), request, stream)
 
 
 @pytest.mark.asyncio
 async def test_the_pipeline_is_driven_by_a_single_run_call(runner):
     stream = ProgressStream()
 
-    result = await _run(ResearchRequest(topic="Antikythera"), stream)
+    result = await _run(ArticleRequest(topic="Antikythera"), stream)
     stream.close()
 
     assert runner.calls == [{"do_polish_article": True}]
@@ -72,7 +72,7 @@ async def test_post_run_is_left_to_the_engine(runner):
     """run() calls it now, so calling it again here would truncate the LM call history."""
     stream = ProgressStream()
 
-    await _run(ResearchRequest(topic="Antikythera"), stream)
+    await _run(ArticleRequest(topic="Antikythera"), stream)
     stream.close()
 
     assert runner.post_run_calls == 0
@@ -82,7 +82,7 @@ async def test_post_run_is_left_to_the_engine(runner):
 async def test_sections_and_polishing_are_reported_as_they_happen(runner):
     stream = ProgressStream()
 
-    await _run(ResearchRequest(topic="Antikythera"), stream)
+    await _run(ArticleRequest(topic="Antikythera"), stream)
     stream.close()
 
     events = [(event.stage, event.detail) async for event in stream]
@@ -95,7 +95,7 @@ async def test_sections_and_polishing_are_reported_as_they_happen(runner):
 async def test_polishing_is_skipped_when_the_request_disables_it(runner):
     stream = ProgressStream()
 
-    await _run(ResearchRequest(topic="Antikythera", do_polish_article=False), stream)
+    await _run(ArticleRequest(topic="Antikythera", do_polish_article=False), stream)
     stream.close()
 
     assert runner.calls == [{"do_polish_article": False}]

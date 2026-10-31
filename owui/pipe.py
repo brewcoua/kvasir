@@ -243,7 +243,7 @@ class Pipe:
         async with aiohttp.ClientSession(timeout=timeout) as http:
             yield think.start()
             request = self._request(topic, options)
-            async for line in self._call(http, "POST", "/v1/research", request, think, status, out):
+            async for line in self._call(http, "POST", "/v1/article", request, think, status, out):
                 yield line
             yield think.close()
 

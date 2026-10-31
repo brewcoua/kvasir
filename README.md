@@ -77,7 +77,7 @@ for SearXNG only.
    {"gateway":true,"searxng":true}
    ```
 
-Then [research a topic](#research-a-topic). On one local model a run takes much longer than through
+Then [write an article](#write-an-article). On one local model a run takes much longer than through
 a hosted gateway.
 
 kvasir binds `0.0.0.0:8080` and has no authentication, so on a laptop it is reachable from the local
@@ -123,10 +123,10 @@ writable. `/tmp` is required, not optional: dspy creates a disk cache directory 
 imported, whether or not caching is on, and `src/kvasir/storm/__init__.py` points `DSPY_CACHEDIR`
 there. A run's scratch directory also lives under `/tmp`.
 
-## Research a topic
+## Write an article
 
 ```bash
-curl -N -X POST localhost:8080/v1/research \
+curl -N -X POST localhost:8080/v1/article \
   -H 'content-type: application/json' \
   -d '{"topic": "The Antikythera mechanism"}'
 ```

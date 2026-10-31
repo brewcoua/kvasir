@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kvasir import main
-from kvasir.models import Citation, Report, ResearchResult, SessionInfo, Turn
+from kvasir.models import ArticleResult, Citation, Report, SessionInfo, Turn
 
 ENVIRONMENT = {
     "OPENAI_API_KEY": "key",
@@ -17,7 +17,7 @@ ENVIRONMENT = {
     "KVASIR_SEARXNG_URL": "http://searxng.example",
 }
 
-RESULT = ResearchResult(
+RESULT = ArticleResult(
     article="# Discovery\n\nText [1].",
     outline="# Discovery",
     citations=[Citation(index=1, url="https://example.org/a", title="A", snippet="s")],
@@ -89,14 +89,14 @@ def test_readyz_treats_an_unreachable_dependency_as_not_ready(client, monkeypatc
     assert client.get("/readyz").status_code == 503
 
 
-def test_research_streams_progress_then_the_article(client, monkeypatch):
+def test_article_streams_progress_then_the_article(client, monkeypatch):
     def fake_run(settings, request, stream):
         stream.publish("research", "asking questions")
         stream.publish("article", "writing sections")
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    response = client.post("/v1/research", json={"topic": "The Kvasir stone"})
+    monkeypatch.setattr(main, "run_article", fake_run)
+    response = client.post("/v1/article", json={"topic": "The Kvasir stone"})
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
@@ -111,19 +111,19 @@ def test_research_streams_progress_then_the_article(client, monkeypatch):
     assert events[-1][1]["citations"][0]["index"] == 1
 
 
-def test_research_reports_a_failure_as_an_error_event(client, monkeypatch):
+def test_article_reports_a_failure_as_an_error_event(client, monkeypatch):
     def fake_run(settings, request, stream):
         raise RuntimeError("gateway refused the connection")
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     assert [name for name, _ in events] == ["run", "error"]
     assert "gateway refused the connection" in events[-1][1]["message"]
 
 
-def test_research_rejects_an_empty_topic(client):
-    assert client.post("/v1/research", json={"topic": ""}).status_code == 422
+def test_article_rejects_an_empty_topic(client):
+    assert client.post("/v1/article", json={"topic": ""}).status_code == 422
 
 
 def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
@@ -150,7 +150,7 @@ def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
 def test_a_task_takes_no_run_and_no_slot(client, monkeypatch):
     monkeypatch.setattr(main, "build_task_model", lambda settings: lambda messages: ["ok"])
     # Standing in for the run this task is describing: with one slot, a task routed through
-    # /v1/research would be refused by it. Held for the whole call, so a slot taken and released
+    # /v1/article would be refused by it. Held for the whole call, so a slot taken and released
     # would not go unnoticed either.
     assert main.app.state.run_slots.acquire(blocking=False)
 
@@ -168,27 +168,27 @@ def test_a_task_needs_at_least_one_message(client):
 
 
 def test_a_slot_is_released_after_every_run(client, monkeypatch):
-    monkeypatch.setattr(main, "run_research", lambda *args: RESULT)
+    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
 
     for _ in range(3):
-        assert client.post("/v1/research", json={"topic": "x"}).status_code == 200
+        assert client.post("/v1/article", json={"topic": "x"}).status_code == 200
 
 
 def test_saturation_returns_429_rather_than_queueing(client, monkeypatch):
-    monkeypatch.setattr(main, "run_research", lambda *args: RESULT)
+    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
     # Standing in for a run already in flight. TestClient buffers a streaming response, so an
     # actual concurrent request cannot be held open here.
     assert main.app.state.run_slots.acquire(blocking=False)
 
     try:
-        response = client.post("/v1/research", json={"topic": "second"})
+        response = client.post("/v1/article", json={"topic": "second"})
     finally:
         main.app.state.run_slots.release()
 
     assert response.status_code == 429
     assert "busy" in response.json()["message"]
     # Refusal must not consume a slot, or the service deadlocks after the first refusal.
-    assert client.post("/v1/research", json={"topic": "third"}).status_code == 200
+    assert client.post("/v1/article", json={"topic": "third"}).status_code == 200
 
 
 @pytest.fixture

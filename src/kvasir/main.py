@@ -20,10 +20,11 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from kvasir import conversation, logs
+from kvasir.article import run_article
 from kvasir.config import Settings, apply_environment
 from kvasir.models import (
+    ArticleRequest,
     Error,
-    ResearchRequest,
     RunDetail,
     RunStarted,
     RunSummary,
@@ -34,7 +35,6 @@ from kvasir.models import (
     TaskResponse,
 )
 from kvasir.progress import ARTICLE, OUTLINE, POLISH, RESEARCH, ProgressStream
-from kvasir.research import run_research
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import Run, RunNotFound, RunRegistry
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
@@ -122,13 +122,13 @@ async def _reachable(url: str, headers: dict[str, str] | None = None) -> bool:
     return result.status_code < 500
 
 
-@app.post("/v1/research")
-async def research(request: ResearchRequest) -> Response:
+@app.post("/v1/article")
+async def article(request: ArticleRequest) -> Response:
     """Run STORM and stream progress until the article is ready."""
     settings: Settings = app.state.settings
     return _streamed(
-        lambda stream: run_research(settings, request, stream),
-        f"research {request.topic!r}",
+        lambda stream: run_article(settings, request, stream),
+        f"article {request.topic!r}",
         "storm",
         request.topic,
         [RESEARCH, OUTLINE, ARTICLE] + ([POLISH] if request.do_polish_article else []),
@@ -183,7 +183,7 @@ async def task(request: TaskRequest) -> TaskResponse:
 
     Open WebUI generates a chat title, tags and follow-up prompts by asking whichever model the
     chat is using, which for a kvasir chat is the pipe. Those are not research: sent to
-    `/v1/research` they each take a run slot, and with one slot they collide with the very run they
+    `/v1/article` they each take a run slot, and with one slot they collide with the very run they
     are summarising. Deliberately not `_streamed` — no run is registered and no slot is claimed.
     """
     settings: Settings = app.state.settings

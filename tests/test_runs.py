@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kvasir import main, runs
-from kvasir.models import Progress, ResearchResult
+from kvasir.models import ArticleResult, Progress
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
@@ -22,7 +22,7 @@ ENVIRONMENT = {
     "KVASIR_SEARXNG_URL": "http://searxng.example",
 }
 
-RESULT = ResearchResult(article="a", outline="o", citations=[], duration_seconds=1.0)
+RESULT = ArticleResult(article="a", outline="o", citations=[], duration_seconds=1.0)
 
 
 @pytest.fixture
@@ -50,8 +50,8 @@ def test_a_run_reaches_done(client, monkeypatch):
         stream.publish("article", "writing")
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(client.post("/v1/research", json={"topic": "The Kvasir stone"}).text)
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
     run_id = events[0][1]["run_id"]
 
     detail = client.get(f"/v1/runs/{run_id}").json()
@@ -68,8 +68,8 @@ def test_a_failed_run_keeps_the_reason(client, monkeypatch):
     def fake_run(settings, request, stream):
         raise RuntimeError("gateway refused the connection")
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
     assert detail["state"] == "failed"
@@ -78,10 +78,10 @@ def test_a_failed_run_keeps_the_reason(client, monkeypatch):
 
 def test_a_rejected_run_is_recorded(client, monkeypatch):
     """A 429 with nothing behind it is exactly the case the registry exists to explain."""
-    monkeypatch.setattr(main, "run_research", lambda *args: RESULT)
+    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
     main.app.state.run_slots.acquire()
     try:
-        assert client.post("/v1/research", json={"topic": "x"}).status_code == 429
+        assert client.post("/v1/article", json={"topic": "x"}).status_code == 429
     finally:
         main.app.state.run_slots.release()
 
@@ -91,9 +91,9 @@ def test_a_rejected_run_is_recorded(client, monkeypatch):
 
 
 def test_runs_are_listed_newest_first(client, monkeypatch):
-    monkeypatch.setattr(main, "run_research", lambda settings, request, stream: RESULT)
+    monkeypatch.setattr(main, "run_article", lambda settings, request, stream: RESULT)
     for topic in ("first", "second"):
-        client.post("/v1/research", json={"topic": topic})
+        client.post("/v1/article", json={"topic": topic})
 
     assert [run["topic"] for run in client.get("/v1/runs").json()] == ["second", "first"]
 
@@ -118,8 +118,8 @@ def test_usage_is_attributed_to_the_running_run(client, monkeypatch):
         runtime.record_search_usage("SearXNG", 3)
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
     assert usage["prompt_tokens"] == 140
@@ -139,8 +139,8 @@ def test_usage_reported_from_a_pool_still_lands_on_the_run(client, monkeypatch):
             list(executor.map(lambda _: runtime.record_lm_usage("m", "r", 10, 1, 0.0), range(8)))
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
     assert usage["by_model"]["m"]["calls"] == 8
@@ -185,8 +185,8 @@ def test_a_watcher_follows_a_run_from_another_thread():
 
 
 def test_watching_a_finished_run_does_not_hang(client, monkeypatch):
-    monkeypatch.setattr(main, "run_research", lambda settings, request, stream: RESULT)
-    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+    monkeypatch.setattr(main, "run_article", lambda settings, request, stream: RESULT)
+    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     frames = parse(client.get(f"/v1/runs/{events[0][1]['run_id']}/events").text)
 
@@ -217,8 +217,8 @@ def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
         runtime.current_usage_sink().record_embedding("e", 300)
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(client.post("/v1/research", json={"topic": "x"}).text)
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
     by_stage = usage["by_stage"]
@@ -236,10 +236,8 @@ def test_a_finished_run_carries_its_result_and_plan(client, monkeypatch):
         stream.publish("article", "finished a (1/2)", 1, 2)
         return RESULT
 
-    monkeypatch.setattr(main, "run_research", fake_run)
-    events = parse(
-        client.post("/v1/research", json={"topic": "x", "do_polish_article": False}).text
-    )
+    monkeypatch.setattr(main, "run_article", fake_run)
+    events = parse(client.post("/v1/article", json={"topic": "x", "do_polish_article": False}).text)
 
     detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
     assert detail["result"]["article"] == RESULT.article

@@ -7,17 +7,17 @@ import time
 from pathlib import Path
 
 from kvasir.config import Settings
-from kvasir.models import ResearchRequest, ResearchResult
+from kvasir.models import ArticleRequest, ArticleResult
 from kvasir.outputs import read_article, read_citations, read_outline
 from kvasir.progress import ProgressStream, StormProgressHandler
 from kvasir.runners import build_storm_runner
 
 
-def run_research(
+def run_article(
     settings: Settings,
-    request: ResearchRequest,
+    request: ArticleRequest,
     stream: ProgressStream,
-) -> ResearchResult:
+) -> ArticleResult:
     """Run STORM to completion, blocking for minutes. Never call this on the event loop.
 
     The scratch directory is created and removed here rather than by the caller. Tying it to the
@@ -28,8 +28,8 @@ def run_research(
 
 
 def _run(
-    settings: Settings, request: ResearchRequest, stream: ProgressStream, scratch: Path
-) -> ResearchResult:
+    settings: Settings, request: ArticleRequest, stream: ProgressStream, scratch: Path
+) -> ArticleResult:
     started = time.monotonic()
 
     runner = build_storm_runner(
@@ -49,7 +49,7 @@ def _run(
 
     # run() records where it wrote, so the topic-to-directory rule is never reimplemented here.
     output = Path(runner.article_output_dir)
-    return ResearchResult(
+    return ArticleResult(
         article=read_article(output),
         outline=read_outline(output),
         citations=read_citations(output),
