@@ -13,7 +13,14 @@ from kvasir.deep import fetch, pipeline, verify
 from kvasir.deep.fetch import FetchError, extract, split
 from kvasir.deep.render import matrix, render
 from kvasir.deep.store import Claim, Question
-from kvasir.models import Cell, Clarification, Criterion, ResearchRequest, Row
+from kvasir.models import (
+    Cell,
+    Clarification,
+    Criterion,
+    RemovedSentence,
+    ResearchRequest,
+    Row,
+)
 
 PAGE = (
     "<html><body><nav>Home | About</nav><h1>The stone</h1>"
@@ -190,7 +197,9 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
                 }
             ],
             "decompose": [{"questions": ["When was the stone found?"]}],
-            "plan": [{"query": "kvasir stone found"}],
+            # The question's search, then the repair's four for the removed sentence, which find
+            # only pages already read.
+            "plan": [{"query": "kvasir stone found"}] + [{"query": f"gold {n}"} for n in range(4)],
             "intake": [
                 {
                     "findings": [
@@ -255,7 +264,8 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         "research",
         "search 1: 1 new claims, 1 in all; When was the stone found?: answered",
     ) in stream.events
-    assert stream.events[-1] == ("verify", "removed 1 of 2 cited sentences")
+    assert ("verify", "removed 1 of 2 cited sentences") in stream.events
+    assert stream.events[-1] == ("verify", "found support for 0 of the sections they came from")
 
 
 @pytest.mark.parametrize(
@@ -812,14 +822,61 @@ def test_a_repeated_question_is_not_added(monkeypatch):
 
 
 def test_the_report_ends_with_what_the_research_did_not_settle():
+    searched = ["q"]
     ledger = [
-        Question(id=1, text="When?", status="answered"),
-        Question(id=2, text="Who?", status="unresolved"),
-        Question(id=3, text="Why?", status="weak"),
-        Question(id=4, text="Where?", status="contradicted"),
+        Question(id=1, text="When?", status="answered", queries=searched),
+        Question(id=2, text="Who?", status="unresolved", queries=searched),
+        Question(id=3, text="Why?", status="weak", queries=searched),
+        Question(id=4, text="Where?", status="contradicted", queries=searched),
         Question(id=5, text="cost of Alpha", status="open", cell=("Alpha", "cost")),
+        Question(id=6, text="How?", status="open"),
+        # A follow-up the budget never reached.
+        Question(id=7, text="How exactly?", status="open", parent=1, depth=1),
     ]
 
     assert pipeline._open_questions(ledger) == (
-        "- Who? (not found)\n- Why? (partly answered)\n- Where? (sources disagree)"
+        "- Who? (not found)\n- Why? (partly answered)\n- Where? (sources disagree)\n"
+        "- How? (not searched)"
     )
+
+
+def test_a_section_whose_removed_sentence_the_search_supports_is_written_again():
+    claims = [claim(1, "https://a")]
+    removed = [
+        RemovedSentence(section="Findings", sentence="It is gold [1].", reason="no gold"),
+        RemovedSentence(section="Ranking", sentence="Row [1].", reason="never asked"),
+    ]
+    searched = []
+
+    def research(questions, budget, judge):
+        searched.append([(q.text, q.missing) for q in questions])
+        claims.append(claim(2, "https://b", quote="solid gold"))
+        questions[0].status, questions[0].claims = "answered", [2]
+
+    models = {
+        "write": DummyLM([{"text": "It is gold [2]. It shines [2]."}]),
+        "verify": DummyLM(
+            [{"supported": True, "reason": "says gold"}, {"supported": False, "reason": "no shine"}]
+        ),
+    }
+
+    sections, left = pipeline._repair(
+        models,
+        Encoder(),
+        "brief",
+        ["Findings"],
+        claims,
+        [("Ranking", "| table |"), ("Findings", "Found in 1904 [1].")],
+        removed,
+        research,
+        lambda q: None,
+        Stream(),
+    )
+
+    # Only sentences from written sections: the ranking table is built, not written.
+    assert searched == [[("It is gold.", "no gold")]]
+    assert sections == [("Ranking", "| table |"), ("Findings", "It is gold [2].")]
+    assert [(r.section, r.sentence) for r in left] == [
+        ("Ranking", "Row [1]."),
+        ("Findings", "It shines [2]."),
+    ]

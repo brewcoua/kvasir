@@ -11,7 +11,7 @@ import datetime
 import logging
 import re
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from statistics import mean
 from typing import Any, TypeVar
 
@@ -86,6 +86,10 @@ STALL_SEARCHES = 4
 FAILED_SEARCHES = 3
 # Claims given to one section, the closest to its title.
 CLAIMS_PER_SECTION = 15
+# Sentences verification removed that are searched for again, at most, and the searches that may
+# take. One pass: a rewritten section's own removals stand.
+REPAIR_SENTENCES = 4
+REPAIR_SEARCHES = 4
 # How much of each earlier section a later one sees, to avoid repeating it without filling the
 # context with it.
 EARLIER_SECTION_CHARACTERS = 400
@@ -254,24 +258,9 @@ def run_research(
     sections: list[tuple[str, str]] = []
     for done, title in enumerate(titles):
         stream.publish(WRITE, f"writing {title}", done, len(titles))
-        evidence = [
-            claims[i]
-            for i in closest(
-                encoder, f"{title}\n{brief}", [c.text for c in claims], CLAIMS_PER_SECTION
-            )
-        ]
-        text = _predict(
-            models["write"],
-            WriteSection,
-            brief=brief,
-            outline="\n".join(titles),
-            section=title,
-            earlier_sections="\n\n".join(
-                f"{t}: {body[:EARLIER_SECTION_CHARACTERS]}" for t, body in sections
-            ),
-            evidence=_listed(evidence),
-        ).text
-        sections.append((title, text))
+        sections.append(
+            (title, _write(models["write"], encoder, brief, titles, title, sections, claims))
+        )
     stream.publish(WRITE, "assembled the report", len(titles), len(titles))
     if rows:
         sections.insert(0, (TABLE_TITLES[output], matrix(rows, criteria)))
@@ -281,6 +270,14 @@ def run_research(
     by_id = {claim.id: claim for claim in claims}
     sections, removed = _verify(models["verify"], sections, by_id, stream)
 
+    def judge(question: Question) -> None:
+        _check(models["check"], encoder, brief, claims, question)
+
+    sections, removed = _repair(
+        models, encoder, brief, titles, claims, sections, removed, research, judge, stream
+    )
+
+    by_id = {claim.id: claim for claim in claims}
     report, citations = render(sections, by_id)
     return ResearchResult(
         report=report,
@@ -294,6 +291,88 @@ def run_research(
         matrix=rows,
         duration_seconds=round(time.monotonic() - started, 1),
     )
+
+
+def _write(
+    model: GatewayModel,
+    encoder: Encoder,
+    brief: str,
+    titles: list[str],
+    title: str,
+    earlier: list[tuple[str, str]],
+    claims: list[Claim],
+    extra: Iterable[int] = (),
+) -> str:
+    """One section, from the claims closest to its title and the `extra` claim ids."""
+    shown = closest(encoder, f"{title}\n{brief}", [c.text for c in claims], CLAIMS_PER_SECTION)
+    ids = {claims[i].id for i in shown} | set(extra)
+    return str(
+        _predict(
+            model,
+            WriteSection,
+            brief=brief,
+            outline="\n".join(titles),
+            section=title,
+            earlier_sections="\n\n".join(
+                f"{t}: {body[:EARLIER_SECTION_CHARACTERS]}" for t, body in earlier
+            ),
+            evidence=_listed([c for c in claims if c.id in ids]),
+        ).text
+    )
+
+
+def _repair(
+    models: dict[str, GatewayModel],
+    encoder: Encoder,
+    brief: str,
+    titles: list[str],
+    claims: list[Claim],
+    sections: list[tuple[str, str]],
+    removed: list[RemovedSentence],
+    research: Callable[[list[Question], int, Judge], None],
+    judge: Judge,
+    stream: ProgressStream,
+) -> tuple[list[tuple[str, str]], list[RemovedSentence]]:
+    """Search for what verification removed, and write again the sections the search supports.
+
+    A removed sentence is often true, cited to a claim that does not say it. Each becomes a
+    question; a section whose question the search answers is written again with the claims that
+    answer it, and checked again.
+    """
+    picked = [r for r in removed if r.section in titles][:REPAIR_SENTENCES]
+    if not picked:
+        return sections, removed
+    questions = [
+        Question(id=n, text=verify.unmarked(r.sentence), missing=r.reason, judged_at=len(claims))
+        for n, r in enumerate(picked, 1)
+    ]
+    stream.publish(VERIFY, f"searching again for {len(picked)} removed sentences")
+    research(questions, REPAIR_SEARCHES, judge)
+    found: dict[str, list[int]] = {}
+    for sentence, question in zip(picked, questions, strict=True):
+        if question.status == "answered":
+            found.setdefault(sentence.section, []).extend(question.claims)
+    stream.publish(VERIFY, f"found support for {len(found)} of the sections they came from")
+
+    by_id = {claim.id: claim for claim in claims}
+    sections = list(sections)
+    for title, ids in found.items():
+        index = next(i for i, (t, _) in enumerate(sections) if t == title)
+        stream.publish(VERIFY, f"writing {title} again")
+        text = _write(
+            models["write"],
+            encoder,
+            brief,
+            titles,
+            title,
+            [s for s in sections[:index] if s[0] in titles],
+            claims,
+            ids,
+        )
+        [(_, kept)], again = _verify(models["verify"], [(title, text)], by_id, stream)
+        sections[index] = (title, kept)
+        removed = [r for r in removed if r.section != title] + again
+    return sections, removed
 
 
 def _candidates(
@@ -697,12 +776,13 @@ UNSETTLED = {
 def _open_questions(ledger: list[Question]) -> str:
     """The questions the research did not settle, as a list for the end of the report.
 
-    Empty cells are left out: the table already shows them as a dash.
+    Empty cells are left out: the table already shows them as a dash. So are follow-ups the budget
+    never reached, which were only suggestions; a first question it never reached says so.
     """
     return "\n".join(
-        f"- {q.text} ({UNSETTLED[q.status]})"
+        f"- {q.text} ({UNSETTLED[q.status] if q.attempts else 'not searched'})"
         for q in ledger
-        if q.status in UNSETTLED and q.cell is None
+        if q.status in UNSETTLED and q.cell is None and (q.attempts or q.depth == 0)
     )
 
 

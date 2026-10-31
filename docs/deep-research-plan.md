@@ -2,9 +2,9 @@
 
 Status: phases 0 to 5 built (report output, clarify, dashboard, verification, ranking and
 table, Open WebUI), and the phase 6 harness (`python -m kvasir.deep.evaluate`). Written 2026-10-31.
-Phases 7 to 9, [adaptive research](#adaptive-research), the
-[settings modal](#settings-modal) and the questions in the result, built 2026-11-01, without the
-baseline evaluation phase 7 asks for; phase 10 planned. The [Pipeline](#pipeline) section predates
+Phases 7 to 10, [adaptive research](#adaptive-research), the
+[settings modal](#settings-modal), the questions in the result and the repair, built 2026-11-01,
+without the baseline evaluation phases 7 and 10 ask for. The [Pipeline](#pipeline) section predates
 them: phase 7 replaced its `rounds` stage.
 
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
@@ -249,6 +249,9 @@ repeat until the search budget is spent, nothing is open or weak, or 4 searches 
 outline      from the ledger
 write        as now
 verify       as now
+repair       up to 4 removed sentences become questions, with 4 searches between them; a section
+             whose question is answered is written again with the claims that answer it, and
+             checked again. One pass: the rewritten section's own removals stand
 render       adds an "Open questions" section from the unresolved questions
 ```
 

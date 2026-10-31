@@ -42,6 +42,11 @@ def cited(sentence: str) -> list[int]:
     ]
 
 
+def unmarked(sentence: str) -> str:
+    """`sentence` without its claim markers."""
+    return " ".join(re.sub(rf"\s*{_MARKER.pattern}", "", sentence).split())
+
+
 def verify(
     title: str,
     text: str,

@@ -133,9 +133,10 @@ there. A run's scratch directory also lives under `/tmp`.
 searches for one at a time: a question the search leaves open is searched for again with a narrower
 query, and one it answers can add harder follow-ups. It reads each page in pieces small enough for
 a 16k context, keeps only claims whose quote appears word for word on the page, and writes the
-report one section at a time from those claims. Each sentence that cites a
-claim is then checked against the claim's quote, and taken out if the quote does not support it. See
-[`docs/deep-research-plan.md`](docs/deep-research-plan.md) for the design.
+report one section at a time from those claims. Each sentence that cites a claim is then checked
+against the claim's quote, and taken out if the quote does not support it. Up to 4 removed
+sentences are searched for again, and a section whose search finds support is written and checked
+once more. See [`docs/deep-research-plan.md`](docs/deep-research-plan.md) for the design.
 
 1. Optionally, ask what the question leaves open. This is one fast-model call, like `/v1/tasks`: it
    registers no run and takes no slot.
