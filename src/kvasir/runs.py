@@ -3,8 +3,9 @@
 A run is minutes of work behind a single streaming response, so a client that disconnects, or one
 that never started the run, has no way to find out how it is going. The registry is that record.
 
-It lives in memory. Runs are observation, not state: nothing resumes from one, and a restart is
-allowed to forget them. That is what keeps a database out of this.
+It lives in memory. Runs are observation, not state: nothing resumes from one, and by default a
+restart forgets them. With KVASIR_RUN_STORE set to sqlite, each run is also written to a
+`RunStore` when it starts and when it ends, which is history for debugging rather than state.
 
 Usage is reported by the pipeline itself, through `kvasir.storm.runtime`'s sink. A `Run` is the
 sink, found through a contextvar rather than passed down, because the reporting happens deep inside
@@ -17,11 +18,11 @@ import asyncio
 import threading
 import time
 from collections import deque
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from kvasir import logs
@@ -40,9 +41,11 @@ from kvasir.models import (
 )
 from kvasir.storm import runtime
 
+if TYPE_CHECKING:
+    from kvasir.run_store import RunStore
+
 # Enough to see what happened over a working session, and bounded so a long-lived process cannot
 # grow without limit. Neither is configuration worth exposing.
-MAX_RUNS = 100
 MAX_EVENTS = 200
 MAX_CALLS = 50
 
@@ -62,7 +65,7 @@ _END: Any = object()
 
 
 class RunNotFound(Exception):
-    """No run with that id. Either it never existed or it aged out of the registry."""
+    """No run with that id. Either it never existed or it aged out of retention."""
 
 
 @dataclass
@@ -141,6 +144,8 @@ class Run:
     error: str | None = None
     planned_stages: list[str] = field(default_factory=list)
     result: RunResult | None = None
+    # Called once the run reaches a terminal state, outside the lock.
+    on_end: Callable[[Run], None] | None = field(default=None, repr=False)
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _stages: dict[str, _Stage] = field(default_factory=dict, repr=False)
@@ -192,6 +197,8 @@ class Run:
             self.ended_at = time.time()
             if self.stage is not None:
                 self._stages[self.stage].leave(self.ended_at)
+        if self.on_end is not None:
+            self.on_end(self)
         self._notify(_END)
 
     def record_progress(self, event: Progress) -> None:
@@ -282,6 +289,7 @@ class Run:
                 usage=self._usage(),
                 planned_stages=self.planned_stages,
                 latest=self._events[-1] if self._events else None,
+                has_result=self.result is not None,
             )
 
     def status(self) -> RunStatus:
@@ -364,15 +372,23 @@ class _Watcher:
 
 
 class RunRegistry:
-    """The most recent runs, newest first. Older ones fall off the end."""
+    """The most recent runs, newest first. Older ones fall off the end.
 
-    def __init__(self, limit: int = MAX_RUNS) -> None:
+    Memory holds the runs this process started. A store, when there is one, holds those of earlier
+    processes too, and answers for any run memory has dropped.
+    """
+
+    def __init__(self, limit: int, store: RunStore | None = None) -> None:
         self._lock = threading.Lock()
         self._runs: dict[str, Run] = {}
         self._limit = limit
+        self._store = store
 
     def start(self, kind: str, topic: str, planned_stages: list[str] | None = None) -> Run:
         run = Run(id=uuid4().hex[:12], kind=kind, topic=topic, planned_stages=planned_stages or [])
+        if self._store is not None:
+            run.on_end = self._store.save
+            self._store.save(run)
         with self._lock:
             self._runs[run.id] = run
             while len(self._runs) > self._limit:
@@ -381,12 +397,28 @@ class RunRegistry:
         return run
 
     def get(self, run_id: str) -> Run | None:
+        """A run this process holds in memory, which is the only kind that can be followed live."""
         with self._lock:
             return self._runs.get(run_id)
 
-    def list(self) -> list[Run]:
+    def summaries(self) -> list[RunSummary]:
         with self._lock:
-            return list(reversed(self._runs.values()))
+            live = list(reversed(self._runs.values()))
+        summaries = [run.summary() for run in live]
+        if self._store is not None:
+            held = {summary.id for summary in summaries}
+            summaries += [stored for stored in self._store.summaries() if stored.id not in held]
+            summaries.sort(key=lambda summary: summary.created_at, reverse=True)
+        return summaries[: self._limit]
+
+    def detail(self, run_id: str) -> RunDetail:
+        run = self.get(run_id)
+        if run is not None:
+            return run.detail()
+        stored = self._store.detail(run_id) if self._store is not None else None
+        if stored is None:
+            raise RunNotFound(run_id)
+        return stored
 
 
 @contextmanager

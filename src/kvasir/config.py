@@ -53,6 +53,9 @@ class Settings:
     searxng_url: str
     data_dir: Path
     session_ttl_hours: int
+    run_store: str
+    max_runs: int
+    run_ttl_days: int
     max_concurrent_runs: int
     max_threads: int
     search_top_k: int
@@ -65,6 +68,10 @@ class Settings:
     @property
     def sessions_dir(self) -> Path:
         return self.data_dir / "sessions"
+
+    @property
+    def runs_db(self) -> Path:
+        return self.data_dir / "kvasir.db"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -100,6 +107,11 @@ class Settings:
             searxng_url=env["KVASIR_SEARXNG_URL"].strip().rstrip("/"),
             data_dir=Path(env.get("KVASIR_DATA_DIR", "").strip() or "/data"),
             session_ttl_hours=_positive_int(env, "KVASIR_SESSION_TTL_HOURS", 168),
+            # Memory by default: a client such as Open WebUI keeps its own record of every answer,
+            # so history across restarts is for debugging the service itself.
+            run_store=_run_store(env),
+            max_runs=_positive_int(env, "KVASIR_MAX_RUNS", 100),
+            run_ttl_days=_positive_int(env, "KVASIR_RUN_TTL_DAYS", 30),
             max_concurrent_runs=_positive_int(env, "KVASIR_MAX_CONCURRENT_RUNS", 1),
             # How wide each of the pipeline's thread pools runs, and how many search or page
             # requests may be in flight at once across the whole process.
@@ -169,6 +181,13 @@ def _log_format(env: Mapping[str, str]) -> str:
     value = (env.get("LOG_FORMAT", "").strip() or "json").lower()
     if value not in ("json", "text"):
         raise ConfigError(f"LOG_FORMAT must be json or text, got {value!r}")
+    return value
+
+
+def _run_store(env: Mapping[str, str]) -> str:
+    value = (env.get("KVASIR_RUN_STORE", "").strip() or "memory").lower()
+    if value not in ("memory", "sqlite"):
+        raise ConfigError(f"KVASIR_RUN_STORE must be memory or sqlite, got {value!r}")
     return value
 
 

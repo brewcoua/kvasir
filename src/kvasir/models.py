@@ -243,6 +243,8 @@ class RunSummary(BaseModel):
     # The stages a run of this kind goes through, in order, when that is known up front.
     planned_stages: list[str]
     latest: Progress | None
+    # Whether the detail carries a result, so a list can offer it without fetching every detail.
+    has_result: bool
 
 
 class RunSpan(BaseModel):

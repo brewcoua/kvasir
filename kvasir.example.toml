@@ -12,6 +12,8 @@ reasoning_effort = "none"
 searxng_url = "http://localhost:8888"
 
 data_dir = "data"
+# Keeps runs across restarts in data/kvasir.db, for debugging. The default is memory.
+run_store = "sqlite"
 # Ollama answers one request at a time by default, so a wide pool only queues.
 max_threads = 2
 log_format = "text"

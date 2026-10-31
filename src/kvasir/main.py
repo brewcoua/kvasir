@@ -39,6 +39,7 @@ from kvasir.models import (
     TaskResponse,
 )
 from kvasir.progress import ARTICLE, BRIEF, OUTLINE, POLISH, RESEARCH, WRITE, ProgressStream
+from kvasir.run_store import RunStore
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import Run, RunNotFound, RunRegistry
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
@@ -68,9 +69,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # without blocking keeps this usable from the event loop.
     app.state.run_slots = threading.BoundedSemaphore(settings.max_concurrent_runs)
     app.state.sessions = SessionStore(settings.sessions_dir, settings.session_ttl_hours)
-    app.state.runs = RunRegistry()
+    store = (
+        RunStore(settings.runs_db, settings.run_ttl_days, settings.max_runs)
+        if settings.run_store == "sqlite"
+        else None
+    )
+    app.state.runs = RunRegistry(settings.max_runs, store)
     # Once, here. Expiry needs no scheduler and no background task.
     app.state.sessions.sweep()
+    if store is not None:
+        store.sweep()
     logger.info(
         "kvasir ready, gateway %s, searxng %s, %d concurrent run(s)",
         settings.openai_api_base,
@@ -227,13 +235,15 @@ async def task(request: TaskRequest) -> TaskResponse:
 
 @app.get("/v1/runs")
 async def list_runs() -> list[RunSummary]:
-    """Every run the process remembers, newest first."""
-    return [record.summary() for record in app.state.runs.list()]
+    """Every run kept, newest first."""
+    registry: RunRegistry = app.state.runs
+    return registry.summaries()
 
 
 @app.get("/v1/runs/{run_id}")
 async def run_detail(run_id: str) -> RunDetail:
-    return _run(run_id).detail()
+    registry: RunRegistry = app.state.runs
+    return registry.detail(run_id)
 
 
 @app.get("/v1/runs/{run_id}/events")
@@ -244,15 +254,15 @@ async def run_events(run_id: str) -> Response:
     happens next. Each progress event is followed by a status, as is every idle interval, so usage
     and stage timings stay current between snapshots.
     """
-    return StreamingResponse(_watch(_run(run_id)), media_type=MEDIA_TYPE, headers=HEADERS)
-
-
-def _run(run_id: str) -> Run:
     registry: RunRegistry = app.state.runs
     record = registry.get(run_id)
-    if record is None:
-        raise RunNotFound(run_id)
-    return record
+    # A run only the store holds has ended, so its whole stream is the one snapshot.
+    events = _watch(record) if record is not None else _stored(registry.detail(run_id))
+    return StreamingResponse(events, media_type=MEDIA_TYPE, headers=HEADERS)
+
+
+async def _stored(detail: RunDetail) -> AsyncIterator[str]:
+    yield frame("snapshot", detail)
 
 
 async def _watch(record: Run) -> AsyncIterator[str]:

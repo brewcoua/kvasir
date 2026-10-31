@@ -231,7 +231,7 @@ The same data is available as JSON.
 
 | Request | Effect |
 | --- | --- |
-| `GET /v1/runs` | Every run the process remembers, newest first. |
+| `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
 | `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 50 model calls, recent events and its result. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` after each `progress` and every 2 seconds in between. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
@@ -254,8 +254,17 @@ Cost comes from what the call reports. Three shapes are read, in order: the cost
 computes for a model it recognises, a LiteLLM proxy's `x-litellm-response-cost` response header, and
 a `cost` field in the response's `usage` object, either a number or split into `prompt_cost` and
 `completion_cost` as Bifrost reports it. A gateway that reports no cost, for a model dspy does not
-price, leaves it at zero, which is not the same as free. Runs are held in memory, capped at the 100 most recent, and do not
-survive a restart.
+price, leaves it at zero, which is not the same as free.
+
+Runs are held in memory, capped at the `KVASIR_MAX_RUNS` most recent, and by default do not survive
+a restart. With `KVASIR_RUN_STORE=sqlite` they are also written to `$KVASIR_DATA_DIR/kvasir.db`,
+once when they start and once when they end, and the list and detail routes read from it as well.
+A run still `queued` or `running` there at startup was cut short by the restart, and is marked
+`failed` with the error `interrupted by a restart`. Retention is applied at startup and after each
+run ends: older than `KVASIR_RUN_TTL_DAYS`, or beyond the `KVASIR_MAX_RUNS` most recent, is deleted.
+Only a run in this process's memory can be followed live; following a stored one sends its snapshot
+and ends. Memory is the default because a client such as Open WebUI keeps its own record of every
+answer, so the store is for debugging the service.
 
 ## Configuration
 
@@ -276,8 +285,11 @@ is a complete file for a local Ollama.
 | `KVASIR_MODEL_STRONG` | required | Outline and article generation. |
 | `KVASIR_SEARXNG_URL` | required | SearXNG base URL. |
 | `KVASIR_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model. Used by both modes. |
-| `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions. |
+| `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions, and for the run database. |
 | `KVASIR_SESSION_TTL_HOURS` | `168` | Session expiry, applied at startup. |
+| `KVASIR_RUN_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |
+| `KVASIR_MAX_RUNS` | `100` | Runs kept, most recent first, in either store. |
+| `KVASIR_RUN_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
 | `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
 | `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |

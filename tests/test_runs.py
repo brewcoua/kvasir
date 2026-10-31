@@ -9,8 +9,8 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from kvasir import main, runs
-from kvasir.models import ArticleResult, Progress
+from kvasir import main, run_store, runs
+from kvasir.models import ArticleResult, Progress, Report, ResearchResult
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
@@ -32,6 +32,16 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
     with TestClient(main.app) as client:
         yield client
+
+
+@pytest.fixture
+def sqlite(monkeypatch, tmp_path):
+    """Starts the app with runs kept in SQLite. Entering it again is a restart."""
+    for name, value in ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("KVASIR_RUN_STORE", "sqlite")
+    return lambda: TestClient(main.app)
 
 
 def parse(text):
@@ -302,7 +312,7 @@ def test_the_registry_forgets_the_oldest():
     registry.start("storm", "three")
 
     assert registry.get(first.id) is None
-    assert [run.topic for run in registry.list()] == ["three", "two"]
+    assert [run.topic for run in registry.summaries()] == ["three", "two"]
 
 
 def test_the_page_is_self_contained(client):
@@ -316,3 +326,76 @@ def test_the_page_is_self_contained(client):
     assert "<title>kvasir runs</title>" in body
     for origin in ("http://", "https://", "//cdn", "src=", "@import"):
         assert origin not in body, origin
+
+
+def test_memory_mode_writes_no_database(client, tmp_path):
+    assert not (tmp_path / "data" / "kvasir.db").exists()
+
+
+def test_a_run_survives_a_restart(sqlite, monkeypatch):
+    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
+    with sqlite() as client:
+        events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+        run_id = events[0][1]["run_id"]
+
+    with sqlite() as client:
+        (summary,) = client.get("/v1/runs").json()
+        assert summary["id"] == run_id
+        assert summary["state"] == "done"
+        assert summary["has_result"] is True
+
+        detail = client.get(f"/v1/runs/{run_id}").json()
+        assert detail["result"]["article"] == "a"
+
+        # A stored run has ended, so following it gives the one snapshot.
+        (snapshot,) = parse(client.get(f"/v1/runs/{run_id}/events").text)
+        assert snapshot[0] == "snapshot"
+        assert snapshot[1]["id"] == run_id
+
+        assert client.get("/v1/runs/missing").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        ResearchResult(
+            report="r", assumptions=["a"], citations=[], claims=[], duration_seconds=1.0
+        ),
+        Report(report="r", citations=[]),
+    ],
+)
+def test_a_stored_result_keeps_its_type(tmp_path, result):
+    """`RunResult` is an untagged union, and these two share their `report` field."""
+    store = run_store.RunStore(tmp_path / "kvasir.db", ttl_days=30, limit=10)
+    run = runs.RunRegistry(10, store).start("research", "t")
+    run.set_result(result)
+    run._finish(runs.DONE, None)
+
+    assert type(store.detail(run.id).result) is type(result)
+
+
+def test_a_run_cut_short_by_a_restart_is_marked_interrupted(tmp_path):
+    path = tmp_path / "kvasir.db"
+    run = runs.RunRegistry(10, run_store.RunStore(path, ttl_days=30, limit=10)).start("storm", "t")
+
+    store = run_store.RunStore(path, ttl_days=30, limit=10)
+    store.sweep()
+
+    (summary,) = store.summaries()
+    assert summary.state == "failed"
+    assert summary.error == run_store.INTERRUPTED
+    assert summary.ended_at == summary.created_at
+    assert store.detail(run.id).state == "failed"
+
+
+def test_the_store_keeps_only_what_retention_allows(tmp_path, monkeypatch):
+    store = run_store.RunStore(tmp_path / "kvasir.db", ttl_days=1, limit=2)
+    registry = runs.RunRegistry(10, store)
+    old = registry.start("storm", "old")
+    old.created_at -= 2 * run_store.SECONDS_PER_DAY
+    old._finish(runs.DONE, None)
+    for topic in ("one", "two", "three"):
+        registry.start(topic=topic, kind="storm")._finish(runs.DONE, None)
+
+    assert [summary.topic for summary in store.summaries()] == ["three", "two"]
+    assert store.detail(old.id) is None

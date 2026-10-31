@@ -24,6 +24,10 @@ def test_defaults():
     assert settings.search_top_k == settings.max_conv_turn == settings.max_perspective == 3
     assert settings.log_level == "INFO"
     assert settings.log_format == "json"
+    assert settings.run_store == "memory"
+    assert settings.runs_db.name == "kvasir.db"
+    assert settings.max_runs == 100
+    assert settings.run_ttl_days == 30
 
 
 @pytest.mark.parametrize("name", sorted(MINIMAL))
@@ -92,6 +96,13 @@ def test_log_format_is_checked():
 
     with pytest.raises(ConfigError, match="LOG_FORMAT"):
         Settings.from_env(MINIMAL | {"LOG_FORMAT": "logfmt"})
+
+
+def test_run_store_is_checked():
+    assert Settings.from_env(MINIMAL | {"KVASIR_RUN_STORE": "SQLite"}).run_store == "sqlite"
+
+    with pytest.raises(ConfigError, match="KVASIR_RUN_STORE"):
+        Settings.from_env(MINIMAL | {"KVASIR_RUN_STORE": "postgres"})
 
 
 def test_apply_environment_disables_telemetry(monkeypatch):
