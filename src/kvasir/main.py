@@ -40,6 +40,8 @@ from kvasir.models import (
 )
 from kvasir.progress import (
     ARTICLE,
+    ASSESS,
+    BACKGROUND,
     BRIEF,
     OUTLINE,
     POLISH,
@@ -165,7 +167,10 @@ async def research(request: ResearchRequest) -> Response:
         f"research {request.question!r}",
         "research",
         request.question,
-        [BRIEF, RESEARCH, WRITE, VERIFY],
+        # Background and assess happen only for a ranking or a table, which the brief may choose.
+        [BRIEF, RESEARCH, WRITE, VERIFY]
+        if request.output == "report"
+        else [BRIEF, BACKGROUND, RESEARCH, ASSESS, WRITE, VERIFY],
     )
 
 

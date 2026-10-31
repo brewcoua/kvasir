@@ -155,15 +155,44 @@ claim is then checked against the claim's quote, and taken out if the quote does
           "clarifications": [{"question": "What hardware?", "answer": "One 24 GB GPU"}]}'
    ```
 
-   It streams like an article run. Stages are `brief`, `research`, `write` and `verify`. The
-   `done` frame carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief
-   decided on your behalf), `citations`, `claims` (every claim gathered, each with its quote and
-   source), `removed` (each sentence verification took out, with its section and the reason) and
-   `duration_seconds`.
+   It streams like an article run. Stages are `brief`, `background`, `research`, `assess`,
+   `write` and `verify`; `background` and `assess` run only for a ranking or a table. The `done`
+   frame carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief decided on
+   your behalf), `citations`, `claims` (every claim gathered, each with its quote and source),
+   `removed` (each sentence verification took out, with its section and the reason), `output`,
+   `criteria`, `matrix` and `duration_seconds`.
 
-Optional fields: `max_rounds` (default 4), `queries_per_round` (4), `results_per_query` (3),
-`model_fast`, `model_strong`. A round that adds fewer than 5 claims ends the research early. A run
-that finds no claim at all says so in `report` and writes no sections.
+Optional fields: `output`, `criteria`, `entities`, `max_rounds` (default 4), `queries_per_round`
+(4), `results_per_query` (3), `model_fast`, `model_strong`. A round that adds fewer than 5 claims
+ends the research early. A run that finds no claim at all says so in `report` and writes no
+sections.
+
+### Rank or compare options
+
+Ask for it in the question: "Rank the best phones of 2026 on price, performance and privacy". The
+brief reads the output type (`ranking`, `table` or `report`), the criteria and the options from the
+question. Criteria and options it names are used as given. What it leaves open the run chooses from
+a first search: at most 8 options, and 3 to 5 criteria weighted 1 to 3 by importance. Named
+criteria weigh 1 each. The request fields `output`, `criteria` and `entities` override the question,
+for clients that already have them as data.
+
+```bash
+curl -N -X POST localhost:8080/v1/research \
+  -H 'content-type: application/json' \
+  -d '{"question": "Rank the open-weight coding models that fit one 24 GB GPU on coding benchmark score, VRAM at 4-bit and licence"}'
+```
+
+The run then assesses each option on each criterion from the claims closest to that pair, keeping
+only claims that name the option. A cell with no such claim gets one more search, for at most 8
+cells. A ranking ranks the options with a finding on each criterion twice, the second time in
+reverse order, since models favour what they read first. Options with no finding tie for last place
+on that criterion. The overall order is the weighted mean of those places. An option the run chooses
+must appear in its first search's results.
+
+The report opens with a table of findings, each cell cited. `matrix` holds the same rows: per option
+its overall `rank`, and per criterion its `finding`, `claims` (claim ids, as in `claims`) and
+`rank`. A table has no ranks. The dashboard shows a ranking as places coloured from best to worst
+in each column, with the finding and its sources on hover.
 
 ## Write an article
 

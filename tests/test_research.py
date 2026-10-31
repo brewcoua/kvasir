@@ -8,9 +8,9 @@ from dspy.utils.dummies import DummyLM
 from kvasir.config import Settings
 from kvasir.deep import fetch, pipeline, verify
 from kvasir.deep.fetch import FetchError, extract, split
-from kvasir.deep.render import render
+from kvasir.deep.render import matrix, render
 from kvasir.deep.store import Claim
-from kvasir.models import Clarification, ResearchRequest
+from kvasir.models import Cell, Clarification, Criterion, ResearchRequest, Row
 
 PAGE = (
     "<html><body><nav>Home | About</nav><h1>The stone</h1>"
@@ -93,7 +93,15 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
     fake_models(
         monkeypatch,
         {
-            "brief": [{"brief": "When was the stone found?", "assumptions": ["any source"]}],
+            "brief": [
+                {
+                    "brief": "When was the stone found?",
+                    "assumptions": ["any source"],
+                    "output": "report",
+                    "criteria": [],
+                    "entities": [],
+                }
+            ],
             "plan": [{"queries": ["kvasir stone found"]}],
             "intake": [
                 {
@@ -200,7 +208,15 @@ def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
     fake_models(
         monkeypatch,
         {
-            "brief": [{"brief": "b", "assumptions": []}],
+            "brief": [
+                {
+                    "brief": "b",
+                    "assumptions": [],
+                    "output": "report",
+                    "criteria": [],
+                    "entities": [],
+                }
+            ],
             "plan": [{"queries": ["q"]}],
             "intake": [{"findings": []}],
         },
@@ -303,3 +319,210 @@ def test_an_unreadable_verdict_keeps_the_sentence(monkeypatch):
 
     assert sections == [("S", "A fact [1].")]
     assert removed == []
+
+
+class Encoder:
+    def encode(self, texts):
+        return [[0.0]] * len(texts)
+
+
+def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings, monkeypatch):
+    fake_models(
+        monkeypatch,
+        {
+            # The question names the options, so they are not chosen again; a name given twice is
+            # kept once, in its first spelling.
+            "brief": [
+                {
+                    "brief": "Which is fastest?",
+                    "assumptions": [],
+                    "output": "report",
+                    "criteria": [],
+                    "entities": ["Alpha", "Beta", "alpha "],
+                }
+            ],
+            # The background searches, then the first round's.
+            "plan": [{"queries": ["fast models"]}, {"queries": ["alpha beta speed"]}],
+            # Out of range weights are clamped to 1 to 3.
+            "criteria": [
+                {"criteria": [{"name": "speed", "weight": 3}, {"name": "cost", "weight": 0}]}
+            ],
+            "intake": [
+                {
+                    "findings": [
+                        {
+                            "claim": "Alpha: 50 tok/s",
+                            "quote": "Alpha runs at 50",
+                            "confidence": "high",
+                        },
+                        {
+                            "claim": "Beta: 20 tok/s",
+                            "quote": "Beta runs at 20",
+                            "confidence": "high",
+                        },
+                    ]
+                }
+            ],
+            "notes": [{"notes_out": "Speeds known [1][2]."}],
+            # Alpha on speed and cost, Beta on speed and cost, then Alpha's empty cost cell again.
+            "assess": [
+                {"finding": "50 tok/s", "claims": [1]},
+                {"finding": "", "claims": []},
+                # 9 does not exist, and 1 is about Alpha: neither is kept.
+                {"finding": "20 tok/s", "claims": [1, 2, 9]},
+                {"finding": "cheap", "claims": [2]},
+                {"finding": "", "claims": []},
+            ],
+            # Speed twice, the second pass reading the options in reverse. Only Beta has a cost
+            # finding, so cost needs no judge: Beta is first and Alpha, with none, last.
+            "judge": [{"ranking": ["Alpha", "Beta"]}, {"ranking": ["1. alpha"]}],
+            "outline": [{"sections": ["Alpha"]}],
+            "write": [{"text": "Alpha is the fastest [1]."}],
+            "verify": [{"supported": True, "reason": "the quote gives the speed"}],
+        },
+    )
+    hits = [{"url": "https://a", "title": "A", "description": "speeds", "snippets": []}]
+    monkeypatch.setattr(
+        pipeline,
+        "build_research_tools",
+        lambda settings: (Encoder(), lambda q, exclude_urls: hits),
+    )
+    monkeypatch.setattr(
+        pipeline, "fetch_text", lambda url: "Alpha runs at 50 tok/s. Beta runs at 20 tok/s."
+    )
+    stream = Stream()
+
+    result = pipeline.run_research(
+        settings,
+        ResearchRequest(question="Which is faster, Alpha or Beta?", output="ranking"),
+        stream,
+    )
+
+    assert result.output == "ranking"
+    assert [(c.name, c.weight) for c in result.criteria] == [("speed", 3), ("cost", 1)]
+    # Alpha: (3 x 1 + 1 x 2) / 4 = 1.25. Beta: (3 x 2 + 1 x 1) / 4 = 1.75.
+    assert [(row.entity, row.rank) for row in result.matrix] == [("Alpha", 1), ("Beta", 2)]
+    assert [(c.finding, c.claims, c.rank) for c in result.matrix[1].cells] == [
+        ("20 tok/s", [2], 2.0),
+        ("cheap", [2], 1),
+    ]
+    assert result.matrix[0].cells[1].rank == 2
+    # Both claims come from one page, so both cite source 1.
+    assert result.report.startswith(
+        "## Ranking\n\n| Rank | Option | speed | cost |\n| --- | --- | --- | --- |\n"
+        "| 1 | Alpha | 50 tok/s [1] | – |\n"
+        "| 2 | Beta | 20 tok/s [1] | cheap [1] |\n"
+    )
+    assert result.report.endswith("## Alpha\n\nAlpha is the fastest [1].")
+    # The page was read in the round, so the searches for the empty cells find nothing new.
+    assert ("assess", "filled 0 of 1 empty cells") in stream.events
+    assert ("assess", "ranked: Alpha, Beta") in stream.events
+
+
+def test_a_ranked_name_matches_without_its_number_or_case():
+    assert pipeline._ordered(
+        ["2) beta", "Gamma", "BETA", "1. Alpha"], ["Alpha", "Beta", "Delta"]
+    ) == [
+        "Beta",
+        "Alpha",
+        "Delta",
+    ]
+
+
+def test_a_table_has_no_rank_and_keeps_its_cells_whole():
+    rows = [
+        Row(
+            entity="A | B",
+            cells=[Cell(criterion="licence", finding="MIT\nor Apache", claims=[4, 5])],
+        )
+    ]
+
+    assert matrix(rows, [Criterion(name="licence")]) == (
+        "| Option | licence |\n| --- | --- |\n| A / B | MIT or Apache [4][5] |\n\n"
+        "A dash means no claim spoke to it."
+    )
+
+
+@pytest.mark.parametrize(
+    "entity, text, named",
+    [
+        ("Qwen3-Coder-30B-A3B", "Qwen3 Coder 30B runs at 69 tok/s", True),
+        ("Claude Opus 5.5", "Qwen3-Coder needs 17 GB at 4-bit", False),
+        # A word inside a longer one is not the name.
+        ("Phi 4", "Phi 14B fits in 12 GB", False),
+    ],
+)
+def test_a_cited_claim_must_name_the_option(entity, text, named):
+    assert pipeline._names(entity, text) is named
+
+
+def test_criteria_and_options_named_in_the_question_are_final(settings, monkeypatch):
+    # No criteria, entities or second plan reply: choosing either again would exhaust the fakes.
+    fake_models(
+        monkeypatch,
+        {
+            "brief": [
+                {
+                    "brief": "Rank phones on price and privacy.",
+                    "assumptions": [],
+                    "output": "ranking",
+                    "criteria": ["price", "privacy"],
+                    # Galaxy is from the model's memory, not the question.
+                    "entities": ["Pixel", "Galaxy S30", "iPhone"],
+                }
+            ],
+            "plan": [{"queries": ["q"]}],
+            "intake": [{"findings": []}],
+        },
+    )
+    hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
+    )
+    monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
+    stream = Stream()
+
+    pipeline.run_research(
+        settings,
+        ResearchRequest(
+            question="Rank the Pixel and the iPhone on price and privacy", max_rounds=1
+        ),
+        stream,
+    )
+
+    assert [e for e in stream.events if e[0] == "background"] == [
+        ("background", "comparing 2 options on 2 criteria: Pixel, iPhone")
+    ]
+
+
+def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypatch):
+    fake_models(
+        monkeypatch,
+        {
+            "brief": [
+                {
+                    "brief": "Rank phones on price.",
+                    "assumptions": [],
+                    "output": "ranking",
+                    "criteria": ["price"],
+                    "entities": [],
+                }
+            ],
+            # The background searches, then the round's.
+            "plan": [{"queries": ["best phones"]}, {"queries": ["q"]}],
+            "entities": [{"entities": ["Pixel 10", "Phantom 9"]}],
+            "intake": [{"findings": []}],
+        },
+    )
+    hits = [{"url": "https://a", "title": "A", "description": "The Pixel 10 leads", "snippets": []}]
+    monkeypatch.setattr(
+        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
+    )
+    monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
+    stream = Stream()
+
+    pipeline.run_research(
+        settings, ResearchRequest(question="Rank phones on price", max_rounds=1), stream
+    )
+
+    assert ("background", "comparing 1 options on 1 criteria: Pixel 10") in stream.events

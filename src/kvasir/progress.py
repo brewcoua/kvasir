@@ -24,6 +24,8 @@ ARTICLE = "article"
 POLISH = "polish"
 
 BRIEF = "brief"
+BACKGROUND = "background"
+ASSESS = "assess"
 WRITE = "write"
 VERIFY = "verify"
 

@@ -587,6 +587,23 @@
       .markdown .scroll {
         margin: 0 0 0.85rem;
       }
+      /* A comparison table is wider than the prose, so it takes the window's width, centred. */
+      .result .page .scroll {
+        width: max-content;
+        min-width: 100%;
+        max-width: calc(100vw - 3.5rem);
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .markdown th,
+      .markdown td {
+        overflow-wrap: normal;
+        vertical-align: top;
+      }
+      .markdown td + td {
+        min-width: 7rem;
+      }
       .markdown li + li,
       .markdown li > ul,
       .markdown li > ol {
@@ -611,6 +628,20 @@
         border: 0;
         border-top: 1px solid var(--line);
         margin: 1.25rem 0;
+      }
+      .heat td.n,
+      .heat th.n {
+        background: none;
+        text-align: center;
+        min-width: 5rem;
+      }
+      .heat td.n {
+        cursor: default;
+        font-weight: 600;
+      }
+      .heat td.empty {
+        color: var(--dim);
+        font-weight: normal;
       }
       .claims td {
         vertical-align: top;
@@ -1052,15 +1083,22 @@
         return anchor;
       }
 
+      // What a ranking cell's popover shows, set when the table is built.
+      const cellNotes = new WeakMap();
+
       function showPopover(anchor) {
-        const citation = sources.get(Number(anchor.dataset.cite));
         const popover = el("popover");
-        if (!citation) return;
-        popover.replaceChildren(
-          node("strong", "", citation.title || host(citation.url)),
-          node("div", "meta", citation.url),
-        );
-        if (citation.snippet) popover.append(node("div", "quote", citation.snippet));
+        if (cellNotes.has(anchor)) {
+          popover.replaceChildren(...cellNotes.get(anchor)());
+        } else {
+          const citation = sources.get(Number(anchor.dataset.cite));
+          if (!citation) return;
+          popover.replaceChildren(
+            node("strong", "", citation.title || host(citation.url)),
+            node("div", "meta", citation.url),
+          );
+          if (citation.snippet) popover.append(node("div", "quote", citation.snippet));
+        }
         popover.hidden = false;
         const box = anchor.getBoundingClientRect();
         const width = popover.offsetWidth;
@@ -1076,7 +1114,7 @@
         ["focusout", false],
       ]) {
         el("result-content").addEventListener(kind, (event) => {
-          const anchor = event.target.closest?.(".cite");
+          const anchor = event.target.closest?.(".cite, .heat .n");
           if (!anchor) return;
           if (show) showPopover(anchor);
           else el("popover").hidden = true;
@@ -1290,6 +1328,79 @@
         );
       }
 
+      // Each cell is the option's place on that criterion, coloured from the best in its column to
+      // the worst. Its finding and sources show on hover.
+      function rankingTable(result) {
+        const claims = new Map(result.claims.map((claim) => [claim.id, claim]));
+        const numbers = new Map(result.citations.map((citation) => [citation.url, citation]));
+        const element = node("table", "heat");
+        const head = element.insertRow();
+        head.append(node("th", "", "Rank"), node("th", "", "Option"));
+        for (const criterion of result.criteria) {
+          const th = node("th", "n", criterion.name);
+          cellNotes.set(th, () => [
+            node("strong", "", criterion.name),
+            node("div", "meta", `weight ${criterion.weight} of 3 in the overall rank`),
+          ]);
+          th.tabIndex = 0;
+          head.append(th);
+        }
+        // The scale spans the cells shown, so the worst cited one is red even when empty ones rank below.
+        const places = result.criteria.map((_, i) =>
+          result.matrix.filter((row) => row.cells[i].claims.length > 0).map((row) => row.cells[i].rank),
+        );
+        for (const row of result.matrix) {
+          const tr = element.insertRow();
+          tr.append(node("td", "", String(row.rank)), node("td", "", row.entity));
+          row.cells.forEach((cell, i) => {
+            if (cell.claims.length === 0) {
+              const td = node("td", "n empty", "–");
+              cellNotes.set(td, () => [
+                node("strong", "", "No claim found"),
+                node("div", "meta", `tied for last on this criterion, at ${cell.rank}`),
+              ]);
+              td.tabIndex = 0;
+              tr.append(td);
+              return;
+            }
+            const best = Math.min(...places[i]);
+            const worst = Math.max(...places[i]);
+            const share = worst === best ? 1 : (worst - cell.rank) / (worst - best);
+            const td = node("td", "n", String(cell.rank));
+            td.style.background = `hsl(${Math.round(120 * share)} 70% 45% / 0.35)`;
+            // The finding, then each quote it rests on, with the source it was read from.
+            cellNotes.set(td, () => [
+              node("strong", "", cell.finding),
+              ...cell.claims
+                .map((id) => claims.get(id))
+                .filter(Boolean)
+                .flatMap((claim) => [
+                  node("div", "quote", claim.quote),
+                  node("div", "meta", `[${numbers.get(claim.url)?.index ?? "?"}] ${host(claim.url)}`),
+                ]),
+            ]);
+            td.tabIndex = 0;
+            tr.append(td);
+          });
+        }
+        const wrapper = node("div", "markdown");
+        const scroll = node("div", "scroll");
+        scroll.append(element);
+        wrapper.append(
+          node("h2", "", "Ranking"),
+          scroll,
+          node(
+            "p",
+            "meta",
+            "Each cell is the option's place on that criterion, 1 being best, ranked twice with the " +
+              "options in reverse order the second time. Green is the best in its column, red the " +
+              "worst, a dash no claim found. Hover a cell for its finding and quotes, a criterion " +
+              "for its weight.",
+          ),
+        );
+        return wrapper;
+      }
+
       let shown = null;
 
       function openResult(run) {
@@ -1300,7 +1411,13 @@
         const content = node("div", "page");
         el("result-content").replaceChildren(content);
         if (result.role) content.append(node("p", "meta", result.role));
-        content.append(markdown(resultText(result)));
+        if (result.output === "ranking" && result.matrix?.length > 0) {
+          // The report's own table is the plain one, for clients that only read markdown.
+          content.append(rankingTable(result));
+          content.append(markdown(result.report.replace(/^## Ranking\n[\s\S]*?(?=\n## |$)/, "")));
+        } else {
+          content.append(markdown(resultText(result)));
+        }
 
         if (result.assumptions?.length > 0) {
           const assumed = document.createElement("details");
@@ -1457,7 +1574,7 @@
 
       const form = el("launch");
       const PLACEHOLDERS = {
-        research: "A question, such as: which European battery makers are best placed for 2030?",
+        research: "A question, such as: rank the best phones of 2026 on price, performance and privacy",
         article: "A topic, such as: the history of the Kvasir stone",
       };
       // The questions `/v1/research/clarify` asked, while the user answers them. Null otherwise.

@@ -29,5 +29,12 @@ def closest(encoder: Encoder, query: str, texts: list[str], k: int) -> list[int]
     """Indices of the `k` texts closest to `query`, in their original order."""
     if len(texts) <= k:
         return list(range(len(texts)))
-    scores = cosine_similarity(encoder.encode([query]), encoder.encode(texts))[0]
+    return nearest(encoder, query, encoder.encode(texts), k)
+
+
+def nearest(encoder: Encoder, query: str, vectors: np.ndarray, k: int) -> list[int]:
+    """`closest`, over texts already encoded, for when many queries search the same texts."""
+    if len(vectors) <= k:
+        return list(range(len(vectors)))
+    scores = cosine_similarity(encoder.encode([query]), vectors)[0]
     return sorted(int(i) for i in np.argsort(scores)[::-1][:k])

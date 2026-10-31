@@ -1,6 +1,7 @@
 # Deep research pipeline: plan
 
-Status: phases 0 to 3 built (report output, clarify, dashboard, verification). Written 2026-10-31.
+Status: phases 0 to 4 built (report output, clarify, dashboard, verification, ranking and
+table). Written 2026-10-31.
 
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
 rank, and its prompts ask for a Wikipedia page. This plan adds a second pipeline, `deep`, for
@@ -38,7 +39,7 @@ ranking.
 ```
 clarify      [separate call, optional] question -> up to 3 questions for the user, or none
 brief        question + clarifications -> output type, scope, entities and criteria if the question names them
-background   2-3 searches, snippets only -> domain context (a short paragraph)
+background   [ranking, table] 3 searches, snippets only, read by criteria and entities as they are
 criteria     [ranking, table] one checklist call over the background, unless the user gave them
 entities     [ranking, table] candidates from background snippets, capped, unless the user gave them
 rounds       repeat until a budget is spent or a round adds too few claims:
@@ -48,7 +49,8 @@ rounds       repeat until a budget is spent or a round adds too few claims:
   filter       keep the pieces closest to the question by embedding
   intake       per piece: claims with a verbatim quote, entities, confidence; or nothing relevant
   notes        rebuild the notes from the store: what is known, what is missing, dead ends
-fill         [ranking, table] targeted searches for each entity x criterion cell with no claim
+assess       [ranking, table] per entity x criterion: a short finding and its claim ids, from the closest claims
+fill         [ranking, table] one search for each cell with no claim, at most 8, then assess it again
 judge        [ranking] per criterion, rank entities from their claims, twice, input order reversed
 outline      from notes and claims, shaped by the output type
 write        one section at a time: its claims, the outline, a summary of earlier sections
@@ -56,15 +58,14 @@ verify       each cited sentence against its claim's quote; unsupported sentence
 render       markdown; ranking and table outputs add a matrix built in code, not by the model
 ```
 
-Output types share everything up to `outline`. Only the outline prompt, the section prompt and
-`render` differ.
+Output types share everything up to `outline`. Only the outline prompt and `render` differ.
+There is no `article` output: STORM at `/v1/article` writes those.
 
 | Output | Outline | Extra |
 | --- | --- | --- |
 | `report` | findings first, then sections | none |
-| `article` | encyclopedic sections | none |
-| `ranking` | method, ranking, one section per entity | criteria, entities, fill, judge; ranked table |
-| `table` | short summary | criteria, entities, fill; matrix of findings, no ranking |
+| `ranking` | method, ranking, one section per entity | criteria, entities, assess, fill, judge; ranked table |
+| `table` | short summary | criteria, entities, assess, fill; matrix of findings, no ranking |
 
 ## Where it lives
 
@@ -140,10 +141,11 @@ assume.
 
 Only `question` is required. `output` defaults to what `brief` infers, falling back to `report`.
 
-The `done` frame carries `content` (markdown), `citations` (the existing `Citation` model),
-`ranking` (per entity: rank, and per criterion its rank and claim ids) when the output is a
-ranking, `claims` (the full evidence store, so a reader can audit any sentence), `removed` (the
-sentences `verify` dropped, with the reason), and `duration_seconds`.
+The `done` frame carries `report` (markdown), `assumptions`, `citations` (the existing `Citation`
+model), `claims` (the full evidence store, so a reader can audit any sentence), `removed` (the
+sentences `verify` dropped, with the reason), `output`, `criteria` (with their weights), `matrix`
+(per entity: its rank, and per criterion its finding, claim ids and rank) when the output is a
+ranking or a table, and `duration_seconds`.
 
 Defaults sized for qwen3.8:27b at 16k context:
 
@@ -161,8 +163,8 @@ Defaults sized for qwen3.8:27b at 16k context:
 With no Open WebUI in front of it, the runs page at `/` becomes the way to use kvasir, so it gains
 a launch panel. It stays one self-contained file with no external asset.
 
-- **Launch.** A form with a kind (`research` or `article`), the question or topic, and for research
-  the output type and optional criteria and entities. Run settings sit behind a disclosure.
+- **Launch.** A form with a kind (`research` or `article`) and the question or topic. Run settings
+  sit behind a disclosure. The output type, criteria and options come from the question.
 - **Clarify.** For research, the form calls `/v1/research/clarify` first and shows any questions
   with an answer field each, plus a "skip" that starts without answering.
 - **Follow.** The form posts the run, reads the `run` frame for its id, and follows the run

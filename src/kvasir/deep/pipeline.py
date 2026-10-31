@@ -12,6 +12,7 @@ import logging
 import re
 import time
 from collections.abc import Iterator
+from statistics import mean
 from typing import Any
 
 import dspy  # type: ignore[import-untyped]
@@ -20,26 +21,33 @@ from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyp
 from kvasir.config import Settings
 from kvasir.deep import verify
 from kvasir.deep.fetch import FetchError, fetch_text, split
-from kvasir.deep.render import render
+from kvasir.deep.render import matrix, render
 from kvasir.deep.signatures import (
+    Assess,
     Brief,
     Clarify,
+    Criteria,
+    Entities,
     Intake,
     Outline,
     PlanQueries,
+    RankCriterion,
     RebuildNotes,
     Verify,
     WriteSection,
 )
-from kvasir.deep.store import Claim, closest
+from kvasir.deep.store import Claim, closest, nearest
 from kvasir.models import (
+    Cell,
     Clarification,
+    Criterion,
     RemovedSentence,
     ResearchClaim,
     ResearchRequest,
     ResearchResult,
+    Row,
 )
-from kvasir.progress import BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
+from kvasir.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.runners import build_research_models, build_research_tools
 from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder
@@ -58,6 +66,27 @@ CLAIMS_PER_SECTION = 15
 # How much of each earlier section a later one sees, to avoid repeating it without filling the
 # context with it.
 EARLIER_SECTION_CHARACTERS = 400
+# Options compared at most, when the run chooses them: assessing costs a call per option and
+# criterion, and ranking two per criterion.
+ENTITIES = 8
+# Criteria at most, when the run chooses them: each costs a call per option and two rankings.
+CRITERIA = 5
+# Searches whose snippets the criteria and the options are chosen from.
+BACKGROUND_QUERIES = 3
+# Claims shown when assessing one option on one criterion, the closest to the pair.
+CLAIMS_PER_CELL = 8
+# Empty cells searched for again, at most, so filling cannot take longer than the research did.
+FILL_CELLS = 8
+
+SHAPES = {
+    "report": "The first section gives the key findings. Each later section covers one part of "
+    "the answer.",
+    "ranking": "A ranking table comes first and is already built. Start with how the options were "
+    "compared, then one section per option, best first.",
+    "table": "A comparison table comes first and is already built. Write a short summary of what "
+    "it shows, then at most two sections on what it leaves open.",
+}
+TABLE_TITLES = {"ranking": "Ranking", "table": "Comparison"}
 
 NO_EVIDENCE = (
     "## No findings\n\nNo page read during the research supported a claim about this question. "
@@ -95,10 +124,31 @@ def run_research(
         clarifications=_clarifications(request.clarifications),
     )
     brief: str = framed.brief
+    output = request.output or framed.output
+    seen: set[str] = set()
+
+    # Named in the question, they are final; the request's own fields override even those. The
+    # brief lists options from memory as readily as from the question, so only those the question
+    # really names count as named.
+    asked = f"{request.question}\n{_clarifications(request.clarifications)}"
+    named = [name for name in framed.criteria if _names(name, asked)]
+    criteria = [Criterion(name=name) for name in request.criteria or named]
+    entities = list(request.entities or [e for e in framed.entities if _names(e, asked)])
+    if output != "report":
+        criteria, entities = _candidates(models, search, today, brief, criteria, entities, stream)
+        if not (criteria and entities):
+            stream.publish(BACKGROUND, "found nothing to compare, so writing a report instead")
+            output = "report"
+        else:
+            # Every later step reads the brief, so naming the options here steers the searches
+            # and the intake towards them.
+            brief += (
+                f"\nOptions compared: {', '.join(entities)}"
+                f"\nCriteria: {', '.join(c.name for c in criteria)}"
+            )
 
     claims: list[Claim] = []
     notes = ""
-    seen: set[str] = set()
     for round_number in range(1, max_rounds + 1):
         stream.publish(RESEARCH, f"round {round_number} of at most {max_rounds}: planning searches")
         queries = _predict(
@@ -164,11 +214,21 @@ def run_research(
             assumptions=list(framed.assumptions),
             citations=[],
             claims=[],
+            output=output,
             duration_seconds=round(time.monotonic() - started, 1),
         )
 
+    rows: list[Row] = []
+    if output != "report":
+        rows = _assess(models, encoder, search, brief, claims, entities, criteria, seen, stream)
+        if output == "ranking":
+            rows = _rank(models["judge"], brief, criteria, rows, stream)
+            brief += f"\nOverall ranking, best first: {', '.join(row.entity for row in rows)}"
+
     stream.publish(WRITE, "outlining the report")
-    titles: list[str] = _predict(models["outline"], Outline, brief=brief, notes=notes).sections
+    titles: list[str] = _predict(
+        models["outline"], Outline, brief=brief, shape=SHAPES[output], notes=notes
+    ).sections
     sections: list[tuple[str, str]] = []
     for done, title in enumerate(titles):
         stream.publish(WRITE, f"writing {title}", done, len(titles))
@@ -191,6 +251,8 @@ def run_research(
         ).text
         sections.append((title, text))
     stream.publish(WRITE, "assembled the report", len(titles), len(titles))
+    if rows:
+        sections.insert(0, (TABLE_TITLES[output], matrix(rows, criteria)))
 
     by_id = {claim.id: claim for claim in claims}
     sections, removed = _verify(models["verify"], sections, by_id, stream)
@@ -202,8 +264,234 @@ def run_research(
         citations=citations,
         claims=[ResearchClaim(**vars(claim)) for claim in claims],
         removed=removed,
+        output=output,
+        criteria=criteria if rows else [],
+        matrix=rows,
         duration_seconds=round(time.monotonic() - started, 1),
     )
+
+
+def _candidates(
+    models: dict[str, GatewayModel],
+    search: SearXNG,
+    today: str,
+    brief: str,
+    criteria: list[Criterion],
+    entities: list[str],
+    stream: ProgressStream,
+) -> tuple[list[Criterion], list[str]]:
+    """The criteria and the options to compare, chosen from search snippets where not given."""
+    if not (criteria and entities):
+        stream.publish(BACKGROUND, "searching for the options and what sets them apart")
+        queries = _predict(
+            models["plan"],
+            PlanQueries,
+            today=today,
+            brief=brief,
+            notes="",
+            count=BACKGROUND_QUERIES,
+        ).queries[:BACKGROUND_QUERIES]
+        # Snippets only, and not marked seen: the research still reads these pages.
+        background = "\n".join(
+            f"{hit['title']}: {hit['description']}"
+            for hit in _search(search, queries, RESULTS_PER_QUERY, set())
+        )
+        if not criteria:
+            stream.publish(BACKGROUND, "choosing the criteria")
+            chosen = _predict(
+                models["criteria"], Criteria, brief=brief, background=background
+            ).criteria
+            criteria = [
+                Criterion(name=c.name, weight=min(max(c.weight, 1), 3)) for c in chosen[:CRITERIA]
+            ]
+        if not entities:
+            stream.publish(BACKGROUND, "choosing the options to compare")
+            chosen = _predict(
+                models["entities"], Entities, brief=brief, background=background, count=ENTITIES
+            ).entities
+            # A small model fills a list with plausible names, such as model sizes never released;
+            # searching for those finds nothing. Only options the results mention are kept.
+            entities = [entity for entity in chosen if _names(entity, background)][:ENTITIES]
+    # The first spelling of a name given twice wins.
+    names = [_key(c.name) for c in criteria]
+    criteria = [c for i, c in enumerate(criteria) if names[i] and names[i] not in names[:i]]
+    names = [_key(e) for e in entities]
+    entities = [e.strip() for i, e in enumerate(entities) if names[i] and names[i] not in names[:i]]
+    stream.publish(
+        BACKGROUND,
+        f"comparing {len(entities)} options on {len(criteria)} criteria: {', '.join(entities)}",
+    )
+    return criteria, entities
+
+
+def _assess(
+    models: dict[str, GatewayModel],
+    encoder: Encoder,
+    search: SearXNG,
+    brief: str,
+    claims: list[Claim],
+    entities: list[str],
+    criteria: list[Criterion],
+    seen: set[str],
+    stream: ProgressStream,
+) -> list[Row]:
+    """Each option's finding on each criterion, searching again for some of those with none.
+
+    Adds the claims the searching finds to `claims`.
+    """
+    rows = [Row(entity=entity, cells=[]) for entity in entities]
+    total = len(entities) * len(criteria)
+    vectors = encoder.encode([c.text for c in claims])
+    for done, (row, criterion) in enumerate((row, c) for row in rows for c in criteria):
+        stream.publish(ASSESS, f"assessing {row.entity} on {criterion.name}", done, total)
+        row.cells.append(
+            _cell(models["assess"], encoder, vectors, brief, claims, row.entity, criterion.name)
+        )
+
+    empty = [(row, i) for row in rows for i, cell in enumerate(row.cells) if not cell.claims]
+    empty = empty[:FILL_CELLS]
+    for done, (row, i) in enumerate(empty):
+        query = f"{row.entity} {row.cells[i].criterion}"
+        stream.publish(ASSESS, f"searching again for {query}", done, len(empty))
+        hits = _search(search, [query], 1, seen)
+        for hit, text in zip(hits, _fetch_all(hits), strict=True):
+            for piece in _relevant_pieces(encoder, query, text):
+                claims.extend(
+                    _intake(models["intake"], brief, hit, piece, len(claims) + 1, round_number=0)
+                )
+        vectors = encoder.encode([c.text for c in claims])
+        row.cells[i] = _cell(
+            models["assess"], encoder, vectors, brief, claims, row.entity, row.cells[i].criterion
+        )
+    if empty:
+        filled = sum(1 for row, i in empty if row.cells[i].claims)
+        stream.publish(
+            ASSESS, f"filled {filled} of {len(empty)} empty cells", len(empty), len(empty)
+        )
+    return rows
+
+
+def _cell(
+    model: GatewayModel,
+    encoder: Encoder,
+    vectors: Any,
+    brief: str,
+    claims: list[Claim],
+    entity: str,
+    criterion: str,
+) -> Cell:
+    shown = [
+        claims[i] for i in nearest(encoder, f"{entity}: {criterion}", vectors, CLAIMS_PER_CELL)
+    ]
+    try:
+        assessed = _predict(
+            model, Assess, brief=brief, entity=entity, criterion=criterion, evidence=_listed(shown)
+        )
+    except AdapterParseError as exc:
+        logger.warning("could not read the finding on %s, %s: %s", entity, criterion, exc)
+        return Cell(criterion=criterion, finding="", claims=[])
+    # Only ids it was shown, of claims that name the entity: a small model otherwise cites another
+    # option's figures for this one.
+    ids = [
+        c.id
+        for c in shown
+        if c.id in assessed.claims and _names(entity, f"{c.text} {c.quote} {c.title}")
+    ]
+    finding = str(assessed.finding).strip()
+    if not (ids and finding):
+        return Cell(criterion=criterion, finding="", claims=[])
+    return Cell(criterion=criterion, finding=finding, claims=ids)
+
+
+def _rank(
+    model: GatewayModel,
+    brief: str,
+    criteria: list[Criterion],
+    rows: list[Row],
+    stream: ProgressStream,
+) -> list[Row]:
+    """`rows` best first, each ranked on every criterion twice, the second time in reverse order.
+
+    A model favours the options it reads first; reversing the order and averaging cancels that.
+    Only options with a finding are judged; those without one tie for the places after them, since
+    a judge asked to rank them anyway places them by guesswork. The overall order is the weighted
+    mean of the criterion ranks, computed here, not judged.
+    """
+    for index, criterion in enumerate(criteria):
+        found = [row for row in rows if row.cells[index].claims]
+        places: dict[str, list[int]] = {row.entity: [] for row in found}
+        if len(found) == 1:
+            places[found[0].entity].append(1)
+        passes = (found, found[::-1]) if len(found) > 1 else ()
+        for turn, order in enumerate(passes, 1):
+            stream.publish(
+                ASSESS,
+                f"ranking on {criterion.name}, pass {turn} of 2",
+                2 * index + turn - 1,
+                2 * len(criteria),
+            )
+            options = "\n".join(f"{row.entity}: {row.cells[index].finding}" for row in order)
+            try:
+                ranking = _predict(
+                    model, RankCriterion, brief=brief, criterion=criterion.name, options=options
+                ).ranking
+            except AdapterParseError as exc:
+                # The input order stands in; the other pass, reversed, cancels it into a tie.
+                logger.warning("could not read the ranking on %s: %s", criterion.name, exc)
+                ranking = []
+            for place, entity in enumerate(_ordered(ranking, [r.entity for r in order]), 1):
+                places[entity].append(place)
+        last = (len(found) + 1 + len(rows)) / 2
+        for row in rows:
+            row.cells[index].rank = mean(places[row.entity]) if row.entity in places else last
+
+    weight = sum(c.weight for c in criteria)
+    scores = {
+        row.entity: sum(
+            c.weight * (cell.rank or 0) for c, cell in zip(criteria, row.cells, strict=True)
+        )
+        / weight
+        for row in rows
+    }
+    ranked = sorted(rows, key=lambda row: scores[row.entity])
+    for place, row in enumerate(ranked, 1):
+        row.rank = place
+    stream.publish(
+        ASSESS,
+        f"ranked: {', '.join(row.entity for row in ranked)}",
+        2 * len(criteria),
+        2 * len(criteria),
+    )
+    return ranked
+
+
+def _names(entity: str, text: str) -> bool:
+    """Whether `text` names `entity`: most of the words of its name appear in it.
+
+    Most rather than all, since sources shorten names: "Qwen3-Coder-30B" for "Qwen3-Coder-30B-A3B".
+    """
+    words = _words(entity).split()
+    found = sum(f" {word} " in _words(text) for word in words)
+    return bool(words) and found * 2 > len(words)
+
+
+def _key(name: str) -> str:
+    return name.strip().lower()
+
+
+def _ordered(ranking: list[str], names: list[str]) -> list[str]:
+    """`names` in the order `ranking` gives them, those it leaves out last, in their own order.
+
+    Models number the list and change the case, so a name is matched without either.
+    """
+    known = {name.lower(): name for name in names}
+    found = [
+        known[key]
+        for item in ranking
+        if (key := re.sub(r"^\s*\d+[.)]\s*", "", item).strip().lower()) in known
+    ]
+    found = list(dict.fromkeys(found))
+    return found + [name for name in names if name not in found]
 
 
 def _verify(

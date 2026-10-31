@@ -6,6 +6,7 @@ import dspy  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
 from kvasir.deep.store import Confidence
+from kvasir.models import Output
 
 
 class Clarify(dspy.Signature):
@@ -32,6 +33,17 @@ class Brief(dspy.Signature):
     clarifications: str = dspy.InputField(desc="questions asked and the answers given, or none")
     brief: str = dspy.OutputField(desc="one paragraph")
     assumptions: list[str] = dspy.OutputField(desc="choices made on the author's behalf")
+    output: Output = dspy.OutputField(
+        desc="ranking if the question asks which options are best, table if it asks to compare "
+        "options without ranking them, report otherwise"
+    )
+    criteria: list[str] = dspy.OutputField(
+        desc="the criteria the question says to compare or rank on, in its words, or empty"
+    )
+    entities: list[str] = dspy.OutputField(
+        desc="the options the question names as the full set to compare, or empty if it leaves "
+        "the set open"
+    )
 
 
 class PlanQueries(dspy.Signature):
@@ -47,6 +59,39 @@ class PlanQueries(dspy.Signature):
     notes: str = dspy.InputField(desc="what is known so far, or empty at the start")
     count: int = dspy.InputField(desc="how many queries to return")
     queries: list[str] = dspy.OutputField(desc="search engine queries")
+
+
+class ChosenCriterion(BaseModel):
+    name: str
+    weight: int
+
+
+class Criteria(dspy.Signature):
+    """Choose the criteria to compare options on, for a research brief.
+
+    Include every criterion the brief names. Each is one thing a source can state about an option,
+    such as a size, a price or a feature, not a judgement such as "overall quality". Weigh each
+    from 1 to 3 by how much it matters to the brief.
+    """
+
+    brief: str = dspy.InputField()
+    background: str = dspy.InputField(desc="search results on the topic")
+    criteria: list[ChosenCriterion] = dspy.OutputField(desc="three to five criteria")
+
+
+class Entities(dspy.Signature):
+    """List the options a research brief compares, such as products, companies or models.
+
+    Include every option the brief names. Then add the options the search results show are the
+    main ones. An option is something the brief asks to choose between: never a benchmark, a
+    leaderboard, an article or a website, and never one the brief rules out. Name each the way the
+    sources do, shortly.
+    """
+
+    brief: str = dspy.InputField()
+    background: str = dspy.InputField(desc="search results on the topic")
+    count: int = dspy.InputField(desc="the most options to return")
+    entities: list[str] = dspy.OutputField()
 
 
 class Finding(BaseModel):
@@ -81,13 +126,36 @@ class RebuildNotes(dspy.Signature):
     notes_out: str = dspy.OutputField(desc="the rewritten notes, under 1000 words")
 
 
-class Outline(dspy.Signature):
-    """Outline a research report answering a brief from research notes.
+class Assess(dspy.Signature):
+    """State what the evidence says about one option on one criterion.
 
-    The first section gives the key findings. Each later section covers one part of the answer.
+    Use only claims about this option. The finding is a table cell: at most six words, without the
+    option's name, such as "24 GB at 4-bit" or "Apache 2.0". Return an empty finding and no claim
+    ids if no claim speaks to it.
     """
 
     brief: str = dspy.InputField()
+    entity: str = dspy.InputField(desc="the option")
+    criterion: str = dspy.InputField()
+    evidence: str = dspy.InputField(desc="one claim per line, prefixed by its id in brackets")
+    finding: str = dspy.OutputField(desc="at most six words, or empty")
+    claims: list[int] = dspy.OutputField(desc="ids of the claims the finding rests on")
+
+
+class RankCriterion(dspy.Signature):
+    """Rank options on one criterion, best first, from what the evidence says about each."""
+
+    brief: str = dspy.InputField()
+    criterion: str = dspy.InputField()
+    options: str = dspy.InputField(desc="one option per line, with its finding")
+    ranking: list[str] = dspy.OutputField(desc="every option's name, best first")
+
+
+class Outline(dspy.Signature):
+    """Outline a research report answering a brief from research notes, in the shape asked for."""
+
+    brief: str = dspy.InputField()
+    shape: str = dspy.InputField(desc="how the report is organised")
     notes: str = dspy.InputField()
     sections: list[str] = dspy.OutputField(desc="section titles, three to seven")
 

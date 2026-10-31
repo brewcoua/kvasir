@@ -73,6 +73,9 @@ class ClarifyResponse(BaseModel):
     questions: list[str]
 
 
+Output = Literal["report", "ranking", "table"]
+
+
 class ResearchRequest(BaseModel):
     """Body of `POST /v1/research`.
 
@@ -81,6 +84,11 @@ class ResearchRequest(BaseModel):
 
     question: str = Field(min_length=1)
     clarifications: list[Clarification] = []
+    # Inferred from the question when omitted.
+    output: Output | None = None
+    # For a ranking or a table, chosen from a first search when omitted.
+    criteria: list[str] | None = None
+    entities: list[str] | None = None
     max_rounds: int | None = Field(default=None, ge=1)
     queries_per_round: int | None = Field(default=None, ge=1)
     results_per_query: int | None = Field(default=None, ge=1)
@@ -109,6 +117,33 @@ class RemovedSentence(BaseModel):
     reason: str
 
 
+class Criterion(BaseModel):
+    """What a ranking or a table compares on, and how much it counts in the overall rank."""
+
+    name: str
+    weight: int = Field(default=1, ge=1, le=3)
+
+
+class Cell(BaseModel):
+    """What the evidence says about one entity on one criterion."""
+
+    criterion: str
+    # Empty when no claim spoke to it.
+    finding: str
+    claims: list[int]
+    # This entity's place on this criterion, averaged over both ranking passes. Rankings only.
+    rank: float | None = None
+
+
+class Row(BaseModel):
+    """One entity of a ranking or a table."""
+
+    entity: str
+    # Overall place, from the weighted mean of its criterion ranks. Rankings only.
+    rank: int | None = None
+    cells: list[Cell]
+
+
 class ResearchResult(BaseModel):
     """Payload of the `done` event of a research run."""
 
@@ -120,6 +155,10 @@ class ResearchResult(BaseModel):
     claims: list[ResearchClaim]
     # Defaulted, so a run stored before verification existed still loads.
     removed: list[RemovedSentence] = []
+    output: Output = "report"
+    criteria: list[Criterion] = []
+    # Best first for a ranking. Empty for a report.
+    matrix: list[Row] = []
     duration_seconds: float
 
 
