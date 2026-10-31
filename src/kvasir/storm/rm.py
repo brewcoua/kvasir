@@ -40,6 +40,9 @@ class SearXNG(dspy.Retrieve):
         self.searxng_api_url = searxng_api_url
         self.searxng_api_key = searxng_api_key
         self.usage = 0
+        # Why the last call's queries came back empty, if they failed rather than found nothing.
+        # Read by the deep research pipeline, which searches one query at a time.
+        self.failures: list[str] = []
 
         if is_valid_source:
             self.is_valid_source = is_valid_source
@@ -69,6 +72,7 @@ class SearXNG(dspy.Retrieve):
             else query_or_queries
         )
         self.usage += len(queries)
+        self.failures = []
         collected_results = []
         headers = (
             {"Authorization": f"Bearer {self.searxng_api_key}"}
@@ -94,6 +98,12 @@ class SearXNG(dspy.Retrieve):
                         follow_redirects=True,
                     )
                 results = response.json()
+                if not results["results"]:
+                    # Rate limits and CAPTCHAs leave the engine out and the answer empty.
+                    self.failures += [
+                        f"{engine}: {reason}"
+                        for engine, reason in results.get("unresponsive_engines", [])
+                    ]
 
                 for r in results["results"]:
                     if self.is_valid_source(r["url"]) and r["url"] not in exclude_urls:
@@ -107,5 +117,6 @@ class SearXNG(dspy.Retrieve):
                         )
             except Exception as e:
                 logger.error(f"Error occurs when searching query {query}: {e}")
+                self.failures.append(f"{type(e).__name__}: {e}")
 
         return collected_results

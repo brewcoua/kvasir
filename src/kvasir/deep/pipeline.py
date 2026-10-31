@@ -96,6 +96,10 @@ NO_EVIDENCE = (
 logger = logging.getLogger(__name__)
 
 
+class SearchUnavailable(RuntimeError):
+    """Every search of a step failed, so the run stops rather than write from no evidence."""
+
+
 def clarify(settings: Settings, question: str) -> list[str]:
     """Questions worth asking before researching `question`, or none."""
     model = build_research_models(settings)["clarify"]
@@ -553,12 +557,18 @@ def _search(
 ) -> list[dict[str, Any]]:
     """Results not read before, at most `per_query` from each query. Marks them seen."""
     hits = []
+    failures: list[str] = []
     for query in queries:
         runtime.record_search_usage("SearXNG", 1)
         found = [hit for hit in search(query, exclude_urls=list(seen)) if hit["url"] not in seen]
+        failures += search.failures
         for hit in found[:per_query]:
             seen.add(hit["url"])
             hits.append(hit)
+    if not hits and failures:
+        raise SearchUnavailable(
+            f"all {len(queries)} searches failed: {'; '.join(dict.fromkeys(failures))}"
+        )
     return hits
 
 

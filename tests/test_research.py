@@ -18,6 +18,19 @@ PAGE = (
 )
 
 
+class Search:
+    """SearXNG, answering every query with the same results, or failing as told."""
+
+    def __init__(self, hits, failures=()):
+        self.hits = hits
+        self.failures = []
+        self._failures = list(failures)
+
+    def __call__(self, query, exclude_urls):
+        self.failures = self._failures
+        return [] if self._failures else self.hits
+
+
 class Stream:
     def __init__(self) -> None:
         self.events: list[tuple[str, str]] = []
@@ -129,9 +142,7 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         {"url": "https://a", "title": "A", "description": "snippet a", "snippets": []},
         {"url": "https://b", "title": "B", "description": "snippet b", "snippets": []},
     ]
-    monkeypatch.setattr(
-        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
-    )
+    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
 
     def fake_fetch(url):
         if url == "https://b":
@@ -222,9 +233,7 @@ def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
-    monkeypatch.setattr(
-        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
-    )
+    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
     monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
@@ -385,7 +394,7 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
     monkeypatch.setattr(
         pipeline,
         "build_research_tools",
-        lambda settings: (Encoder(), lambda q, exclude_urls: hits),
+        lambda settings: (Encoder(), Search(hits)),
     )
     monkeypatch.setattr(
         pipeline, "fetch_text", lambda url: "Alpha runs at 50 tok/s. Beta runs at 20 tok/s."
@@ -476,9 +485,7 @@ def test_criteria_and_options_named_in_the_question_are_final(settings, monkeypa
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
-    monkeypatch.setattr(
-        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
-    )
+    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
     monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
@@ -515,9 +522,7 @@ def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypa
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "The Pixel 10 leads", "snippets": []}]
-    monkeypatch.setattr(
-        pipeline, "build_research_tools", lambda settings: (None, lambda q, exclude_urls: hits)
-    )
+    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, Search(hits)))
     monkeypatch.setattr(pipeline, "fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
@@ -526,3 +531,31 @@ def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypa
     )
 
     assert ("background", "comparing 1 options on 1 criteria: Pixel 10") in stream.events
+
+
+def test_a_run_whose_searches_all_fail_stops_with_the_reason(settings, monkeypatch):
+    fake_models(
+        monkeypatch,
+        {
+            "brief": [
+                {
+                    "brief": "b",
+                    "assumptions": [],
+                    "output": "report",
+                    "criteria": [],
+                    "entities": [],
+                }
+            ],
+            "plan": [{"queries": ["q1", "q2"]}],
+        },
+    )
+    failing = Search([], ["brave: Suspended: too many requests", "duckduckgo: CAPTCHA"])
+    monkeypatch.setattr(pipeline, "build_research_tools", lambda settings: (None, failing))
+
+    with pytest.raises(pipeline.SearchUnavailable) as raised:
+        pipeline.run_research(settings, ResearchRequest(question="q"), Stream())
+
+    # Each engine once, though both queries reported it.
+    assert str(raised.value) == (
+        "all 2 searches failed: brave: Suspended: too many requests; duckduckgo: CAPTCHA"
+    )

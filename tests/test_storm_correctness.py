@@ -163,6 +163,35 @@ def test_searxng_follows_its_redirect_to_search(monkeypatch):
     assert [result["url"] for result in results] == ["https://example.invalid/a"]
 
 
+def test_searxng_says_why_a_query_came_back_empty(monkeypatch):
+    """A rate-limited engine answers with no results, which reads as a topic nothing covers."""
+    from kvasir.storm.rm import SearXNG
+
+    class _Response:
+        def json(self):
+            return {
+                "results": [],
+                "unresponsive_engines": [["brave", "Suspended: too many requests"]],
+            }
+
+    answers = iter([_Response(), RuntimeError("connection refused")])
+
+    def get(url, **kwargs):
+        answer = next(answers)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr("kvasir.storm.rm.httpx.get", get)
+    search = SearXNG(searxng_api_url="http://searxng.invalid")
+
+    assert search(["a", "b"]) == []
+    assert search.failures == [
+        "brave: Suspended: too many requests",
+        "RuntimeError: connection refused",
+    ]
+
+
 def test_a_section_query_against_nothing_collected_retrieves_nothing():
     """A research stage that found no source left an empty table, whose (0, 0) embedding failed
     the similarity product and with it the whole run."""
