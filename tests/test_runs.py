@@ -206,6 +206,38 @@ def test_a_reentered_stage_sums_its_spans():
     assert stages["mind_map"].spans[0].ended_at == 12.0
 
 
+def test_calls_show_in_flight_then_finished_or_failed():
+    run = runs.Run(id="r", kind="research", topic="t")
+    answered = run.start_lm("openai/fast", "intake")
+    failed = run.start_lm("openai/fast", "intake")
+    run.start_lm("openai/strong", "write")
+
+    run.end_lm(answered, 100, 20)
+    run.end_lm(failed, None, None)
+
+    calls = run.status().calls
+    assert [(c.role, c.prompt_tokens, c.failed) for c in calls] == [
+        ("intake", 100, False),
+        ("intake", None, True),
+        ("write", None, False),
+    ]
+    assert calls[0].ended_at is not None
+    assert calls[2].ended_at is None
+
+
+def test_only_the_most_recent_calls_are_kept():
+    run = runs.Run(id="r", kind="research", topic="t")
+    first = run.start_lm("m", "intake")
+    for _ in range(runs.MAX_CALLS):
+        run.start_lm("m", "intake")
+
+    # Forgotten while in flight, so ending it changes nothing.
+    run.end_lm(first, 1, 1)
+
+    assert len(run.status().calls) == runs.MAX_CALLS
+    assert all(call.ended_at is None for call in run.status().calls)
+
+
 def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
     def fake_run(settings, request, stream):
         runtime.record_lm_usage("m", "conv_simulator", 30, 5, 0.0)

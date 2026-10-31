@@ -87,6 +87,8 @@ class _Sink:
     def __init__(self) -> None:
         self.lm: list[tuple[str, str | None, int, int, float]] = []
         self.reasoning: list[int] = []
+        self.started: list[str | None] = []
+        self.ended: list[tuple[int, int | None, int | None]] = []
 
     def record_lm(
         self,
@@ -99,6 +101,13 @@ class _Sink:
     ) -> None:
         self.lm.append((model, role, prompt_tokens, completion_tokens, cost))
         self.reasoning.append(reasoning_tokens)
+
+    def start_lm(self, model: str, role: str | None) -> int:
+        self.started.append(role)
+        return len(self.started) - 1
+
+    def end_lm(self, call: int, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+        self.ended.append((call, prompt_tokens, completion_tokens))
 
     def record_embedding(self, model: str, tokens: int) -> None:
         pass
@@ -221,6 +230,17 @@ def test_the_caller_can_shorten_the_retry_budget() -> None:
             _model(down)(prompt="hello")
 
         assert len(down.requests) == 1
+
+
+def test_each_attempt_is_reported_as_a_call_that_ends() -> None:
+    """A retried call shows as a failure followed by the attempt that answered."""
+    with _Gateway(statuses=[500, 200]) as flaky:
+        sink = _Sink()
+        with runtime.record_usage_into(sink):
+            _model(flaky, role="intake")(prompt="hello")
+
+    assert sink.started == ["intake", "intake"]
+    assert sink.ended == [(0, None, None), (1, 11, 5)]
 
 
 def test_a_bad_request_is_not_retried() -> None:

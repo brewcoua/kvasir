@@ -1,6 +1,6 @@
 # Deep research pipeline: plan
 
-Status: proposed, not built. Written 2026-10-31.
+Status: phases 0 to 2 built (report output, clarify, dashboard). Written 2026-10-31.
 
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
 rank, and its prompts ask for a Wikipedia page. This plan adds a second pipeline, `deep`, for
@@ -165,9 +165,10 @@ a launch panel. It stays one self-contained file with no external asset.
   the output type and optional criteria and entities. Run settings sit behind a disclosure.
 - **Clarify.** For research, the form calls `/v1/research/clarify` first and shows any questions
   with an answer field each, plus a "skip" that starts without answering.
-- **Follow.** The form posts the run, reads the `run` frame for its id, then stops reading. The run
-  continues server-side, as it already does when a client disconnects, and the page follows it
-  through `/v1/runs/{id}/events` like any other run.
+- **Follow.** The form posts the run, reads the `run` frame for its id, and follows the run
+  through `/v1/runs/{id}/events` like any other run. It keeps reading the posted stream and
+  discards it, because the server releases the run slot when that response ends, not when the work
+  does.
 - **Result.** The run detail renders the result: markdown converted by a small renderer covering
   what `render.py` emits (headings, paragraphs, lists, links, emphasis, tables), citations, and for
   research the removed sentences and the evidence store. Every string is escaped before it becomes

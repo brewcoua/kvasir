@@ -99,7 +99,13 @@ class GatewayModel(dspy.LM):
         backoff.expo, RETRYABLE, max_time=_retry_seconds.get, on_backoff=_log_retry
     )
     def forward(self, prompt: str | None = None, messages: Any = None, **kwargs: Any) -> Any:
-        response = super().forward(prompt=prompt, messages=messages, **kwargs)
+        # Per attempt rather than per logical call, so a retry shows as the failure it followed.
+        call = runtime.lm_started(self.model, self.role)
+        try:
+            response = super().forward(prompt=prompt, messages=messages, **kwargs)
+        except BaseException:
+            runtime.lm_ended(call)
+            raise
 
         usage = getattr(response, "usage", None) or {}
         if not isinstance(usage, dict):
@@ -112,6 +118,7 @@ class GatewayModel(dspy.LM):
             self.prompt_tokens += prompt_tokens
             self.completion_tokens += completion_tokens
 
+        runtime.lm_ended(call, prompt_tokens, completion_tokens)
         runtime.record_lm_usage(
             self.model,
             self.role,

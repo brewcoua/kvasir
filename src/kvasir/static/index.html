@@ -340,6 +340,83 @@
         color: var(--dim);
         margin: 0.5rem 0;
       }
+      .side {
+        display: grid;
+        gap: 1rem;
+      }
+      .launch {
+        display: grid;
+        gap: 0.5rem;
+      }
+      .launch textarea,
+      .launch input[type="number"],
+      .launch input[type="text"] {
+        width: 100%;
+        font: inherit;
+        color: inherit;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.35rem 0.5rem;
+      }
+      .launch textarea {
+        resize: vertical;
+      }
+      .launch label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--dim);
+      }
+      .launch .kinds label {
+        display: inline;
+        color: inherit;
+        font-size: inherit;
+        margin-right: 0.75rem;
+      }
+      .launch .fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+        gap: 0.5rem;
+      }
+      .launch .fields[hidden] {
+        display: none;
+      }
+      .launch .question {
+        margin: 0 0 0.25rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .markdown {
+        overflow-wrap: anywhere;
+      }
+      .markdown h2,
+      .markdown h3,
+      .markdown h4 {
+        text-transform: none;
+        letter-spacing: normal;
+        color: inherit;
+        margin: 1.25rem 0 0.4rem;
+      }
+      .markdown h2 {
+        font-size: 1.15rem;
+      }
+      .markdown h3 {
+        font-size: 1rem;
+      }
+      .markdown h4 {
+        font-size: 0.9rem;
+      }
+      .markdown a {
+        color: var(--accent);
+      }
+      .markdown code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+      }
+      .claims td {
+        vertical-align: top;
+        font-size: 0.85rem;
+      }
     </style>
   </head>
   <body>
@@ -349,10 +426,47 @@
     </header>
 
     <main>
-      <section class="panel">
-        <h2>Runs</h2>
-        <div class="runs" id="runs"><p class="empty">Nothing has run yet.</p></div>
-      </section>
+      <div class="side">
+        <section class="panel">
+          <h2>New run</h2>
+          <form class="body launch" id="launch">
+            <div class="kinds">
+              <label><input type="radio" name="kind" value="research" checked /> Research</label>
+              <label><input type="radio" name="kind" value="article" /> Article</label>
+            </div>
+            <textarea id="launch-text" rows="3" required></textarea>
+            <details>
+              <summary>Settings</summary>
+              <div class="fields" data-kind="research">
+                <label>Rounds <input type="number" min="1" name="max_rounds" /></label>
+                <label>Queries per round <input type="number" min="1" name="queries_per_round" /></label>
+                <label>Results per query <input type="number" min="1" name="results_per_query" /></label>
+              </div>
+              <div class="fields" data-kind="article" hidden>
+                <label>Results per search <input type="number" min="1" name="search_top_k" /></label>
+                <label>Turns per perspective <input type="number" min="1" name="max_conv_turn" /></label>
+                <label>Perspectives <input type="number" min="1" name="max_perspective" /></label>
+                <label><input type="checkbox" name="do_polish_article" checked /> Polish</label>
+              </div>
+              <div class="fields">
+                <label>Fast model <input type="text" name="model_fast" /></label>
+                <label>Strong model <input type="text" name="model_strong" /></label>
+              </div>
+            </details>
+            <div id="clarify"></div>
+            <p>
+              <button type="submit" class="action" id="launch-start">Start</button>
+              <button type="button" class="action" id="launch-skip" hidden>Skip questions</button>
+              <span class="meta" id="launch-status"></span>
+            </p>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Runs</h2>
+          <div class="runs" id="runs"><p class="empty">Nothing has run yet.</p></div>
+        </section>
+      </div>
 
       <section class="panel">
         <h2>Detail</h2>
@@ -478,7 +592,7 @@
             const cell = row.insertCell();
             if (headings[index][1]) cell.className = "n";
             if (value instanceof Node) {
-              if (value.classList.contains("track")) cell.className = "track-cell";
+              if (value.classList?.contains("track")) cell.className = "track-cell";
               cell.append(value);
             } else {
               cell.append(text(value));
@@ -592,6 +706,25 @@
         );
       }
 
+      const CALLS_SHOWN = 12;
+
+      // Newest first, so a call in flight sits on top with its clock running.
+      function callTable(run) {
+        const calls = run.calls.slice(-CALLS_SHOWN).reverse();
+        return table(
+          [["role", false], ["model", false], ["at", true], ["time", true], ["in", true], ["out", true], ["", false]],
+          calls.map((call) => [
+            call.role ?? "",
+            call.model,
+            run.started_at ? `+${(call.started_at - run.started_at).toFixed(0)}s` : "",
+            clock(call.started_at, call.ended_at),
+            call.prompt_tokens === null ? "" : count(call.prompt_tokens),
+            call.completion_tokens === null ? "" : count(call.completion_tokens),
+            call.ended_at === null ? "running" : call.failed ? "failed" : "",
+          ]),
+        );
+      }
+
       function drawLive(run) {
         current = run;
         const live = el("live");
@@ -616,6 +749,10 @@
           live.append(node("h3", "", "Stages"));
           live.append(timeline(run));
         }
+        if (run.calls.length > 0) {
+          live.append(node("h3", "", "Model calls"));
+          live.append(callTable(run));
+        }
         if (Object.keys(run.usage.by_role).length > 0) {
           live.append(node("h3", "", "By role"));
           live.append(usageTable("role", run.usage.by_role));
@@ -631,16 +768,8 @@
         for (const citation of list) {
           const item = document.createElement("li");
           item.value = citation.index;
-          // Search results are untrusted: only a web link becomes clickable.
-          if (/^https?:/i.test(citation.url)) {
-            const link = node("a", "", citation.title || citation.url);
-            link.href = citation.url;
-            link.target = "_blank";
-            link.rel = "noreferrer noopener";
-            item.append(link);
-          } else {
-            item.append(text(citation.title || citation.url));
-          }
+          item.id = `cite-${citation.index}`;
+          item.append(link(citation.title || citation.url, citation.url));
           if (citation.snippet) item.append(node("div", "meta", citation.snippet));
           ordered.append(item);
         }
@@ -651,14 +780,118 @@
       const resultText = (result) =>
         result.article ?? result.report ?? result.utterance ?? JSON.stringify(result, null, 2);
 
+      // Only a web link becomes clickable: the text comes from web pages and the model.
+      function link(label, url) {
+        if (!/^https?:/i.test(url)) return text(label);
+        const anchor = node("a", "", label);
+        anchor.href = url;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer noopener";
+        return anchor;
+      }
+
+      // Bold, italics, code, links and citation markers. Everything else stays text, and every
+      // piece becomes a text node, so nothing in the markdown is ever parsed as HTML.
+      const INLINE =
+        /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\((https?:[^)\s]+)\)|\[(\d+)\]/g;
+
+      function inline(source) {
+        const parts = [];
+        let last = 0;
+        for (const match of source.matchAll(INLINE)) {
+          parts.push(text(source.slice(last, match.index)));
+          const [, bold, italic, code, label, url, cite] = match;
+          if (bold !== undefined) parts.push(node("strong", "", bold));
+          else if (italic !== undefined) parts.push(node("em", "", italic));
+          else if (code !== undefined) parts.push(node("code", "", code));
+          else if (label !== undefined) parts.push(link(label, url));
+          else {
+            const anchor = node("a", "", `[${cite}]`);
+            anchor.href = `#cite-${cite}`;
+            parts.push(anchor);
+          }
+          last = match.index + match[0].length;
+        }
+        parts.push(text(source.slice(last)));
+        return parts;
+      }
+
+      // Headings, paragraphs and lists: what the pipelines write.
+      function markdown(source) {
+        const root = node("div", "markdown");
+        let paragraph = [];
+        let list = null;
+        const flush = () => {
+          if (paragraph.length > 0) {
+            const element = node("p");
+            element.append(...inline(paragraph.join(" ")));
+            root.append(element);
+          }
+          paragraph = [];
+          list = null;
+        };
+        for (const line of source.split("\n")) {
+          const heading = line.match(/^(#{1,6})\s+(.*)$/);
+          const item = line.match(/^\s*(?:([-*])|\d+\.)\s+(.*)$/);
+          if (heading) {
+            flush();
+            const element = node(`h${Math.min(heading[1].length + 1, 4)}`);
+            element.append(...inline(heading[2]));
+            root.append(element);
+          } else if (item) {
+            if (paragraph.length > 0) flush();
+            const tag = item[1] ? "ul" : "ol";
+            if (!list || list.tagName.toLowerCase() !== tag) {
+              list = node(tag);
+              root.append(list);
+            }
+            const element = node("li");
+            element.append(...inline(item[2]));
+            list.append(element);
+          } else if (line.trim() === "") {
+            flush();
+          } else {
+            list = null;
+            paragraph.push(line.trim());
+          }
+        }
+        flush();
+        return root;
+      }
+
+      // Every claim the run gathered, so any cited sentence can be checked against its quote.
+      function claimTable(claims) {
+        return table(
+          [["#", true], ["claim", false], ["quote", false], ["source", false], ["confidence", false]],
+          claims.map((claim) => [
+            claim.id,
+            claim.text,
+            claim.quote,
+            link(claim.title || claim.url, claim.url),
+            claim.confidence,
+          ]),
+        );
+      }
+
+      let shown = null;
+
       function openResult(run) {
         const result = run.result;
+        shown = result;
         el("drawer-title").textContent = run.topic;
         const content = el("drawer-content");
         content.replaceChildren();
         if (result.role) content.append(node("p", "meta", result.role));
-        content.append(node("pre", "prose", resultText(result)));
+        content.append(markdown(resultText(result)));
 
+        if (result.assumptions?.length > 0) {
+          const assumed = document.createElement("details");
+          assumed.append(node("summary", "", `Assumptions (${result.assumptions.length})`));
+          const list = node("ul");
+          for (const assumption of result.assumptions) list.append(node("li", "", assumption));
+          assumed.append(list);
+          content.append(assumed);
+        }
         if (result.outline) {
           const outline = document.createElement("details");
           outline.append(node("summary", "", "Outline"));
@@ -669,7 +902,17 @@
           const sources = document.createElement("details");
           sources.append(node("summary", "", `Sources (${result.citations.length})`));
           sources.append(citations(result.citations));
+          // Open, so a citation marker has somewhere to jump to.
+          sources.open = true;
           content.append(sources);
+        }
+        if (result.claims?.length > 0) {
+          const evidence = document.createElement("details");
+          evidence.append(node("summary", "", `Evidence (${result.claims.length} claims)`));
+          const wrapper = claimTable(result.claims);
+          wrapper.classList.add("claims");
+          evidence.append(wrapper);
+          content.append(evidence);
         }
         el("drawer").hidden = false;
         content.scrollTop = 0;
@@ -685,7 +928,7 @@
       });
       el("drawer-copy").addEventListener("click", async () => {
         const copy = el("drawer-copy");
-        await navigator.clipboard.writeText(el("drawer-content").querySelector(".prose").textContent);
+        await navigator.clipboard.writeText(resultText(shown));
         copy.textContent = "Copied";
         setTimeout(() => (copy.textContent = "Copy"), 1500);
       });
@@ -780,6 +1023,152 @@
           el("summary").textContent = String(error);
         }
       }
+
+      const form = el("launch");
+      const PLACEHOLDERS = {
+        research: "A question, such as: which European battery makers are best placed for 2030?",
+        article: "A topic, such as: the history of the Kvasir stone",
+      };
+      // The questions `/v1/research/clarify` asked, while the user answers them. Null otherwise.
+      let asked = null;
+
+      const kind = () => form.elements.kind.value;
+      const status = (message) => (el("launch-status").textContent = message);
+
+      function resetClarify() {
+        asked = null;
+        el("clarify").replaceChildren();
+        el("launch-skip").hidden = true;
+      }
+
+      function showKind() {
+        for (const fields of form.querySelectorAll("[data-kind]")) {
+          fields.hidden = fields.dataset.kind !== kind();
+        }
+        el("launch-text").placeholder = PLACEHOLDERS[kind()];
+        resetClarify();
+      }
+
+      function body(clarifications) {
+        const request = {};
+        const text = el("launch-text").value.trim();
+        if (kind() === "research") {
+          request.question = text;
+          request.clarifications = clarifications;
+        } else {
+          request.topic = text;
+          request.do_polish_article = form.elements.do_polish_article.checked;
+        }
+        // Only the settings shown for this kind, and only those filled in: the rest default.
+        const fields = form.querySelectorAll(
+          `[data-kind="${kind()}"] input:not([type=checkbox]), [name^=model_]`,
+        );
+        for (const input of fields) {
+          if (input.value.trim() === "") continue;
+          request[input.name] = input.type === "number" ? Number(input.value) : input.value.trim();
+        }
+        return request;
+      }
+
+      function showQuestions(questions) {
+        asked = questions;
+        const box = el("clarify");
+        box.replaceChildren(node("p", "meta", "Answer what you can, or skip."));
+        questions.forEach((question, index) => {
+          box.append(node("p", "question", question));
+          const answer = document.createElement("textarea");
+          answer.rows = 1;
+          answer.name = `answer-${index}`;
+          box.append(answer);
+        });
+        el("launch-skip").hidden = false;
+        status("");
+      }
+
+      function answers() {
+        return asked
+          .map((question, index) => ({
+            question,
+            answer: form.elements[`answer-${index}`].value.trim(),
+          }))
+          .filter((clarification) => clarification.answer !== "");
+      }
+
+      // Posts the run and reads only far enough to learn its id, then follows it like any other
+      // run. The rest of the stream is still read, and thrown away: the server gives the run slot
+      // back when this response ends, so ending it early would free the slot mid-run.
+      async function start(clarifications) {
+        const button = el("launch-start");
+        button.disabled = true;
+        status("starting…");
+        try {
+          const response = await fetch(kind() === "research" ? "/v1/research" : "/v1/article", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body(clarifications)),
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            const message = error.message ?? JSON.stringify(error.detail ?? response.status);
+            status(`refused: ${message}`);
+            return;
+          }
+          const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+          let buffer = "";
+          let runId = null;
+          while (runId === null) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += value;
+            const frame = buffer.match(/event: run\ndata: (.*)\n\n/);
+            if (frame) runId = JSON.parse(frame[1]).run_id;
+          }
+          if (runId === null) {
+            status("the run ended before it started");
+            return;
+          }
+          (async () => {
+            while (!(await reader.read()).done);
+          })().catch(() => {});
+          resetClarify();
+          el("launch-text").value = "";
+          status("");
+          select(runId);
+        } catch (error) {
+          status(String(error));
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (kind() !== "research") return start([]);
+        if (asked !== null) return start(answers());
+
+        status("checking whether the question needs clarifying…");
+        el("launch-start").disabled = true;
+        try {
+          const response = await fetch("/v1/research/clarify", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ question: el("launch-text").value.trim() }),
+          });
+          if (!response.ok) throw new Error(`clarify: ${response.status}`);
+          const { questions } = await response.json();
+          if (questions.length > 0) return showQuestions(questions);
+        } catch (error) {
+          // Clarifying is a courtesy. Failing to, the run starts as asked.
+          console.warn(error);
+        } finally {
+          el("launch-start").disabled = false;
+        }
+        return start([]);
+      });
+      el("launch-skip").addEventListener("click", () => start([]));
+      el("launch-text").addEventListener("input", resetClarify);
+      for (const radio of form.elements.kind) radio.addEventListener("change", showKind);
+      showKind();
 
       refresh();
       setInterval(refresh, LIST_INTERVAL_MS);

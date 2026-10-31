@@ -218,9 +218,12 @@ once at startup, with no scheduler and no background task.
 
 ## Watch what is running
 
-`GET /` serves a single page listing runs. For a selected run it shows elapsed time, totals for
+`GET /` serves a single page that starts runs and lists them. To start one, pick research or
+article, enter the question or topic, and press Start. For research, the page asks the clarifying
+questions first; answer what you can, or skip. For a selected run it shows elapsed time, totals for
 tokens in and out, reasoning tokens, cost, searches and embedding tokens, then the stages on a
-timeline with each stage's duration and usage, the usage split by role and by model, the result once
+timeline with each stage's duration and usage, the most recent model calls with a clock on any still
+waiting, the usage split by role and by model, the result once
 the run finishes, and the event log. Figures update live while the run is in progress. It is one
 self-contained file with no external asset, since the image is read-only and offline.
 
@@ -229,7 +232,7 @@ The same data is available as JSON.
 | Request | Effect |
 | --- | --- |
 | `GET /v1/runs` | Every run the process remembers, newest first. |
-| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, recent events and its result. |
+| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 50 model calls, recent events and its result. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` after each `progress` and every 2 seconds in between. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 

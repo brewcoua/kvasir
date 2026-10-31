@@ -213,6 +213,20 @@ class RunUsage(BaseModel):
     by_stage: dict[str, StageUsage]
 
 
+class LmCall(BaseModel):
+    """One completion request, while it is waiting and after it returns."""
+
+    role: str | None
+    model: str
+    started_at: float
+    # Null while the call is in flight.
+    ended_at: float | None
+    # Null while in flight, and when the call failed.
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    failed: bool
+
+
 class RunSummary(BaseModel):
     """One run, as `GET /v1/runs` lists it."""
 
@@ -256,6 +270,8 @@ class RunStatus(RunSummary):
     """A run's live state, as the `status` event of `GET /v1/runs/{id}/events` carries it."""
 
     stages: list[RunStage]
+    # The most recent completions, oldest first, including those still in flight.
+    calls: list[LmCall]
 
 
 class RunDetail(RunStatus):

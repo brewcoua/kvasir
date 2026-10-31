@@ -26,6 +26,7 @@ from uuid import uuid4
 
 from kvasir import logs
 from kvasir.models import (
+    LmCall,
     ModelUsage,
     Progress,
     RunDetail,
@@ -43,6 +44,7 @@ from kvasir.storm import runtime
 # grow without limit. Neither is configuration worth exposing.
 MAX_RUNS = 100
 MAX_EVENTS = 200
+MAX_CALLS = 50
 
 QUEUED = "queued"
 RUNNING = "running"
@@ -149,6 +151,8 @@ class Run:
     _embedding_tokens: int = field(default=0, repr=False)
     _searches: int = field(default=0, repr=False)
     _watchers: list[_Watcher] = field(default_factory=list, repr=False)
+    _calls: dict[int, LmCall] = field(default_factory=dict, repr=False)
+    _next_call: int = field(default=0, repr=False)
 
     @contextmanager
     def active(self) -> Iterator[None]:
@@ -221,6 +225,35 @@ class Run:
             ):
                 usage.add(prompt_tokens, completion_tokens, reasoning_tokens, cost)
 
+    def start_lm(self, model: str, role: str | None) -> int:
+        with self._lock:
+            call = self._next_call
+            self._next_call += 1
+            self._calls[call] = LmCall(
+                role=role,
+                model=model,
+                started_at=time.time(),
+                ended_at=None,
+                prompt_tokens=None,
+                completion_tokens=None,
+                failed=False,
+            )
+            # Insertion-ordered, so this forgets the oldest. A call forgotten while still in
+            # flight is ended into nothing.
+            while len(self._calls) > MAX_CALLS:
+                del self._calls[next(iter(self._calls))]
+            return call
+
+    def end_lm(self, call: int, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+        with self._lock:
+            record = self._calls.get(call)
+            if record is None:
+                return
+            record.ended_at = time.time()
+            record.prompt_tokens = prompt_tokens
+            record.completion_tokens = completion_tokens
+            record.failed = prompt_tokens is None
+
     def record_embedding(self, model: str, tokens: int) -> None:
         with self._lock:
             self._embedding_tokens += tokens
@@ -258,6 +291,7 @@ class Run:
             return RunStatus(
                 **dict(summary),
                 stages=[stage.model(name, now) for name, stage in self._stages.items()],
+                calls=[call.model_copy() for call in self._calls.values()],
             )
 
     def detail(self) -> RunDetail:

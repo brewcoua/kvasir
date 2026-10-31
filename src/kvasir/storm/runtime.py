@@ -70,6 +70,12 @@ class UsageSink(Protocol):
         reasoning_tokens: int = 0,
     ) -> None: ...
 
+    def start_lm(self, model: str, role: str | None) -> int: ...
+
+    def end_lm(
+        self, call: int, prompt_tokens: int | None, completion_tokens: int | None
+    ) -> None: ...
+
     def record_embedding(self, model: str, tokens: int) -> None: ...
 
     def record_search(self, engine: str, queries: int) -> None: ...
@@ -107,6 +113,24 @@ def record_lm_usage(
         sink.record_lm(
             model, role, prompt_tokens, completion_tokens, cost, reasoning_tokens=reasoning_tokens
         )
+
+
+def lm_started(model: str, role: str | None) -> int | None:
+    """Report that a completion was sent, so a run can show what it is waiting on.
+
+    Returns the id to end it with, or None when nothing is listening.
+    """
+    sink = _usage_sink.get()
+    return sink.start_lm(model, role) if sink is not None else None
+
+
+def lm_ended(
+    call: int | None, prompt_tokens: int | None = None, completion_tokens: int | None = None
+) -> None:
+    """Report that a completion came back. Null token counts mean it failed."""
+    sink = _usage_sink.get()
+    if sink is not None and call is not None:
+        sink.end_lm(call, prompt_tokens, completion_tokens)
 
 
 def current_usage_sink() -> UsageSink | None:
@@ -150,6 +174,8 @@ __all__ = [
     "configure_concurrency",
     "current_usage_sink",
     "fetch_slot",
+    "lm_ended",
+    "lm_started",
     "max_threads",
     "record_lm_usage",
     "record_search_usage",
