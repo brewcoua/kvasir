@@ -18,6 +18,9 @@ and no container image. This repository supplies the missing middle: a small Fas
 `knowledge_storm` is vendored as `src/kvasir/storm` and modified, rather than depended on. See
 [`docs/fork-notes.md`](docs/fork-notes.md) for what diverges and why.
 
+How the service fits together, from a request to its result, is in
+[`docs/architecture.md`](docs/architecture.md).
+
 ## What it needs
 
 - An OpenAI-compatible gateway. All model and embedding traffic goes there, and nothing calls
@@ -111,8 +114,9 @@ $ curl -s localhost:8080/readyz
 ```
 
 `/readyz` returns 503 if either dependency is unreachable, and names which one. A missing or
-unusable variable makes the container exit at startup listing every variable at fault, rather than
-starting and failing on the first request.
+unusable variable makes the container exit at startup, rather than starting and failing on the
+first request. Missing required variables are listed together; an unusable value is reported on its
+own, so fixing one may reveal the next.
 
 Pin the digest in production. `ghcr.io/brewcoua/kvasir:0.1.0@sha256:...` is the intended form; the
 publishing workflow writes the digest to its run summary. There is deliberately no moving `latest`.
@@ -136,7 +140,7 @@ a 16k context, keeps only claims whose quote appears word for word on the page, 
 report one section at a time from those claims. Each sentence that cites a claim is then checked
 against the claim's quote, and taken out if the quote does not support it. Up to 4 removed
 sentences are searched for again, and a section whose search finds support is written and checked
-once more. See [`docs/deep-research-plan.md`](docs/deep-research-plan.md) for the design.
+once more. See [`docs/research.md`](docs/research.md) for how each step works and why.
 
 1. Optionally, ask what the question leaves open. This is one fast-model call, like `/v1/tasks`: it
    registers no run and takes no slot.

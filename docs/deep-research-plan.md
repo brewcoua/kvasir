@@ -7,6 +7,9 @@ Phases 7 to 10, [adaptive research](#adaptive-research), the
 without the baseline evaluation phases 7 and 10 ask for. The [Pipeline](#pipeline) section predates
 them: phase 7 replaced its `rounds` stage.
 
+The pipeline as built is described in [`research.md`](research.md). This page is the plan, kept
+for its evidence and its reasoning.
+
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
 rank, and its prompts ask for a Wikipedia page. This plan adds a second pipeline, `deep`, for
 questions such as "rank the best companies in sector X on these criteria", built for a 27B-class
