@@ -14,6 +14,7 @@ export type LmCallContent = Schemas["LmCallContent"];
 export type SearchCall = Schemas["SearchCall"];
 export type SearchContent = Schemas["SearchContent"];
 export type ResearchQuestion = Schemas["ResearchQuestion"];
+export type ResearchClaim = Schemas["ResearchClaim"];
 export type Citation = Schemas["Citation"];
 export type ResearchResult = Schemas["ResearchResult"];
 export type MethodInfo = Schemas["MethodInfo"];

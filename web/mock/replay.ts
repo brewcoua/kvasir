@@ -59,8 +59,17 @@ export function snapshot(run: RunDetail, { at, toReal, speed }: Timing): RunDeta
         ? { ...call, started_at: toReal(call.started_at), ended_at: toReal(call.ended_at) }
         : { ...call, started_at: toReal(call.started_at), ended_at: null, prompt_tokens: null, completion_tokens: null },
     );
+  const searches = run.searches
+    .filter((search) => search.started_at <= at)
+    .map((search) =>
+      search.ended_at !== null && search.ended_at <= at
+        ? { ...search, started_at: toReal(search.started_at), ended_at: toReal(search.ended_at) }
+        : { ...search, started_at: toReal(search.started_at), ended_at: null, results: null, failures: [] },
+    );
   // Usage has no timeline, so it grows with the share of the run gone by.
   const share = over || end === start ? 1 : (at - start) / (end - start);
+  // Nor have questions, so they appear in the order asked, likewise.
+  const questions = run.questions.slice(0, Math.ceil(run.questions.length * share));
   const usage: Usage = scaled(run.usage, share);
   const seen = new Set(stages.map((stage) => stage.name));
   usage.by_stage = Object.fromEntries(
@@ -80,6 +89,8 @@ export function snapshot(run: RunDetail, { at, toReal, speed }: Timing): RunDeta
     events,
     stages,
     calls,
+    searches,
+    questions,
     usage,
     result: over ? run.result : null,
     has_result: over && run.result !== null,

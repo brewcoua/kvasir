@@ -4,7 +4,9 @@
 // made from the ranking fixture: `running`, frozen partway with its clock still going, and `live`,
 // replayed at MOCK_SPEED times its real pace and started again once it ends. Starting a run from
 // the page replays a fixture the same way. `<name>.calls.json` holds what a fixture's calls sent
-// and answered, by call id, for runs recorded with KVASIR_KEEP_CALL_CONTENT.
+// and answered, by call id, for runs recorded with KVASIR_KEEP_CALL_CONTENT, and
+// `<name>.searches.json` what its searches returned, by search id. `graph-live` replays the graph
+// fixture the way `live` replays the ranking.
 import { readdirSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
@@ -14,6 +16,7 @@ import { snapshot, type Timing } from "./replay.ts";
 
 type RunDetail = components["schemas"]["RunDetail"];
 type LmCallContent = components["schemas"]["LmCallContent"];
+type SearchContent = components["schemas"]["SearchContent"];
 
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 const SPEED = Number(process.env.MOCK_SPEED ?? 20);
@@ -75,6 +78,7 @@ interface Entry {
   run: RunDetail;
   timing: () => Timing;
   contents?: Record<string, LmCallContent>;
+  searches?: Record<string, SearchContent>;
 }
 
 const now = () => Date.now() / 1000;
@@ -111,16 +115,17 @@ function replay(run: RunDetail, id: string, loop: boolean, patch: Partial<RunDet
 function load(): Map<string, Entry> {
   const runs = new Map<string, Entry>();
   const files = readdirSync(FIXTURES);
-  for (const file of files.filter((name) => name.endsWith(".json") && !name.endsWith(".calls.json")).sort()) {
+  const kept = (name: string) => (files.includes(name) ? JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) : undefined);
+  for (const file of files.filter((name) => /^[^.]+\.json$/.test(name)).sort()) {
     const run: RunDetail = JSON.parse(readFileSync(join(FIXTURES, file), "utf8"));
     const id = file.replace(/\.json$/, "");
-    const calls = `${id}.calls.json`;
-    const contents = files.includes(calls) ? JSON.parse(readFileSync(join(FIXTURES, calls), "utf8")) : undefined;
-    runs.set(id, { ...stored({ ...run, id }), contents });
+    runs.set(id, { ...stored({ ...run, id }), contents: kept(`${id}.calls.json`), searches: kept(`${id}.searches.json`) });
   }
   const ranking = runs.get("ranking")!.run;
   runs.set("running", frozen(ranking, "running"));
   runs.set("live", replay(ranking, "live", true));
+  const graph = runs.get("graph")!;
+  runs.set("graph-live", { ...replay(graph.run, "graph-live", true), searches: graph.searches });
   return runs;
 }
 
@@ -129,10 +134,10 @@ function summary(run: RunDetail) {
   return rest;
 }
 
-// The `status` event, which carries only the most recent calls.
+// The `status` event, which carries only the most recent calls and searches.
 function status(run: RunDetail) {
   const { events: _events, result: _result, ...rest } = run;
-  return { ...rest, calls: run.calls.slice(-STATUS_CALLS) };
+  return { ...rest, calls: run.calls.slice(-STATUS_CALLS), searches: run.searches.slice(-STATUS_CALLS) };
 }
 
 const view = (entry: Entry) => snapshot(entry.run, entry.timing());
@@ -201,6 +206,13 @@ export function mock(): Plugin {
         if (request.method === "GET" && call) {
           const kept = runs.get(call[1])?.contents?.[call[2]];
           if (!kept) return send(response, 404, { message: `no content kept for call ${call[2]}` });
+          return send(response, 200, kept);
+        }
+
+        const search = path.match(/^\/v1\/runs\/([^/]+)\/searches\/(\d+)$/);
+        if (request.method === "GET" && search) {
+          const kept = runs.get(search[1])?.searches?.[search[2]];
+          if (!kept) return send(response, 404, { message: `no results kept for search ${search[2]}` });
           return send(response, 200, kept);
         }
 

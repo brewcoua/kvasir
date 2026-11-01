@@ -1183,32 +1183,85 @@ table.runs a.topic:hover {
   grid-column: 1 / -1;
 }
 
-/* The graph tab: a question tree, its lines drawn in an svg behind the rows. */
+/* The graph tab: questions, the claims they rest on, and the topic they hang from. */
 .graph {
-  position: relative;
-  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
 }
 .graph svg {
-  position: absolute;
-  top: 0;
-  left: 0;
+  display: block;
+  cursor: grab;
+  touch-action: none;
 }
-.graph path {
-  fill: none;
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8em;
+}
+.graph-legend .action {
+  margin-left: auto;
+}
+.graph .link {
   stroke: var(--line);
+  stroke-width: 1;
+}
+.graph .link.raised {
+  stroke: var(--dim);
   stroke-width: 1.5;
 }
-.graph circle {
-  fill: var(--dim);
+.graph .link.corroborates {
+  stroke: var(--ok);
+  stroke-dasharray: 4 3;
 }
-.graph circle.answered {
+.graph .link.contradicts {
+  stroke: var(--bad);
+  stroke-dasharray: 4 3;
+}
+.graph .node {
+  cursor: pointer;
+}
+.graph .node circle {
+  fill: var(--dim);
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+.graph .node.topic circle {
+  fill: var(--text);
+}
+.graph .node.answered circle {
   fill: var(--ok);
 }
-.graph circle.weak {
+.graph .node.weak circle {
   fill: var(--busy);
 }
-.graph circle.contradicted {
+.graph .node.contradicted circle {
   fill: var(--bad);
+}
+.graph .node.claim circle {
+  fill: var(--accent);
+}
+.graph .node.claim.medium circle {
+  opacity: 0.7;
+}
+.graph .node.claim.low circle {
+  opacity: 0.4;
+}
+.graph .node.selected circle {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.graph .node text {
+  font-size: 0.72rem;
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3;
+  pointer-events: none;
+}
+.graph .faded {
+  opacity: 0.15;
 }
 .question-status.answered {
   color: var(--ok);
@@ -1218,30 +1271,6 @@ table.runs a.topic:hover {
 }
 .question-status.contradicted {
   color: var(--bad);
-}
-.graph .node {
-  position: absolute;
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.6em;
-  padding: 0 0.4em;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.graph .node:hover,
-.graph .node.selected {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-.graph .text {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .graph-chosen {
   margin-top: 1em;

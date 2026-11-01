@@ -367,9 +367,12 @@ own address, so a reload or a shared link keeps it.
   - Searches lists every query sent to SearXNG, with the event it followed, how many results came
     back and why it failed if it did. Opening one lists the results, when
     `KVASIR_KEEP_CALL_CONTENT` kept them.
-  - Graph is shown for a run of the `graph` method. It draws each question under the one whose
-    evidence raised it, coloured by status, and follows the run live. Selecting a question shows
-    its queries and, once the run is done, the claims it rests on.
+  - Graph is shown for a run of the `graph` method. It lays out the topic, the first questions
+    hanging from it, each follow-up hanging from the question whose evidence raised it, and, once
+    the run is done, the claims each question rests on, with the links between claims that
+    corroborate or contradict each other. Questions are coloured by status. Drag a node to move
+    it, scroll or drag the background to zoom and pan, and select a node to fade all but its
+    neighbours and show its queries, or a claim's quote and source. It follows the run live.
 
 Figures update live while the run is in progress. The theme selector in the header offers
 `system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in
@@ -550,11 +553,13 @@ pnpm build      # into src/kvasir/static/, where the service serves it
 after it, and `#/runs/<name>/result` opens its result directly: `#/runs/ranking/result` shows the
 ranking table. Two more runs are made from `ranking.json`: `running`, frozen partway, and `live`,
 replayed at 20 times its real pace and started again once it ends. Set `MOCK_SPEED` to change the
-pace. A run started from the page replays a fixture the same way: `wal.json` for research, and
+pace. `graph-live` replays `graph.json` the same way, its questions appearing as the run goes. A
+run started from the page replays a fixture the same way: `wal.json` for research, and
 `article.json` for an article.
 
-`<name>.calls.json` holds what a fixture's calls sent and answered, keyed by call id. Only `wal`
-has one, recorded with `KVASIR_KEEP_CALL_CONTENT=true`.
+`<name>.calls.json` holds what a fixture's calls sent and answered, keyed by call id, and
+`<name>.searches.json` what its searches returned, keyed by search id. Only `wal` has the first and
+only `graph` the second, both recorded with `KVASIR_KEEP_CALL_CONTENT=true`.
 
 A fixture is a run's detail as `GET /v1/runs/{id}` returns it. To add one from a run kept in the
 SQLite history:
@@ -571,6 +576,14 @@ run=<run id>
 for n in $(jq -r '.calls[] | select(.has_content) | .id' web/fixtures/<name>.json); do
   curl -s localhost:8080/v1/runs/$run/calls/$n | jq -c --arg n "$n" '{($n): .}'
 done | jq -s -c add > web/fixtures/<name>.calls.json
+```
+
+Its searches' results are fetched the same way:
+
+```bash
+for n in $(jq -r '.searches[] | select(.has_content) | .id' web/fixtures/<name>.json); do
+  curl -s localhost:8080/v1/runs/$run/searches/$n | jq -c --arg n "$n" '{($n): .}'
+done | jq -s -c add > web/fixtures/<name>.searches.json
 ```
 
 The TypeScript types in `web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
