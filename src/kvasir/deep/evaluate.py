@@ -225,7 +225,7 @@ def summary(scores: list[Score], errors: dict[str, str]) -> str:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m kvasir.deep.evaluate", description=__doc__)
     parser.add_argument("out", type=Path, help="directory for results and scores")
-    parser.add_argument("--url", default="http://localhost:8000", help="the kvasir service")
+    parser.add_argument("--url", default="http://localhost:8080", help="the kvasir service")
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
     parser.add_argument("--only", nargs="*", default=None, help="question ids to run")
     args = parser.parse_args(argv)

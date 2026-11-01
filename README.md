@@ -433,7 +433,7 @@ would need answered. To evaluate, start the service, then run:
 uv run python -m kvasir.deep.evaluate data/eval/baseline
 ```
 
-It researches each question through the service at `http://localhost:8000` (`--url` to change),
+It researches each question through the service at `http://localhost:8080` (`--url` to change),
 without clarifications, and saves each result as `<id>.json`. A saved result is not researched
 again, so an interrupted evaluation resumes; `--only <id>...` limits it to some questions. A run
 takes minutes, so the full set takes hours on a local model.
