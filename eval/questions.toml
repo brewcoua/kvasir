@@ -1,4 +1,4 @@
-# Questions for `python -m kvasir.deep.evaluate`. Each names the output its wording should lead the
+# Questions for `python -m kvasir.research.evaluate`. Each names the output its wording should lead the
 # brief to choose, and checks a judge answers yes or no against the finished report. Checks ask
 # what a reader of the question needs, not for facts the run could only get from memory.
 

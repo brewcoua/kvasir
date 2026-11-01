@@ -8,7 +8,8 @@ without the baseline evaluation phases 7 and 10 ask for. The [Pipeline](#pipelin
 them: phase 7 replaced its `rounds` stage.
 
 The pipeline as built is described in [`research.md`](research.md). This page is the plan, kept
-for its evidence and its reasoning.
+for its evidence and its reasoning. Paths below are as planned: `deep/` has since been split into
+`research/` and `methods/ledger/`, as [`methods-plan.md`](methods-plan.md) describes.
 
 STORM writes an encyclopedic article about a topic. It takes no instructions, does not compare or
 rank, and its prompts ask for a Wikipedia page. This plan adds a second pipeline, `deep`, for

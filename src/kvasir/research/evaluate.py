@@ -10,7 +10,7 @@ resumes. Every saved result is then scored:
 - citations: each cited sentence of the final report against the quotes of the sources it cites.
   This repeats the pipeline's own verification on what survived it, with the strong model as judge.
 
-    uv run python -m kvasir.deep.evaluate data/eval/baseline
+    uv run python -m kvasir.research.evaluate data/eval/baseline
 
 Scores go to `scores.json` in the same directory, with a summary table on stdout.
 """
@@ -32,8 +32,8 @@ import httpx
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 
 from kvasir.config import Settings
-from kvasir.deep import verify
-from kvasir.deep.signatures import Verify
+from kvasir.research import verify
+from kvasir.research.signatures import Verify
 from kvasir.runners import build_research_models
 from kvasir.storm.lm import GatewayModel
 
@@ -223,7 +223,7 @@ def summary(scores: list[Score], errors: dict[str, str]) -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="python -m kvasir.deep.evaluate", description=__doc__)
+    parser = argparse.ArgumentParser(prog="python -m kvasir.research.evaluate", description=__doc__)
     parser.add_argument("out", type=Path, help="directory for results and scores")
     parser.add_argument("--url", default="http://localhost:8080", help="the kvasir service")
     parser.add_argument("--questions", type=Path, default=QUESTIONS)

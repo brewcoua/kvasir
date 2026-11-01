@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from kvasir import conversation, logs
 from kvasir.article import run_article
 from kvasir.config import Settings, apply_environment
-from kvasir.deep.pipeline import clarify, run_research
+from kvasir.methods.ledger.method import run_research
 from kvasir.models import (
     ArticleRequest,
     ClarifyRequest,
@@ -53,6 +53,7 @@ from kvasir.progress import (
     WRITE,
     ProgressStream,
 )
+from kvasir.research.clarify import clarify
 from kvasir.run_store import RunStore
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
 from kvasir.runs import CallContentNotFound, Run, RunNotFound, RunRegistry

@@ -24,7 +24,7 @@ flowchart LR
         api["FastAPI routes<br/>main.py"]
         registry["RunRegistry<br/>runs.py"]
         storm["STORM / Co-STORM<br/>storm/"]
-        deep["Research pipeline<br/>deep/"]
+        deep["Research methods<br/>methods/, research/"]
     end
 
     gateway["OpenAI-compatible<br/>gateway"]
@@ -58,7 +58,8 @@ flowchart LR
 | `run_store.py` | The optional SQLite history. |
 | `sessions.py` | Co-STORM session files. |
 | `article.py`, `conversation.py` | Drive one STORM run, and one Co-STORM operation. |
-| `deep/` | The research pipeline. See [`research.md`](research.md). |
+| `research/` | The steps every research method shares: search, reading, verification, writing, rendering. See [`research.md`](research.md). |
+| `methods/` | The research methods, each orchestrating those steps. `methods/ledger/` is the research pipeline. See [`methods-plan.md`](methods-plan.md). |
 | `storm/` | The vendored, modified `knowledge_storm`. See [`fork-notes.md`](fork-notes.md). |
 | `static/` | The runs page, built from `web/` by `pnpm build` and not committed. `GET /` answers 503 until it is built. |
 
@@ -66,7 +67,7 @@ flowchart LR
 
 | Route | Engine | Run kind | Output |
 | --- | --- | --- | --- |
-| `POST /v1/research` | `deep.pipeline.run_research` | `research` | A report answering a question, ranking or comparing options when asked. |
+| `POST /v1/research` | `methods.ledger.method.run_research` | `research` | A report answering a question, ranking or comparing options when asked. |
 | `POST /v1/article` | STORM, `article.run_article` | `storm` | A Wikipedia-style article about a topic. |
 | `POST /v1/session` and its sub-routes | Co-STORM, `conversation.*` | `costorm` | A turn-based round table, and a report from it. |
 

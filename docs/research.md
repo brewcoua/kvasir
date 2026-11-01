@@ -1,10 +1,12 @@
 # The research pipeline
 
 How `POST /v1/research` turns a question into a cited report, and why each step is shaped the way
-it is. This page describes the pipeline as built, in `src/kvasir/deep/`. How to call it is in the
-README's [Research a question](../README.md#research-a-question). The plan it was built from, with
-the sources behind each design rule, is [`deep-research-plan.md`](deep-research-plan.md). How a run
-is streamed, accounted for and stored is in [`architecture.md`](architecture.md).
+it is. This page describes the pipeline as built: the `ledger` method in
+`src/kvasir/methods/ledger/`, over the steps every method shares in `src/kvasir/research/`. How to
+call it is in the README's [Research a question](../README.md#research-a-question). The plan it was
+built from, with the sources behind each design rule, is
+[`deep-research-plan.md`](deep-research-plan.md). How a run is streamed, accounted for and stored is
+in [`architecture.md`](architecture.md).
 
 ## What it is built for
 
@@ -14,7 +16,7 @@ applies them.
 
 | Rule | Consequence |
 | --- | --- |
-| Code decides how much to search and when to stop. The model decides what to search for, what a page says, and how to write it. | Budgets, stop conditions, query shapes and ranking arithmetic are constants in `pipeline.py`, not prompts. A prompted small model searches too little when left to decide. |
+| Code decides how much to search and when to stop. The model decides what to search for, what a page says, and how to write it. | Budgets, stop conditions, query shapes and ranking arithmetic are constants in the modules of `methods/ledger/` and `research/`, not prompts. A prompted small model searches too little when left to decide. |
 | No call sees more than one small input. | A page is cut into pieces of about 1,500 tokens, and each call reads one piece, one question and the brief. Nothing carries the run's history. |
 | Nothing counts as evidence unless a page says it word for word. | Every claim carries a quote, and a claim whose quote is not on the page is dropped. Every cited sentence is later checked against those quotes. |
 | Calls are sequential. | A local server answers one request at a time, so parallel model calls buy no speed. Only page downloads run in a pool. |
@@ -68,7 +70,7 @@ Today's date is passed because the model's sense of "now" is its training cutoff
 "best" means best at that date.
 
 The brief lists options from memory as readily as from the question. So a criterion or an option
-counts as named only if `_names` finds it in the question or its clarifications. `_names` asks for
+counts as named only if `names` finds it in the question or its clarifications. `names` asks for
 most of the words of a name, not all, since sources shorten names: "Qwen3-Coder-30B" for
 "Qwen3-Coder-30B-A3B". Request fields `output`, `criteria` and `entities` override all of this.
 
@@ -129,7 +131,7 @@ never answered.
 
 ### Picking, and judging first
 
-`_pick` takes the question with the fewest attempts, then the shallowest, then the oldest. Fewest
+`pick` takes the question with the fewest attempts, then the shallowest, then the oldest. Fewest
 attempts first means every question gets a plain search before any gets a narrower one.
 
 A search for one question often answers another. So before spending a search on a question, the
@@ -220,7 +222,7 @@ flowchart LR
   which the brief would not rank first.
 - **Intake.** One fast-model call per piece. It reads the brief, the question the page was found
   for, the page title and the piece, and returns claims, each with a quote and a confidence.
-- **Quote check.** `_quoted` keeps a claim only if its quote appears in the piece word for word.
+- **Quote check.** `quoted` keeps a claim only if its quote appears in the piece word for word.
   The comparison is on words alone, lower-cased, so a non-breaking hyphen or a line break where the
   page had an inline tag does not count as a difference. An ellipsis in the quote stands for words
   left out, and the fragments must appear in order.
@@ -292,7 +294,7 @@ sequenceDiagram
     V-->>S: kept, with its own removals final
 ```
 
-**Verify.** `deep/verify.py` cuts each section into sentences and checks every sentence that cites
+**Verify.** `research/verify.py` cuts each section into sentences and checks every sentence that cites
 a claim. `Verify` reads the sentence and the cited claims with their quotes, and decides whether
 every fact in the sentence is stated in the quotes or follows directly from them. An added number,
 name or comparison makes it unsupported. An unsupported sentence is removed and recorded in
@@ -342,10 +344,11 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | `write` | `WriteSection` | strong | 2000 |
 | `verify` | `Verify` | fast | 600 |
 
-Signatures are typed dspy signatures in `deep/signatures.py`. dspy's adapter turns each into a
-prompt and parses the answer back into its declared types, so no step parses prose with a regex. A
-parse failure in intake, judging, assessing, ranking or verifying is logged and treated as no
-result for that one call, rather than failing the run.
+Signatures are typed dspy signatures: those every method shares in `research/signatures.py`,
+`Clarify` in `research/clarify.py`, and the ledger's own in `methods/ledger/signatures.py`. dspy's
+adapter turns each into a prompt and parses the answer back into its declared types, so no step
+parses prose with a regex. A parse failure in intake, judging, assessing, ranking or verifying is
+logged and treated as no result for that one call, rather than failing the run.
 
 ## What changed while building it
 
@@ -363,7 +366,7 @@ this design's own, to be kept or dropped on evidence.
 
 ## What is not measured yet
 
-`python -m kvasir.deep.evaluate` scores runs on 20 fixed questions in
+`python -m kvasir.research.evaluate` scores runs on 20 fixed questions in
 [`eval/questions.toml`](../eval/questions.toml): the output type, a yes-or-no checklist per
 question, and the citations that survived verification. How to run it is in the README's
 [Evaluate research](../README.md#evaluate-research). The plan asked for a baseline from the rounds

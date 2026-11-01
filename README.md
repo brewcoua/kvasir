@@ -518,7 +518,7 @@ tables. Each lists the output type its wording asks for and a few checks a reade
 would need answered. To evaluate, start the service, then run:
 
 ```bash
-uv run python -m kvasir.deep.evaluate data/eval/baseline
+uv run python -m kvasir.research.evaluate data/eval/baseline
 ```
 
 It researches each question through the service at `http://localhost:8080` (`--url` to change),

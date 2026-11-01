@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dspy.utils.dummies import DummyLM
 
-from kvasir.deep import evaluate
-from kvasir.deep.evaluate import Question
+from kvasir.research import evaluate
+from kvasir.research.evaluate import Question
 
 QUESTION = Question(
     id="stone",

@@ -8,11 +8,18 @@ does not settle something, which is what the writer is asked to say.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 
-from kvasir.deep.store import Claim
+from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+
 from kvasir.models import RemovedSentence
+from kvasir.progress import VERIFY, ProgressStream
+from kvasir.research.calls import predict
+from kvasir.research.claims import Claim, quoted_claims
+from kvasir.research.signatures import Verify
+from kvasir.storm.lm import GatewayModel
 
 # A claim id as the writer cites it: `[3]`, or `[3, 7]`.
 _MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
@@ -23,6 +30,44 @@ _END = re.compile(r"(?<=[.!?])((?:\s*\[\d+(?:\s*,\s*\d+)*\])*)\s+(?=[A-Z*_(\"“
 _PREFIX = re.compile(r"^(\s*(?:[-*+]|\d+\.|>)\s+)")
 
 Check = Callable[[str, list[Claim]], tuple[bool, str]]
+
+logger = logging.getLogger(__name__)
+
+
+def report(
+    model: GatewayModel,
+    sections: list[tuple[str, str]],
+    claims: dict[int, Claim],
+    stream: ProgressStream,
+) -> tuple[list[tuple[str, str]], list[RemovedSentence]]:
+    """`sections` without the cited sentences `model` finds unsupported, and those sentences."""
+    total = sum(count(text) for _, text in sections)
+    done = 0
+    stream.publish(VERIFY, f"checking {total} cited sentences against their quotes", 0, total)
+
+    def check(sentence: str, evidence: list[Claim]) -> tuple[bool, str]:
+        try:
+            verdict = predict(model, Verify, sentence=sentence, evidence=quoted_claims(evidence))
+        except AdapterParseError as exc:
+            # Unchecked rather than removed: a verdict that cannot be read says nothing about
+            # the sentence.
+            logger.warning("could not read the verdict on %r: %s", sentence, exc)
+            return True, ""
+        return bool(verdict.supported), str(verdict.reason)
+
+    def checked() -> None:
+        nonlocal done
+        done += 1
+        stream.publish(VERIFY, f"checked {done} of {total} cited sentences", done, total)
+
+    verified: list[tuple[str, str]] = []
+    removed: list[RemovedSentence] = []
+    for title, text in sections:
+        kept, dropped = verify(title, text, claims, check, checked)
+        verified.append((title, kept))
+        removed.extend(dropped)
+    stream.publish(VERIFY, f"removed {len(removed)} of {total} cited sentences", total, total)
+    return verified, removed
 
 
 def sentences(line: str) -> list[str]:

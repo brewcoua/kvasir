@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
@@ -10,9 +10,6 @@ import numpy as np
 from kvasir.storm.encoder import Encoder, cosine_similarity
 
 Confidence = Literal["high", "medium", "low"]
-# `open`: nothing found yet. `weak`: part of an answer. `contradicted`: sources disagree.
-# `unresolved`: every query shape was tried and found nothing.
-Status = Literal["open", "weak", "answered", "contradicted", "unresolved"]
 
 
 @dataclass
@@ -29,32 +26,6 @@ class Claim:
     step: int
 
 
-@dataclass
-class Question:
-    """One thing the research has to find out, and how far it got."""
-
-    id: int
-    text: str
-    # The question this one follows up on, one level shallower.
-    parent: int | None = None
-    depth: int = 0
-    status: Status = "open"
-    # The claims whose quotes support the answer, as the last judgement found them.
-    claims: list[int] = field(default_factory=list)
-    queries: list[str] = field(default_factory=list)
-    # What the last judgement found missing, for the next query to look for.
-    missing: str = ""
-    # How many claims the store held at the last judgement, so a question is judged again only
-    # once there is something new to judge it on.
-    judged_at: int = 0
-    # For a ranking or a table: the option and the criterion of the empty cell this asks about.
-    cell: tuple[str, str] | None = None
-
-    @property
-    def attempts(self) -> int:
-        return len(self.queries)
-
-
 def closest(encoder: Encoder, query: str, texts: list[str], k: int) -> list[int]:
     """Indices of the `k` texts closest to `query`, in their original order."""
     if len(texts) <= k:
@@ -68,3 +39,11 @@ def nearest(encoder: Encoder, query: str, vectors: np.ndarray, k: int) -> list[i
         return list(range(len(vectors)))
     scores = cosine_similarity(encoder.encode([query]), vectors)[0]
     return sorted(int(i) for i in np.argsort(scores)[::-1][:k])
+
+
+def listed(claims: list[Claim]) -> str:
+    return "\n".join(f"[{claim.id}] {claim.text}" for claim in claims)
+
+
+def quoted_claims(claims: list[Claim]) -> str:
+    return "\n".join(f"[{claim.id}] {claim.text}\n    quote: {claim.quote}" for claim in claims)

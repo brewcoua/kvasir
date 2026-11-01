@@ -44,8 +44,8 @@ export interface Method {
   size: (v: Values, picked: Picked) => string;
 }
 
-// Mirrors `FILL_SEARCHES` in `kvasir/deep/pipeline.py`: searches for the cells of a table still
-// empty after the research, on top of its budget.
+// Mirrors `FILL_SEARCHES` in `kvasir/methods/ledger/compare.py`: searches for the cells of a table
+// still empty after the research, on top of its budget.
 const FILL_SEARCHES = 8;
 
 // The output asked for, or null when the brief is to pick it.

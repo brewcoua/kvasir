@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from kvasir.deep.store import Claim
 from kvasir.models import Cell, Citation, Criterion, Row
+from kvasir.research.claims import Claim
 
 # `[3]`, and `[3, 7]`, which models write despite being asked for `[3][7]`.
 _MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
