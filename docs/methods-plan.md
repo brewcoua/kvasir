@@ -1,7 +1,7 @@
 # Research methods: plan
 
-Status: written 2026-11-01. Steps 1 to 3, 5 and 6 of the [build order](#build-order) are built, without
-the evaluations; step 4 is not run, and step 7 is planned.
+Status: written 2026-11-01. Steps 1 to 3 and 5 to 7 of the [build order](#build-order) are built,
+without the evaluations; step 4 is not run.
 
 kvasir has one route per engine: `/v1/research` for the question ledger, `/v1/article` for STORM.
 Each has its own request model, run kind, stage list, role table, runs-page entry and Open WebUI
@@ -176,6 +176,18 @@ As built in step 6, that experiment is the ledger option `frontier: "worth"`, in
 recorded as corroborating the claim it repeats when it comes from another site. A branch's share of
 the budget does not follow its score: the best-first order and the per-branch stop are the only
 controls.
+
+Step 7 built `graph` with these differences:
+
+- There is no `graph/frontier.py`. The method uses the ledger's `Frontier` and `Question` as they
+  are, so a question node is a ledger question, and a claim node a `Claim` whose corroborating and
+  contradicting edges are its own `corroborated_by` and `contradicted_by`. `graph.py` holds only
+  the path and branch lookups.
+- A branch's share of the budget is a fixed cap, `branch_searches`, not its score.
+- The gap bonus is the ledger's, for a `weak` or `contradicted` question, not one for a claim with
+  one source.
+- Sections are branches, titled by their first question, rather than clusters found by embedding.
+- It always writes a report, and has no repair pass.
 
 ## Verification, in tiers
 

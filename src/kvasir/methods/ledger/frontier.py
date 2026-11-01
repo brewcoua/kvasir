@@ -43,13 +43,13 @@ class Frontier:
 
     def pick(self, questions: list[Question], max_attempts: int) -> Question | None:
         """The question worth most of those not settled, outside a closed branch."""
-        roots = _roots(questions)
+        root_of = roots(questions)
         waiting = [
             q
             for q in questions
             if q.status in ("open", "weak", "contradicted")
             and q.attempts < max_attempts
-            and roots[q.id] not in self.closed
+            and root_of[q.id] not in self.closed
         ]
         if not waiting:
             return None
@@ -74,7 +74,7 @@ class Frontier:
     def searched(self, questions: list[Question], question: Question, new: list[Claim]) -> bool:
         """Merge the claims a search for `question` found, already added to the run's claims, and
         close its branch if they added nothing. True when the branch was closed."""
-        root = _roots(questions)[question.id]
+        root = roots(questions)[question.id]
         if self.merge(new):
             self.stalled[root] = 0
             return False
@@ -120,13 +120,13 @@ class Frontier:
         return self.question_vectors[question.id]
 
 
-def _roots(questions: list[Question]) -> dict[int, int]:
+def roots(questions: list[Question]) -> dict[int, int]:
     """Each question's first question, the one its follow-ups descend from."""
     parents = {q.id: q.parent for q in questions}
-    roots = {}
+    of = {}
     for q in questions:
         root = q.id
         while (parent := parents.get(root)) is not None:
             root = parent
-        roots[q.id] = root
-    return roots
+        of[q.id] = root
+    return of

@@ -362,6 +362,58 @@ export interface components {
              */
             weight: number;
         };
+        /**
+         * GraphOptions
+         * @description Options of the `graph` method. The budgets fall back to the configured defaults.
+         */
+        GraphOptions: {
+            /** Max Searches */
+            max_searches?: number | null;
+            /** Results Per Query */
+            results_per_query?: number | null;
+            /** Max Attempts */
+            max_attempts?: number | null;
+            /** Max Depth */
+            max_depth?: number | null;
+            /**
+             * Branch Searches
+             * @default 6
+             */
+            branch_searches: number;
+            /** Ground */
+            ground?: boolean | null;
+            /**
+             * Corroborate
+             * @default false
+             */
+            corroborate: boolean;
+            /**
+             * Contradict
+             * @default false
+             */
+            contradict: boolean;
+            /** Model Fast */
+            model_fast?: string | null;
+            /** Model Strong */
+            model_strong?: string | null;
+        };
+        /** GraphRun */
+        GraphRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            method: "graph";
+            input: components["schemas"]["Input"];
+            /**
+             * @default {
+             *       "branch_searches": 6,
+             *       "corroborate": false,
+             *       "contradict": false
+             *     }
+             */
+            options: components["schemas"]["GraphOptions"];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -996,7 +1048,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LedgerRun"] | components["schemas"]["StormRun"];
+                "application/json": components["schemas"]["LedgerRun"] | components["schemas"]["GraphRun"] | components["schemas"]["StormRun"];
             };
         };
         responses: {

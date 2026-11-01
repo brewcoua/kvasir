@@ -156,6 +156,27 @@ their questions are set. A branch is a first question and its follow-ups.
   and no source, and none of its questions is searched again. The run-wide stall limit and budget
   still apply.
 
+### The graph method
+
+The `graph` method, in `methods/graph/`, keeps the ledger's brief, first questions, query shapes,
+intake and verification, and the worth score, merging and branch closing above, always on. It
+differs in three ways.
+
+- **Raised questions.** After a search that adds claims, `Expand` judges the question on the claims
+  it already rests on and the new ones, and returns up to 2 questions the evidence raises
+  (`RAISED`), added as its children while it is above `max_depth`. The ledger adds follow-ups only
+  to an answered question; here a `weak` or `contradicted` one raises them too.
+- **Path, not ledger.** `Expand` reads the question's path from its first question, never the
+  whole graph. So a question is not judged again on what another branch found, as the ledger's
+  loop does.
+- **Branch budget.** A branch also closes once it has spent `branch_searches` searches. There is
+  no run-wide stall limit: the run ends when the budget is spent or every branch is closed.
+
+The report has one section per branch with a claim its questions rest on, titled by the first
+question and always given those claims, then "Open questions". There is no outline call and no
+repair pass. The design is untested against the ledger; see
+[`methods-plan.md`](methods-plan.md#the-graph-method).
+
 ### Query shapes
 
 The model writes the words of a query. The shape is chosen in code, by how many queries the

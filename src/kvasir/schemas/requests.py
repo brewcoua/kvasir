@@ -83,6 +83,25 @@ class LedgerOptions(BaseModel):
     model_strong: str | None = None
 
 
+class GraphOptions(BaseModel):
+    """Options of the `graph` method. The budgets fall back to the configured defaults."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_searches: int | None = Field(default=None, ge=1)
+    results_per_query: int | None = Field(default=None, ge=1)
+    max_attempts: int | None = Field(default=None, ge=1)
+    # Levels of raised questions below the first questions.
+    max_depth: int | None = Field(default=None, ge=1)
+    # Searches one branch may spend before it is closed, however much it still adds.
+    branch_searches: int = Field(default=6, ge=1)
+    ground: bool | None = None
+    corroborate: bool = False
+    contradict: bool = False
+    model_fast: str | None = None
+    model_strong: str | None = None
+
+
 class StormOptions(BaseModel):
     """Options of the `storm` method. Each falls back to the configured default when omitted."""
 
@@ -102,6 +121,12 @@ class LedgerRun(BaseModel):
     options: LedgerOptions = LedgerOptions()
 
 
+class GraphRun(BaseModel):
+    method: Literal["graph"]
+    input: Input
+    options: GraphOptions = GraphOptions()
+
+
 class StormRun(BaseModel):
     method: Literal["storm"]
     input: Input
@@ -110,7 +135,7 @@ class StormRun(BaseModel):
 
 # Body of `POST /v1/runs`. One member per entry of `kvasir.methods.METHODS`, so each method's
 # options are typed in the schema and an unknown option is refused before the run starts.
-RunRequest = Annotated[LedgerRun | StormRun, Field(discriminator="method")]
+RunRequest = Annotated[LedgerRun | GraphRun | StormRun, Field(discriminator="method")]
 
 
 class MethodInfo(BaseModel):

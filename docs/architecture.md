@@ -59,7 +59,7 @@ flowchart LR
 | `sessions.py` | Co-STORM session files. |
 | `conversation.py` | Drives one Co-STORM operation. |
 | `research/` | The steps every research method shares: search, reading, verification, writing, rendering. See [`research.md`](research.md). |
-| `methods/` | The methods `POST /v1/runs` runs, listed in `METHODS`. Each is a `Method` (`methods/base.py`): its options, stages, configured defaults and run. `methods/ledger/` is the research pipeline, `methods/storm/` drives STORM. See [`methods-plan.md`](methods-plan.md). |
+| `methods/` | The methods `POST /v1/runs` runs, listed in `METHODS`. Each is a `Method` (`methods/base.py`): its options, stages, configured defaults and run. `methods/ledger/` is the research pipeline, `methods/graph/` explores the questions findings raise over the same steps, `methods/storm/` drives STORM. See [`methods-plan.md`](methods-plan.md). |
 | `storm/` | The vendored, modified `knowledge_storm`. See [`fork-notes.md`](fork-notes.md). |
 | `static/` | The runs page, built from `web/` by `pnpm build` and not committed. `GET /` answers 503 until it is built. |
 
@@ -68,6 +68,7 @@ flowchart LR
 | Route | Engine | Run kind | Output |
 | --- | --- | --- | --- |
 | `POST /v1/runs` with `ledger` | `methods.ledger.method.run_research` | `ledger` | A report answering a question, ranking or comparing options when asked. |
+| `POST /v1/runs` with `graph` | `methods.graph.method.run_graph` | `graph` | A report answering a question, one section per branch explored. |
 | `POST /v1/runs` with `storm` | STORM, `methods.storm.method.run_article` | `storm` | A Wikipedia-style article about a topic. |
 | `POST /v1/session` and its sub-routes | Co-STORM, `conversation.*` | `costorm` | A turn-based round table, and a report from it. |
 

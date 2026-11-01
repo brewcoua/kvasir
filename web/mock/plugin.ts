@@ -46,6 +46,17 @@ const METHODS = [
     corroborate: false,
     contradict: false,
   }),
+  method("graph", true, ["brief", "research", "write", "verify"], {
+    ...MODELS,
+    max_searches: 24,
+    results_per_query: 5,
+    max_attempts: 3,
+    max_depth: 1,
+    branch_searches: 6,
+    ground: false,
+    corroborate: false,
+    contradict: false,
+  }),
   method("storm", false, ["research", "outline", "article", "polish"], {
     ...MODELS,
     search_top_k: 3,
@@ -208,7 +219,7 @@ export function mock(): Plugin {
           // The service records a run under its method's name.
           const kind = String(body.method);
           // The recorded one, so a run started here has call content to show.
-          const fixture = runs.get(kind === "ledger" ? "wal" : "article")!;
+          const fixture = runs.get(kind === "storm" ? "article" : "wal")!;
           const id = Math.random().toString(16).slice(2, 14);
           const topic = String((body.input as { question?: string } | undefined)?.question ?? "");
           const entry = { ...replay(fixture.run, id, false, { kind, topic }), contents: fixture.contents };

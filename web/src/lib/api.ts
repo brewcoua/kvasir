@@ -16,7 +16,7 @@ export type ResearchResult = Schemas["ResearchResult"];
 export type MethodInfo = Schemas["MethodInfo"];
 // The options with a configured default, every method's together. Their names do not collide, but
 // for the models, which mean the same in every method.
-type Configured = Omit<Schemas["LedgerOptions"] & Schemas["StormOptions"], "output" | "criteria" | "entities">;
+type Configured = Omit<Schemas["LedgerOptions"] & Schemas["GraphOptions"] & Schemas["StormOptions"], "output" | "criteria" | "entities">;
 export type Defaults = { [K in keyof Configured]-?: NonNullable<Configured[K]> };
 
 // `GET /v1/methods` puts each configured default in its option's schema.

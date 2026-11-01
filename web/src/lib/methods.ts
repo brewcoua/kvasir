@@ -103,6 +103,28 @@ export const METHODS: Method[] = [
     },
   },
   {
+    kind: "graph",
+    name: "graph",
+    label: "Graph research",
+    blurb: "Answers a question as a cited report, following the questions each finding raises, most promising first.",
+    placeholder: "Why did the Kvasir stone end up in a museum?",
+    clarify: true,
+    options: [],
+    stages: [
+      { name: "brief", does: () => "Pins down the question and its assumptions.", settings: [] },
+      {
+        name: "research",
+        does: (v) =>
+          `Up to ${v.max_searches} searches, reading ${v.results_per_query} pages each, ${v.max_attempts} attempts per question, ` +
+          `${v.branch_searches} per branch, raised questions ${v.max_depth} level${v.max_depth === 1 ? "" : "s"} deep.`,
+        settings: ["max_searches", "results_per_query", "max_attempts", "branch_searches", "max_depth"],
+      },
+      { name: "write", does: () => "Writes one section per branch that found something, each claim citing its source.", settings: [] },
+      { name: "verify", does: () => "Checks each cited sentence against its quote, and removes what is unsupported.", settings: [] },
+    ],
+    size: (v) => `At most ${v.max_searches} searches, reading ${(v.max_searches ?? 0) * (v.results_per_query ?? 0)} pages.`,
+  },
+  {
     kind: "article",
     name: "storm",
     label: "Article",

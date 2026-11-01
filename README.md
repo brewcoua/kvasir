@@ -150,6 +150,7 @@ Every run starts at `POST /v1/runs`. The body names a method, the input and the 
 | Method | Produces |
 | --- | --- |
 | `ledger` | A cited report answering a question, or a ranking or a table comparing options. |
+| `graph` | A cited report answering a question, following the questions each finding raises. |
 | `storm` | A Wikipedia-style article on the topic given as `input.question`. |
 
 `GET /v1/methods` lists each method with its stages, whether it asks clarifying questions, and its
@@ -208,6 +209,27 @@ adding claims is no longer searched, as
 [`docs/research.md`](docs/research.md#picking-by-worth) describes. The report ends with an "Open
 questions" section listing what the research did not settle. A run that finds no claim at all says
 so in `report` and writes no sections.
+
+### Follow what the research raises
+
+The `graph` method answers a question with a cited report, like `ledger`, but explores rather than
+works through a list. It searches the question worth most first, and the evidence a search finds
+raises child questions under it. Each judgement reads only the question's path from its first
+question and the claims found for it. A branch, a first question and every question raised under
+it, closes after 2 searches in a row add nothing, or once it has spent `branch_searches` (6 by
+default). The report has one section per branch that found something. It never makes a ranking or
+a table.
+
+```bash
+curl -N -X POST localhost:8080/v1/runs \
+  -H 'content-type: application/json' \
+  -d '{"method": "graph", "input": {"question": "Why did the Kvasir stone end up in a museum?"}}'
+```
+
+Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has the same fields as a
+`ledger` run. Options: `max_searches`, `results_per_query`, `max_attempts`, `max_depth`,
+`branch_searches`, `ground`, `corroborate`, `contradict`, `model_fast`, `model_strong`. See
+[`docs/research.md`](docs/research.md#the-graph-method).
 
 ### Check claims more strictly
 
@@ -568,7 +590,7 @@ It researches each question through the service at `http://localhost:8080` (`--u
 without clarifications, and saves each result as `<id>.json`. `--method` picks the method, `ledger`
 by default, and `--options` takes its options as a JSON object, such as `'{"max_searches": 8}'`.
 Save each method or set of options to its own directory to compare them. Scoring reads `report`,
-`claims` and `citations`, so only `ledger` results score today. A saved result is not researched
+`claims` and `citations`, so `ledger` and `graph` results score and `storm` results do not. A saved result is not researched
 again, so an interrupted evaluation resumes; `--only <id>...` limits it to some questions. A run
 takes minutes, so the full set takes hours on a local model.
 
