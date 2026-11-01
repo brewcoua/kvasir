@@ -21,7 +21,7 @@ from kvasir.methods.ledger.brief import clarifications
 from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.method import FIRST_QUESTIONS, NO_EVIDENCE
 from kvasir.methods.ledger.questions import Question, add_questions, as_results, open_questions
-from kvasir.methods.ledger.signatures import Brief, Decompose
+from kvasir.methods.ledger.signatures import Brief, Decompose, NamedQuestion
 from kvasir.research import verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim
@@ -59,7 +59,7 @@ def run_graph(
     stream.publish(RESEARCH, "splitting the brief into questions")
     questions: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
-    add_questions(encoder, questions, first or [input.question])
+    add_questions(encoder, questions, first or [NamedQuestion(title="", question=input.question)])
     record_questions(as_results(questions))
     claims: list[Claim] = []
     explore(

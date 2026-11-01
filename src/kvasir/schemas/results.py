@@ -50,6 +50,8 @@ class ResearchQuestion(BaseModel):
 
     id: int
     text: str
+    # A few words naming it, or empty when the model gave none or the run predates titles.
+    title: str = ""
     # The question this one follows up on.
     parent: int | None
     depth: int

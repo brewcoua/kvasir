@@ -15,7 +15,7 @@ from kvasir.methods.graph.method import run_graph
 from kvasir.methods.graph.signatures import Expand
 from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.questions import Question
-from kvasir.methods.ledger.signatures import SearchFor
+from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import extract
 from kvasir.schemas.requests import GraphOptions, Input
@@ -60,7 +60,7 @@ def explored(monkeypatch, questions, budget=10, max_depth=2, branch_searches=6):
                 "status": "answered",
                 "claims": ids,
                 "missing": "",
-                "raised": [f"{inputs['question']} more"],
+                "raised": [NamedQuestion(title="more", question=f"{inputs['question']} more")],
             },
         )
 
@@ -136,7 +136,14 @@ def test_a_run_writes_one_section_per_branch_that_found_something(monkeypatch):
                     "entities": [],
                 }
             ],
-            "decompose": [{"questions": ["Q1?", "Q2?"]}],
+            "decompose": [
+                {
+                    "questions": [
+                        {"title": "first", "question": "Q1?"},
+                        {"title": "second", "question": "Q2?"},
+                    ]
+                }
+            ],
             "plan": [{"query": "one"}, {"query": "two"}],
             "intake": [
                 {
@@ -145,7 +152,14 @@ def test_a_run_writes_one_section_per_branch_that_found_something(monkeypatch):
                     ]
                 }
             ],
-            "check": [{"status": "answered", "claims": [1], "missing": "", "raised": ["Q3?"]}],
+            "check": [
+                {
+                    "status": "answered",
+                    "claims": [1],
+                    "missing": "",
+                    "raised": [{"title": "third", "question": "Q3?"}],
+                }
+            ],
             "write": [{"text": "It was found in 1904 [1]."}],
             "verify": [{"supported": True, "reason": "the quote gives the year"}],
         }.items()
@@ -178,9 +192,9 @@ def test_a_run_writes_one_section_per_branch_that_found_something(monkeypatch):
     assert result.report == (
         "## Q1?\n\nIt was found in 1904 [1].\n\n## Open questions\n\n- Q2? (not found)"
     )
-    assert [(q.text, q.parent, q.status) for q in result.questions] == [
-        ("Q1?", None, "answered"),
-        ("Q2?", None, "open"),
-        ("Q3?", 1, "open"),
+    assert [(q.title, q.text, q.parent, q.status) for q in result.questions] == [
+        ("first", "Q1?", None, "answered"),
+        ("second", "Q2?", None, "open"),
+        ("third", "Q3?", 1, "open"),
     ]
     assert [c.url for c in result.citations] == ["https://a"]

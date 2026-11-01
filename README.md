@@ -370,9 +370,11 @@ own address, so a reload or a shared link keeps it.
   - Graph is shown for a run of the `graph` method. It lays out the topic, the first questions
     hanging from it, each follow-up hanging from the question whose evidence raised it, and, once
     the run is done, the claims each question rests on, with the links between claims that
-    corroborate or contradict each other. Questions are coloured by status. Drag a node to move
-    it, scroll or drag the background to zoom and pan, and select a node to fade all but its
-    neighbours and show its queries, or a claim's quote and source. It follows the run live.
+    corroborate or contradict each other. A question is labelled by the short title the model gave
+    it when asking it, and hovering shows the whole question. Questions are coloured by status.
+    Drag a node to move it, scroll or drag the background to zoom and pan, and select a node to
+    fade all but its neighbours and show its queries, or a claim's quote and source. It follows
+    the run live.
 
 Figures update live while the run is in progress. The theme selector in the header offers
 `system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in

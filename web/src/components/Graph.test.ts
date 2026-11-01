@@ -13,6 +13,7 @@ globalThis.ResizeObserver ??= class {
 const question = (id: number, parent: number | null, depth: number, claims: number[] = []): ResearchQuestion => ({
   id,
   text: `question ${id}`,
+  title: "",
   parent,
   depth,
   status: claims.length > 0 ? "answered" : "open",
@@ -62,5 +63,13 @@ describe("Graph", () => {
     const { container, getByText } = render(Graph, { run: live([question(1, null, 0, [5, 6])]) });
     await fireEvent.click(container.querySelector(".node.question")!);
     expect(getByText("Claims 5, 6. Their text shows once the run is done.")).toBeTruthy();
+  });
+
+  it("labels a question by its title, or by its text when it has none", () => {
+    const { container } = render(Graph, {
+      run: live([{ ...question(1, null, 0), title: "Climate" }, question(2, null, 0)]),
+    });
+    const labels = [...container.querySelectorAll(".node.question text")].map((label) => label.textContent);
+    expect(labels).toEqual(["Climate", "question 2"]);
   });
 });

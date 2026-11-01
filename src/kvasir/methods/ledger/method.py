@@ -26,7 +26,7 @@ from kvasir.methods.ledger.questions import (
     open_questions,
 )
 from kvasir.methods.ledger.repair import repair
-from kvasir.methods.ledger.signatures import Brief, Decompose, Outline
+from kvasir.methods.ledger.signatures import Brief, Decompose, NamedQuestion, Outline
 from kvasir.research import verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim
@@ -127,12 +127,13 @@ def run_research(
     stream.publish(RESEARCH, "splitting the brief into questions")
     ledger: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
-    add_questions(encoder, ledger, first or [input.question])
+    add_questions(encoder, ledger, first or [NamedQuestion(title="", question=input.question)])
 
     def check(question: Question) -> None:
         asked = loop.check(models["check"], encoder, brief, claims, question)
         if follow_ups and question.status == "answered" and question.depth < max_depth:
-            add_questions(encoder, ledger, asked[:FOLLOW_UPS], question)
+            untitled = [NamedQuestion(title="", question=q) for q in asked[:FOLLOW_UPS]]
+            add_questions(encoder, ledger, untitled, question)
 
     searched = 0
 

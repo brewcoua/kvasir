@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from kvasir.methods.ledger.signatures import NamedQuestion
 from kvasir.schemas.results import ResearchQuestion
 from kvasir.storm.encoder import Encoder, cosine_similarity
 
@@ -33,6 +34,8 @@ class Question:
 
     id: int
     text: str
+    # A few words naming it, when the model that asked it gave one.
+    title: str = ""
     # The question this one follows up on, one level shallower.
     parent: int | None = None
     depth: int = 0
@@ -54,15 +57,19 @@ class Question:
 
 
 def add_questions(
-    encoder: Encoder, ledger: list[Question], texts: list[str], parent: Question | None = None
+    encoder: Encoder,
+    ledger: list[Question],
+    asked: list[NamedQuestion],
+    parent: Question | None = None,
 ) -> None:
-    """Add to `ledger` those of `texts` that repeat no question in it, up to `MAX_QUESTIONS`."""
-    texts = [text.strip() for text in texts if text.strip()]
-    if not texts:
+    """Add to `ledger` those of `asked` that repeat no question in it, up to `MAX_QUESTIONS`."""
+    asked = [q for q in asked if q.question.strip()]
+    if not asked:
         return
+    texts = [q.question.strip() for q in asked]
     vectors = list(encoder.encode([q.text for q in ledger] + texts))
     kept = vectors[: len(ledger)]
-    for text, vector in zip(texts, vectors[len(ledger) :], strict=True):
+    for named, text, vector in zip(asked, texts, vectors[len(ledger) :], strict=True):
         if len(ledger) >= MAX_QUESTIONS:
             return
         if kept and cosine_similarity([vector], kept).max() > DUPLICATE_QUESTION:
@@ -71,6 +78,7 @@ def add_questions(
             Question(
                 id=len(ledger) + 1,
                 text=text,
+                title=named.title.strip(),
                 parent=parent.id if parent else None,
                 depth=parent.depth + 1 if parent else 0,
             )
@@ -111,6 +119,7 @@ def as_results(ledger: list[Question]) -> list[ResearchQuestion]:
         ResearchQuestion(
             id=q.id,
             text=q.text,
+            title=q.title,
             parent=q.parent,
             depth=q.depth,
             status=q.status,

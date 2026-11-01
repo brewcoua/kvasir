@@ -6,6 +6,8 @@ from typing import Literal
 
 import dspy  # type: ignore[import-untyped]
 
+from kvasir.methods.ledger.signatures import NamedQuestion
+
 
 class Expand(dspy.Signature):
     """Decide how well the evidence answers one research question, and what it raises next.
@@ -25,4 +27,6 @@ class Expand(dspy.Signature):
     status: Literal["answered", "weak", "contradicted", "open"] = dspy.OutputField()
     claims: list[int] = dspy.OutputField(desc="ids of the claims counted as support")
     missing: str = dspy.OutputField(desc="what is still missing, in a few words, or empty")
-    raised: list[str] = dspy.OutputField(desc="at most two questions the evidence raises, or empty")
+    raised: list[NamedQuestion] = dspy.OutputField(
+        desc="at most two questions the evidence raises, or empty"
+    )

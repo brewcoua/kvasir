@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 import dspy  # type: ignore[import-untyped]
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from kvasir.schemas.results import Output
 
@@ -51,6 +51,13 @@ class PlanQueries(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc="search engine queries")
 
 
+class NamedQuestion(BaseModel):
+    """A question, and the short name a graph of the research shows it by."""
+
+    title: str = Field(description="two to five words naming what the question asks about")
+    question: str
+
+
 class Decompose(dspy.Signature):
     """Split a research brief into the questions a good answer has to settle.
 
@@ -61,7 +68,7 @@ class Decompose(dspy.Signature):
     """
 
     brief: str = dspy.InputField()
-    questions: list[str] = dspy.OutputField(desc="three to six questions")
+    questions: list[NamedQuestion] = dspy.OutputField(desc="three to six questions")
 
 
 class SearchFor(dspy.Signature):

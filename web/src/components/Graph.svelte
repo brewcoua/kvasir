@@ -66,7 +66,7 @@
     const nextLinks: Link[] = [];
     const cited = new Set<number>();
     for (const q of questions) {
-      next.push({ id: `q${q.id}`, kind: "question", label: short(q.text), full: q.text, r: q.depth === 0 ? 9 : 7, status: q.status });
+      next.push({ id: `q${q.id}`, kind: "question", label: q.title || short(q.text), full: q.text, r: q.depth === 0 ? 9 : 7, status: q.status });
       const above = q.parent === null ? "topic" : `q${q.parent}`;
       nextLinks.push({ id: `${above}-q${q.id}`, kind: "raised", source: above, target: `q${q.id}` });
       for (const id of q.claims) {
@@ -226,7 +226,8 @@
   {#if chosenQuestion}
     {@const q = chosenQuestion}
     <div class="graph-chosen">
-      <h3>{q.id}. {q.text}</h3>
+      <h3>{q.id}. {q.title || q.text}</h3>
+      {#if q.title}<p>{q.text}</p>{/if}
       <p><span class="question-status {q.status}">{q.status}</span>{#if q.missing} · Missing: {q.missing}{/if}</p>
       {#if q.queries.length > 0}
         <h4>Queries</h4>

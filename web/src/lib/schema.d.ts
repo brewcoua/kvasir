@@ -682,6 +682,11 @@ export interface components {
             id: number;
             /** Text */
             text: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
             /** Parent */
             parent: number | null;
             /** Depth */

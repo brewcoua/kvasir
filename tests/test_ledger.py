@@ -13,7 +13,7 @@ from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.method import NO_EVIDENCE, run_research
 from kvasir.methods.ledger.questions import Question, add_questions, open_questions
 from kvasir.methods.ledger.repair import repair
-from kvasir.methods.ledger.signatures import SearchFor
+from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import FetchError, extract
 from kvasir.research.search import SearchUnavailable
@@ -49,7 +49,7 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
                     "entities": [],
                 }
             ],
-            "decompose": [{"questions": ["When was the stone found?"]}],
+            "decompose": [{"questions": [{"title": "t", "question": "When was the stone found?"}]}],
             # The question's search, then the repair's four for the removed sentence, which find
             # only pages already read.
             "plan": [{"query": "kvasir stone found"}] + [{"query": f"gold {n}"} for n in range(4)],
@@ -134,7 +134,7 @@ def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
                     "entities": [],
                 }
             ],
-            "decompose": [{"questions": ["q?"]}],
+            "decompose": [{"questions": [{"title": "t", "question": "q?"}]}],
             "plan": [{"query": "q"}],
             "intake": [{"findings": []}],
         },
@@ -183,7 +183,7 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
                 {"query": "alpha beta speed"},
                 {"query": "alpha cost"},
             ],
-            "decompose": [{"questions": ["How fast is each?"]}],
+            "decompose": [{"questions": [{"title": "t", "question": "How fast is each?"}]}],
             # Out of range weights are clamped to 1 to 3.
             "criteria": [
                 {"criteria": [{"name": "speed", "weight": 3}, {"name": "cost", "weight": 0}]}
@@ -283,7 +283,7 @@ def test_criteria_and_options_named_in_the_question_are_final(settings, monkeypa
                     "entities": ["Pixel", "Galaxy S30", "iPhone"],
                 }
             ],
-            "decompose": [{"questions": ["q?"]}],
+            "decompose": [{"questions": [{"title": "t", "question": "q?"}]}],
             "plan": [{"query": "q"}],
             "intake": [{"findings": []}],
         },
@@ -322,7 +322,7 @@ def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypa
             ],
             # The background searches, then the question's.
             "plan": [{"queries": ["best phones"]}, {"query": "q"}],
-            "decompose": [{"questions": ["q?"]}],
+            "decompose": [{"questions": [{"title": "t", "question": "q?"}]}],
             "entities": [{"entities": ["Pixel 10", "Phantom 9"]}],
             "intake": [{"findings": []}],
         },
@@ -353,7 +353,7 @@ def test_a_run_whose_searches_all_fail_stops_with_the_reason(settings, monkeypat
                     "entities": [],
                 }
             ],
-            "decompose": [{"questions": ["q?"]}],
+            "decompose": [{"questions": [{"title": "t", "question": "q?"}]}],
             "plan": [{"query": "q1"}, {"query": "q2"}, {"query": "q3"}],
         },
     )
@@ -520,7 +520,8 @@ def test_a_repeated_question_is_not_added(monkeypatch):
     ledger = [Question(id=1, text="Which year?")]
     parent = ledger[0]
 
-    add_questions(Words(), ledger, ["The year it was found?", "Who found it?", " "], parent)
+    asked = ["The year it was found?", "Who found it?", " "]
+    add_questions(Words(), ledger, [NamedQuestion(title="t", question=q) for q in asked], parent)
 
     assert [(q.id, q.text, q.parent, q.depth) for q in ledger] == [
         (1, "Which year?", None, 0),
