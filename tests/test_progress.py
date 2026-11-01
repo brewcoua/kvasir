@@ -119,6 +119,7 @@ def test_frame_payload_is_json():
         "at": 1.0,
         "done": 1,
         "total": 4,
+        "seq": None,
     }
 
 

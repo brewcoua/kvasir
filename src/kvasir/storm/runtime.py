@@ -70,10 +70,17 @@ class UsageSink(Protocol):
         reasoning_tokens: int = 0,
     ) -> None: ...
 
-    def start_lm(self, model: str, role: str | None) -> int: ...
+    def start_lm(
+        self, model: str, role: str | None, messages: list[dict[str, Any]] | None = None
+    ) -> int: ...
 
     def end_lm(
-        self, call: int, prompt_tokens: int | None, completion_tokens: int | None
+        self,
+        call: int,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        response: str | None = None,
+        reasoning: str | None = None,
     ) -> None: ...
 
     def record_embedding(self, model: str, tokens: int) -> None: ...
@@ -115,22 +122,29 @@ def record_lm_usage(
         )
 
 
-def lm_started(model: str, role: str | None) -> int | None:
+def lm_started(
+    model: str, role: str | None, messages: list[dict[str, Any]] | None = None
+) -> int | None:
     """Report that a completion was sent, so a run can show what it is waiting on.
 
-    Returns the id to end it with, or None when nothing is listening.
+    `messages` is what was sent, which the sink keeps only if configured to. Returns the id to end
+    the call with, or None when nothing is listening.
     """
     sink = _usage_sink.get()
-    return sink.start_lm(model, role) if sink is not None else None
+    return sink.start_lm(model, role, messages) if sink is not None else None
 
 
 def lm_ended(
-    call: int | None, prompt_tokens: int | None = None, completion_tokens: int | None = None
+    call: int | None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    response: str | None = None,
+    reasoning: str | None = None,
 ) -> None:
     """Report that a completion came back. Null token counts mean it failed."""
     sink = _usage_sink.get()
     if sink is not None and call is not None:
-        sink.end_lm(call, prompt_tokens, completion_tokens)
+        sink.end_lm(call, prompt_tokens, completion_tokens, response, reasoning)
 
 
 def current_usage_sink() -> UsageSink | None:

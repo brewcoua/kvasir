@@ -68,7 +68,15 @@ for SearXNG only.
 
    Remove it with `podman rm -f searxng`.
 
-3. Configure and start kvasir:
+3. Build the runs page. This needs Node 26 and pnpm:
+
+   ```bash
+   (cd web && pnpm install && pnpm build)
+   ```
+
+   Without it the API works, and `GET /` answers 503 with the command to run.
+
+4. Configure and start kvasir:
 
    ```bash
    cp kvasir.example.toml kvasir.toml
@@ -77,7 +85,7 @@ for SearXNG only.
 
    Edit `kvasir.toml` to use other models. See [Configuration](#configuration) for every key.
 
-4. Check both dependencies are reachable:
+5. Check both dependencies are reachable:
 
    ```console
    $ curl -s localhost:8080/readyz
@@ -224,7 +232,7 @@ event: run
 data: {"run_id": "0f3c9a1b7e42"}
 
 event: progress
-data: {"stage": "research", "detail": "completed conversation turn 3", "at": 1793475466.3, "done": 3, "total": 12}
+data: {"stage": "research", "detail": "completed conversation turn 3", "at": 1793475466.3, "done": 3, "total": 12, "seq": 7}
 
 event: done
 data: {"article": "...", "outline": "...", "citations": [...], "duration_seconds": 412}
@@ -235,7 +243,8 @@ so use a client that streams, and set a generous timeout.
 
 `at` is the Unix time of the event. `done` and `total` count progress through the stage when it has
 a countable unit, and are null otherwise: sections in `article`, conversation turns in `research`.
-The research `total` is an upper bound, since a conversation can end early.
+The research `total` is an upper bound, since a conversation can end early. `seq` numbers the run's
+events from 0, and a model call's `event` names the event it followed.
 
 Every streaming response opens with a `run` frame. Use its `run_id` to follow the run at
 `/v1/runs/{id}` if the client stops reading, and to attribute cost afterwards. A client that does
@@ -265,26 +274,46 @@ once at startup, with no scheduler and no background task.
 
 ## Watch what is running
 
-`GET /` serves a single page that starts runs and lists them. To start one, pick research or
-article, enter the question or topic, and press Start. For research, the page asks the clarifying
-questions first; answer what you can, or skip. For a selected run it shows elapsed time, totals for
-tokens in and out, reasoning tokens, cost, searches and embedding tokens, then the stages on a
-timeline with each stage's duration and usage, the most recent model calls with a clock on any still
-waiting, the usage split by role and by model, the result once
-the run finishes, and the event log. Figures update live while the run is in progress. A run with a
-result has an icon in the list that opens it directly. The result opens over the whole page, with
-each `[n]` shown as a badge naming the source's site; hovering or focusing one shows its title, URL
-and quote. The theme selector in the header offers `system`, `light`, `dark`, `paper`, `riso`,
-`amber`, `moss` and `navy`, and the choice is kept in the browser. It is one self-contained file
-with no external asset, since the image is read-only and offline.
+`GET /` serves the runs page. New and Runs in its header lead to its views, and each view has its
+own address, so a reload or a shared link keeps it.
+
+- New (`#/`) starts a run. Pick the method, enter the question or topic, and press Enter or the
+  arrow. For research, name the options and criteria in the question itself, as in "rank the Pixel
+  9a and the Fairphone 5 on price and updates"; the brief reads them from there. To fix the shape of
+  the answer, pick report, ranking or table from the `+` menu in the input box. It shows as a badge
+  there, and removing the badge leaves the shape to the question. The page asks the clarifying
+  questions first; answer what you can, or skip.
+
+  Beside the input, the plan lists the stages with the budget the settings give each, the most the
+  run can search, and how long finished runs of the method took. A change made there is kept as in
+  the settings. Below it, the method's recent runs are listed. The page opens on the method last
+  picked, and `/` from any page comes back to it with the input focused.
+- Runs (`#/runs`) lists every run kept, with its state, elapsed time, tokens and cost.
+- A run (`#/runs/<id>`) shows the runs list beside it, and has a tab per view, each with its own
+  address, such as `#/runs/<id>/calls`.
+  - Result is shown once the run has one, and the run opens on it. Each `[n]` is a badge naming
+    the source's site; hovering or focusing one shows its title, URL and quote.
+  - Overview shows the stages on a timeline with each stage's duration, including the planned
+    stages not reached yet, and the event log. An event that led to model calls links to them.
+  - Usage shows elapsed time, totals for tokens in and out, reasoning tokens, cost, searches and
+    embedding tokens, then the usage split by stage, by role and by model, with the time spent in
+    calls, output tokens per second and the mean time per call.
+  - Calls lists every model call with a clock on any still waiting. Opening one shows what it sent
+    and what it answered, when `KVASIR_KEEP_CALL_CONTENT` kept it.
+
+Figures update live while the run is in progress. The theme selector in the header offers
+`system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in
+the browser. The page loads nothing from another origin, since the image is read-only and offline.
+Its source is in [`web/`](web/); see [Work on the runs page](#work-on-the-runs-page).
 
 The same data is available as JSON.
 
 | Request | Effect |
 | --- | --- |
 | `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
-| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 50 model calls, recent events and its result. |
-| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` after each `progress` and every 2 seconds in between. |
+| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 events and its result. |
+| `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_KEEP_CALL_CONTENT` kept it. |
+| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls after each `progress` and every 2 seconds in between. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
 `POST /v1/tasks` is the one route that is not a run: it registers nothing and takes no slot. It
@@ -299,7 +328,8 @@ run was in when the call finished, and calls made before the first progress even
 `unstaged`. Co-STORM can change stage while a call is in flight, so its stage split is approximate.
 `reasoning_tokens` is part of `completion_tokens`, not added to it, and stays zero when the gateway
 does not report it. A stage entered more than once has one span per entry, and its `seconds` sums
-them.
+them. A usage row's `seconds` sums the time its successful calls took, from request to answer:
+nothing is streamed, so it includes the time the model spent reading the prompt.
 
 Cost comes from what the call reports. Three shapes are read, in order: the cost dspy itself
 computes for a model it recognises, a LiteLLM proxy's `x-litellm-response-cost` response header, and
@@ -314,7 +344,9 @@ A run still `queued` or `running` there at startup was cut short by the restart,
 `failed` with the error `interrupted by a restart`. Retention is applied at startup and after each
 run ends: older than `KVASIR_RUN_TTL_DAYS`, or beyond the `KVASIR_MAX_RUNS` most recent, is deleted.
 Only a run in this process's memory can be followed live; following a stored one sends its snapshot
-and ends. Memory is the default because a client such as Open WebUI keeps its own record of every
+and ends. What calls sent and answered is kept only with `KVASIR_KEEP_CALL_CONTENT=true`, in the
+same store as the run and for as long as it. Their timings and token counts are kept either way.
+Memory is the default because a client such as Open WebUI keeps its own record of every
 answer, so the store is for debugging the service.
 
 ## Configuration
@@ -341,6 +373,7 @@ is a complete file for a local Ollama.
 | `KVASIR_RUN_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |
 | `KVASIR_MAX_RUNS` | `100` | Runs kept, most recent first, in either store. |
 | `KVASIR_RUN_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
+| `KVASIR_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer with its run, to read on the runs page. `true` or `false`. |
 | `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
 | `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
@@ -426,6 +459,57 @@ pass.
 signatures now carry types and descriptions rather than prompt prefixes, and dspy's adapters turn
 them into prompts and parse the answers back. Where upstream picked structure out of prose with
 regexes, the output field states its type instead.
+
+### Work on the runs page
+
+The page is a Svelte app in `web/`, built with Vite into `src/kvasir/static/`, which is not
+committed. It needs Node 26 and pnpm.
+
+```bash
+cd web
+pnpm install
+pnpm dev:mock   # the page on localhost:5173, its API answered from web/fixtures/
+pnpm dev        # the same, with /v1 proxied to a kvasir on localhost:8080
+pnpm build      # into src/kvasir/static/, where the service serves it
+```
+
+`pnpm dev:mock` needs no gateway, search engine or run. Each file in `web/fixtures/` is a run named
+after it, and `#/runs/<name>/result` opens its result directly: `#/runs/ranking/result` shows the
+ranking table. Two more runs are made from `ranking.json`: `running`, frozen partway, and `live`,
+replayed at 20 times its real pace and started again once it ends. Set `MOCK_SPEED` to change the
+pace. A run started from the page replays a fixture the same way: `wal.json` for research, and
+`article.json` for an article.
+
+`<name>.calls.json` holds what a fixture's calls sent and answered, keyed by call id. Only `wal`
+has one, recorded with `KVASIR_KEEP_CALL_CONTENT=true`.
+
+A fixture is a run's detail as `GET /v1/runs/{id}` returns it. To add one from a run kept in the
+SQLite history:
+
+```bash
+curl -s localhost:8080/v1/runs/<run id> > web/fixtures/<name>.json
+```
+
+To include its calls' content, with the run kept by a service started with
+`KVASIR_KEEP_CALL_CONTENT=true`:
+
+```bash
+run=<run id>
+for n in $(jq -r '.calls[] | select(.has_content) | .id' web/fixtures/<name>.json); do
+  curl -s localhost:8080/v1/runs/$run/calls/$n | jq -c --arg n "$n" '{($n): .}'
+done | jq -s -c add > web/fixtures/<name>.calls.json
+```
+
+The TypeScript types in `web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
+Run `pnpm types` after changing a model in `src/kvasir/models.py`; CI fails when they differ.
+
+```bash
+pnpm check   # svelte-check
+pnpm test    # Vitest: the markdown renderer
+pnpm e2e     # Playwright, against the mock and against the built page served by the service
+```
+
+`pnpm e2e` needs Chromium once: `pnpm exec playwright install chromium`.
 
 ### Evaluate research
 

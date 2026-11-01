@@ -28,6 +28,7 @@ from uuid import uuid4
 from kvasir import logs
 from kvasir.models import (
     LmCall,
+    LmCallContent,
     ModelUsage,
     Progress,
     RunDetail,
@@ -44,10 +45,13 @@ from kvasir.storm import runtime
 if TYPE_CHECKING:
     from kvasir.run_store import RunStore
 
-# Enough to see what happened over a working session, and bounded so a long-lived process cannot
-# grow without limit. Neither is configuration worth exposing.
-MAX_EVENTS = 200
-MAX_CALLS = 50
+# Enough for every event and call of a long research run, and bounded so a long-lived process
+# cannot grow without limit. Neither is configuration worth exposing.
+MAX_EVENTS = 1000
+MAX_CALLS = 2000
+# The calls a `status` carries. It is sent after every event, so it holds only the recent ones; a
+# follower merges them into the detail's by id.
+STATUS_CALLS = 50
 
 QUEUED = "queued"
 RUNNING = "running"
@@ -59,6 +63,9 @@ REJECTED = "rejected"
 UNSTAGED = "unstaged"
 
 _current: ContextVar[Run | None] = ContextVar("current_run", default=None)
+# The `seq` of the last event published in this line of work. The pools copy context when work is
+# submitted, so a call made in a pool sees the event published before its work was handed out.
+_event: ContextVar[int | None] = ContextVar("current_event", default=None)
 
 # Ends a watcher's stream. Distinct from None, which a watcher with a heartbeat yields when idle.
 _END: Any = object()
@@ -66,6 +73,10 @@ _END: Any = object()
 
 class RunNotFound(Exception):
     """No run with that id. Either it never existed or it aged out of retention."""
+
+
+class CallContentNotFound(Exception):
+    """No content for that call: keeping it is off, the call is unknown, or it aged out."""
 
 
 @dataclass
@@ -77,6 +88,7 @@ class _Usage:
     cost: float = 0.0
     embedding_tokens: int = 0
     searches: int = 0
+    seconds: float = 0.0
 
     def add(
         self, prompt_tokens: int, completion_tokens: int, reasoning_tokens: int, cost: float
@@ -94,6 +106,7 @@ class _Usage:
             completion_tokens=self.completion_tokens,
             reasoning_tokens=self.reasoning_tokens,
             cost=round(self.cost, 6),
+            seconds=round(self.seconds, 3),
         )
 
     def stage(self) -> StageUsage:
@@ -144,6 +157,8 @@ class Run:
     error: str | None = None
     planned_stages: list[str] = field(default_factory=list)
     result: RunResult | None = None
+    # Whether each call's messages and response are kept. See KVASIR_KEEP_CALL_CONTENT.
+    keep_content: bool = False
     # Called once the run reaches a terminal state, outside the lock.
     on_end: Callable[[Run], None] | None = field(default=None, repr=False)
 
@@ -157,7 +172,9 @@ class Run:
     _searches: int = field(default=0, repr=False)
     _watchers: list[_Watcher] = field(default_factory=list, repr=False)
     _calls: dict[int, LmCall] = field(default_factory=dict, repr=False)
+    _contents: dict[int, LmCallContent] = field(default_factory=dict, repr=False)
     _next_call: int = field(default=0, repr=False)
+    _next_event: int = field(default=0, repr=False)
 
     @contextmanager
     def active(self) -> Iterator[None]:
@@ -203,6 +220,8 @@ class Run:
 
     def record_progress(self, event: Progress) -> None:
         with self._lock:
+            event.seq = self._next_event
+            self._next_event += 1
             if event.stage != self.stage:
                 if self.stage is not None:
                     self._stages[self.stage].leave(event.at)
@@ -232,11 +251,18 @@ class Run:
             ):
                 usage.add(prompt_tokens, completion_tokens, reasoning_tokens, cost)
 
-    def start_lm(self, model: str, role: str | None) -> int:
+    def start_lm(
+        self, model: str, role: str | None, messages: list[dict[str, Any]] | None = None
+    ) -> int:
         with self._lock:
             call = self._next_call
             self._next_call += 1
+            if self.keep_content and messages is not None:
+                self._contents[call] = LmCallContent(messages=messages, response=None)
             self._calls[call] = LmCall(
+                id=call,
+                event=_event.get(),
+                has_content=call in self._contents,
                 role=role,
                 model=model,
                 started_at=time.time(),
@@ -248,10 +274,19 @@ class Run:
             # Insertion-ordered, so this forgets the oldest. A call forgotten while still in
             # flight is ended into nothing.
             while len(self._calls) > MAX_CALLS:
-                del self._calls[next(iter(self._calls))]
+                forgotten = next(iter(self._calls))
+                del self._calls[forgotten]
+                self._contents.pop(forgotten, None)
             return call
 
-    def end_lm(self, call: int, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+    def end_lm(
+        self,
+        call: int,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        response: str | None = None,
+        reasoning: str | None = None,
+    ) -> None:
         with self._lock:
             record = self._calls.get(call)
             if record is None:
@@ -260,6 +295,27 @@ class Run:
             record.prompt_tokens = prompt_tokens
             record.completion_tokens = completion_tokens
             record.failed = prompt_tokens is None
+            content = self._contents.get(call)
+            if content is not None:
+                content.response = response
+                content.reasoning = reasoning
+            if not record.failed:
+                seconds = record.ended_at - record.started_at
+                for usage in (
+                    self._by_model.setdefault(record.model, _Usage()),
+                    self._by_role.setdefault(record.role or "unattributed", _Usage()),
+                    self._stage_usage(),
+                ):
+                    usage.seconds += seconds
+
+    def content(self, call: int) -> LmCallContent | None:
+        with self._lock:
+            content = self._contents.get(call)
+            return None if content is None else content.model_copy(deep=True)
+
+    def contents(self) -> dict[int, LmCallContent]:
+        with self._lock:
+            return {call: content.model_copy(deep=True) for call, content in self._contents.items()}
 
     def record_embedding(self, model: str, tokens: int) -> None:
         with self._lock:
@@ -292,18 +348,20 @@ class Run:
                 has_result=self.result is not None,
             )
 
-    def status(self) -> RunStatus:
+    def status(self, calls: int | None = STATUS_CALLS) -> RunStatus:
+        """The run as it stands, with its most recent `calls`, or every call when None."""
         summary = self.summary()
         with self._lock:
             now = self.ended_at or time.time()
+            kept = list(self._calls.values())
             return RunStatus(
                 **dict(summary),
                 stages=[stage.model(name, now) for name, stage in self._stages.items()],
-                calls=[call.model_copy() for call in self._calls.values()],
+                calls=[call.model_copy() for call in (kept if calls is None else kept[-calls:])],
             )
 
     def detail(self) -> RunDetail:
-        status = self.status()
+        status = self.status(calls=None)
         with self._lock:
             return RunDetail(**dict(status), events=list(self._events), result=self.result)
 
@@ -378,14 +436,23 @@ class RunRegistry:
     processes too, and answers for any run memory has dropped.
     """
 
-    def __init__(self, limit: int, store: RunStore | None = None) -> None:
+    def __init__(
+        self, limit: int, store: RunStore | None = None, keep_content: bool = False
+    ) -> None:
         self._lock = threading.Lock()
         self._runs: dict[str, Run] = {}
         self._limit = limit
         self._store = store
+        self._keep_content = keep_content
 
     def start(self, kind: str, topic: str, planned_stages: list[str] | None = None) -> Run:
-        run = Run(id=uuid4().hex[:12], kind=kind, topic=topic, planned_stages=planned_stages or [])
+        run = Run(
+            id=uuid4().hex[:12],
+            kind=kind,
+            topic=topic,
+            planned_stages=planned_stages or [],
+            keep_content=self._keep_content,
+        )
         if self._store is not None:
             run.on_end = self._store.save
             self._store.save(run)
@@ -420,18 +487,36 @@ class RunRegistry:
             raise RunNotFound(run_id)
         return stored
 
+    def content(self, run_id: str, call: int) -> LmCallContent:
+        run = self.get(run_id)
+        if run is not None:
+            content = run.content(call)
+        elif self._store is not None:
+            content = self._store.content(run_id, call)
+        else:
+            content = None
+        if content is None:
+            raise CallContentNotFound(f"{call} of run {run_id}")
+        return content
+
 
 @contextmanager
 def _current_run(run: Run) -> Iterator[None]:
     token = _current.set(run)
+    event = _event.set(None)
     try:
         yield
     finally:
+        _event.reset(event)
         _current.reset(token)
 
 
 def record_progress(event: Progress) -> None:
-    """Attribute a progress event to whichever run this thread is working on, if any."""
+    """Attribute a progress event to whichever run this thread is working on, if any.
+
+    Calls made afterwards in this thread, and in work it hands to a pool, are linked to it.
+    """
     run = _current.get()
     if run is not None:
         run.record_progress(event)
+        _event.set(event.seq)

@@ -58,6 +58,22 @@ def test_healthz_checks_no_dependency(client):
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
+def test_index_serves_the_built_page(client, monkeypatch, tmp_path):
+    page = tmp_path / "index.html"
+    page.write_text("<!doctype html>")
+    monkeypatch.setattr(main, "INDEX", page)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_index_says_when_the_page_is_not_built(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "INDEX", tmp_path / "index.html")
+    response = client.get("/")
+    assert response.status_code == 503
+    assert "pnpm build" in response.text
+
+
 def test_defaults_report_the_configuration(environment, monkeypatch):
     monkeypatch.setenv("KVASIR_RESEARCH_MAX_SEARCHES", "9")
     monkeypatch.setenv("KVASIR_RESEARCH_FOLLOW_UPS", "false")

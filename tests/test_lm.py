@@ -89,6 +89,8 @@ class _Sink:
         self.reasoning: list[int] = []
         self.started: list[str | None] = []
         self.ended: list[tuple[int, int | None, int | None]] = []
+        self.messages: list[list[dict[str, Any]] | None] = []
+        self.responses: list[str | None] = []
 
     def record_lm(
         self,
@@ -102,12 +104,23 @@ class _Sink:
         self.lm.append((model, role, prompt_tokens, completion_tokens, cost))
         self.reasoning.append(reasoning_tokens)
 
-    def start_lm(self, model: str, role: str | None) -> int:
+    def start_lm(
+        self, model: str, role: str | None, messages: list[dict[str, Any]] | None = None
+    ) -> int:
         self.started.append(role)
+        self.messages.append(messages)
         return len(self.started) - 1
 
-    def end_lm(self, call: int, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+    def end_lm(
+        self,
+        call: int,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        response: str | None = None,
+        reasoning: str | None = None,
+    ) -> None:
         self.ended.append((call, prompt_tokens, completion_tokens))
+        self.responses.append(response)
 
     def record_embedding(self, model: str, tokens: int) -> None:
         pass
@@ -241,6 +254,15 @@ def test_each_attempt_is_reported_as_a_call_that_ends() -> None:
 
     assert sink.started == ["intake", "intake"]
     assert sink.ended == [(0, None, None), (1, 11, 5)]
+
+
+def test_a_call_reports_what_it_sent_and_what_came_back(gateway: _Gateway) -> None:
+    sink = _Sink()
+    with runtime.record_usage_into(sink):
+        _model(gateway, role="intake")(prompt="hello")
+
+    assert sink.messages == [[{"role": "user", "content": "hello"}]]
+    assert sink.responses == ["an answer"]
 
 
 def test_a_bad_request_is_not_retried() -> None:

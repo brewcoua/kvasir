@@ -60,7 +60,7 @@ flowchart LR
 | `article.py`, `conversation.py` | Drive one STORM run, and one Co-STORM operation. |
 | `deep/` | The research pipeline. See [`research.md`](research.md). |
 | `storm/` | The vendored, modified `knowledge_storm`. See [`fork-notes.md`](fork-notes.md). |
-| `static/index.html` | The runs page: one file, no build step, nothing loaded from another origin. |
+| `static/` | The runs page, built from `web/` by `pnpm build` and not committed. `GET /` answers 503 until it is built. |
 
 ## Three ways to produce something
 
@@ -252,6 +252,7 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/researc
 | --- | --- | --- | --- |
 | Runs | Memory, in `RunRegistry` | The `KVASIR_MAX_RUNS` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
 | Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `KVASIR_RUN_STORE=sqlite` | `KVASIR_RUN_TTL_DAYS` and `KVASIR_MAX_RUNS` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
+| Model call content | With its run, in memory and in `kvasir.db`, with `KVASIR_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. |
 | Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSION_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
 | STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `article.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
@@ -326,5 +327,5 @@ Each row is a choice someone changing kvasir is likely to question, and the reas
 | Configuration is read once, at startup, and a bad value stops it. | A container that starts and fails on the first request is harder to diagnose than one that refuses to start. |
 | `/healthz` checks nothing; `/readyz` checks the gateway and SearXNG without spending tokens. | A gateway outage must not restart the pod. |
 | Logs are one JSON object per line, each with `run_id`, `run_kind` and `stage`. | Runs interleave across threads, so lines must be separable by machine. `python -m kvasir` routes uvicorn's access log through the same handler. |
-| The runs page is one self-contained HTML file. | The image is read-only and may be offline. Every string is escaped before it becomes HTML, since results come from web pages. |
+| The runs page is a Svelte app built at image build time, and loads nothing from another origin. | The image is read-only and may be offline. Markdown is only lexed, by `marked`, and Svelte writes every token as text, so nothing from a web page or a model is parsed as HTML. |
 | `knowledge_storm` is vendored and modified. | Upstream is dormant, and most of the changes fix behaviour that produced a bad article rather than an error. See [`fork-notes.md`](fork-notes.md). |

@@ -100,7 +100,8 @@ class GatewayModel(dspy.LM):
     )
     def forward(self, prompt: str | None = None, messages: Any = None, **kwargs: Any) -> Any:
         # Per attempt rather than per logical call, so a retry shows as the failure it followed.
-        call = runtime.lm_started(self.model, self.role)
+        sent = messages or [{"role": "user", "content": prompt}]
+        call = runtime.lm_started(self.model, self.role, sent)
         try:
             response = super().forward(prompt=prompt, messages=messages, **kwargs)
         except BaseException:
@@ -118,7 +119,7 @@ class GatewayModel(dspy.LM):
             self.prompt_tokens += prompt_tokens
             self.completion_tokens += completion_tokens
 
-        runtime.lm_ended(call, prompt_tokens, completion_tokens)
+        runtime.lm_ended(call, prompt_tokens, completion_tokens, *_answer(response))
         runtime.record_lm_usage(
             self.model,
             self.role,
@@ -128,6 +129,15 @@ class GatewayModel(dspy.LM):
             reasoning_tokens=_reasoning_tokens(usage),
         )
         return response
+
+
+def _answer(response: Any) -> tuple[str | None, str | None]:
+    """The first choice's text, and its reasoning when the gateway returns that separately."""
+    choices = getattr(response, "choices", None) or []
+    message = getattr(choices[0], "message", None) if choices else None
+    if message is None:
+        return None, None
+    return getattr(message, "content", None), getattr(message, "reasoning_content", None)
 
 
 def _reasoning_tokens(usage: dict) -> int:

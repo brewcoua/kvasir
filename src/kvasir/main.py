@@ -16,7 +16,8 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from kvasir import conversation, logs
 from kvasir.article import run_article
@@ -28,6 +29,7 @@ from kvasir.models import (
     ClarifyResponse,
     Defaults,
     Error,
+    LmCallContent,
     ResearchRequest,
     RunDetail,
     RunResult,
@@ -53,7 +55,7 @@ from kvasir.progress import (
 )
 from kvasir.run_store import RunStore
 from kvasir.runners import TASK_RETRY_SECONDS, build_task_model
-from kvasir.runs import Run, RunNotFound, RunRegistry
+from kvasir.runs import CallContentNotFound, Run, RunNotFound, RunRegistry
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.sse import HEADERS, MEDIA_TYPE, frame
 from kvasir.storm.lm import retry_budget
@@ -63,7 +65,9 @@ READINESS_TIMEOUT_SECONDS = 5.0
 # How often a follower gets a fresh status while nothing else happens. Tokens are spent between
 # progress events, and the polishing stage publishes none for minutes.
 STATUS_INTERVAL_SECONDS = 2.0
-INDEX = Path(__file__).parent / "static" / "index.html"
+# Built from web/ by `pnpm build`, which the image does and a checkout has to.
+STATIC = Path(__file__).parent / "static"
+INDEX = STATIC / "index.html"
 
 logger = logging.getLogger("kvasir")
 
@@ -86,7 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.run_store == "sqlite"
         else None
     )
-    app.state.runs = RunRegistry(settings.max_runs, store)
+    app.state.runs = RunRegistry(settings.max_runs, store, settings.keep_call_content)
     # Once, here. Expiry needs no scheduler and no background task.
     app.state.sessions.sweep()
     if store is not None:
@@ -104,9 +108,15 @@ app = FastAPI(title="kvasir", lifespan=lifespan)
 
 
 @app.get("/", include_in_schema=False)
-async def index() -> FileResponse:
-    """The runs page. One file, no build step, and nothing loaded from another origin."""
+async def index() -> Response:
+    """The runs page, built from web/. Nothing it loads comes from another origin."""
+    if not INDEX.is_file():
+        return PlainTextResponse("The runs page is not built. Run `pnpm build` in web/.", 503)
     return FileResponse(INDEX, media_type="text/html")
+
+
+# Not checked at import, so the API still starts from a checkout where the page is not built.
+app.mount("/assets", StaticFiles(directory=STATIC / "assets", check_dir=False), name="assets")
 
 
 @app.get("/healthz")
@@ -282,6 +292,13 @@ async def run_detail(run_id: str) -> RunDetail:
     return registry.detail(run_id)
 
 
+@app.get("/v1/runs/{run_id}/calls/{call_id}")
+async def call_content(run_id: str, call_id: int) -> LmCallContent:
+    """What one model call was sent and answered. Kept only with KVASIR_KEEP_CALL_CONTENT."""
+    registry: RunRegistry = app.state.runs
+    return registry.content(run_id, call_id)
+
+
 @app.get("/v1/runs/{run_id}/events")
 async def run_events(run_id: str) -> Response:
     """Follow a run live, including one this client did not start.
@@ -331,6 +348,11 @@ async def delete_session(session_id: str) -> None:
 @app.exception_handler(RunNotFound)
 async def _run_not_found(request: Request, exc: RunNotFound) -> JSONResponse:
     return JSONResponse({"message": f"no run {exc}"}, status_code=404)
+
+
+@app.exception_handler(CallContentNotFound)
+async def _call_content_not_found(request: Request, exc: CallContentNotFound) -> JSONResponse:
+    return JSONResponse({"message": f"no content kept for call {exc}"}, status_code=404)
 
 
 @app.exception_handler(SessionNotFound)

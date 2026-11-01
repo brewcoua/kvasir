@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -267,6 +267,9 @@ class Progress(BaseModel):
     # `total` is an upper bound for research turns, since a conversation may end early.
     done: int | None = None
     total: int | None = None
+    # Its place in the run, numbered from 0, so a model call can name the event it followed. Null
+    # outside a run, and in runs stored before events were numbered.
+    seq: int | None = None
 
 
 class Error(BaseModel):
@@ -286,6 +289,9 @@ class ModelUsage(BaseModel):
     # Whatever the gateway reported per call. Zero on a cache hit, and zero for a gateway that
     # reports no cost at all, which is not the same as free.
     cost: float
+    # Wall time of the calls that answered, summed, so output tokens over it is a rate. It includes
+    # reading the prompt, since nothing streams. Defaulted, so a run stored before it loads.
+    seconds: float = 0.0
 
 
 class StageUsage(ModelUsage):
@@ -313,6 +319,13 @@ class RunUsage(BaseModel):
 class LmCall(BaseModel):
     """One completion request, while it is waiting and after it returns."""
 
+    # Numbered from 0 within the run. Null in runs stored before calls were numbered.
+    id: int | None = None
+    # The `seq` of the last event published in the work that made the call. Null when the call came
+    # before any event, or in runs stored before calls were linked.
+    event: int | None = None
+    # Whether its messages and response were kept, for `GET /v1/runs/{id}/calls/{call}`.
+    has_content: bool = False
     role: str | None
     model: str
     started_at: float
@@ -322,6 +335,17 @@ class LmCall(BaseModel):
     prompt_tokens: int | None
     completion_tokens: int | None
     failed: bool
+
+
+class LmCallContent(BaseModel):
+    """What one completion was sent and what it answered, kept with KVASIR_KEEP_CALL_CONTENT."""
+
+    # As sent to the gateway, in the OpenAI chat shape.
+    messages: list[dict[str, Any]]
+    # Null when the call failed.
+    response: str | None
+    # A reasoning model's thinking, when the gateway returns it separately.
+    reasoning: str | None = None
 
 
 class RunSummary(BaseModel):
@@ -374,7 +398,7 @@ class RunStatus(RunSummary):
 
 
 class RunDetail(RunStatus):
-    """One run, as `GET /v1/runs/{id}` returns it."""
+    """One run, as `GET /v1/runs/{id}` returns it. Its `calls` are every call the run kept."""
 
     events: list[Progress]
     # What the run returned, once it has.

@@ -236,16 +236,79 @@ def test_calls_show_in_flight_then_finished_or_failed():
 
 
 def test_only_the_most_recent_calls_are_kept():
-    run = runs.Run(id="r", kind="research", topic="t")
-    first = run.start_lm("m", "intake")
+    run = runs.Run(id="r", kind="research", topic="t", keep_content=True)
+    first = run.start_lm("m", "intake", [{"role": "user", "content": "q"}])
     for _ in range(runs.MAX_CALLS):
         run.start_lm("m", "intake")
 
     # Forgotten while in flight, so ending it changes nothing.
     run.end_lm(first, 1, 1)
 
-    assert len(run.status().calls) == runs.MAX_CALLS
-    assert all(call.ended_at is None for call in run.status().calls)
+    calls = run.detail().calls
+    assert len(calls) == runs.MAX_CALLS
+    assert all(call.ended_at is None for call in calls)
+    assert run.content(first) is None
+
+
+def test_a_status_carries_only_the_recent_calls():
+    run = runs.Run(id="r", kind="research", topic="t")
+    for _ in range(runs.STATUS_CALLS + 5):
+        run.start_lm("m", "intake")
+
+    assert [call.id for call in run.status().calls][0] == 5
+    assert len(run.detail().calls) == runs.STATUS_CALLS + 5
+
+
+def test_a_call_is_linked_to_the_event_before_it_in_its_own_work():
+    run = runs.Run(id="r", kind="research", topic="t")
+    with runtime.record_usage_into(run), runs._current_run(run):
+        runtime.lm_started("m", "brief")
+        runs.record_progress(Progress(stage="research", detail="searching"))
+        runs.record_progress(Progress(stage="research", detail="reading"))
+        with ContextThreadPoolExecutor(max_workers=2) as pool:
+            pool.submit(runtime.lm_started, "m", "intake").result()
+            # Published after the work was handed out, so that work does not see it.
+            runs.record_progress(Progress(stage="research", detail="read"))
+        runtime.lm_started("m", "notes")
+
+    assert [event.seq for event in run.detail().events] == [0, 1, 2]
+    assert [(call.role, call.event) for call in run.detail().calls] == [
+        ("brief", None),
+        ("intake", 1),
+        ("notes", 2),
+    ]
+
+
+def test_call_content_is_kept_only_when_asked():
+    messages = [{"role": "user", "content": "q"}]
+    for keep in (False, True):
+        run = runs.Run(id="r", kind="research", topic="t", keep_content=keep)
+        call = run.start_lm("m", "intake", messages)
+        run.end_lm(call, 10, 2, "an answer", "thinking")
+
+        content = run.content(call)
+        assert run.detail().calls[0].has_content is keep
+        if keep:
+            assert content is not None
+            assert (content.messages, content.response, content.reasoning) == (
+                messages,
+                "an answer",
+                "thinking",
+            )
+        else:
+            assert content is None
+
+
+def test_answered_calls_add_their_time_to_usage(monkeypatch):
+    clock = iter([0.0, 2.0, 2.0, 3.0, 10.0])
+    monkeypatch.setattr(runs.time, "time", lambda: next(clock))
+    run = runs.Run(id="r", kind="research", topic="t")
+    answered = run.start_lm("m", "intake")
+    run.end_lm(answered, 10, 40)
+    failed = run.start_lm("m", "intake")
+    run.end_lm(failed, None, None)
+
+    assert run._usage().by_model["m"].seconds == 2.0
 
 
 def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
@@ -315,19 +378,6 @@ def test_the_registry_forgets_the_oldest():
     assert [run.topic for run in registry.summaries()] == ["three", "two"]
 
 
-def test_the_page_is_self_contained(client):
-    """The image is read-only and offline, so anything from another origin would never load."""
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
-
-    body = response.text
-    assert "<title>kvasir runs</title>" in body
-    for origin in ("http://", "https://", "//cdn", "src=", "@import"):
-        assert origin not in body, origin
-
-
 def test_memory_mode_writes_no_database(client, tmp_path):
     assert not (tmp_path / "data" / "kvasir.db").exists()
 
@@ -353,6 +403,39 @@ def test_a_run_survives_a_restart(sqlite, monkeypatch):
         assert snapshot[1]["id"] == run_id
 
         assert client.get("/v1/runs/missing").status_code == 404
+
+
+def _article_with_a_call(*args):
+    call = runtime.lm_started("m", "article_gen", [{"role": "user", "content": "write"}])
+    runtime.lm_ended(call, 10, 2, "an article")
+    return RESULT
+
+
+def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
+    monkeypatch.setenv("KVASIR_KEEP_CALL_CONTENT", "true")
+    monkeypatch.setattr(main, "run_article", _article_with_a_call)
+    with sqlite() as client:
+        events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+        run_id = events[0][1]["run_id"]
+        (call,) = client.get(f"/v1/runs/{run_id}").json()["calls"]
+        assert call["has_content"] is True
+        live = client.get(f"/v1/runs/{run_id}/calls/{call['id']}").json()
+        assert live["response"] == "an article"
+
+    with sqlite() as client:
+        assert client.get(f"/v1/runs/{run_id}/calls/{call['id']}").json() == live
+        assert client.get(f"/v1/runs/{run_id}/calls/99").status_code == 404
+
+
+def test_call_content_is_not_kept_by_default(client, monkeypatch):
+    monkeypatch.setattr(main, "run_article", _article_with_a_call)
+    events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+    run_id = events[0][1]["run_id"]
+
+    (call,) = client.get(f"/v1/runs/{run_id}").json()["calls"]
+    assert call["has_content"] is False
+    assert call["prompt_tokens"] == 10
+    assert client.get(f"/v1/runs/{run_id}/calls/{call['id']}").status_code == 404
 
 
 @pytest.mark.parametrize(

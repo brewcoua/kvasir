@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kvasir.models import RunDetail, RunSummary
+from kvasir.models import LmCallContent, RunDetail, RunSummary
 
 if TYPE_CHECKING:
     from kvasir.runs import Run
@@ -43,6 +43,13 @@ class RunStore:
                 "CREATE TABLE IF NOT EXISTS runs ("
                 "id TEXT PRIMARY KEY, created_at REAL NOT NULL, state TEXT NOT NULL, "
                 "summary TEXT NOT NULL, detail TEXT NOT NULL)"
+            )
+            # Apart from the detail, which every list or open of a run reads: content is megabytes
+            # per run and is read one call at a time. Empty unless KVASIR_KEEP_CALL_CONTENT is on.
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS calls ("
+                "run_id TEXT NOT NULL, id INTEGER NOT NULL, content TEXT NOT NULL, "
+                "PRIMARY KEY (run_id, id))"
             )
 
     @contextmanager
@@ -71,6 +78,13 @@ class RunStore:
                         detail.model_dump_json(),
                     ),
                 )
+                db.executemany(
+                    "INSERT OR REPLACE INTO calls VALUES (?, ?, ?)",
+                    [
+                        (run.id, call, content.model_dump_json())
+                        for call, content in run.contents().items()
+                    ],
+                )
                 self._prune(db)
         except sqlite3.Error:
             logger.exception("could not save run %s", run.id)
@@ -87,6 +101,13 @@ class RunStore:
         with self._connect() as db:
             row = db.execute("SELECT detail FROM runs WHERE id = ?", (run_id,)).fetchone()
         return None if row is None else RunDetail.model_validate_json(row[0])
+
+    def content(self, run_id: str, call: int) -> LmCallContent | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT content FROM calls WHERE run_id = ? AND id = ?", (run_id, call)
+            ).fetchone()
+        return None if row is None else LmCallContent.model_validate_json(row[0])
 
     def sweep(self) -> None:
         """Drop what is past retention, and end the runs a restart cut short. Called at startup."""
@@ -110,6 +131,7 @@ class RunStore:
             "(SELECT id FROM runs ORDER BY created_at DESC LIMIT ?)",
             (self._limit,),
         )
+        db.execute("DELETE FROM calls WHERE run_id NOT IN (SELECT id FROM runs)")
 
 
 def _interrupted(record: str) -> str:

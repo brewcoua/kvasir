@@ -1,0 +1,92 @@
+// Kept in localStorage, and only what the user changed: a field left alone follows the configured
+// default, read from /v1/defaults and shown as its value.
+import type { Defaults } from "./api";
+
+export type Value = number | boolean | string;
+export type Kind = "research" | "article";
+
+export interface Setting {
+  name: keyof Defaults;
+  label: string;
+  hint: string;
+  type: "number" | "checkbox" | "text";
+  for: Kind | "both";
+}
+
+export const PANES: { name: string; label: string; title: string; settings: Setting[] }[] = [
+  {
+    name: "research",
+    label: "Research",
+    title: "Research",
+    settings: [
+      { name: "max_searches", label: "Searches", type: "number", for: "research", hint: "Searches in the whole run, before those for empty table cells." },
+      { name: "results_per_query", label: "Pages per search", type: "number", for: "research", hint: "Results read from each search." },
+      { name: "max_attempts", label: "Attempts per question", type: "number", for: "research", hint: "Differently shaped queries tried before a question is given up." },
+      { name: "follow_ups", label: "Follow-up questions", type: "checkbox", for: "research", hint: "Whether an answered question can add harder ones." },
+      { name: "max_depth", label: "Follow-up depth", type: "number", for: "research", hint: "Levels of follow-ups below the first questions." },
+    ],
+  },
+  {
+    name: "ranking",
+    label: "Ranking",
+    title: "Ranking and comparison",
+    settings: [
+      { name: "max_entities", label: "Most options", type: "number", for: "research", hint: "Options compared at most, when the run chooses them." },
+      { name: "max_criteria", label: "Most criteria", type: "number", for: "research", hint: "Criteria at most, when the run chooses them." },
+    ],
+  },
+  {
+    name: "article",
+    label: "Article",
+    title: "Article",
+    settings: [
+      { name: "search_top_k", label: "Results per search", type: "number", for: "article", hint: "Search results per query." },
+      { name: "max_conv_turn", label: "Turns per perspective", type: "number", for: "article", hint: "Questions each perspective asks." },
+      { name: "max_perspective", label: "Perspectives", type: "number", for: "article", hint: "Perspectives researched." },
+      { name: "do_polish_article", label: "Polish", type: "checkbox", for: "article", hint: "Run the polishing stage. Slower, better prose." },
+    ],
+  },
+  {
+    name: "models",
+    label: "Models",
+    title: "Models",
+    settings: [
+      { name: "model_fast", label: "Fast model", type: "text", for: "both", hint: "For research and articles. Passed to the gateway as written." },
+      { name: "model_strong", label: "Strong model", type: "text", for: "both", hint: "For research and articles. Passed to the gateway as written." },
+    ],
+  },
+];
+
+export const SETTINGS = PANES.flatMap((pane) => pane.settings);
+export const setting = (name: keyof Defaults) => SETTINGS.find((s) => s.name === name)!;
+
+const KEY = "settings";
+
+// State, so the settings dialog and the new run page show the same values as they change.
+export const saved: Partial<Record<keyof Defaults, Value>> = $state(JSON.parse(localStorage.getItem(KEY) ?? "{}"));
+
+// What a run would be sent: the value changed, or else the configured default.
+export const value = (name: keyof Defaults, defaults: Partial<Defaults>) => saved[name] ?? defaults[name];
+
+// A value equal to the default is not kept, so a later change of the default reaches it.
+export function keep(name: keyof Defaults, value: Value | undefined, defaults: Partial<Defaults>) {
+  if (value === undefined || value === defaults[name]) delete saved[name];
+  else saved[name] = value;
+  localStorage.setItem(KEY, JSON.stringify(saved));
+}
+
+export function forget() {
+  for (const name of Object.keys(saved) as (keyof Defaults)[]) delete saved[name];
+  localStorage.removeItem(KEY);
+}
+
+// Only the settings changed for this kind: the rest take the service's defaults.
+export function chosen(kind: Kind): Record<string, Value> {
+  const request: Record<string, Value> = {};
+  for (const setting of SETTINGS) {
+    if (setting.name in saved && (setting.for === kind || setting.for === "both")) {
+      request[setting.name] = saved[setting.name]!;
+    }
+  }
+  return request;
+}

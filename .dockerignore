@@ -3,3 +3,8 @@
 !uv.lock
 !README.md
 !src
+!web
+web/node_modules
+web/test-results
+web/playwright-report
+src/kvasir/static

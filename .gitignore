@@ -8,3 +8,4 @@ dist/
 .tmp/
 kvasir.toml
 data/
+src/kvasir/static/

@@ -32,6 +32,43 @@ jobs:
       # expression in pyproject.toml.
       - run: uv run pytest
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.11.32"
+          enable-cache: true
+
+      # The version is package.json's packageManager field.
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --locked
+
+      # The types are generated from the service's schema. A diff here means a model changed and
+      # `pnpm types` was not run.
+      - run: pnpm types && git diff --exit-code src/lib/schema.d.ts
+
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm exec playwright install --with-deps chromium
+      # Builds the page, and serves it from the service for the smoke test.
+      - run: pnpm e2e
+
   image:
     # Proves the Dockerfile still builds without publishing anything. amd64 only, since this is a
     # build check rather than a release.

@@ -56,6 +56,7 @@ class Settings:
     run_store: str
     max_runs: int
     run_ttl_days: int
+    keep_call_content: bool
     max_concurrent_runs: int
     max_threads: int
     search_top_k: int
@@ -119,6 +120,9 @@ class Settings:
             run_store=_run_store(env),
             max_runs=_positive_int(env, "KVASIR_MAX_RUNS", 100),
             run_ttl_days=_positive_int(env, "KVASIR_RUN_TTL_DAYS", 30),
+            # Off by default: prompts carry the pages read and the user's question, which some
+            # deployments must not retain. Timing and tokens are kept either way.
+            keep_call_content=_bool(env, "KVASIR_KEEP_CALL_CONTENT", False),
             max_concurrent_runs=_positive_int(env, "KVASIR_MAX_CONCURRENT_RUNS", 1),
             # How wide each of the pipeline's thread pools runs, and how many search or page
             # requests may be in flight at once across the whole process.
