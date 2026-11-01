@@ -81,6 +81,9 @@ class SearXNG(dspy.Retrieve):
         )
 
         for query in queries:
+            search = runtime.search_started("SearXNG", query)
+            rows = []
+            failures = []
             try:
                 params = {"q": query, "format": "json"}
                 # SearXNG serves the snippets directly, so this request is the leaf of the
@@ -98,14 +101,15 @@ class SearXNG(dspy.Retrieve):
                         follow_redirects=True,
                     )
                 results = response.json()
-                if not results["results"]:
+                rows = results["results"]
+                if not rows:
                     # Rate limits and CAPTCHAs leave the engine out and the answer empty.
-                    self.failures += [
+                    failures = [
                         f"{engine}: {reason}"
                         for engine, reason in results.get("unresponsive_engines", [])
                     ]
 
-                for r in results["results"]:
+                for r in rows:
                     if self.is_valid_source(r["url"]) and r["url"] not in exclude_urls:
                         collected_results.append(
                             {
@@ -117,6 +121,8 @@ class SearXNG(dspy.Retrieve):
                         )
             except Exception as e:
                 logger.error(f"Error occurs when searching query {query}: {e}")
-                self.failures.append(f"{type(e).__name__}: {e}")
+                failures = [f"{type(e).__name__}: {e}"]
+            self.failures += failures
+            runtime.search_ended(search, rows, failures)
 
         return collected_results

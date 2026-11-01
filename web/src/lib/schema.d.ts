@@ -65,6 +65,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/searches/{search_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Content
+         * @description What one search returned. Kept only with KVASIR_KEEP_CALL_CONTENT.
+         */
+        get: operations["search_content_v1_runs__run_id__searches__search_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -765,6 +785,16 @@ export interface components {
             stages: components["schemas"]["RunStage"][];
             /** Calls */
             calls: components["schemas"]["LmCall"][];
+            /**
+             * Searches
+             * @default []
+             */
+            searches: components["schemas"]["SearchCall"][];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["ResearchQuestion"][];
             /** Events */
             events: components["schemas"]["Progress"][];
             /** Result */
@@ -858,6 +888,47 @@ export interface components {
             by_stage: {
                 [key: string]: components["schemas"]["StageUsage"];
             };
+        };
+        /**
+         * SearchCall
+         * @description One query sent to the search engine, while it is waiting and after it returns.
+         */
+        SearchCall: {
+            /** Id */
+            id: number;
+            /** Event */
+            event: number | null;
+            /** Has Content */
+            has_content: boolean;
+            /** Engine */
+            engine: string;
+            /** Query */
+            query: string;
+            /** Started At */
+            started_at: number;
+            /** Ended At */
+            ended_at: number | null;
+            /** Results */
+            results: number | null;
+            /** Failures */
+            failures: string[];
+        };
+        /**
+         * SearchContent
+         * @description What one search returned, kept with KVASIR_KEEP_CALL_CONTENT.
+         */
+        SearchContent: {
+            /** Results */
+            results: components["schemas"]["SearchResult"][];
+        };
+        /** SearchResult */
+        SearchResult: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+            /** Snippet */
+            snippet: string;
         };
         /**
          * SessionInfo
@@ -1122,6 +1193,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LmCallContent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_content_v1_runs__run_id__searches__search_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                search_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchContent"];
                 };
             };
             /** @description Validation Error */

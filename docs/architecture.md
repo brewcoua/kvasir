@@ -254,7 +254,7 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify
 | --- | --- | --- | --- |
 | Runs | Memory, in `RunRegistry` | The `KVASIR_MAX_RUNS` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
 | Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `KVASIR_RUN_STORE=sqlite` | `KVASIR_RUN_TTL_DAYS` and `KVASIR_MAX_RUNS` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
-| Model call content | With its run, in memory and in `kvasir.db`, with `KVASIR_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. |
+| Model call content and search results | With its run, in memory and in `kvasir.db`, with `KVASIR_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. Search results follow the same setting. |
 | Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSION_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
 | STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `methods/storm/method.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |

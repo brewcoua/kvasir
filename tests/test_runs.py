@@ -19,9 +19,10 @@ from kvasir.runs.run import (
     Run,
     _current_run,
     record_progress,
+    record_questions,
 )
 from kvasir.runs.store import INTERRUPTED, SECONDS_PER_DAY, RunStore
-from kvasir.schemas.results import ArticleResult, Report, ResearchResult
+from kvasir.schemas.results import ArticleResult, Report, ResearchQuestion, ResearchResult
 from kvasir.schemas.runs import Progress
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
@@ -437,6 +438,75 @@ def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypa
     with sqlite() as client:
         assert client.get(f"/v1/runs/{run_id}/calls/{call['id']}").json() == live
         assert client.get(f"/v1/runs/{run_id}/calls/99").status_code == 404
+
+
+class _SearxngAnswer:
+    def json(self):
+        return {
+            "results": [{"url": "https://example.invalid/a", "title": "A", "content": "about a"}]
+        }
+
+
+def _article_with_a_search(*args):
+    from kvasir.storm.rm import SearXNG
+
+    record_progress(Progress(stage="research", detail="searching"))
+    SearXNG(searxng_api_url="http://searxng.invalid")("the stone")
+    return RESULT
+
+
+def test_search_results_are_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
+    monkeypatch.setenv("KVASIR_KEEP_CALL_CONTENT", "true")
+    monkeypatch.setattr("kvasir.storm.rm.httpx.get", lambda url, **kwargs: _SearxngAnswer())
+    stub_method(monkeypatch, "storm", _article_with_a_search)
+    with sqlite() as client:
+        events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
+        run_id = events[0][1]["run_id"]
+        (search,) = client.get(f"/v1/runs/{run_id}").json()["searches"]
+        assert (search["query"], search["event"], search["results"]) == ("the stone", 0, 1)
+        assert search["has_content"] is True
+        live = client.get(f"/v1/runs/{run_id}/searches/{search['id']}").json()
+        assert live == {
+            "results": [{"title": "A", "url": "https://example.invalid/a", "snippet": "about a"}]
+        }
+
+    with sqlite() as client:
+        assert client.get(f"/v1/runs/{run_id}/searches/{search['id']}").json() == live
+        assert client.get(f"/v1/runs/{run_id}/searches/99").status_code == 404
+
+
+def test_search_results_are_not_kept_by_default(client, monkeypatch):
+    monkeypatch.setattr("kvasir.storm.rm.httpx.get", lambda url, **kwargs: _SearxngAnswer())
+    stub_method(monkeypatch, "storm", _article_with_a_search)
+    events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
+    run_id = events[0][1]["run_id"]
+
+    (search,) = client.get(f"/v1/runs/{run_id}").json()["searches"]
+    assert search["has_content"] is False
+    assert search["results"] == 1
+    assert client.get(f"/v1/runs/{run_id}/searches/{search['id']}").status_code == 404
+
+
+def test_a_failed_search_says_why():
+    run = Run(id="r", kind="research", topic="t")
+    search = run.start_search("SearXNG", "q")
+    assert run.status().searches[0].ended_at is None
+
+    run.end_search(search, [], ["brave: Suspended: too many requests"])
+
+    (record,) = run.status().searches
+    assert (record.results, record.failures) == (0, ["brave: Suspended: too many requests"])
+
+
+def test_a_status_carries_the_questions_asked_so_far():
+    run = Run(id="r", kind="graph", topic="t")
+    question = ResearchQuestion(
+        id=1, text="q", parent=None, depth=0, status="open", claims=[], queries=[], missing=""
+    )
+    with _current_run(run):
+        record_questions([question])
+
+    assert run.status().questions == [question]
 
 
 def test_call_content_is_not_kept_by_default(client, monkeypatch):

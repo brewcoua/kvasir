@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary
+from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary, SearchContent
 
 if TYPE_CHECKING:
     from kvasir.runs.run import Run
@@ -48,6 +48,12 @@ class RunStore:
             # per run and is read one call at a time. Empty unless KVASIR_KEEP_CALL_CONTENT is on.
             db.execute(
                 "CREATE TABLE IF NOT EXISTS calls ("
+                "run_id TEXT NOT NULL, id INTEGER NOT NULL, content TEXT NOT NULL, "
+                "PRIMARY KEY (run_id, id))"
+            )
+            # A search's results, apart for the same reason, and kept under the same setting.
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS searches ("
                 "run_id TEXT NOT NULL, id INTEGER NOT NULL, content TEXT NOT NULL, "
                 "PRIMARY KEY (run_id, id))"
             )
@@ -85,6 +91,13 @@ class RunStore:
                         for call, content in run.contents().items()
                     ],
                 )
+                db.executemany(
+                    "INSERT OR REPLACE INTO searches VALUES (?, ?, ?)",
+                    [
+                        (run.id, search, content.model_dump_json())
+                        for search, content in run.search_contents().items()
+                    ],
+                )
                 self._prune(db)
         except sqlite3.Error:
             logger.exception("could not save run %s", run.id)
@@ -109,6 +122,13 @@ class RunStore:
             ).fetchone()
         return None if row is None else LmCallContent.model_validate_json(row[0])
 
+    def search_content(self, run_id: str, search: int) -> SearchContent | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT content FROM searches WHERE run_id = ? AND id = ?", (run_id, search)
+            ).fetchone()
+        return None if row is None else SearchContent.model_validate_json(row[0])
+
     def sweep(self) -> None:
         """Drop what is past retention, and end the runs a restart cut short. Called at startup."""
         with self._connect() as db:
@@ -132,6 +152,7 @@ class RunStore:
             (self._limit,),
         )
         db.execute("DELETE FROM calls WHERE run_id NOT IN (SELECT id FROM runs)")
+        db.execute("DELETE FROM searches WHERE run_id NOT IN (SELECT id FROM runs)")
 
 
 def _interrupted(record: str) -> str:

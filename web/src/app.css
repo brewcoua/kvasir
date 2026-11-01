@@ -484,14 +484,18 @@ td.track-cell {
 .filter span:first-child {
   flex: 1;
 }
-.calls tr.call {
+.calls tr.call,
+.searches tr.call {
   cursor: pointer;
 }
 .calls tr.call:hover,
-.calls tr.open {
+.calls tr.open,
+.searches tr.call:hover,
+.searches tr.open {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
-.calls tr.content > td {
+.calls tr.content > td,
+.searches tr.content > td {
   padding: 0.25rem 0 0.75rem;
 }
 .calls h4 {
@@ -1177,4 +1181,69 @@ table.runs a.topic:hover {
 }
 .side .setting .hint {
   grid-column: 1 / -1;
+}
+
+/* The graph tab: a question tree, its lines drawn in an svg behind the rows. */
+.graph {
+  position: relative;
+  overflow-x: auto;
+}
+.graph svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.graph path {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+.graph circle {
+  fill: var(--dim);
+}
+.graph circle.answered {
+  fill: var(--ok);
+}
+.graph circle.weak {
+  fill: var(--busy);
+}
+.graph circle.contradicted {
+  fill: var(--bad);
+}
+.question-status.answered {
+  color: var(--ok);
+}
+.question-status.weak {
+  color: var(--busy);
+}
+.question-status.contradicted {
+  color: var(--bad);
+}
+.graph .node {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0 0.4em;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.graph .node:hover,
+.graph .node.selected {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.graph .text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.graph-chosen {
+  margin-top: 1em;
+  border-top: 1px solid var(--line);
 }

@@ -1,4 +1,4 @@
-"""A run as the registry serves it: its state, progress, model calls and usage."""
+"""A run as the registry serves it: its state, progress, model calls, searches and usage."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from kvasir.schemas.results import RunResult
+from kvasir.schemas.results import ResearchQuestion, RunResult
 
 
 class Progress(BaseModel):
@@ -102,6 +102,38 @@ class LmCallContent(BaseModel):
     reasoning: str | None = None
 
 
+class SearchCall(BaseModel):
+    """One query sent to the search engine, while it is waiting and after it returns."""
+
+    # Numbered from 0 within the run, apart from the model calls.
+    id: int
+    # The `seq` of the last event published in the work that made the search, as for a call.
+    event: int | None
+    # Whether its results were kept, for `GET /v1/runs/{id}/searches/{search}`.
+    has_content: bool
+    engine: str
+    query: str
+    started_at: float
+    # Null while the search is in flight.
+    ended_at: float | None
+    # What the engine returned, before the run drops what it already read. Null while in flight.
+    results: int | None
+    # Why it came back empty, when it failed rather than found nothing.
+    failures: list[str]
+
+
+class SearchResult(BaseModel):
+    title: str
+    url: str
+    snippet: str
+
+
+class SearchContent(BaseModel):
+    """What one search returned, kept with KVASIR_KEEP_CALL_CONTENT."""
+
+    results: list[SearchResult]
+
+
 class RunSummary(BaseModel):
     """One run, as `GET /v1/runs` lists it."""
 
@@ -149,6 +181,11 @@ class RunStatus(RunSummary):
     stages: list[RunStage]
     # The most recent completions, oldest first, including those still in flight.
     calls: list[LmCall]
+    # The most recent searches, likewise. Defaulted, so a run stored before searches loads.
+    searches: list[SearchCall] = []
+    # The questions a graph run has asked so far, so its graph can be followed live. Empty for
+    # other methods.
+    questions: list[ResearchQuestion] = []
 
 
 class RunDetail(RunStatus):

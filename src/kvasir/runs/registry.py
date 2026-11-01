@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from kvasir.runs.run import Run
 from kvasir.runs.store import RunStore
-from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary
+from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary, SearchContent
 
 
 class RunNotFound(Exception):
@@ -16,6 +16,10 @@ class RunNotFound(Exception):
 
 class CallContentNotFound(Exception):
     """No content for that call: keeping it is off, the call is unknown, or it aged out."""
+
+
+class SearchContentNotFound(Exception):
+    """No results for that search: keeping them is off, the search is unknown, or it aged out."""
 
 
 class RunRegistry:
@@ -86,4 +90,16 @@ class RunRegistry:
             content = None
         if content is None:
             raise CallContentNotFound(f"{call} of run {run_id}")
+        return content
+
+    def search_content(self, run_id: str, search: int) -> SearchContent:
+        run = self.get(run_id)
+        if run is not None:
+            content = run.search_content(search)
+        elif self._store is not None:
+            content = self._store.search_content(run_id, search)
+        else:
+            content = None
+        if content is None:
+            raise SearchContentNotFound(f"{search} of run {run_id}")
         return content

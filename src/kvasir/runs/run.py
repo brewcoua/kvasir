@@ -14,7 +14,7 @@ from typing import Any
 from kvasir import logs
 from kvasir.runs.usage import Usage
 from kvasir.runs.watcher import END, Watcher
-from kvasir.schemas.results import RunResult
+from kvasir.schemas.results import ResearchQuestion, RunResult
 from kvasir.schemas.runs import (
     LmCall,
     LmCallContent,
@@ -25,6 +25,9 @@ from kvasir.schemas.runs import (
     RunStatus,
     RunSummary,
     RunUsage,
+    SearchCall,
+    SearchContent,
+    SearchResult,
 )
 from kvasir.storm import runtime
 
@@ -32,8 +35,9 @@ from kvasir.storm import runtime
 # cannot grow without limit. Neither is configuration worth exposing.
 MAX_EVENTS = 1000
 MAX_CALLS = 2000
-# The calls a `status` carries. It is sent after every event, so it holds only the recent ones; a
-# follower merges them into the detail's by id.
+MAX_SEARCHES = 1000
+# The calls, and the searches, a `status` carries. It is sent after every event, so it holds only
+# the recent ones; a follower merges them into the detail's by id.
 STATUS_CALLS = 50
 
 QUEUED = "queued"
@@ -108,6 +112,10 @@ class Run:
     _calls: dict[int, LmCall] = field(default_factory=dict, repr=False)
     _contents: dict[int, LmCallContent] = field(default_factory=dict, repr=False)
     _next_call: int = field(default=0, repr=False)
+    _search_calls: dict[int, SearchCall] = field(default_factory=dict, repr=False)
+    _search_contents: dict[int, SearchContent] = field(default_factory=dict, repr=False)
+    _next_search: int = field(default=0, repr=False)
+    _questions: list[ResearchQuestion] = field(default_factory=list, repr=False)
     _next_event: int = field(default=0, repr=False)
 
     @contextmanager
@@ -251,6 +259,63 @@ class Run:
         with self._lock:
             return {call: content.model_copy(deep=True) for call, content in self._contents.items()}
 
+    def start_search(self, engine: str, query: str) -> int:
+        with self._lock:
+            search = self._next_search
+            self._next_search += 1
+            self._search_calls[search] = SearchCall(
+                id=search,
+                event=_event.get(),
+                has_content=self.keep_content,
+                engine=engine,
+                query=query,
+                started_at=time.time(),
+                ended_at=None,
+                results=None,
+                failures=[],
+            )
+            while len(self._search_calls) > MAX_SEARCHES:
+                forgotten = next(iter(self._search_calls))
+                del self._search_calls[forgotten]
+                self._search_contents.pop(forgotten, None)
+            return search
+
+    def end_search(self, search: int, results: list[dict[str, Any]], failures: list[str]) -> None:
+        with self._lock:
+            record = self._search_calls.get(search)
+            if record is None:
+                return
+            record.ended_at = time.time()
+            record.results = len(results)
+            record.failures = failures
+            if self.keep_content:
+                self._search_contents[search] = SearchContent(
+                    results=[
+                        SearchResult(
+                            title=row.get("title", ""),
+                            url=row["url"],
+                            snippet=row.get("content", ""),
+                        )
+                        for row in results
+                    ]
+                )
+
+    def search_content(self, search: int) -> SearchContent | None:
+        with self._lock:
+            content = self._search_contents.get(search)
+            return None if content is None else content.model_copy(deep=True)
+
+    def search_contents(self) -> dict[int, SearchContent]:
+        with self._lock:
+            return {
+                search: content.model_copy(deep=True)
+                for search, content in self._search_contents.items()
+            }
+
+    def record_questions(self, questions: list[ResearchQuestion]) -> None:
+        with self._lock:
+            self._questions = questions
+
     def record_embedding(self, model: str, tokens: int) -> None:
         with self._lock:
             self._embedding_tokens += tokens
@@ -283,15 +348,21 @@ class Run:
             )
 
     def status(self, calls: int | None = STATUS_CALLS) -> RunStatus:
-        """The run as it stands, with its most recent `calls`, or every call when None."""
+        """The run as it stands, with its most recent `calls` and searches, or all when None."""
         summary = self.summary()
         with self._lock:
             now = self.ended_at or time.time()
             kept = list(self._calls.values())
+            searches = list(self._search_calls.values())
             return RunStatus(
                 **dict(summary),
                 stages=[stage.model(name, now) for name, stage in self._stages.items()],
                 calls=[call.model_copy() for call in (kept if calls is None else kept[-calls:])],
+                searches=[
+                    search.model_copy(deep=True)
+                    for search in (searches if calls is None else searches[-calls:])
+                ],
+                questions=[question.model_copy(deep=True) for question in self._questions],
             )
 
     def detail(self) -> RunDetail:
@@ -355,3 +426,10 @@ def record_progress(event: Progress) -> None:
     if run is not None:
         run.record_progress(event)
         _event.set(event.seq)
+
+
+def record_questions(questions: list[ResearchQuestion]) -> None:
+    """Show the questions asked so far on whichever run this thread is working on, if any."""
+    run = _current.get()
+    if run is not None:
+        run.record_questions(questions)

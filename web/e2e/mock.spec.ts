@@ -33,7 +33,7 @@ test("an event opens the calls it made, and a call without kept content says so"
 
   await expect(page).toHaveURL(/#\/runs\/report\/calls$/);
   const calls = run(page).locator("table.calls tr.call");
-  await expect(run(page).locator(".filter")).toBeVisible();
+  await expect(run(page).locator(".filter", { hasText: "Calls after" })).toBeVisible();
   await expect(calls).toHaveCount(Number.parseInt(label));
   await calls.first().click();
   await expect(run(page).getByText("Content not kept.")).toBeVisible();

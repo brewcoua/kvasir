@@ -20,7 +20,12 @@ from fastapi.staticfiles import StaticFiles
 from kvasir import logs
 from kvasir.api import methods, runs, sessions, tasks
 from kvasir.config import Settings, apply_environment
-from kvasir.runs.registry import CallContentNotFound, RunNotFound, RunRegistry
+from kvasir.runs.registry import (
+    CallContentNotFound,
+    RunNotFound,
+    RunRegistry,
+    SearchContentNotFound,
+)
 from kvasir.runs.store import RunStore
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.storm.runtime import configure_concurrency
@@ -127,6 +132,11 @@ async def _run_not_found(request: Request, exc: RunNotFound) -> JSONResponse:
 @app.exception_handler(CallContentNotFound)
 async def _call_content_not_found(request: Request, exc: CallContentNotFound) -> JSONResponse:
     return JSONResponse({"message": f"no content kept for call {exc}"}, status_code=404)
+
+
+@app.exception_handler(SearchContentNotFound)
+async def _search_content_not_found(request: Request, exc: SearchContentNotFound) -> JSONResponse:
+    return JSONResponse({"message": f"no results kept for search {exc}"}, status_code=404)
 
 
 @app.exception_handler(SessionNotFound)

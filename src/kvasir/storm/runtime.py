@@ -87,6 +87,12 @@ class UsageSink(Protocol):
 
     def record_search(self, engine: str, queries: int) -> None: ...
 
+    def start_search(self, engine: str, query: str) -> int: ...
+
+    def end_search(
+        self, search: int, results: list[dict[str, Any]], failures: list[str]
+    ) -> None: ...
+
 
 # A contextvar rather than a global, because a sink belongs to one run and the pipeline reports
 # from every thread that run touches. The pools above carry it along with everything else.
@@ -163,6 +169,19 @@ def record_search_usage(engine: str, queries: int) -> None:
         sink.record_search(engine, queries)
 
 
+def search_started(engine: str, query: str) -> int | None:
+    """Report that a query was sent. Returns the id to end it with, or None when nothing listens."""
+    sink = _usage_sink.get()
+    return sink.start_search(engine, query) if sink is not None else None
+
+
+def search_ended(search: int | None, results: list[dict[str, Any]], failures: list[str]) -> None:
+    """Report what a query returned, as the engine's own result rows, and why it failed if it did."""
+    sink = _usage_sink.get()
+    if sink is not None and search is not None:
+        sink.end_search(search, results, failures)
+
+
 _T = TypeVar("_T")
 
 
@@ -194,4 +213,6 @@ __all__ = [
     "record_lm_usage",
     "record_search_usage",
     "record_usage_into",
+    "search_ended",
+    "search_started",
 ]

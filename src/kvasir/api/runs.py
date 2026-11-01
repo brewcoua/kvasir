@@ -14,7 +14,7 @@ from kvasir.methods import METHODS
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import Run
 from kvasir.schemas.requests import RunRequest
-from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary
+from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary, SearchContent
 
 # How often a follower gets a fresh status while nothing else happens. Tokens are spent between
 # progress events, and the polishing stage publishes none for minutes.
@@ -57,6 +57,13 @@ async def call_content(http: Request, run_id: str, call_id: int) -> LmCallConten
     """What one model call was sent and answered. Kept only with KVASIR_KEEP_CALL_CONTENT."""
     registry: RunRegistry = http.app.state.runs
     return registry.content(run_id, call_id)
+
+
+@router.get("/v1/runs/{run_id}/searches/{search_id}")
+async def search_content(http: Request, run_id: str, search_id: int) -> SearchContent:
+    """What one search returned. Kept only with KVASIR_KEEP_CALL_CONTENT."""
+    registry: RunRegistry = http.app.state.runs
+    return registry.search_content(run_id, search_id)
 
 
 @router.get("/v1/runs/{run_id}/events")

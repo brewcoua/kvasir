@@ -364,6 +364,12 @@ own address, so a reload or a shared link keeps it.
     calls, output tokens per second and the mean time per call.
   - Calls lists every model call with a clock on any still waiting. Opening one shows what it sent
     and what it answered, when `KVASIR_KEEP_CALL_CONTENT` kept it.
+  - Searches lists every query sent to SearXNG, with the event it followed, how many results came
+    back and why it failed if it did. Opening one lists the results, when
+    `KVASIR_KEEP_CALL_CONTENT` kept them.
+  - Graph is shown for a run of the `graph` method. It draws each question under the one whose
+    evidence raised it, coloured by status, and follows the run live. Selecting a question shows
+    its queries and, once the run is done, the claims it rests on.
 
 Figures update live while the run is in progress. The theme selector in the header offers
 `system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in
@@ -375,9 +381,10 @@ The same data is available as JSON.
 | Request | Effect |
 | --- | --- |
 | `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
-| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 events and its result. |
+| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 searches, its last 1000 events, the questions a `graph` run has asked so far, and its result. |
 | `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_KEEP_CALL_CONTENT` kept it. |
-| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls after each `progress` and every 2 seconds in between. |
+| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. 404 unless `KVASIR_KEEP_CALL_CONTENT` kept it. |
+| `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls and the last 50 searches after each `progress` and every 2 seconds in between. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
 `POST /v1/tasks` is the one route that is not a run: it registers nothing and takes no slot. It
@@ -408,8 +415,9 @@ A run still `queued` or `running` there at startup was cut short by the restart,
 `failed` with the error `interrupted by a restart`. Retention is applied at startup and after each
 run ends: older than `KVASIR_RUN_TTL_DAYS`, or beyond the `KVASIR_MAX_RUNS` most recent, is deleted.
 Only a run in this process's memory can be followed live; following a stored one sends its snapshot
-and ends. What calls sent and answered is kept only with `KVASIR_KEEP_CALL_CONTENT=true`, in the
-same store as the run and for as long as it. Their timings and token counts are kept either way.
+and ends. What calls sent and answered, and what searches returned, is kept only with
+`KVASIR_KEEP_CALL_CONTENT=true`, in the same store as the run and for as long as it. Their timings,
+token counts, queries and result counts are kept either way.
 Memory is the default because a client such as Open WebUI keeps its own record of every
 answer, so the store is for debugging the service.
 
@@ -438,7 +446,7 @@ is a complete file for a local Ollama.
 | `KVASIR_RUN_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |
 | `KVASIR_MAX_RUNS` | `100` | Runs kept, most recent first, in either store. |
 | `KVASIR_RUN_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
-| `KVASIR_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer with its run, to read on the runs page. `true` or `false`. |
+| `KVASIR_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
 | `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
 | `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |

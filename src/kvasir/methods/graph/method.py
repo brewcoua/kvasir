@@ -29,6 +29,7 @@ from kvasir.research.corroborate import cross_check
 from kvasir.research.render import render
 from kvasir.runners import build_checker, build_research_models, build_research_tools
 from kvasir.runs.progress import BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
+from kvasir.runs.run import record_questions
 from kvasir.schemas.requests import GraphOptions, Input
 from kvasir.schemas.results import ResearchClaim, ResearchResult
 
@@ -59,6 +60,7 @@ def run_graph(
     questions: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
     add_questions(encoder, questions, first or [input.question])
+    record_questions(as_results(questions))
     claims: list[Claim] = []
     explore(
         models,

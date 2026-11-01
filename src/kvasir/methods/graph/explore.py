@@ -15,13 +15,14 @@ from kvasir.methods.graph.graph import path
 from kvasir.methods.graph.signatures import Expand
 from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier, roots
 from kvasir.methods.ledger.loop import FAILED_SEARCHES, QUERY_SHAPES
-from kvasir.methods.ledger.questions import Question, add_questions
+from kvasir.methods.ledger.questions import Question, add_questions, as_results
 from kvasir.methods.ledger.signatures import SearchFor
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
 from kvasir.research.read import read
 from kvasir.research.search import SearchUnavailable, search
 from kvasir.runs.progress import RESEARCH, ProgressStream
+from kvasir.runs.run import record_questions
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG
@@ -120,6 +121,8 @@ def explore(
                 add_questions(encoder, questions, raised[:RAISED], question)
         if question.status == "open" and question.attempts >= max_attempts:
             question.status = "unresolved"
+        # Before the event, so the status that follows it carries the graph as it now stands.
+        record_questions(as_results(questions))
         stream.publish(
             RESEARCH,
             f"search {searches}: {len(new)} new claims, {len(claims)} in all; "

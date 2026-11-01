@@ -6,12 +6,14 @@
   import Bar from "./Bar.svelte";
   import Calls from "./Calls.svelte";
   import Clock from "./Clock.svelte";
+  import Graph from "./Graph.svelte";
   import Result from "./Result.svelte";
+  import Searches from "./Searches.svelte";
   import UsageTable from "./UsageTable.svelte";
 
   let { run, tab, ontab }: { run: RunDetail; tab: string; ontab: (tab: string) => void } = $props();
 
-  // The event the calls tab is filtered to.
+  // The event the calls and searches tabs are filtered to.
   let event: number | null = $state(null);
 
   const usage = $derived(run.usage);
@@ -71,6 +73,8 @@
     <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
     <Tabs.Trigger value="usage">Usage</Tabs.Trigger>
     <Tabs.Trigger value="calls">Calls <span class="meta">{count(run.calls.length)}</span></Tabs.Trigger>
+    <Tabs.Trigger value="searches">Searches <span class="meta">{count(run.searches.length)}</span></Tabs.Trigger>
+    {#if run.kind === "graph"}<Tabs.Trigger value="graph">Graph</Tabs.Trigger>{/if}
   </Tabs.List>
 
   {#if run.result}
@@ -153,4 +157,12 @@
   <Tabs.Content value="calls">
     <Calls {run} bind:event />
   </Tabs.Content>
+
+  <Tabs.Content value="searches">
+    <Searches {run} bind:event />
+  </Tabs.Content>
+
+  {#if run.kind === "graph"}
+    <Tabs.Content value="graph"><Graph {run} /></Tabs.Content>
+  {/if}
 </Tabs.Root>
