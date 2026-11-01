@@ -89,15 +89,18 @@ test("a research run asks its questions first, and sends the settings changed", 
   await expect(page.getByText("Before starting")).toBeVisible();
   await page.getByLabel("Which region or market should the answer cover?").fill("Europe");
 
-  const request = page.waitForRequest((r) => r.url().endsWith("/v1/research") && r.method() === "POST");
+  const request = page.waitForRequest((r) => r.url().endsWith("/v1/runs") && r.method() === "POST");
   await page.getByRole("button", { name: "Start" }).click();
   expect((await request).postDataJSON()).toEqual({
-    question: "Which phone?",
-    clarifications: [{ question: "Which region or market should the answer cover?", answer: "Europe" }],
-    max_searches: 7,
+    method: "ledger",
+    input: {
+      question: "Which phone?",
+      clarifications: [{ question: "Which region or market should the answer cover?", answer: "Europe" }],
+    },
+    options: { max_searches: 7 },
   });
   await expect(page).toHaveURL(/#\/runs\/[0-9a-f]+$/);
-  await expect(run(page).locator(".heading")).toContainText("running · research · Which phone?");
+  await expect(run(page).locator(".heading")).toContainText("running · ledger · Which phone?");
 
   // The new run is followed live.
   const events = run(page).locator(".events li");
@@ -111,9 +114,9 @@ test("an article starts with its topic alone, from Enter", async ({ page }) => {
   await page.getByRole("radio", { name: "Article" }).click();
   await expect(page.locator(".plan")).toContainText("3 perspectives");
   await page.getByLabel("Question or topic").fill("Kvasir");
-  const request = page.waitForRequest((r) => r.url().endsWith("/v1/article") && r.method() === "POST");
+  const request = page.waitForRequest((r) => r.url().endsWith("/v1/runs") && r.method() === "POST");
   await page.getByLabel("Question or topic").press("Enter");
-  expect((await request).postDataJSON()).toEqual({ topic: "Kvasir" });
+  expect((await request).postDataJSON()).toEqual({ method: "storm", input: { question: "Kvasir" }, options: {} });
   await expect(run(page).locator(".heading")).toContainText("running · storm · Kvasir");
 });
 
@@ -128,12 +131,12 @@ test("a ranking is asked for from the + menu, and shows as a badge", async ({ pa
 
   await page.getByLabel("Question or topic").fill("Rank the Pixel 9a and the Fairphone 5 on price and updates");
   await page.getByRole("button", { name: "Start" }).click();
-  const request = page.waitForRequest((r) => r.url().endsWith("/v1/research") && r.method() === "POST");
+  const request = page.waitForRequest((r) => r.url().endsWith("/v1/runs") && r.method() === "POST");
   await page.getByText("skip the questions").click();
   expect((await request).postDataJSON()).toEqual({
-    question: "Rank the Pixel 9a and the Fairphone 5 on price and updates",
-    clarifications: [],
-    output: "ranking",
+    method: "ledger",
+    input: { question: "Rank the Pixel 9a and the Fairphone 5 on price and updates", clarifications: [] },
+    options: { output: "ranking" },
   });
 });
 

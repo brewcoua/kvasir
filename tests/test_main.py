@@ -3,15 +3,19 @@
 import asyncio
 import json
 import threading
+from typing import get_args
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from fakes import article_run, stub_method
 from kvasir import conversation
 from kvasir.api import streaming
 from kvasir.api.app import app
+from kvasir.methods import METHODS
 from kvasir.runs.registry import RunRegistry
+from kvasir.schemas.requests import RunRequest
 from kvasir.schemas.results import (
     ArticleResult,
     Citation,
@@ -83,18 +87,40 @@ def test_index_says_when_the_page_is_not_built(client, monkeypatch, tmp_path):
     assert "pnpm build" in response.text
 
 
-def test_defaults_report_the_configuration(environment, monkeypatch):
+def test_methods_report_the_configured_defaults(environment, monkeypatch):
     monkeypatch.setenv("KVASIR_RESEARCH_MAX_SEARCHES", "9")
     monkeypatch.setenv("KVASIR_RESEARCH_FOLLOW_UPS", "false")
 
     with TestClient(app) as client:
-        defaults = client.get("/v1/defaults").json()
+        methods = {method["name"]: method for method in client.get("/v1/methods").json()}
 
-    assert defaults["max_searches"] == 9
-    assert defaults["follow_ups"] is False
-    assert defaults["model_fast"] == ENVIRONMENT["KVASIR_MODEL_FAST"]
-    assert defaults["do_polish_article"] is True
-    assert defaults["search_top_k"] == 3
+    assert set(methods) == set(METHODS)
+    ledger = methods["ledger"]["options"]["properties"]
+    storm = methods["storm"]["options"]["properties"]
+    assert ledger["max_searches"]["default"] == 9
+    assert ledger["follow_ups"]["default"] is False
+    assert ledger["model_fast"]["default"] == ENVIRONMENT["KVASIR_MODEL_FAST"]
+    assert storm["do_polish_article"]["default"] is True
+    assert storm["search_top_k"]["default"] == 3
+    assert methods["ledger"]["clarifies"] is True
+    assert methods["storm"]["stages"] == ["research", "outline", "article", "polish"]
+
+
+def test_every_method_can_be_requested():
+    members = get_args(get_args(RunRequest)[0])
+    assert {member.model_fields["method"].annotation.__args__[0] for member in members} == set(
+        METHODS
+    )
+
+
+def test_an_unknown_option_is_refused(client):
+    body = article_run("x", max_searches=3)
+    assert client.post("/v1/runs", json=body).status_code == 422
+
+
+def test_an_unknown_method_is_refused(client):
+    body = {"method": "nope", "input": {"question": "x"}}
+    assert client.post("/v1/runs", json=body).status_code == 422
 
 
 def test_startup_fails_loudly_on_missing_configuration(monkeypatch):
@@ -132,13 +158,13 @@ def test_readyz_treats_an_unreachable_dependency_as_not_ready(client, monkeypatc
 
 
 def test_article_streams_progress_then_the_article(client, monkeypatch):
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         stream.publish("research", "asking questions")
         stream.publish("article", "writing sections")
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    response = client.post("/v1/article", json={"topic": "The Kvasir stone"})
+    stub_method(monkeypatch, "storm", fake_run)
+    response = client.post("/v1/runs", json=article_run("The Kvasir stone"))
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
@@ -154,25 +180,25 @@ def test_article_streams_progress_then_the_article(client, monkeypatch):
 
 
 def test_article_reports_a_failure_as_an_error_event(client, monkeypatch):
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         raise RuntimeError("gateway refused the connection")
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("x")).text)
 
     assert [name for name, _ in events] == ["run", "error"]
     assert "gateway refused the connection" in events[-1][1]["message"]
 
 
 def test_article_rejects_an_empty_topic(client):
-    assert client.post("/v1/article", json={"topic": ""}).status_code == 422
+    assert client.post("/v1/runs", json=article_run("")).status_code == 422
 
 
 def test_research_streams_progress_then_the_report(client, monkeypatch):
     seen = {}
 
-    def fake_run(settings, request, stream):
-        seen["request"] = request
+    def fake_run(settings, input, options, stream):
+        seen["input"] = input
         stream.publish("brief", "writing the research brief")
         return ResearchResult(
             report="## Findings\n\nText [1].",
@@ -182,24 +208,28 @@ def test_research_streams_progress_then_the_report(client, monkeypatch):
             duration_seconds=1.0,
         )
 
-    monkeypatch.setattr("kvasir.api.runs.run_research", fake_run)
+    stub_method(monkeypatch, "ledger", fake_run)
     body = {
-        "question": "Which battery makers lead?",
-        "clarifications": [{"question": "Region?", "answer": "Europe"}],
+        "method": "ledger",
+        "input": {
+            "question": "Which battery makers lead?",
+            "clarifications": [{"question": "Region?", "answer": "Europe"}],
+        },
     }
-    events = parse(client.post("/v1/research", json=body).text)
+    events = parse(client.post("/v1/runs", json=body).text)
 
     assert [name for name, _ in events] == ["run", "progress", "done"]
     assert events[-1][1]["report"].startswith("## Findings")
-    assert seen["request"].clarifications[0].answer == "Europe"
+    assert seen["input"].clarifications[0].answer == "Europe"
     [run] = client.get("/v1/runs").json()
-    assert run["kind"] == "research"
+    assert run["kind"] == "ledger"
     # The brief may choose a ranking, so a run that does not name its output plans for one.
     assert run["planned_stages"] == ["brief", "background", "research", "assess", "write", "verify"]
 
 
 def test_research_rejects_an_empty_question(client):
-    assert client.post("/v1/research", json={"question": ""}).status_code == 422
+    body = {"method": "ledger", "input": {"question": ""}}
+    assert client.post("/v1/runs", json=body).status_code == 422
 
 
 def test_clarify_answers_without_a_run_or_a_slot(client, monkeypatch):
@@ -208,7 +238,7 @@ def test_clarify_answers_without_a_run_or_a_slot(client, monkeypatch):
     assert app.state.run_slots.acquire(blocking=False)
 
     try:
-        response = client.post("/v1/research/clarify", json={"question": "best makers"})
+        response = client.post("/v1/clarify", json={"question": "best makers"})
     finally:
         app.state.run_slots.release()
 
@@ -242,7 +272,7 @@ def test_a_task_takes_no_run_and_no_slot(client, monkeypatch):
         "kvasir.api.tasks.build_task_model", lambda settings: lambda messages: ["ok"]
     )
     # Standing in for the run this task is describing: with one slot, a task routed through
-    # /v1/article would be refused by it. Held for the whole call, so a slot taken and released
+    # /v1/runs would be refused by it. Held for the whole call, so a slot taken and released
     # would not go unnoticed either.
     assert app.state.run_slots.acquire(blocking=False)
 
@@ -260,27 +290,27 @@ def test_a_task_needs_at_least_one_message(client):
 
 
 def test_a_slot_is_released_after_every_run(client, monkeypatch):
-    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
+    stub_method(monkeypatch, "storm", lambda *args: RESULT)
 
     for _ in range(3):
-        assert client.post("/v1/article", json={"topic": "x"}).status_code == 200
+        assert client.post("/v1/runs", json=article_run("x")).status_code == 200
 
 
 def test_saturation_returns_429_rather_than_queueing(client, monkeypatch):
-    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
+    stub_method(monkeypatch, "storm", lambda *args: RESULT)
     # Standing in for a run already in flight. TestClient buffers a streaming response, so an
     # actual concurrent request cannot be held open here.
     assert app.state.run_slots.acquire(blocking=False)
 
     try:
-        response = client.post("/v1/article", json={"topic": "second"})
+        response = client.post("/v1/runs", json=article_run("second"))
     finally:
         app.state.run_slots.release()
 
     assert response.status_code == 429
     assert "busy" in response.json()["message"]
     # Refusal must not consume a slot, or the service deadlocks after the first refusal.
-    assert client.post("/v1/article", json={"topic": "third"}).status_code == 200
+    assert client.post("/v1/runs", json=article_run("third")).status_code == 200
 
 
 @pytest.mark.asyncio

@@ -24,21 +24,33 @@ const TICK_MS = 500;
 // As many calls as the service puts in a `status` event.
 const STATUS_CALLS = 50;
 
-const DEFAULTS = {
-  model_fast: "openai/gpt-oss:20b",
-  model_strong: "openai/gpt-oss:20b",
-  max_searches: 24,
-  results_per_query: 5,
-  max_attempts: 3,
-  follow_ups: true,
-  max_depth: 1,
-  max_entities: 6,
-  max_criteria: 5,
-  search_top_k: 3,
-  max_conv_turn: 3,
-  max_perspective: 3,
-  do_polish_article: true,
-};
+const MODELS = { model_fast: "openai/gpt-oss:20b", model_strong: "openai/gpt-oss:20b" };
+// As `GET /v1/methods` answers, with only the defaults of each option's schema.
+const method = (name: string, clarifies: boolean, stages: string[], defaults: Record<string, unknown>) => ({
+  name,
+  clarifies,
+  stages,
+  options: { properties: Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, { default: value }])) },
+});
+const METHODS = [
+  method("ledger", true, ["brief", "background", "research", "assess", "write", "verify"], {
+    ...MODELS,
+    max_searches: 24,
+    results_per_query: 5,
+    max_attempts: 3,
+    follow_ups: true,
+    max_depth: 1,
+    max_entities: 6,
+    max_criteria: 5,
+  }),
+  method("storm", false, ["research", "outline", "article", "polish"], {
+    ...MODELS,
+    search_top_k: 3,
+    max_conv_turn: 3,
+    max_perspective: 3,
+    do_polish_article: true,
+  }),
+];
 
 const QUESTIONS = [
   "Which region or market should the answer cover?",
@@ -169,7 +181,7 @@ export function mock(): Plugin {
           const all = [...runs.values()].map((entry) => summary(view(entry)));
           return send(response, 200, all.sort((a, b) => b.created_at - a.created_at));
         }
-        if (request.method === "GET" && path === "/v1/defaults") return send(response, 200, DEFAULTS);
+        if (request.method === "GET" && path === "/v1/methods") return send(response, 200, METHODS);
 
         const call = path.match(/^\/v1\/runs\/([^/]+)\/calls\/(\d+)$/);
         if (request.method === "GET" && call) {
@@ -185,17 +197,17 @@ export function mock(): Plugin {
           return match[2] ? follow(entry, request, response) : send(response, 200, view(entry));
         }
 
-        if (request.method === "POST" && path === "/v1/research/clarify") {
+        if (request.method === "POST" && path === "/v1/clarify") {
           return send(response, 200, { questions: QUESTIONS });
         }
-        if (request.method === "POST" && (path === "/v1/research" || path === "/v1/article")) {
+        if (request.method === "POST" && path === "/v1/runs") {
           const body = await read(request);
-          // The service records an article run as `storm`.
-          const kind = path === "/v1/research" ? "research" : "storm";
+          // The service records a run under its method's name.
+          const kind = String(body.method);
           // The recorded one, so a run started here has call content to show.
-          const fixture = runs.get(kind === "research" ? "wal" : "article")!;
+          const fixture = runs.get(kind === "ledger" ? "wal" : "article")!;
           const id = Math.random().toString(16).slice(2, 14);
-          const topic = String(body.question ?? body.topic ?? "");
+          const topic = String((body.input as { question?: string } | undefined)?.question ?? "");
           const entry = { ...replay(fixture.run, id, false, { kind, topic }), contents: fixture.contents };
           runs.set(id, entry);
           const frame = stream(response);

@@ -79,7 +79,7 @@ Alternatively, point Open WebUI at a different model for this entirely, under **
 
 ## Research
 
-A new question first goes to `POST /v1/research/clarify`, one fast-model call. If the service finds
+A new question first goes to `POST /v1/clarify`, one fast-model call. If the service finds
 something worth asking, the reply is a numbered list of questions and no run starts. Answer them
 in one message, or reply `go` to research without answering. Either starts the run on the
 original question, with your reply passed as the answer to all the listed questions. If there is

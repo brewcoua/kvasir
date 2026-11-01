@@ -11,9 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from kvasir import article
+from kvasir.methods.storm import method as article
 from kvasir.runs.progress import ARTICLE, POLISH, ProgressStream
-from kvasir.schemas.requests import ArticleRequest
+from kvasir.schemas.requests import Input, StormOptions
 
 
 class _Runner:
@@ -52,15 +52,17 @@ def runner(monkeypatch, tmp_path):
     return built
 
 
-async def _run(request, stream):
-    return article.run_article(object(), request, stream)
+async def _run(stream, **options):
+    return article.run_article(
+        object(), Input(question="Antikythera"), StormOptions(**options), stream
+    )
 
 
 @pytest.mark.asyncio
 async def test_the_pipeline_is_driven_by_a_single_run_call(runner):
     stream = ProgressStream()
 
-    result = await _run(ArticleRequest(topic="Antikythera"), stream)
+    result = await _run(stream)
     stream.close()
 
     assert runner.calls == [{"do_polish_article": True}]
@@ -72,7 +74,7 @@ async def test_post_run_is_left_to_the_engine(runner):
     """run() calls it now, so calling it again here would truncate the LM call history."""
     stream = ProgressStream()
 
-    await _run(ArticleRequest(topic="Antikythera"), stream)
+    await _run(stream)
     stream.close()
 
     assert runner.post_run_calls == 0
@@ -82,7 +84,7 @@ async def test_post_run_is_left_to_the_engine(runner):
 async def test_sections_and_polishing_are_reported_as_they_happen(runner):
     stream = ProgressStream()
 
-    await _run(ArticleRequest(topic="Antikythera"), stream)
+    await _run(stream)
     stream.close()
 
     events = [(event.stage, event.detail) async for event in stream]
@@ -95,7 +97,7 @@ async def test_sections_and_polishing_are_reported_as_they_happen(runner):
 async def test_polishing_is_skipped_when_the_request_disables_it(runner):
     stream = ProgressStream()
 
-    await _run(ArticleRequest(topic="Antikythera", do_polish_article=False), stream)
+    await _run(stream, do_polish_article=False)
     stream.close()
 
     assert runner.calls == [{"do_polish_article": False}]

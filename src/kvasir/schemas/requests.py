@@ -2,25 +2,11 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from kvasir.schemas.results import Output
-
-
-class ArticleRequest(BaseModel):
-    """Body of `POST /v1/article`.
-
-    Every field but the topic falls back to the configured default when omitted.
-    """
-
-    topic: str = Field(min_length=1)
-    search_top_k: int | None = Field(default=None, ge=1)
-    max_conv_turn: int | None = Field(default=None, ge=1)
-    max_perspective: int | None = Field(default=None, ge=1)
-    do_polish_article: bool = True
-    # Passed to the gateway verbatim. Not validated against any list of known models.
-    model_fast: str | None = None
-    model_strong: str | None = None
 
 
 class TaskRequest(BaseModel):
@@ -36,32 +22,37 @@ class TaskResponse(BaseModel):
 
 
 class Clarification(BaseModel):
-    """One question `/v1/research/clarify` asked, and the user's answer to it."""
+    """One question `/v1/clarify` asked, and the user's answer to it."""
 
     question: str
     answer: str
 
 
 class ClarifyRequest(BaseModel):
-    """Body of `POST /v1/research/clarify`."""
+    """Body of `POST /v1/clarify`."""
 
     question: str = Field(min_length=1)
 
 
 class ClarifyResponse(BaseModel):
-    """Payload of `POST /v1/research/clarify`. Empty when the question needs no clarifying."""
+    """Payload of `POST /v1/clarify`. Empty when the question needs no clarifying."""
 
     questions: list[str]
 
 
-class ResearchRequest(BaseModel):
-    """Body of `POST /v1/research`.
-
-    The budgets fall back to the configured defaults when omitted.
-    """
+class Input(BaseModel):
+    """What a run is about. For STORM, the question is the article's topic."""
 
     question: str = Field(min_length=1)
+    # Only a method that clarifies reads them.
     clarifications: list[Clarification] = []
+
+
+class LedgerOptions(BaseModel):
+    """Options of the `ledger` method. The budgets fall back to the configured defaults."""
+
+    model_config = ConfigDict(extra="forbid")
+
     # Inferred from the question when omitted.
     output: Output | None = None
     # For a ranking or a table, chosen from a first search when omitted.
@@ -77,29 +68,51 @@ class ResearchRequest(BaseModel):
     # For a ranking or a table, when the run chooses them.
     max_entities: int | None = Field(default=None, ge=1)
     max_criteria: int | None = Field(default=None, ge=1)
+    # Passed to the gateway verbatim. Not validated against any list of known models.
     model_fast: str | None = None
     model_strong: str | None = None
 
 
-class Defaults(BaseModel):
-    """Payload of `GET /v1/defaults`: what each optional run field takes when a request omits it.
+class StormOptions(BaseModel):
+    """Options of the `storm` method. Each falls back to the configured default when omitted."""
 
-    Keyed by the request field's name, research's and article's together, for a client to show.
-    """
+    model_config = ConfigDict(extra="forbid")
 
-    model_fast: str
-    model_strong: str
-    max_searches: int
-    results_per_query: int
-    max_attempts: int
-    follow_ups: bool
-    max_depth: int
-    max_entities: int
-    max_criteria: int
-    search_top_k: int
-    max_conv_turn: int
-    max_perspective: int
-    do_polish_article: bool
+    search_top_k: int | None = Field(default=None, ge=1)
+    max_conv_turn: int | None = Field(default=None, ge=1)
+    max_perspective: int | None = Field(default=None, ge=1)
+    do_polish_article: bool = True
+    model_fast: str | None = None
+    model_strong: str | None = None
+
+
+class LedgerRun(BaseModel):
+    method: Literal["ledger"]
+    input: Input
+    options: LedgerOptions = LedgerOptions()
+
+
+class StormRun(BaseModel):
+    method: Literal["storm"]
+    input: Input
+    options: StormOptions = StormOptions()
+
+
+# Body of `POST /v1/runs`. One member per entry of `kvasir.methods.METHODS`, so each method's
+# options are typed in the schema and an unknown option is refused before the run starts.
+RunRequest = Annotated[LedgerRun | StormRun, Field(discriminator="method")]
+
+
+class MethodInfo(BaseModel):
+    """One entry of `GET /v1/methods`."""
+
+    name: str
+    # Whether a client should ask `/v1/clarify` before starting it.
+    clarifies: bool
+    # The stages a run with the default options goes through.
+    stages: list[str]
+    # The options' JSON Schema, with the configured defaults as each property's `default`.
+    options: dict[str, Any]
 
 
 class SessionRequest(BaseModel):

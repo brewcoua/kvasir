@@ -1,5 +1,5 @@
 // Kept in localStorage, and only what the user changed: a field left alone follows the configured
-// default, read from /v1/defaults and shown as its value.
+// default, read from /v1/methods and shown as its value.
 import type { Defaults } from "./api";
 
 export type Value = number | boolean | string;

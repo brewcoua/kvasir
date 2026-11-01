@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { json, type Defaults, type RunSummary } from "./lib/api";
+  import { defaultsOf, json, type Defaults, type MethodInfo, type RunSummary } from "./lib/api";
   import { go, route } from "./lib/route.svelte";
   import Icon from "./components/Icon.svelte";
   import RunList from "./components/RunList.svelte";
@@ -42,8 +42,8 @@
     // Rewrites a link from before the pages were split into its current form.
     go(route.current, true);
     refresh();
-    json<Defaults>("/v1/defaults")
-      .then((answer) => (defaults = answer))
+    json<MethodInfo[]>("/v1/methods")
+      .then((methods) => (defaults = Object.assign({}, ...methods.map(defaultsOf))))
       .catch((error) => console.warn("no defaults:", error));
     const timer = setInterval(refresh, LIST_INTERVAL_MS);
     return () => clearInterval(timer);

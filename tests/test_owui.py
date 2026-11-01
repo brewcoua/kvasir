@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import uvicorn
 
+from fakes import stub_method
 from kvasir import conversation
 from kvasir.api.app import app
 from kvasir.schemas.results import (
@@ -97,12 +98,12 @@ def service(monkeypatch, tmp_path):
     }.items():
         monkeypatch.setenv(name, value)
 
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         stream.publish("research", "asking questions")
         stream.publish("polish", "polishing the article")
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
+    stub_method(monkeypatch, "storm", fake_run)
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -296,9 +297,7 @@ async def test_a_task_goes_to_the_fast_model_and_takes_no_run(pipe, monkeypatch)
     run they describe.
     """
     researched = []
-    monkeypatch.setattr(
-        "kvasir.api.runs.run_article", lambda *args: researched.append(args) or RESULT
-    )
+    stub_method(monkeypatch, "storm", lambda *args: researched.append(args) or RESULT)
     monkeypatch.setattr(
         "kvasir.api.tasks.build_task_model",
         lambda settings: lambda messages: ['{"title": "Kvasir Stone"}'],
@@ -354,10 +353,10 @@ async def test_a_confirmed_follow_up_researches_again(pipe):
 
 @pytest.mark.asyncio
 async def test_a_failed_run_closes_the_reasoning_block(pipe, monkeypatch):
-    def failing_run(settings, request, stream):
+    def failing_run(settings, input, options, stream):
         raise RuntimeError("searxng returned nothing")
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", failing_run)
+    stub_method(monkeypatch, "storm", failing_run)
     events = Events()
 
     answer = await run(pipe, storm("x"), events)
@@ -408,11 +407,11 @@ async def test_without_a_topic_and_without_a_dialog_it_says_so(pipe):
 async def test_only_the_last_user_message_is_researched(pipe, monkeypatch):
     sent = {}
 
-    def capture(settings, request, stream):
-        sent["topic"] = request.topic
+    def capture(settings, input, options, stream):
+        sent["topic"] = input.question
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", capture)
+    stub_method(monkeypatch, "storm", capture)
     await run(
         pipe,
         {
@@ -433,35 +432,35 @@ async def test_only_the_last_user_message_is_researched(pipe, monkeypatch):
 async def test_unset_valves_leave_the_defaults_to_the_service(pipe, monkeypatch):
     sent = {}
 
-    def capture(settings, request, stream):
-        sent["request"] = request
+    def capture(settings, input, options, stream):
+        sent["options"] = options
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", capture)
+    stub_method(monkeypatch, "storm", capture)
     await run(pipe, storm("x"))
 
-    request = sent["request"]
-    assert request.search_top_k is None
-    assert request.max_conv_turn is None
-    assert request.model_fast is None
+    options = sent["options"]
+    assert options.search_top_k is None
+    assert options.max_conv_turn is None
+    assert options.model_fast is None
 
 
 @pytest.mark.asyncio
 async def test_a_user_valve_overrides_the_admin_one(pipe, monkeypatch):
     sent = {}
 
-    def capture(settings, request, stream):
-        sent["request"] = request
+    def capture(settings, input, options, stream):
+        sent["options"] = options
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", capture)
+    stub_method(monkeypatch, "storm", capture)
     pipe.valves.SEARCH_TOP_K = 3
     user = {"valves": {"SEARCH_TOP_K": 9, "POLISH": "off"}}
 
     await run(pipe, storm("x"), user=user)
 
-    assert sent["request"].search_top_k == 9
-    assert sent["request"].do_polish_article is False
+    assert sent["options"].search_top_k == 9
+    assert sent["options"].do_polish_article is False
 
 
 # -- Co-STORM ----------------------------------------------------------------------------------
@@ -609,13 +608,14 @@ def researcher(service, monkeypatch):
         calls["clarified"] = question
         return calls["questions"]
 
-    def run_research(settings, request, stream):
+    def run_research(settings, input, options, stream):
         stream.publish("research", "searching")
-        calls["request"] = request
+        calls["input"] = input
+        calls["options"] = options
         return RESEARCH
 
     monkeypatch.setattr("kvasir.api.tasks.clarify", clarify)
-    monkeypatch.setattr("kvasir.api.runs.run_research", run_research)
+    stub_method(monkeypatch, "ledger", run_research)
     return calls
 
 
@@ -625,7 +625,7 @@ async def test_a_new_question_gets_clarifying_questions_and_no_run(pipe, researc
     answer = await run(pipe, research("The Kvasir stone"), events)
 
     assert researcher["clarified"] == "The Kvasir stone"
-    assert "request" not in researcher
+    assert "input" not in researcher
     assert answer.startswith("Before researching this, a few questions:")
     assert "1. Which stone do you mean?\n2. From what period?" in answer
     assert "<think>" not in answer
@@ -641,9 +641,9 @@ async def test_the_reply_answers_the_questions_and_starts_the_run(pipe, research
         pipe, research("The Kvasir stone", asked, "The runestone, Viking age"), events
     )
 
-    request = researcher["request"]
-    assert request.question == "The Kvasir stone"
-    assert [(c.question, c.answer) for c in request.clarifications] == [
+    asked_for = researcher["input"]
+    assert asked_for.question == "The Kvasir stone"
+    assert [(c.question, c.answer) for c in asked_for.clarifications] == [
         ("Which stone do you mean?\nFrom what period?", "The runestone, Viking age")
     ]
     assert answer.index("</think>") < answer.index("# The Kvasir stone")
@@ -658,8 +658,8 @@ async def test_go_researches_without_answers(pipe, researcher):
 
     await run(pipe, research("The Kvasir stone", asked, "Go"))
 
-    assert researcher["request"].question == "The Kvasir stone"
-    assert researcher["request"].clarifications == []
+    assert researcher["input"].question == "The Kvasir stone"
+    assert researcher["input"].clarifications == []
 
 
 @pytest.mark.asyncio
@@ -668,7 +668,7 @@ async def test_a_clear_question_researches_right_away(pipe, researcher):
 
     answer = await run(pipe, research("The Kvasir stone"))
 
-    assert researcher["request"].question == "The Kvasir stone"
+    assert researcher["input"].question == "The Kvasir stone"
     assert "# The Kvasir stone" in answer
 
 
@@ -679,7 +679,7 @@ async def test_clarifying_can_be_turned_off(pipe, researcher):
     await run(pipe, research("The Kvasir stone"))
 
     assert "clarified" not in researcher
-    assert researcher["request"].clarifications == []
+    assert researcher["input"].clarifications == []
 
 
 @pytest.mark.asyncio
@@ -697,7 +697,7 @@ async def test_research_budgets_reach_the_service_only_when_set(pipe, researcher
 
     await run(pipe, research("The Kvasir stone"))
 
-    request = researcher["request"]
-    assert request.max_searches == 2
-    assert request.follow_ups is False
-    assert request.results_per_query is None
+    options = researcher["options"]
+    assert options.max_searches == 2
+    assert options.follow_ups is False
+    assert options.results_per_query is None

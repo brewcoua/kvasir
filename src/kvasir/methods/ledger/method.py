@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import datetime
 import time
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from kvasir.config import Settings
+from kvasir.methods.base import Method
 from kvasir.methods.ledger import loop
 from kvasir.methods.ledger.brief import candidates, clarifications
 from kvasir.methods.ledger.compare import assess, fill, rank
@@ -31,8 +32,8 @@ from kvasir.research.claims import Claim
 from kvasir.research.render import matrix, render
 from kvasir.research.text import names
 from kvasir.runners import build_research_models, build_research_tools
-from kvasir.runs.progress import BACKGROUND, BRIEF, RESEARCH, WRITE, ProgressStream
-from kvasir.schemas.requests import ResearchRequest
+from kvasir.runs.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
+from kvasir.schemas.requests import Input, LedgerOptions
 from kvasir.schemas.results import Criterion, ResearchClaim, ResearchResult, Row
 
 # Questions the first split of the brief adds at most.
@@ -59,17 +60,17 @@ T = TypeVar("T")
 
 
 def run_research(
-    settings: Settings, request: ResearchRequest, stream: ProgressStream
+    settings: Settings, input: Input, options: LedgerOptions, stream: ProgressStream
 ) -> ResearchResult:
     """Research a question to a cited report, blocking for minutes. Never call this on the loop."""
     started = time.monotonic()
-    models = build_research_models(settings, request.model_fast, request.model_strong)
+    models = build_research_models(settings, options.model_fast, options.model_strong)
     encoder, searxng = build_research_tools(settings)
-    budget = _setting(request.max_searches, settings.research_max_searches)
-    per_query = _setting(request.results_per_query, settings.research_results_per_query)
-    attempts = _setting(request.max_attempts, settings.research_max_attempts)
-    follow_ups = _setting(request.follow_ups, settings.research_follow_ups)
-    max_depth = _setting(request.max_depth, settings.research_max_depth)
+    budget = _setting(options.max_searches, settings.research_max_searches)
+    per_query = _setting(options.results_per_query, settings.research_results_per_query)
+    attempts = _setting(options.max_attempts, settings.research_max_attempts)
+    follow_ups = _setting(options.follow_ups, settings.research_follow_ups)
+    max_depth = _setting(options.max_depth, settings.research_max_depth)
 
     # The model's sense of "now" is its training cutoff, so "best" would mean best then.
     today = datetime.date.today().isoformat()
@@ -79,20 +80,20 @@ def run_research(
         models["brief"],
         Brief,
         today=today,
-        question=request.question,
-        clarifications=clarifications(request.clarifications),
+        question=input.question,
+        clarifications=clarifications(input.clarifications),
     )
     brief: str = framed.brief
-    output = request.output or framed.output
+    output = options.output or framed.output
     seen: set[str] = set()
 
-    # Named in the question, they are final; the request's own fields override even those. The
+    # Named in the question, they are final; the options override even those. The
     # brief lists options from memory as readily as from the question, so only those the question
     # really names count as named.
-    asked = f"{request.question}\n{clarifications(request.clarifications)}"
+    asked = f"{input.question}\n{clarifications(input.clarifications)}"
     named = [name for name in framed.criteria if names(name, asked)]
-    criteria = [Criterion(name=name) for name in request.criteria or named]
-    entities = list(request.entities or [e for e in framed.entities if names(e, asked)])
+    criteria = [Criterion(name=name) for name in options.criteria or named]
+    entities = list(options.entities or [e for e in framed.entities if names(e, asked)])
     if output != "report":
         criteria, entities = candidates(
             models,
@@ -101,8 +102,8 @@ def run_research(
             brief,
             criteria,
             entities,
-            _setting(request.max_criteria, settings.research_max_criteria),
-            _setting(request.max_entities, settings.research_max_entities),
+            _setting(options.max_criteria, settings.research_max_criteria),
+            _setting(options.max_entities, settings.research_max_entities),
             per_query,
             stream,
         )
@@ -121,7 +122,7 @@ def run_research(
     stream.publish(RESEARCH, "splitting the brief into questions")
     ledger: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
-    add_questions(encoder, ledger, first or [request.question])
+    add_questions(encoder, ledger, first or [input.question])
 
     def check(question: Question) -> None:
         asked = loop.check(models["check"], encoder, brief, claims, question)
@@ -215,5 +216,36 @@ def run_research(
 
 
 def _setting(value: T | None, default: T) -> T:
-    """The request's value, or the configured default when the request leaves it out."""
+    """The option's value, or the configured default when the run leaves it out."""
     return default if value is None else value
+
+
+def _stages(options: LedgerOptions) -> list[str]:
+    # Background and assess happen only for a ranking or a table, which the brief may choose.
+    if options.output == "report":
+        return [BRIEF, RESEARCH, WRITE, VERIFY]
+    return [BRIEF, BACKGROUND, RESEARCH, ASSESS, WRITE, VERIFY]
+
+
+def _defaults(settings: Settings) -> dict[str, Any]:
+    return {
+        "max_searches": settings.research_max_searches,
+        "results_per_query": settings.research_results_per_query,
+        "max_attempts": settings.research_max_attempts,
+        "follow_ups": settings.research_follow_ups,
+        "max_depth": settings.research_max_depth,
+        "max_entities": settings.research_max_entities,
+        "max_criteria": settings.research_max_criteria,
+        "model_fast": settings.model_fast,
+        "model_strong": settings.model_strong,
+    }
+
+
+LEDGER = Method(
+    name="ledger",
+    Options=LedgerOptions,
+    clarifies=True,
+    stages=_stages,
+    defaults=_defaults,
+    run=run_research,
+)

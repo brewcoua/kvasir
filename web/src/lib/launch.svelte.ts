@@ -9,7 +9,7 @@ export class Launch {
   method: Method = $state(METHODS.find((m) => m.kind === localStorage.getItem(KEY)) ?? METHODS[0]);
   picked: Picked = $state({});
   text = $state("");
-  // The questions `/v1/research/clarify` asked, while the user answers them. Null otherwise.
+  // The questions `/v1/clarify` asked, while the user answers them. Null otherwise.
   asked: string[] | null = $state(null);
   answers: string[] = $state([]);
   status = $state("");
@@ -36,7 +36,7 @@ export class Launch {
     this.status = "checking whether the question needs clarifying…";
     this.busy = true;
     try {
-      const response = await fetch("/v1/research/clarify", {
+      const response = await fetch("/v1/clarify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question: this.text.trim() }),
@@ -68,15 +68,14 @@ export class Launch {
           .filter((clarification) => clarification.answer !== "")
       : [];
     const body = {
-      [this.method.field]: this.text.trim(),
-      ...(this.method.clarify ? { clarifications } : {}),
-      ...this.picked,
-      ...chosen(this.method.kind),
+      method: this.method.name,
+      input: { question: this.text.trim(), ...(this.method.clarify ? { clarifications } : {}) },
+      options: { ...this.picked, ...chosen(this.method.kind) },
     };
     this.busy = true;
     this.status = "starting…";
     try {
-      const response = await fetch(this.method.endpoint, {
+      const response = await fetch("/v1/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

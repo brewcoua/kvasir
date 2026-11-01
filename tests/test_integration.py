@@ -18,11 +18,11 @@ import os
 
 import pytest
 
-from kvasir.article import run_article
 from kvasir.config import Settings, apply_environment
 from kvasir.conversation import create, report, step
+from kvasir.methods.storm.method import run_article
 from kvasir.runs.progress import ProgressStream
-from kvasir.schemas.requests import ArticleRequest, SessionRequest
+from kvasir.schemas.requests import Input, SessionRequest, StormOptions
 from kvasir.sessions import SessionStore
 
 pytestmark = pytest.mark.integration
@@ -58,9 +58,9 @@ async def stream():
 @pytest.mark.asyncio
 async def test_a_short_storm_run_produces_a_cited_article(settings, stream):
     """Deliberately the smallest run that still exercises every stage."""
-    request = ArticleRequest(topic=TOPIC, max_conv_turn=1, max_perspective=1, search_top_k=3)
+    options = StormOptions(max_conv_turn=1, max_perspective=1, search_top_k=3)
 
-    result = await _in_thread(run_article, settings, request, stream)
+    result = await _in_thread(run_article, settings, Input(question=TOPIC), options, stream)
 
     assert result.article.strip(), "the article is empty"
     assert result.outline.strip(), "the outline is empty"

@@ -15,8 +15,8 @@ from kvasir.storm.lm import retry_budget
 router = APIRouter()
 
 
-@router.post("/v1/research/clarify")
-async def research_clarify(http: Request, request: ClarifyRequest) -> ClarifyResponse:
+@router.post("/v1/clarify")
+async def clarify_question(http: Request, request: ClarifyRequest) -> ClarifyResponse:
     """Questions to ask before researching, or none. One fast-model call.
 
     Like `/v1/tasks`, no run is registered and no slot is claimed: the user is still deciding
@@ -34,7 +34,7 @@ async def task(http: Request, request: TaskRequest) -> TaskResponse:
 
     Open WebUI generates a chat title, tags and follow-up prompts by asking whichever model the
     chat is using, which for a kvasir chat is the pipe. Those are not research: sent to
-    `/v1/article` they each take a run slot, and with one slot they collide with the very run they
+    `/v1/runs` they each take a run slot, and with one slot they collide with the very run they
     are summarising. Deliberately not `streamed` — no run is registered and no slot is claimed.
     """
     settings: Settings = http.app.state.settings

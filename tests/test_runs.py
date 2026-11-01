@@ -9,6 +9,7 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
+from fakes import article_run, stub_method
 from kvasir.api.app import app
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import (
@@ -66,13 +67,13 @@ def parse(text):
 
 
 def test_a_run_reaches_done(client, monkeypatch):
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         stream.publish("research", "asking questions")
         stream.publish("article", "writing")
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
     run_id = events[0][1]["run_id"]
 
     detail = client.get(f"/v1/runs/{run_id}").json()
@@ -86,11 +87,11 @@ def test_a_run_reaches_done(client, monkeypatch):
 
 
 def test_a_failed_run_keeps_the_reason(client, monkeypatch):
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         raise RuntimeError("gateway refused the connection")
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("x")).text)
 
     detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
     assert detail["state"] == "failed"
@@ -99,10 +100,10 @@ def test_a_failed_run_keeps_the_reason(client, monkeypatch):
 
 def test_a_rejected_run_is_recorded(client, monkeypatch):
     """A 429 with nothing behind it is exactly the case the registry exists to explain."""
-    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
+    stub_method(monkeypatch, "storm", lambda *args: RESULT)
     app.state.run_slots.acquire()
     try:
-        assert client.post("/v1/article", json={"topic": "x"}).status_code == 429
+        assert client.post("/v1/runs", json=article_run("x")).status_code == 429
     finally:
         app.state.run_slots.release()
 
@@ -112,9 +113,9 @@ def test_a_rejected_run_is_recorded(client, monkeypatch):
 
 
 def test_runs_are_listed_newest_first(client, monkeypatch):
-    monkeypatch.setattr("kvasir.api.runs.run_article", lambda settings, request, stream: RESULT)
+    stub_method(monkeypatch, "storm", lambda settings, input, options, stream: RESULT)
     for topic in ("first", "second"):
-        client.post("/v1/article", json={"topic": topic})
+        client.post("/v1/runs", json=article_run(topic))
 
     assert [run["topic"] for run in client.get("/v1/runs").json()] == ["second", "first"]
 
@@ -129,7 +130,7 @@ def test_an_unknown_run_is_a_404(client):
 def test_usage_is_attributed_to_the_running_run(client, monkeypatch):
     """The pipeline reports through a contextvar, so nothing has to hand it the run."""
 
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         runtime.record_lm_usage("openai/strong", "article_gen", 100, 20, 0.002)
         runtime.record_lm_usage("openai/fast", "conv_simulator", 30, 5, 0.0001)
         runtime.record_lm_usage("openai/fast", "conv_simulator", 10, 5, 0.0)
@@ -139,8 +140,8 @@ def test_usage_is_attributed_to_the_running_run(client, monkeypatch):
         runtime.record_search_usage("SearXNG", 3)
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("x")).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
     assert usage["prompt_tokens"] == 140
@@ -155,13 +156,13 @@ def test_usage_is_attributed_to_the_running_run(client, monkeypatch):
 def test_usage_reported_from_a_pool_still_lands_on_the_run(client, monkeypatch):
     """Most of a run's spending happens inside the pipeline's thread pools."""
 
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         with ContextThreadPoolExecutor(max_workers=4) as executor:
             list(executor.map(lambda _: runtime.record_lm_usage("m", "r", 10, 1, 0.0), range(8)))
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("x")).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
     assert usage["by_model"]["m"]["calls"] == 8
@@ -206,8 +207,8 @@ def test_a_watcher_follows_a_run_from_another_thread():
 
 
 def test_watching_a_finished_run_does_not_hang(client, monkeypatch):
-    monkeypatch.setattr("kvasir.api.runs.run_article", lambda settings, request, stream: RESULT)
-    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
+    stub_method(monkeypatch, "storm", lambda settings, input, options, stream: RESULT)
+    events = parse(client.post("/v1/runs", json=article_run("x")).text)
 
     frames = parse(client.get(f"/v1/runs/{events[0][1]['run_id']}/events").text)
 
@@ -323,7 +324,7 @@ def test_answered_calls_add_their_time_to_usage(monkeypatch):
 
 
 def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         runtime.record_lm_usage("m", "conv_simulator", 30, 5, 0.0)
         stream.publish("research", "asking questions")
         runtime.record_lm_usage("m", "conv_simulator", 10, 5, 0.001)
@@ -333,8 +334,8 @@ def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
         runtime.current_usage_sink().record_embedding("e", 300)
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "x"}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("x")).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
     by_stage = usage["by_stage"]
@@ -348,12 +349,12 @@ def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
 
 
 def test_a_finished_run_carries_its_result_and_plan(client, monkeypatch):
-    def fake_run(settings, request, stream):
+    def fake_run(settings, input, options, stream):
         stream.publish("article", "finished a (1/2)", 1, 2)
         return RESULT
 
-    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
-    events = parse(client.post("/v1/article", json={"topic": "x", "do_polish_article": False}).text)
+    stub_method(monkeypatch, "storm", fake_run)
+    events = parse(client.post("/v1/runs", json=article_run("x", do_polish_article=False)).text)
 
     detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
     assert detail["result"]["article"] == RESULT.article
@@ -394,9 +395,9 @@ def test_memory_mode_writes_no_database(client, tmp_path):
 
 
 def test_a_run_survives_a_restart(sqlite, monkeypatch):
-    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
+    stub_method(monkeypatch, "storm", lambda *args: RESULT)
     with sqlite() as client:
-        events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+        events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
         run_id = events[0][1]["run_id"]
 
     with sqlite() as client:
@@ -424,9 +425,9 @@ def _article_with_a_call(*args):
 
 def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
     monkeypatch.setenv("KVASIR_KEEP_CALL_CONTENT", "true")
-    monkeypatch.setattr("kvasir.api.runs.run_article", _article_with_a_call)
+    stub_method(monkeypatch, "storm", _article_with_a_call)
     with sqlite() as client:
-        events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+        events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
         run_id = events[0][1]["run_id"]
         (call,) = client.get(f"/v1/runs/{run_id}").json()["calls"]
         assert call["has_content"] is True
@@ -439,8 +440,8 @@ def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypa
 
 
 def test_call_content_is_not_kept_by_default(client, monkeypatch):
-    monkeypatch.setattr("kvasir.api.runs.run_article", _article_with_a_call)
-    events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
+    stub_method(monkeypatch, "storm", _article_with_a_call)
+    events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
     run_id = events[0][1]["run_id"]
 
     (call,) = client.get(f"/v1/runs/{run_id}").json()["calls"]

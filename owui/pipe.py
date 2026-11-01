@@ -281,7 +281,7 @@ class Pipe:
         async with aiohttp.ClientSession(timeout=timeout) as http:
             yield think.start()
             request = self._request(topic, options)
-            async for line in self._call(http, "POST", "/v1/article", request, think, status, out):
+            async for line in self._call(http, "POST", "/v1/runs", request, think, status, out):
                 yield line
             yield think.close()
 
@@ -303,9 +303,9 @@ class Pipe:
             "max_conv_turn": options.max_conv_turn,
             "max_perspective": options.max_perspective,
         }
-        request: dict[str, Any] = {"topic": topic, "do_polish_article": options.polish}
-        request.update({name: value for name, value in optional.items() if value})
-        return request
+        chosen: dict[str, Any] = {"do_polish_article": options.polish}
+        chosen.update({name: value for name, value in optional.items() if value})
+        return {"method": "storm", "input": {"question": topic}, "options": chosen}
 
     # -- Research ------------------------------------------------------------------------------
 
@@ -331,20 +331,25 @@ class Pipe:
                         return
 
             await status.say(f"Researching {question}")
-            request: dict[str, Any] = {"question": question, "clarifications": clarifications}
+            chosen: dict[str, Any] = {}
             optional = {
                 "model_fast": self.valves.MODEL_FAST,
                 "model_strong": self.valves.MODEL_STRONG,
                 "max_searches": self.valves.MAX_SEARCHES,
                 "results_per_query": self.valves.RESULTS_PER_QUERY,
             }
-            request.update({name: value for name, value in optional.items() if value})
+            chosen.update({name: value for name, value in optional.items() if value})
             if self.valves.FOLLOW_UPS != "default":
-                request["follow_ups"] = self.valves.FOLLOW_UPS == "on"
+                chosen["follow_ups"] = self.valves.FOLLOW_UPS == "on"
+            request = {
+                "method": "ledger",
+                "input": {"question": question, "clarifications": clarifications},
+                "options": chosen,
+            }
 
             out: dict[str, Any] = {}
             yield think.start()
-            async for line in self._call(http, "POST", "/v1/research", request, think, status, out):
+            async for line in self._call(http, "POST", "/v1/runs", request, think, status, out):
                 yield line
             yield think.close()
 
@@ -358,7 +363,7 @@ class Pipe:
         # One fast-model call, so it gets the task timeout rather than the run's.
         timeout = aiohttp.ClientTimeout(total=self.valves.TASK_TIMEOUT_SECONDS)
         async with http.post(
-            self._url("/v1/research/clarify"), json={"question": question}, timeout=timeout
+            self._url("/v1/clarify"), json={"question": question}, timeout=timeout
         ) as response:
             if response.status != 200:
                 raise _ServiceError(response.status, await response.text())

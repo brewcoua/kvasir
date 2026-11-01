@@ -9,23 +9,11 @@ from fastapi.responses import StreamingResponse
 
 from kvasir.api.sse import HEADERS, MEDIA_TYPE, frame
 from kvasir.api.streaming import streamed
-from kvasir.article import run_article
 from kvasir.config import Settings
-from kvasir.methods.ledger.method import run_research
-from kvasir.runs.progress import (
-    ARTICLE,
-    ASSESS,
-    BACKGROUND,
-    BRIEF,
-    OUTLINE,
-    POLISH,
-    RESEARCH,
-    VERIFY,
-    WRITE,
-)
+from kvasir.methods import METHODS
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import Run
-from kvasir.schemas.requests import ArticleRequest, Defaults, ResearchRequest
+from kvasir.schemas.requests import RunRequest
 from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary
 
 # How often a follower gets a fresh status while nothing else happens. Tokens are spent between
@@ -35,55 +23,19 @@ STATUS_INTERVAL_SECONDS = 2.0
 router = APIRouter()
 
 
-@router.post("/v1/article")
-async def article(http: Request, request: ArticleRequest) -> Response:
-    """Run STORM and stream progress until the article is ready."""
+@router.post("/v1/runs")
+async def start_run(http: Request, request: RunRequest) -> Response:
+    """Run a method and stream progress until its result is ready."""
     settings: Settings = http.app.state.settings
+    method = METHODS[request.method]
+    question = request.input.question
     return streamed(
         http.app.state,
-        lambda stream: run_article(settings, request, stream),
-        f"article {request.topic!r}",
-        "storm",
-        request.topic,
-        [RESEARCH, OUTLINE, ARTICLE] + ([POLISH] if request.do_polish_article else []),
-    )
-
-
-@router.post("/v1/research")
-async def research(http: Request, request: ResearchRequest) -> Response:
-    """Run the deep research pipeline and stream progress until the report is ready."""
-    settings: Settings = http.app.state.settings
-    return streamed(
-        http.app.state,
-        lambda stream: run_research(settings, request, stream),
-        f"research {request.question!r}",
-        "research",
-        request.question,
-        # Background and assess happen only for a ranking or a table, which the brief may choose.
-        [BRIEF, RESEARCH, WRITE, VERIFY]
-        if request.output == "report"
-        else [BRIEF, BACKGROUND, RESEARCH, ASSESS, WRITE, VERIFY],
-    )
-
-
-@router.get("/v1/defaults")
-async def defaults(http: Request) -> Defaults:
-    """What a run's optional fields default to, as configured, for the runs page to show."""
-    settings: Settings = http.app.state.settings
-    return Defaults(
-        model_fast=settings.model_fast,
-        model_strong=settings.model_strong,
-        max_searches=settings.research_max_searches,
-        results_per_query=settings.research_results_per_query,
-        max_attempts=settings.research_max_attempts,
-        follow_ups=settings.research_follow_ups,
-        max_depth=settings.research_max_depth,
-        max_entities=settings.research_max_entities,
-        max_criteria=settings.research_max_criteria,
-        search_top_k=settings.search_top_k,
-        max_conv_turn=settings.max_conv_turn,
-        max_perspective=settings.max_perspective,
-        do_polish_article=ArticleRequest.model_fields["do_polish_article"].default,
+        lambda stream: method.run(settings, request.input, request.options, stream),
+        f"{method.name} {question!r}",
+        method.name,
+        question,
+        method.stages(request.options),
     )
 
 

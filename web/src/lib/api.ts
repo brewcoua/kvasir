@@ -13,7 +13,20 @@ export type LmCall = Schemas["LmCall"];
 export type LmCallContent = Schemas["LmCallContent"];
 export type Citation = Schemas["Citation"];
 export type ResearchResult = Schemas["ResearchResult"];
-export type Defaults = Schemas["Defaults"];
+export type MethodInfo = Schemas["MethodInfo"];
+// The options with a configured default, every method's together. Their names do not collide, but
+// for the models, which mean the same in every method.
+type Configured = Omit<Schemas["LedgerOptions"] & Schemas["StormOptions"], "output" | "criteria" | "entities">;
+export type Defaults = { [K in keyof Configured]-?: NonNullable<Configured[K]> };
+
+// `GET /v1/methods` puts each configured default in its option's schema.
+export const defaultsOf = (method: MethodInfo): Partial<Defaults> =>
+  Object.fromEntries(
+    Object.entries((method.options.properties ?? {}) as Record<string, { default?: unknown }>).map(([name, option]) => [
+      name,
+      option.default,
+    ]),
+  ) as Partial<Defaults>;
 
 export async function json<T>(path: string): Promise<T> {
   const response = await fetch(path);

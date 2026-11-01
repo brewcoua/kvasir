@@ -1,8 +1,11 @@
-"""Fakes for the research tests: SearXNG, the progress stream, the encoder and claims."""
+"""Fakes for the tests: SearXNG, the progress stream, the encoder, claims and methods."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from kvasir.config import Settings
+from kvasir.methods import METHODS
 from kvasir.research.claims import Claim
 
 PAGE = (
@@ -55,3 +58,13 @@ def research_settings() -> Settings:
             "KVASIR_SEARXNG_URL": "http://searxng.example",
         }
     )
+
+
+def stub_method(monkeypatch, name, run):
+    """Swaps the run of method `name` for `run`, where `POST /v1/runs` looks it up."""
+    monkeypatch.setitem(METHODS, name, replace(METHODS[name], run=run))
+
+
+def article_run(topic, **options):
+    """A `POST /v1/runs` body for an article on `topic`."""
+    return {"method": "storm", "input": {"question": topic}, "options": options}

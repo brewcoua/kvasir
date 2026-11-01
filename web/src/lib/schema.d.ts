@@ -4,66 +4,6 @@
  */
 
 export interface paths {
-    "/v1/article": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Article
-         * @description Run STORM and stream progress until the article is ready.
-         */
-        post: operations["article_v1_article_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/research": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Research
-         * @description Run the deep research pipeline and stream progress until the report is ready.
-         */
-        post: operations["research_v1_research_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/defaults": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Defaults
-         * @description What a run's optional fields default to, as configured, for the runs page to show.
-         */
-        get: operations["defaults_v1_defaults_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/runs": {
         parameters: {
             query?: never;
@@ -77,7 +17,11 @@ export interface paths {
          */
         get: operations["list_runs_v1_runs_get"];
         put?: never;
-        post?: never;
+        /**
+         * Start Run
+         * @description Run a method and stream progress until its result is ready.
+         */
+        post: operations["start_run_v1_runs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -145,7 +89,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/research/clarify": {
+    "/v1/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Methods
+         * @description Every method, with its options and their configured defaults, for a client to show.
+         */
+        get: operations["methods_v1_methods_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/clarify": {
         parameters: {
             query?: never;
             header?: never;
@@ -155,13 +119,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Research Clarify
+         * Clarify Question
          * @description Questions to ask before researching, or none. One fast-model call.
          *
          *     Like `/v1/tasks`, no run is registered and no slot is claimed: the user is still deciding
          *     whether to start one.
          */
-        post: operations["research_clarify_v1_research_clarify_post"];
+        post: operations["clarify_question_v1_clarify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -183,7 +147,7 @@ export interface paths {
          *
          *     Open WebUI generates a chat title, tags and follow-up prompts by asking whichever model the
          *     chat is using, which for a kvasir chat is the pipe. Those are not research: sent to
-         *     `/v1/article` they each take a run slot, and with one slot they collide with the very run they
+         *     `/v1/runs` they each take a run slot, and with one slot they collide with the very run they
          *     are summarising. Deliberately not `streamed` — no run is registered and no slot is claimed.
          */
         post: operations["task_v1_tasks_post"];
@@ -318,31 +282,6 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * ArticleRequest
-         * @description Body of `POST /v1/article`.
-         *
-         *     Every field but the topic falls back to the configured default when omitted.
-         */
-        ArticleRequest: {
-            /** Topic */
-            topic: string;
-            /** Search Top K */
-            search_top_k?: number | null;
-            /** Max Conv Turn */
-            max_conv_turn?: number | null;
-            /** Max Perspective */
-            max_perspective?: number | null;
-            /**
-             * Do Polish Article
-             * @default true
-             */
-            do_polish_article: boolean;
-            /** Model Fast */
-            model_fast?: string | null;
-            /** Model Strong */
-            model_strong?: string | null;
-        };
-        /**
          * ArticleResult
          * @description Payload of the `done` event.
          */
@@ -386,7 +325,7 @@ export interface components {
         };
         /**
          * Clarification
-         * @description One question `/v1/research/clarify` asked, and the user's answer to it.
+         * @description One question `/v1/clarify` asked, and the user's answer to it.
          */
         Clarification: {
             /** Question */
@@ -396,7 +335,7 @@ export interface components {
         };
         /**
          * ClarifyRequest
-         * @description Body of `POST /v1/research/clarify`.
+         * @description Body of `POST /v1/clarify`.
          */
         ClarifyRequest: {
             /** Question */
@@ -404,7 +343,7 @@ export interface components {
         };
         /**
          * ClarifyResponse
-         * @description Payload of `POST /v1/research/clarify`. Empty when the question needs no clarifying.
+         * @description Payload of `POST /v1/clarify`. Empty when the question needs no clarifying.
          */
         ClarifyResponse: {
             /** Questions */
@@ -423,44 +362,64 @@ export interface components {
              */
             weight: number;
         };
-        /**
-         * Defaults
-         * @description Payload of `GET /v1/defaults`: what each optional run field takes when a request omits it.
-         *
-         *     Keyed by the request field's name, research's and article's together, for a client to show.
-         */
-        Defaults: {
-            /** Model Fast */
-            model_fast: string;
-            /** Model Strong */
-            model_strong: string;
-            /** Max Searches */
-            max_searches: number;
-            /** Results Per Query */
-            results_per_query: number;
-            /** Max Attempts */
-            max_attempts: number;
-            /** Follow Ups */
-            follow_ups: boolean;
-            /** Max Depth */
-            max_depth: number;
-            /** Max Entities */
-            max_entities: number;
-            /** Max Criteria */
-            max_criteria: number;
-            /** Search Top K */
-            search_top_k: number;
-            /** Max Conv Turn */
-            max_conv_turn: number;
-            /** Max Perspective */
-            max_perspective: number;
-            /** Do Polish Article */
-            do_polish_article: boolean;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Input
+         * @description What a run is about. For STORM, the question is the article's topic.
+         */
+        Input: {
+            /** Question */
+            question: string;
+            /**
+             * Clarifications
+             * @default []
+             */
+            clarifications: components["schemas"]["Clarification"][];
+        };
+        /**
+         * LedgerOptions
+         * @description Options of the `ledger` method. The budgets fall back to the configured defaults.
+         */
+        LedgerOptions: {
+            /** Output */
+            output?: ("report" | "ranking" | "table") | null;
+            /** Criteria */
+            criteria?: string[] | null;
+            /** Entities */
+            entities?: string[] | null;
+            /** Max Searches */
+            max_searches?: number | null;
+            /** Results Per Query */
+            results_per_query?: number | null;
+            /** Max Attempts */
+            max_attempts?: number | null;
+            /** Follow Ups */
+            follow_ups?: boolean | null;
+            /** Max Depth */
+            max_depth?: number | null;
+            /** Max Entities */
+            max_entities?: number | null;
+            /** Max Criteria */
+            max_criteria?: number | null;
+            /** Model Fast */
+            model_fast?: string | null;
+            /** Model Strong */
+            model_strong?: string | null;
+        };
+        /** LedgerRun */
+        LedgerRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            method: "ledger";
+            input: components["schemas"]["Input"];
+            /** @default {} */
+            options: components["schemas"]["LedgerOptions"];
         };
         /**
          * LmCall
@@ -504,6 +463,22 @@ export interface components {
             response: string | null;
             /** Reasoning */
             reasoning?: string | null;
+        };
+        /**
+         * MethodInfo
+         * @description One entry of `GET /v1/methods`.
+         */
+        MethodInfo: {
+            /** Name */
+            name: string;
+            /** Clarifies */
+            clarifies: boolean;
+            /** Stages */
+            stages: string[];
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
         };
         /**
          * ModelUsage
@@ -616,45 +591,6 @@ export interface components {
             queries: string[];
             /** Missing */
             missing: string;
-        };
-        /**
-         * ResearchRequest
-         * @description Body of `POST /v1/research`.
-         *
-         *     The budgets fall back to the configured defaults when omitted.
-         */
-        ResearchRequest: {
-            /** Question */
-            question: string;
-            /**
-             * Clarifications
-             * @default []
-             */
-            clarifications: components["schemas"]["Clarification"][];
-            /** Output */
-            output?: ("report" | "ranking" | "table") | null;
-            /** Criteria */
-            criteria?: string[] | null;
-            /** Entities */
-            entities?: string[] | null;
-            /** Max Searches */
-            max_searches?: number | null;
-            /** Results Per Query */
-            results_per_query?: number | null;
-            /** Max Attempts */
-            max_attempts?: number | null;
-            /** Follow Ups */
-            follow_ups?: boolean | null;
-            /** Max Depth */
-            max_depth?: number | null;
-            /** Max Entities */
-            max_entities?: number | null;
-            /** Max Criteria */
-            max_criteria?: number | null;
-            /** Model Fast */
-            model_fast?: string | null;
-            /** Model Strong */
-            model_strong?: string | null;
         };
         /**
          * ResearchResult
@@ -904,6 +840,42 @@ export interface components {
             utterance: string;
         };
         /**
+         * StormOptions
+         * @description Options of the `storm` method. Each falls back to the configured default when omitted.
+         */
+        StormOptions: {
+            /** Search Top K */
+            search_top_k?: number | null;
+            /** Max Conv Turn */
+            max_conv_turn?: number | null;
+            /** Max Perspective */
+            max_perspective?: number | null;
+            /**
+             * Do Polish Article
+             * @default true
+             */
+            do_polish_article: boolean;
+            /** Model Fast */
+            model_fast?: string | null;
+            /** Model Strong */
+            model_strong?: string | null;
+        };
+        /** StormRun */
+        StormRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            method: "storm";
+            input: components["schemas"]["Input"];
+            /**
+             * @default {
+             *       "do_polish_article": true
+             *     }
+             */
+            options: components["schemas"]["StormOptions"];
+        };
+        /**
          * TaskRequest
          * @description Body of `POST /v1/tasks`. OpenAI-shaped chat messages, forwarded to the fast model as-is.
          */
@@ -961,92 +933,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    article_v1_article_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ArticleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    research_v1_research_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    defaults_v1_defaults_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Defaults"];
-                };
-            };
-        };
-    };
     list_runs_v1_runs_get: {
         parameters: {
             query?: never;
@@ -1063,6 +949,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunSummary"][];
+                };
+            };
+        };
+    };
+    start_run_v1_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerRun"] | components["schemas"]["StormRun"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1161,7 +1080,27 @@ export interface operations {
             };
         };
     };
-    research_clarify_v1_research_clarify_post: {
+    methods_v1_methods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MethodInfo"][];
+                };
+            };
+        };
+    };
+    clarify_question_v1_clarify_post: {
         parameters: {
             query?: never;
             header?: never;

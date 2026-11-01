@@ -1,6 +1,6 @@
 # Research methods: plan
 
-Status: written 2026-11-01. Steps 1 and 2 of the [build order](#build-order) are built; the rest is planned.
+Status: written 2026-11-01. Steps 1 to 3 of the [build order](#build-order) are built; the rest is planned.
 
 kvasir has one route per engine: `/v1/research` for the question ledger, `/v1/article` for STORM.
 Each has its own request model, run kind, stage list, role table, runs-page entry and Open WebUI
@@ -123,6 +123,19 @@ pipeline constants in `web/src/lib/methods.ts`.
 Every result carries `report`, `citations`, `claims` and `duration_seconds`; a method adds its own
 fields. `python -m kvasir.research.evaluate` gains `--method` and `--options`, so methods are
 scored on the same questions.
+
+Step 3 built this with these differences:
+
+- `Method` is a frozen dataclass in `methods/base.py`, not a protocol. It holds `name`, `Options`,
+  `clarifies`, `stages`, `defaults` and `run`. The role tables are still in `runners.py`.
+- `RunRequest` is a union discriminated on `method`, one member per method, so each method's options
+  are typed in the OpenAPI schema. A new method adds a member there as well as an entry in
+  `METHODS`. A test checks the two match.
+- The runs page reads only the defaults from `/v1/methods`. Its stage descriptions and budgets stay
+  in `web/src/lib/methods.ts`, and so does the copy of `FILL_SEARCHES`. The Open WebUI pipe keeps
+  one model per method.
+- Results are not unified yet. A STORM result still carries `article`, so only `ledger` results
+  can be scored.
 
 ## The graph method
 

@@ -1,6 +1,6 @@
 # The research pipeline
 
-How `POST /v1/research` turns a question into a cited report, and why each step is shaped the way
+How the `ledger` method turns a question into a cited report, and why each step is shaped the way
 it is. This page describes the pipeline as built: the `ledger` method in
 `src/kvasir/methods/ledger/`, over the steps every method shares in `src/kvasir/research/`. How to
 call it is in the README's [Research a question](../README.md#research-a-question). The plan it was
@@ -55,7 +55,7 @@ criteria falls back to a `report`.
 
 ## Framing the question
 
-`clarify` is a separate call, `POST /v1/research/clarify`, made before the run if the client wants
+`clarify` is a separate call, `POST /v1/clarify`, made before the run if the client wants
 it. It asks at most three questions, or none. The answers travel with the research request, so the
 API stays stateless.
 

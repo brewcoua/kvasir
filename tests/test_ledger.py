@@ -16,8 +16,13 @@ from kvasir.methods.ledger.signatures import SearchFor
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import FetchError, extract
 from kvasir.research.search import SearchUnavailable
-from kvasir.schemas.requests import Clarification, ResearchRequest
+from kvasir.schemas.requests import Clarification, Input, LedgerOptions
 from kvasir.schemas.results import RemovedSentence
+
+
+def ask(question, **options):
+    """The input and options of a ledger run."""
+    return Input(question=question), LedgerOptions(**options)
 
 
 @pytest.fixture
@@ -86,9 +91,7 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
     monkeypatch.setattr("kvasir.research.read.fetch_text", fake_fetch)
     stream = Stream()
 
-    result = run_research(
-        settings, ResearchRequest(question="When was the Kvasir stone found?"), stream
-    )
+    result = run_research(settings, *ask(question="When was the Kvasir stone found?"), stream)
 
     # The paraphrased "solid gold" quote is on no page, so it is not evidence. The one question is
     # answered after one search, so the run asks for no other query.
@@ -143,7 +146,7 @@ def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
     monkeypatch.setattr("kvasir.research.read.fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
-    result = run_research(settings, ResearchRequest(question="q", max_searches=1), stream)
+    result = run_research(settings, *ask(question="q", max_searches=1), stream)
 
     assert result.report == NO_EVIDENCE
     assert result.citations == []
@@ -231,9 +234,7 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
 
     result = run_research(
         settings,
-        ResearchRequest(
-            question="Which is faster, Alpha or Beta?", output="ranking", max_attempts=1
-        ),
+        *ask(question="Which is faster, Alpha or Beta?", output="ranking", max_attempts=1),
         stream,
     )
 
@@ -296,9 +297,7 @@ def test_criteria_and_options_named_in_the_question_are_final(settings, monkeypa
 
     run_research(
         settings,
-        ResearchRequest(
-            question="Rank the Pixel and the iPhone on price and privacy", max_searches=1
-        ),
+        *ask(question="Rank the Pixel and the iPhone on price and privacy", max_searches=1),
         stream,
     )
 
@@ -335,7 +334,7 @@ def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypa
     monkeypatch.setattr("kvasir.research.read.fetch_text", lambda url: "nothing relevant")
     stream = Stream()
 
-    run_research(settings, ResearchRequest(question="Rank phones on price", max_searches=1), stream)
+    run_research(settings, *ask(question="Rank phones on price", max_searches=1), stream)
 
     assert ("background", "comparing 1 options on 1 criteria: Pixel 10") in stream.events
 
@@ -364,7 +363,7 @@ def test_a_run_whose_searches_all_fail_stops_with_the_reason(settings, monkeypat
     )
 
     with pytest.raises(SearchUnavailable) as raised:
-        run_research(settings, ResearchRequest(question="q"), Stream())
+        run_research(settings, *ask(question="q"), Stream())
 
     # Each engine once, though every search reported it.
     assert str(raised.value) == (

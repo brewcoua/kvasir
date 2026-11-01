@@ -57,9 +57,9 @@ flowchart LR
 | `runs/progress.py` | `ProgressStream`, and the callback handlers that turn STORM's callbacks into progress events. |
 | `runs/` | `Run` (`run.py`) and `RunRegistry` (`registry.py`): state, stages, usage and live followers for each run. `store.py` is the optional SQLite history. |
 | `sessions.py` | Co-STORM session files. |
-| `article.py`, `conversation.py` | Drive one STORM run, and one Co-STORM operation. |
+| `conversation.py` | Drives one Co-STORM operation. |
 | `research/` | The steps every research method shares: search, reading, verification, writing, rendering. See [`research.md`](research.md). |
-| `methods/` | The research methods, each orchestrating those steps. `methods/ledger/` is the research pipeline. See [`methods-plan.md`](methods-plan.md). |
+| `methods/` | The methods `POST /v1/runs` runs, listed in `METHODS`. Each is a `Method` (`methods/base.py`): its options, stages, configured defaults and run. `methods/ledger/` is the research pipeline, `methods/storm/` drives STORM. See [`methods-plan.md`](methods-plan.md). |
 | `storm/` | The vendored, modified `knowledge_storm`. See [`fork-notes.md`](fork-notes.md). |
 | `static/` | The runs page, built from `web/` by `pnpm build` and not committed. `GET /` answers 503 until it is built. |
 
@@ -67,8 +67,8 @@ flowchart LR
 
 | Route | Engine | Run kind | Output |
 | --- | --- | --- | --- |
-| `POST /v1/research` | `methods.ledger.method.run_research` | `research` | A report answering a question, ranking or comparing options when asked. |
-| `POST /v1/article` | STORM, `article.run_article` | `storm` | A Wikipedia-style article about a topic. |
+| `POST /v1/runs` with `ledger` | `methods.ledger.method.run_research` | `ledger` | A report answering a question, ranking or comparing options when asked. |
+| `POST /v1/runs` with `storm` | STORM, `methods.storm.method.run_article` | `storm` | A Wikipedia-style article about a topic. |
 | `POST /v1/session` and its sub-routes | Co-STORM, `conversation.*` | `costorm` | A turn-based round table, and a report from it. |
 
 STORM and Co-STORM are upstream's work, kept close to upstream. The research pipeline is kvasir's
@@ -76,7 +76,7 @@ own, written because STORM takes no instructions, does not compare or rank, and 
 an encyclopedia page. It lives outside the fork so it is typed, linted and checked by `mypy` like
 the rest of the service.
 
-Two routes are deliberately not runs: `POST /v1/tasks` and `POST /v1/research/clarify`. Each is one
+Two routes are deliberately not runs: `POST /v1/tasks` and `POST /v1/clarify`. Each is one
 fast-model call. Neither registers a run nor takes a slot. `/v1/tasks` exists because Open WebUI
 asks the chat's own model for a title, tags and follow-up prompts; answered as runs, those would
 queue behind, or be refused by, the run they describe. Clarifying happens before the user has
@@ -97,7 +97,7 @@ sequenceDiagram
     participant W as Worker thread
     participant P as Pipeline
 
-    C->>L: POST /v1/research
+    C->>L: POST /v1/runs
     L->>R: start(kind, topic, planned_stages)
     alt every slot is taken
         L->>R: run.reject()
@@ -244,7 +244,7 @@ section gives.
 Retrying is `forward`'s too, not litellm's. It retries only what a later attempt can fix (rate
 limits, server errors, timeouts, transport errors) for up to 1000 seconds, because a run is minutes
 of work and waiting out an outage costs less than losing it. A bad request or a context overflow
-fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/research/clarify` cap it at
+fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify` cap it at
 30 seconds (`TASK_RETRY_SECONDS`): nobody waits out an outage for a chat title.
 
 ## What is kept, and where
@@ -255,7 +255,7 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/researc
 | Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `KVASIR_RUN_STORE=sqlite` | `KVASIR_RUN_TTL_DAYS` and `KVASIR_MAX_RUNS` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
 | Model call content | With its run, in memory and in `kvasir.db`, with `KVASIR_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. |
 | Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSION_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
-| STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `article.py` reads them back and removes the directory. |
+| STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `methods/storm/method.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
 
 The SQLite store writes a run twice: when it starts, so a restart mid-run leaves a trace, and when
@@ -287,13 +287,13 @@ sequenceDiagram
 
     U->>O: question
     O->>P: pipe(body)
-    P->>K: POST /v1/research/clarify
+    P->>K: POST /v1/clarify
     K-->>P: questions
     P-->>O: "Before researching this, a few questions:" ...
     U->>O: answers, or "go"
     O->>P: pipe(body)
     Note over P: finds the clarifying reply in the chat,<br/>pairs it with this message
-    P->>K: POST /v1/research with clarifications
+    P->>K: POST /v1/runs with clarifications
     loop progress frames
         K-->>P: event: progress
         P-->>O: a line in the reasoning block

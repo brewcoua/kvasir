@@ -15,7 +15,7 @@
 
   const launch = new Launch((id) => onstarted(id));
 
-  const own = $derived(runs.filter((run) => run.kind === launch.method.run));
+  const own = $derived(runs.filter((run) => run.kind === launch.method.name));
   const size = $derived(launch.method.size(values(launch.method, defaults), launch.picked));
   // How long finished runs of this method took, whatever their settings were.
   const took = $derived.by(() => {

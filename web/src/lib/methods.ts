@@ -29,14 +29,12 @@ export interface Stage {
 
 export interface Method {
   kind: Kind;
-  // The `kind` its runs are listed under.
-  run: string;
+  // The method `POST /v1/runs` is asked for, and the `kind` its runs are listed under.
+  name: string;
   label: string;
   blurb: string;
-  endpoint: string;
-  field: "question" | "topic";
   placeholder: string;
-  // Whether `/v1/research/clarify` is asked first.
+  // Whether `/v1/clarify` is asked first.
   clarify: boolean;
   options: Option[];
   stages: Stage[];
@@ -55,11 +53,9 @@ const compares = (picked: Picked) => output(picked) !== "report";
 export const METHODS: Method[] = [
   {
     kind: "research",
-    run: "research",
+    name: "ledger",
     label: "Deep research",
     blurb: "Answers a question from searched sources, as a cited report, a ranking or a table.",
-    endpoint: "/v1/research",
-    field: "question",
     placeholder: "Rank the best phones of 2026 on price, performance and privacy",
     clarify: true,
     options: [
@@ -108,11 +104,9 @@ export const METHODS: Method[] = [
   },
   {
     kind: "article",
-    run: "storm",
+    name: "storm",
     label: "Article",
     blurb: "Writes a Wikipedia-style article on a topic, from simulated expert conversations (STORM).",
-    endpoint: "/v1/article",
-    field: "topic",
     placeholder: "The history of the Kvasir stone",
     clarify: false,
     options: [],

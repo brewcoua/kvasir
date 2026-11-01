@@ -11,6 +11,7 @@ resumes. Every saved result is then scored:
   This repeats the pipeline's own verification on what survived it, with the strong model as judge.
 
     uv run python -m kvasir.research.evaluate data/eval/baseline
+    uv run python -m kvasir.research.evaluate data/eval/shallow --options '{"max_searches": 8}'
 
 Scores go to `scores.json` in the same directory, with a summary table on stdout.
 """
@@ -90,11 +91,10 @@ def frames(lines: Iterable[str]) -> Iterator[tuple[str, dict[str, Any]]]:
             yield event, json.loads(line[len("data: ") :])
 
 
-def research(url: str, question: Question) -> dict[str, Any]:
+def research(url: str, question: Question, method: str, options: dict[str, Any]) -> dict[str, Any]:
     """The run's result, or its error, as the service reports them."""
-    with httpx.stream(
-        "POST", f"{url}/v1/research", json={"question": question.question}, timeout=None
-    ) as response:
+    body = {"method": method, "input": {"question": question.question}, "options": options}
+    with httpx.stream("POST", f"{url}/v1/runs", json=body, timeout=None) as response:
         if response.status_code != 200:
             return {"error": f"{response.status_code}: {response.read().decode()}"}
         stage = ""
@@ -228,6 +228,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--url", default="http://localhost:8080", help="the kvasir service")
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
     parser.add_argument("--only", nargs="*", default=None, help="question ids to run")
+    parser.add_argument(
+        "--method", default="ledger", help="the method to run, as /v1/methods names it"
+    )
+    parser.add_argument(
+        "--options", type=json.loads, default={}, help="the method's options, as a JSON object"
+    )
     args = parser.parse_args(argv)
 
     questions = [
@@ -239,7 +245,9 @@ def main(argv: list[str] | None = None) -> None:
         if path.exists():
             continue
         print(f"researching {question.id}", file=sys.stderr)
-        path.write_text(json.dumps(research(args.url, question), indent=1))
+        path.write_text(
+            json.dumps(research(args.url, question, args.method, args.options), indent=1)
+        )
 
     judge = build_research_models(Settings.from_env())["judge"]
     scores: list[Score] = []
