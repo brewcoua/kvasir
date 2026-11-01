@@ -50,6 +50,8 @@ class Settings:
     model_fast: str
     model_strong: str
     embedding_model: str
+    # A grounding checker such as MiniCheck, or none. See `kvasir.research.ground`.
+    model_checker: str | None
     searxng_url: str
     data_dir: Path
     session_ttl_hours: int
@@ -111,6 +113,11 @@ class Settings:
                 _model(env, "KVASIR_EMBEDDING_MODEL")
                 if env.get("KVASIR_EMBEDDING_MODEL", "").strip()
                 else DEFAULT_EMBEDDING_MODEL
+            ),
+            model_checker=(
+                _model(env, "KVASIR_MODEL_CHECKER")
+                if env.get("KVASIR_MODEL_CHECKER", "").strip()
+                else None
             ),
             searxng_url=env["KVASIR_SEARXNG_URL"].strip().rstrip("/"),
             data_dir=Path(env.get("KVASIR_DATA_DIR", "").strip() or "/data"),

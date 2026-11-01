@@ -405,6 +405,18 @@ export interface components {
             max_entities?: number | null;
             /** Max Criteria */
             max_criteria?: number | null;
+            /** Ground */
+            ground?: boolean | null;
+            /**
+             * Corroborate
+             * @default false
+             */
+            corroborate: boolean;
+            /**
+             * Contradict
+             * @default false
+             */
+            contradict: boolean;
             /** Model Fast */
             model_fast?: string | null;
             /** Model Strong */
@@ -418,7 +430,12 @@ export interface components {
              */
             method: "ledger";
             input: components["schemas"]["Input"];
-            /** @default {} */
+            /**
+             * @default {
+             *       "corroborate": false,
+             *       "contradict": false
+             *     }
+             */
             options: components["schemas"]["LedgerOptions"];
         };
         /**
@@ -566,6 +583,16 @@ export interface components {
              * @default 0
              */
             step: number;
+            /**
+             * Corroborated By
+             * @default []
+             */
+            corroborated_by: number[];
+            /**
+             * Contradicted By
+             * @default []
+             */
+            contradicted_by: number[];
         };
         /**
          * ResearchQuestion

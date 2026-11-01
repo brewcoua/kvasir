@@ -50,6 +50,9 @@ TASK_MAX_TOKENS = 1000
 # default budget runs out, so retrying past this only leaves a thread spinning on a dead gateway.
 TASK_RETRY_SECONDS = 30.0
 
+# A checker answers Yes or No.
+CHECKER_MAX_TOKENS = 10
+
 _COSTORM_ROLES = {
     "question_answering": ("strong", 1000),
     "discourse_manage": ("fast", 500),
@@ -77,6 +80,7 @@ _RESEARCH_ROLES = {
     "outline": ("strong", 500),
     "write": ("strong", 2000),
     "verify": ("fast", 600),
+    "contradict": ("fast", 400),
 }
 
 
@@ -125,6 +129,24 @@ def build_research_models(
         role: _language_model(settings, role, tier, max_tokens)
         for role, (tier, max_tokens) in _RESEARCH_ROLES.items()
     }
+
+
+def build_checker(settings: Settings) -> GatewayModel | None:
+    """The grounding checker, if one is configured. See `kvasir.research.ground`.
+
+    At temperature 0, unlike every other role: a verdict that changes between two calls on the
+    same quote is no check. No reasoning effort is sent, since a checker is not a thinking model.
+    """
+    if settings.model_checker is None:
+        return None
+    return GatewayModel(
+        model=settings.model_checker,
+        role="ground",
+        api_key=settings.openai_api_key,
+        api_base=settings.openai_api_base,
+        max_tokens=CHECKER_MAX_TOKENS,
+        temperature=0.0,
+    )
 
 
 def build_research_tools(settings: Settings) -> tuple[Encoder, SearXNG]:

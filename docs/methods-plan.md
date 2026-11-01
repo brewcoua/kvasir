@@ -1,6 +1,7 @@
 # Research methods: plan
 
-Status: written 2026-11-01. Steps 1 to 3 of the [build order](#build-order) are built; the rest is planned.
+Status: written 2026-11-01. Steps 1 to 3 and 5 of the [build order](#build-order) are built, without
+the evaluations; step 4 is not run, and the rest is planned.
 
 kvasir has one route per engine: `/v1/research` for the question ledger, `/v1/article` for STORM.
 Each has its own request model, run kind, stage list, role table, runs-page entry and Open WebUI
@@ -184,6 +185,12 @@ leaves undecided.
 | 5. Contradiction | Claims about the same thing from different sources disagree. | Checker calls between pairs |
 
 Tier 2 is optional, configured as its own model. Without it, tier 3 does its work.
+
+As built in step 5: tier 2 checks a claim against the page piece it was read from, not its quote
+alone, and decides sentences citing one claim. Tiers 2, 4 and 5 are the ledger options `ground`,
+`corroborate` and `contradict`. Tier 4 compares nearest neighbours by embedding rather than merged
+claims, since merging is step 6. MiniCheck answers Yes or No with no score, so nothing is sent on
+to tier 3 for being near the threshold.
 
 ## Build order
 

@@ -7,6 +7,8 @@ openai_api_key = "ollama"  # required, ignored by Ollama
 model_fast = "openai/qwen3.8:27b"
 model_strong = "openai/qwen3.8:27b"
 embedding_model = "openai/nomic-embed-text:latest"
+# A grounding checker, after `ollama pull bespoke-minicheck`. Leave out to check with model_fast.
+# model_checker = "openai/bespoke-minicheck"
 # Thinking tokens count against each role's token budget, which leaves no room for the answer.
 reasoning_effort = "none"
 searxng_url = "http://localhost:8888"

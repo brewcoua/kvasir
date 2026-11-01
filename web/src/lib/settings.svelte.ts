@@ -36,6 +36,16 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
     ],
   },
   {
+    name: "verification",
+    label: "Verification",
+    title: "Verification",
+    settings: [
+      { name: "ground", label: "Grounding checker", type: "checkbox", for: "research", hint: "Check each claim against its page, and each sentence citing one claim. Needs KVASIR_MODEL_CHECKER." },
+      { name: "corroborate", label: "Corroborate", type: "checkbox", for: "research", hint: "Look for other sites supporting each claim." },
+      { name: "contradict", label: "Contradictions", type: "checkbox", for: "research", hint: "Look for other sites disagreeing with each claim." },
+    ],
+  },
+  {
     name: "article",
     label: "Article",
     title: "Article",

@@ -65,7 +65,9 @@ def repair(
             claims,
             ids,
         )
-        [(_, kept)], again = verify.report(models["verify"], [(title, text)], by_id, stream)
+        [(_, kept)], again = verify.report(
+            models["verify"], [(title, text)], by_id, stream, models.get("ground")
+        )
         sections[index] = (title, kept)
         removed = [r for r in removed if r.section != title] + again
     return sections, removed

@@ -4,6 +4,9 @@ A small model cites claims that do not say what its sentence says. Each sentence
 is shown with the quotes of the claims it cites, and taken out when they do not support it. A
 sentence that cites nothing is left alone: it is a transition, or a statement that the evidence
 does not settle something, which is what the writer is asked to say.
+
+With a grounding checker, a sentence citing one claim is checked by it, and only a sentence
+combining several claims goes to the model: tiers 2 and 3 of verification.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyp
 
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
+from kvasir.research.ground import grounded
 from kvasir.research.signatures import Verify
 from kvasir.runs.progress import VERIFY, ProgressStream
 from kvasir.schemas.results import RemovedSentence
@@ -39,13 +43,19 @@ def report(
     sections: list[tuple[str, str]],
     claims: dict[int, Claim],
     stream: ProgressStream,
+    checker: GatewayModel | None = None,
 ) -> tuple[list[tuple[str, str]], list[RemovedSentence]]:
-    """`sections` without the cited sentences `model` finds unsupported, and those sentences."""
+    """`sections` without the cited sentences found unsupported, and those sentences."""
     total = sum(count(text) for _, text in sections)
     done = 0
     stream.publish(VERIFY, f"checking {total} cited sentences against their quotes", 0, total)
 
     def check(sentence: str, evidence: list[Claim]) -> tuple[bool, str]:
+        if checker is not None and len(evidence) == 1:
+            [claim] = evidence
+            if grounded(checker, f"{claim.text}\n{claim.quote}", unmarked(sentence)):
+                return True, ""
+            return False, "the grounding checker found the claim does not support it"
         try:
             verdict = predict(model, Verify, sentence=sentence, evidence=quoted_claims(evidence))
         except AdapterParseError as exc:

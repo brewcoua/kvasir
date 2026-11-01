@@ -99,6 +99,9 @@ def test_methods_report_the_configured_defaults(environment, monkeypatch):
     storm = methods["storm"]["options"]["properties"]
     assert ledger["max_searches"]["default"] == 9
     assert ledger["follow_ups"]["default"] is False
+    # No checker is configured, so grounding is off.
+    assert ledger["ground"]["default"] is False
+    assert ledger["corroborate"]["default"] is False
     assert ledger["model_fast"]["default"] == ENVIRONMENT["KVASIR_MODEL_FAST"]
     assert storm["do_polish_article"]["default"] is True
     assert storm["search_top_k"]["default"] == 3

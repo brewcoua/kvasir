@@ -68,6 +68,13 @@ class LedgerOptions(BaseModel):
     # For a ranking or a table, when the run chooses them.
     max_entities: int | None = Field(default=None, ge=1)
     max_criteria: int | None = Field(default=None, ge=1)
+    # Check each claim, and each sentence citing one claim, with the grounding checker. On when
+    # one is configured; without one, it does nothing.
+    ground: bool | None = None
+    # Compare each claim with the closest claims from other sites, for support and for
+    # disagreement.
+    corroborate: bool = False
+    contradict: bool = False
     # Passed to the gateway verbatim. Not validated against any list of known models.
     model_fast: str | None = None
     model_strong: str | None = None

@@ -398,7 +398,7 @@ def loop(monkeypatch, questions, found, judge, budget=16, max_attempts=4, search
         shapes.append(inputs["shape"])
         return type("Prediction", (), {"query": f"query {len(shapes)}"})
 
-    def read(model, encoder, brief, question, hits, first_id, step, label, stream):
+    def read(model, encoder, brief, question, hits, first_id, step, label, stream, checker):
         texts = found.get(len(shapes), []) if hits else []
         return [claim(first_id + i, hits[0]["url"]) for i, _ in enumerate(texts)]
 

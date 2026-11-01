@@ -111,6 +111,7 @@ def research(
             first_step + searches,
             f"search {searches}",
             stream,
+            models.get("ground"),
         )
         claims.extend(new)
         stalled = 0 if new else stalled + 1

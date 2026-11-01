@@ -29,9 +29,10 @@ from kvasir.methods.ledger.signatures import Brief, Decompose, Outline
 from kvasir.research import verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim
+from kvasir.research.corroborate import cross_check
 from kvasir.research.render import matrix, render
 from kvasir.research.text import names
-from kvasir.runners import build_research_models, build_research_tools
+from kvasir.runners import build_checker, build_research_models, build_research_tools
 from kvasir.runs.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.schemas.requests import Input, LedgerOptions
 from kvasir.schemas.results import Criterion, ResearchClaim, ResearchResult, Row
@@ -65,6 +66,9 @@ def run_research(
     """Research a question to a cited report, blocking for minutes. Never call this on the loop."""
     started = time.monotonic()
     models = build_research_models(settings, options.model_fast, options.model_strong)
+    checker = build_checker(settings)
+    if checker is not None and _setting(options.ground, True):
+        models["ground"] = checker
     encoder, searxng = build_research_tools(settings)
     budget = _setting(options.max_searches, settings.research_max_searches)
     per_query = _setting(options.results_per_query, settings.research_results_per_query)
@@ -190,7 +194,9 @@ def run_research(
         sections.append(("Open questions", left))
 
     by_id = {claim.id: claim for claim in claims}
-    sections, removed = verify.report(models["verify"], sections, by_id, stream)
+    sections, removed = verify.report(
+        models["verify"], sections, by_id, stream, models.get("ground")
+    )
 
     def judge(question: Question) -> None:
         loop.check(models["check"], encoder, brief, claims, question)
@@ -198,6 +204,8 @@ def run_research(
     sections, removed = repair(
         models, encoder, brief, titles, claims, sections, removed, research, judge, stream
     )
+
+    cross_check(models, encoder, claims, stream, options.corroborate, options.contradict)
 
     by_id = {claim.id: claim for claim in claims}
     report, citations = render(sections, by_id)
@@ -236,6 +244,7 @@ def _defaults(settings: Settings) -> dict[str, Any]:
         "max_depth": settings.research_max_depth,
         "max_entities": settings.research_max_entities,
         "max_criteria": settings.research_max_criteria,
+        "ground": settings.model_checker is not None,
         "model_fast": settings.model_fast,
         "model_strong": settings.model_strong,
     }

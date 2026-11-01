@@ -42,6 +42,9 @@ const METHODS = [
     max_depth: 1,
     max_entities: 6,
     max_criteria: 5,
+    ground: false,
+    corroborate: false,
+    contradict: false,
   }),
   method("storm", false, ["research", "outline", "article", "polish"], {
     ...MODELS,

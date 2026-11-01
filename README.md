@@ -197,7 +197,8 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
    `criteria`, `matrix` and `duration_seconds`.
 
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
-`follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `model_fast`, `model_strong`. Each
+`follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `ground`, `corroborate`, `contradict`,
+`model_fast`, `model_strong`. Each
 budget left out takes its `KVASIR_RESEARCH_*` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
@@ -205,6 +206,27 @@ shape: plain words, the exact terms its answer would contain, a primary source (
 `filetype:pdf`), then the broader topic. The report ends with an "Open questions" section listing
 what the research did not settle. A run that finds no claim at all says so in `report` and writes
 no sections.
+
+### Check claims more strictly
+
+Three options add checks past the quote check, each at a cost in calls.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker drops each claim the page piece it was read from does not support, and decides each sentence citing one claim. Without a checker it does nothing. |
+| `corroborate` | `false` | Each claim is compared with up to 3 close claims from other sites. Those that support it go in its `corroborated_by`. |
+| `contradict` | `false` | Close claims from other sites that disagree with it go in its `contradicted_by`, both ways. |
+
+To use MiniCheck on Ollama, pull it, then point the checker at it through the gateway:
+
+```bash
+ollama pull bespoke-minicheck
+export KVASIR_MODEL_CHECKER=openai/bespoke-minicheck
+```
+
+Bespoke-MiniCheck-7B is licensed CC BY-NC 4.0. Whether Ollama keeps it loaded next to the main
+model, or swaps the two on each call, depends on its memory; a swap on every check makes a run far
+slower.
 
 ### Rank or compare options
 
@@ -386,6 +408,7 @@ is a complete file for a local Ollama.
 | `KVASIR_MODEL_STRONG` | required | Outline and article generation. |
 | `KVASIR_SEARXNG_URL` | required | SearXNG base URL. |
 | `KVASIR_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model. Used by both modes. |
+| `KVASIR_MODEL_CHECKER` | unset | Research: a grounding checker such as MiniCheck, which answers Yes or No. Unset leaves every check to the fast model. |
 | `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions, and for the run database. |
 | `KVASIR_SESSION_TTL_HOURS` | `168` | Session expiry, applied at startup. |
 | `KVASIR_RUN_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |

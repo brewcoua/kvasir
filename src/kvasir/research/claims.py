@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -24,6 +24,9 @@ class Claim:
     confidence: Confidence
     # The step of the research that found it; 0 for the background searches.
     step: int
+    # Claims from other sites that support this one, and that disagree with it.
+    corroborated_by: list[int] = field(default_factory=list)
+    contradicted_by: list[int] = field(default_factory=list)
 
 
 def closest(encoder: Encoder, query: str, texts: list[str], k: int) -> list[int]:

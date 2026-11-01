@@ -199,14 +199,17 @@ flowchart LR
     filter["3 pieces closest<br/>to the question"]
     intake["Intake<br/>claims with quotes"]
     quote{"quote on<br/>the page?"}
+    ground{"piece supports<br/>the claim?"}
     store[("claims")]
     drop["dropped"]
 
     fetch --> split
     fetch -- unreadable --> snippet --> split
     split --> filter --> intake --> quote
-    quote -- yes --> store
+    quote -- yes --> ground
     quote -- no --> drop
+    ground -- yes, or no checker --> store
+    ground -- no --> drop
 ```
 
 - **Fetch.** `fetch_text` downloads with `httpx` inside a process-wide fetch permit, for 20 seconds
@@ -226,6 +229,11 @@ flowchart LR
   The comparison is on words alone, lower-cased, so a non-breaking hyphen or a line break where the
   page had an inline tag does not count as a difference. An ellipsis in the quote stands for words
   left out, and the fragments must appear in order.
+- **Grounding.** With the `ground` option and a checker configured, `research/ground.py` asks the
+  checker whether the piece supports the claim, and drops the claim if not. The piece is the
+  document rather than the quote, since a claim names what its quote leaves to the page, such as
+  the subject of "it was found in 1904". A quote on the page shows the claim was read there, not
+  that the page says it.
 
 Intake is most of a run's calls: a search reads up to 3 pages of 3 pieces, so up to 9 intake calls.
 Each piece is its own progress event, since the page being read is what a follower wants to see.
@@ -303,6 +311,18 @@ row is not a sentence and cutting one would break the table. A sentence citing n
 alone too: it is a transition, or a statement that the evidence does not settle something. A
 verdict that cannot be parsed keeps the sentence, since it says nothing about it.
 
+With the `ground` option and a checker configured, a sentence citing one claim goes to the checker
+instead, with the claim and its quote as the document. Only a sentence combining several claims
+still goes to `Verify`, since the checker reads one document and one claim.
+
+**Corroborate and contradict.** With `corroborate` or `contradict`, `research/corroborate.py` runs
+after repair. Each claim is paired with up to 3 claims from other sites (`NEIGHBOURS`) at a cosine
+similarity of 0.8 or more (`SAME_FACT`). Pages of one site, with `www.` dropped, are one source.
+For each pair, the checker, or `Verify` without one, decides whether the other claim supports this
+one; if so it goes in `corroborated_by`. Otherwise, with `contradict`, `Contradicts` decides whether
+the two cannot both be true, and each goes in the other's `contradicted_by`. Both lists are data
+for a reader and for the methods that weigh evidence; the ledger's report does not use them.
+
 A small model cites claims that do not say what its sentence says. That is why every cited sentence
 is checked, rather than trusting the writer.
 
@@ -343,6 +363,10 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | `outline` | `Outline` | strong | 500 |
 | `write` | `WriteSection` | strong | 2000 |
 | `verify` | `Verify` | fast | 600 |
+| `contradict` | `Contradicts` | fast | 400 |
+
+The grounding checker is its own model, `KVASIR_MODEL_CHECKER`, with the role `ground`, 10 tokens
+and temperature 0.
 
 Signatures are typed dspy signatures: those every method shares in `research/signatures.py`,
 `Clarify` in `research/clarify.py`, and the ledger's own in `methods/ledger/signatures.py`. dspy's

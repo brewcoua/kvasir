@@ -59,3 +59,15 @@ class Verify(dspy.Signature):
     evidence: str = dspy.InputField(desc="each cited claim, with the quote it was read from")
     supported: bool = dspy.OutputField()
     reason: str = dspy.OutputField(desc="one short sentence")
+
+
+class Contradicts(dspy.Signature):
+    """Decide whether two claims from different sources disagree about the same fact.
+
+    They disagree when both cannot be true at once, such as two different dates for one event.
+    Different facts about the same subject do not disagree, and neither does one being vaguer.
+    """
+
+    first: str = dspy.InputField(desc="a claim, with the quote it was read from")
+    second: str = dspy.InputField(desc="a claim, with the quote it was read from")
+    disagree: bool = dspy.OutputField()
