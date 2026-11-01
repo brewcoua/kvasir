@@ -391,9 +391,12 @@ async def _events(
                 return result
         finally:
             logger.info("finished %s in %.1fs", description, time.monotonic() - started)
+            # Here rather than when the response ends, which is earlier if the client leaves.
+            run_slots.release()
             # Ends the iteration below even when the work raises.
             stream.close()
 
+    worker: asyncio.Task[RunResult] | None = None
     try:
         # First, so a client can follow the run at /v1/runs/{id} even if it stops reading here.
         yield frame("run", RunStarted(run_id=record.id))
@@ -413,4 +416,6 @@ async def _events(
         )
         yield frame("error", Error(message=f"{type(exc).__name__}: {exc}"))
     finally:
-        run_slots.release()
+        # Once started, the work releases the slot itself.
+        if worker is None:
+            run_slots.release()

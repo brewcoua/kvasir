@@ -1,6 +1,8 @@
 """Route behaviour with the STORM run faked. No network, no model calls."""
 
+import asyncio
 import json
+import threading
 
 import httpx
 import pytest
@@ -8,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from kvasir import main
 from kvasir.models import ArticleResult, Citation, Report, ResearchResult, SessionInfo, Turn
+from kvasir.runs import RunRegistry
 
 ENVIRONMENT = {
     "OPENAI_API_KEY": "key",
@@ -251,6 +254,44 @@ def test_saturation_returns_429_rather_than_queueing(client, monkeypatch):
     assert "busy" in response.json()["message"]
     # Refusal must not consume a slot, or the service deadlocks after the first refusal.
     assert client.post("/v1/article", json={"topic": "third"}).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_client_that_disconnects_keeps_the_slot_until_the_work_ends(environment):
+    slots = threading.BoundedSemaphore(1)
+    assert slots.acquire(blocking=False)
+    finish = threading.Event()
+
+    def work(stream):
+        finish.wait(5)
+        return RESULT
+
+    record = RunRegistry(10).start("storm", "x")
+    events = main._events(work, "x", record, slots)
+    await anext(events)
+    # Waiting for the first progress event when the client goes away, as a disconnect does.
+    reading = asyncio.create_task(anext(events))
+    await asyncio.sleep(0.1)
+    reading.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await reading
+
+    assert not slots.acquire(blocking=False)
+    finish.set()
+    assert await asyncio.to_thread(slots.acquire, True, 5)
+
+
+@pytest.mark.asyncio
+async def test_a_client_that_leaves_before_the_work_starts_frees_the_slot(environment):
+    slots = threading.BoundedSemaphore(1)
+    assert slots.acquire(blocking=False)
+    record = RunRegistry(10).start("storm", "x")
+
+    events = main._events(lambda stream: RESULT, "x", record, slots)
+    await anext(events)
+    await events.aclose()
+
+    assert slots.acquire(blocking=False)
 
 
 @pytest.fixture
