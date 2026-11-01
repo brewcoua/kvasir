@@ -174,7 +174,7 @@ tree. It copies the submitting thread's context into each task, so the run ident
 `runtime` also carries a `UsageSink` on a contextvar. `lm.py` reports each completion with its
 token counts and what the gateway reported the call cost, `encoder.py` reports embedding tokens, and
 `Retriever.retrieve` reports query counts. Nothing in the tree imports `kvasir`; with no sink
-installed the calls are no-ops. `kvasir.runs.Run` is the sink the service installs.
+installed the calls are no-ops. `kvasir.runs.run.Run` is the sink the service installs.
 
 Article generation and polishing had no callbacks at all. The last callback of an upstream run was
 `on_outline_refinement_end`, after which the longest part of the run happened silently.
@@ -268,7 +268,7 @@ against.
 `storm_wiki.modules.callback.BaseCallbackHandler` and
 `collaborative_storm.modules.callback.BaseCallbackHandler` share a name and nothing else. They have
 different methods and neither inherits from the other. Import the one matching the engine being
-observed. `src/kvasir/progress.py` subclasses both.
+observed. `src/kvasir/runs/progress.py` subclasses both.
 
 ### Read the output directory off the runner
 

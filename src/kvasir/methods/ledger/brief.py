@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from kvasir.methods.ledger.signatures import Criteria, Entities, PlanQueries
-from kvasir.models import Clarification, Criterion
-from kvasir.progress import BACKGROUND, ProgressStream
 from kvasir.research.calls import predict
 from kvasir.research.search import search
 from kvasir.research.text import names
+from kvasir.runs.progress import BACKGROUND, ProgressStream
+from kvasir.schemas.requests import Clarification
+from kvasir.schemas.results import Criterion
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG
 

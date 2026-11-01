@@ -18,10 +18,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kvasir.models import LmCallContent, RunDetail, RunSummary
+from kvasir.schemas.runs import LmCallContent, RunDetail, RunSummary
 
 if TYPE_CHECKING:
-    from kvasir.runs import Run
+    from kvasir.runs.run import Run
 
 logger = logging.getLogger("kvasir")
 

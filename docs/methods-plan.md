@@ -1,6 +1,6 @@
 # Research methods: plan
 
-Status: written 2026-11-01. Step 1 of the [build order](#build-order) is built; the rest is planned.
+Status: written 2026-11-01. Steps 1 and 2 of the [build order](#build-order) are built; the rest is planned.
 
 kvasir has one route per engine: `/v1/research` for the question ledger, `/v1/article` for STORM.
 Each has its own request model, run kind, stage list, role table, runs-page entry and Open WebUI
@@ -54,8 +54,10 @@ src/kvasir/
     results.py        the result every method returns, claims, citations
     runs.py           run summaries, details and usage as served
   runs/
-    registry.py       Run, RunRegistry
+    run.py            Run: state, stages, events, calls
+    registry.py       RunRegistry
     usage.py          usage by model, role and stage
+    watcher.py        a live follower's queue
     store.py          the SQLite history
     progress.py       ProgressStream and the stage names
   research/           shared by every research method

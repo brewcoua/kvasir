@@ -9,8 +9,19 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from kvasir import main, run_store, runs
-from kvasir.models import ArticleResult, Progress, Report, ResearchResult
+from kvasir.api.app import app
+from kvasir.runs.registry import RunRegistry
+from kvasir.runs.run import (
+    DONE,
+    MAX_CALLS,
+    STATUS_CALLS,
+    Run,
+    _current_run,
+    record_progress,
+)
+from kvasir.runs.store import INTERRUPTED, SECONDS_PER_DAY, RunStore
+from kvasir.schemas.results import ArticleResult, Report, ResearchResult
+from kvasir.schemas.runs import Progress
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
@@ -30,7 +41,7 @@ def client(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    with TestClient(main.app) as client:
+    with TestClient(app) as client:
         yield client
 
 
@@ -41,7 +52,7 @@ def sqlite(monkeypatch, tmp_path):
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("KVASIR_RUN_STORE", "sqlite")
-    return lambda: TestClient(main.app)
+    return lambda: TestClient(app)
 
 
 def parse(text):
@@ -60,7 +71,7 @@ def test_a_run_reaches_done(client, monkeypatch):
         stream.publish("article", "writing")
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
     run_id = events[0][1]["run_id"]
 
@@ -78,7 +89,7 @@ def test_a_failed_run_keeps_the_reason(client, monkeypatch):
     def fake_run(settings, request, stream):
         raise RuntimeError("gateway refused the connection")
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
@@ -88,12 +99,12 @@ def test_a_failed_run_keeps_the_reason(client, monkeypatch):
 
 def test_a_rejected_run_is_recorded(client, monkeypatch):
     """A 429 with nothing behind it is exactly the case the registry exists to explain."""
-    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
-    main.app.state.run_slots.acquire()
+    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
+    app.state.run_slots.acquire()
     try:
         assert client.post("/v1/article", json={"topic": "x"}).status_code == 429
     finally:
-        main.app.state.run_slots.release()
+        app.state.run_slots.release()
 
     (summary,) = client.get("/v1/runs").json()
     assert summary["state"] == "rejected"
@@ -101,7 +112,7 @@ def test_a_rejected_run_is_recorded(client, monkeypatch):
 
 
 def test_runs_are_listed_newest_first(client, monkeypatch):
-    monkeypatch.setattr(main, "run_article", lambda settings, request, stream: RESULT)
+    monkeypatch.setattr("kvasir.api.runs.run_article", lambda settings, request, stream: RESULT)
     for topic in ("first", "second"):
         client.post("/v1/article", json={"topic": topic})
 
@@ -128,7 +139,7 @@ def test_usage_is_attributed_to_the_running_run(client, monkeypatch):
         runtime.record_search_usage("SearXNG", 3)
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
@@ -149,7 +160,7 @@ def test_usage_reported_from_a_pool_still_lands_on_the_run(client, monkeypatch):
             list(executor.map(lambda _: runtime.record_lm_usage("m", "r", 10, 1, 0.0), range(8)))
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
@@ -167,7 +178,7 @@ def test_a_watcher_follows_a_run_from_another_thread():
     """The events endpoint reads on the event loop while the pipeline reports from its threads."""
 
     async def scenario():
-        run = runs.Run(id="r", kind="storm", topic="t")
+        run = Run(id="r", kind="storm", topic="t")
         watcher = run.watch()
         received = []
 
@@ -195,7 +206,7 @@ def test_a_watcher_follows_a_run_from_another_thread():
 
 
 def test_watching_a_finished_run_does_not_hang(client, monkeypatch):
-    monkeypatch.setattr(main, "run_article", lambda settings, request, stream: RESULT)
+    monkeypatch.setattr("kvasir.api.runs.run_article", lambda settings, request, stream: RESULT)
     events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     frames = parse(client.get(f"/v1/runs/{events[0][1]['run_id']}/events").text)
@@ -206,7 +217,7 @@ def test_watching_a_finished_run_does_not_hang(client, monkeypatch):
 
 def test_a_reentered_stage_sums_its_spans():
     """Co-STORM alternates stages, so first entry to last exit would overstate both."""
-    run = runs.Run(id="r", kind="costorm", topic="t")
+    run = Run(id="r", kind="costorm", topic="t")
     for stage, at in (("turn", 0.0), ("mind_map", 10.0), ("turn", 12.0), ("mind_map", 20.0)):
         run.record_progress(Progress(stage=stage, detail=stage, at=at))
 
@@ -217,7 +228,7 @@ def test_a_reentered_stage_sums_its_spans():
 
 
 def test_calls_show_in_flight_then_finished_or_failed():
-    run = runs.Run(id="r", kind="research", topic="t")
+    run = Run(id="r", kind="research", topic="t")
     answered = run.start_lm("openai/fast", "intake")
     failed = run.start_lm("openai/fast", "intake")
     run.start_lm("openai/strong", "write")
@@ -236,39 +247,39 @@ def test_calls_show_in_flight_then_finished_or_failed():
 
 
 def test_only_the_most_recent_calls_are_kept():
-    run = runs.Run(id="r", kind="research", topic="t", keep_content=True)
+    run = Run(id="r", kind="research", topic="t", keep_content=True)
     first = run.start_lm("m", "intake", [{"role": "user", "content": "q"}])
-    for _ in range(runs.MAX_CALLS):
+    for _ in range(MAX_CALLS):
         run.start_lm("m", "intake")
 
     # Forgotten while in flight, so ending it changes nothing.
     run.end_lm(first, 1, 1)
 
     calls = run.detail().calls
-    assert len(calls) == runs.MAX_CALLS
+    assert len(calls) == MAX_CALLS
     assert all(call.ended_at is None for call in calls)
     assert run.content(first) is None
 
 
 def test_a_status_carries_only_the_recent_calls():
-    run = runs.Run(id="r", kind="research", topic="t")
-    for _ in range(runs.STATUS_CALLS + 5):
+    run = Run(id="r", kind="research", topic="t")
+    for _ in range(STATUS_CALLS + 5):
         run.start_lm("m", "intake")
 
     assert [call.id for call in run.status().calls][0] == 5
-    assert len(run.detail().calls) == runs.STATUS_CALLS + 5
+    assert len(run.detail().calls) == STATUS_CALLS + 5
 
 
 def test_a_call_is_linked_to_the_event_before_it_in_its_own_work():
-    run = runs.Run(id="r", kind="research", topic="t")
-    with runtime.record_usage_into(run), runs._current_run(run):
+    run = Run(id="r", kind="research", topic="t")
+    with runtime.record_usage_into(run), _current_run(run):
         runtime.lm_started("m", "brief")
-        runs.record_progress(Progress(stage="research", detail="searching"))
-        runs.record_progress(Progress(stage="research", detail="reading"))
+        record_progress(Progress(stage="research", detail="searching"))
+        record_progress(Progress(stage="research", detail="reading"))
         with ContextThreadPoolExecutor(max_workers=2) as pool:
             pool.submit(runtime.lm_started, "m", "intake").result()
             # Published after the work was handed out, so that work does not see it.
-            runs.record_progress(Progress(stage="research", detail="read"))
+            record_progress(Progress(stage="research", detail="read"))
         runtime.lm_started("m", "notes")
 
     assert [event.seq for event in run.detail().events] == [0, 1, 2]
@@ -282,7 +293,7 @@ def test_a_call_is_linked_to_the_event_before_it_in_its_own_work():
 def test_call_content_is_kept_only_when_asked():
     messages = [{"role": "user", "content": "q"}]
     for keep in (False, True):
-        run = runs.Run(id="r", kind="research", topic="t", keep_content=keep)
+        run = Run(id="r", kind="research", topic="t", keep_content=keep)
         call = run.start_lm("m", "intake", messages)
         run.end_lm(call, 10, 2, "an answer", "thinking")
 
@@ -301,8 +312,8 @@ def test_call_content_is_kept_only_when_asked():
 
 def test_answered_calls_add_their_time_to_usage(monkeypatch):
     clock = iter([0.0, 2.0, 2.0, 3.0, 10.0])
-    monkeypatch.setattr(runs.time, "time", lambda: next(clock))
-    run = runs.Run(id="r", kind="research", topic="t")
+    monkeypatch.setattr("kvasir.runs.run.time.time", lambda: next(clock))
+    run = Run(id="r", kind="research", topic="t")
     answered = run.start_lm("m", "intake")
     run.end_lm(answered, 10, 40)
     failed = run.start_lm("m", "intake")
@@ -322,7 +333,7 @@ def test_usage_is_split_by_the_stage_it_was_spent_in(client, monkeypatch):
         runtime.current_usage_sink().record_embedding("e", 300)
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     usage = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()["usage"]
@@ -341,7 +352,7 @@ def test_a_finished_run_carries_its_result_and_plan(client, monkeypatch):
         stream.publish("article", "finished a (1/2)", 1, 2)
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "x", "do_polish_article": False}).text)
 
     detail = client.get(f"/v1/runs/{events[0][1]['run_id']}").json()
@@ -356,20 +367,20 @@ def test_a_watcher_with_a_heartbeat_yields_when_idle():
     """What lets a follower refresh usage during a stage that publishes nothing."""
 
     async def scenario():
-        run = runs.Run(id="r", kind="storm", topic="t")
+        run = Run(id="r", kind="storm", topic="t")
         watcher = run.watch(heartbeat=0.01)
         received = []
         async for event in watcher:
             received.append(event)
             if len(received) == 2:
-                run._finish(runs.DONE, None)
+                run._finish(DONE, None)
         return received
 
     assert asyncio.run(scenario()) == [None, None]
 
 
 def test_the_registry_forgets_the_oldest():
-    registry = runs.RunRegistry(limit=2)
+    registry = RunRegistry(limit=2)
     first = registry.start("storm", "one")
     registry.start("storm", "two")
     registry.start("storm", "three")
@@ -383,7 +394,7 @@ def test_memory_mode_writes_no_database(client, tmp_path):
 
 
 def test_a_run_survives_a_restart(sqlite, monkeypatch):
-    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
+    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
     with sqlite() as client:
         events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
         run_id = events[0][1]["run_id"]
@@ -413,7 +424,7 @@ def _article_with_a_call(*args):
 
 def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
     monkeypatch.setenv("KVASIR_KEEP_CALL_CONTENT", "true")
-    monkeypatch.setattr(main, "run_article", _article_with_a_call)
+    monkeypatch.setattr("kvasir.api.runs.run_article", _article_with_a_call)
     with sqlite() as client:
         events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
         run_id = events[0][1]["run_id"]
@@ -428,7 +439,7 @@ def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypa
 
 
 def test_call_content_is_not_kept_by_default(client, monkeypatch):
-    monkeypatch.setattr(main, "run_article", _article_with_a_call)
+    monkeypatch.setattr("kvasir.api.runs.run_article", _article_with_a_call)
     events = parse(client.post("/v1/article", json={"topic": "The Kvasir stone"}).text)
     run_id = events[0][1]["run_id"]
 
@@ -449,36 +460,36 @@ def test_call_content_is_not_kept_by_default(client, monkeypatch):
 )
 def test_a_stored_result_keeps_its_type(tmp_path, result):
     """`RunResult` is an untagged union, and these two share their `report` field."""
-    store = run_store.RunStore(tmp_path / "kvasir.db", ttl_days=30, limit=10)
-    run = runs.RunRegistry(10, store).start("research", "t")
+    store = RunStore(tmp_path / "kvasir.db", ttl_days=30, limit=10)
+    run = RunRegistry(10, store).start("research", "t")
     run.set_result(result)
-    run._finish(runs.DONE, None)
+    run._finish(DONE, None)
 
     assert type(store.detail(run.id).result) is type(result)
 
 
 def test_a_run_cut_short_by_a_restart_is_marked_interrupted(tmp_path):
     path = tmp_path / "kvasir.db"
-    run = runs.RunRegistry(10, run_store.RunStore(path, ttl_days=30, limit=10)).start("storm", "t")
+    run = RunRegistry(10, RunStore(path, ttl_days=30, limit=10)).start("storm", "t")
 
-    store = run_store.RunStore(path, ttl_days=30, limit=10)
+    store = RunStore(path, ttl_days=30, limit=10)
     store.sweep()
 
     (summary,) = store.summaries()
     assert summary.state == "failed"
-    assert summary.error == run_store.INTERRUPTED
+    assert summary.error == INTERRUPTED
     assert summary.ended_at == summary.created_at
     assert store.detail(run.id).state == "failed"
 
 
 def test_the_store_keeps_only_what_retention_allows(tmp_path, monkeypatch):
-    store = run_store.RunStore(tmp_path / "kvasir.db", ttl_days=1, limit=2)
-    registry = runs.RunRegistry(10, store)
+    store = RunStore(tmp_path / "kvasir.db", ttl_days=1, limit=2)
+    registry = RunRegistry(10, store)
     old = registry.start("storm", "old")
-    old.created_at -= 2 * run_store.SECONDS_PER_DAY
-    old._finish(runs.DONE, None)
+    old.created_at -= 2 * SECONDS_PER_DAY
+    old._finish(DONE, None)
     for topic in ("one", "two", "three"):
-        registry.start(topic=topic, kind="storm")._finish(runs.DONE, None)
+        registry.start(topic=topic, kind="storm")._finish(DONE, None)
 
     assert [summary.topic for summary in store.summaries()] == ["three", "two"]
     assert store.detail(old.id) is None

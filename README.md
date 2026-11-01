@@ -407,7 +407,7 @@ Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, incl
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
 
 Every line, including uvicorn's access log. Start the service as `python -m kvasir` rather than
-`uvicorn kvasir.main:app` to get that: the module configures logging first and tells uvicorn to
+`uvicorn kvasir.api.app:app` to get that: the module configures logging first and tells uvicorn to
 install none of its own, which is what stops the access log printing as plain text. The image does
 this already.
 
@@ -501,7 +501,7 @@ done | jq -s -c add > web/fixtures/<name>.calls.json
 ```
 
 The TypeScript types in `web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
-Run `pnpm types` after changing a model in `src/kvasir/models.py`; CI fails when they differ.
+Run `pnpm types` after changing a schema in `src/kvasir/schemas/`; CI fails when they differ.
 
 ```bash
 pnpm check   # svelte-check

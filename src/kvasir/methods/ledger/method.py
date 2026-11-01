@@ -25,14 +25,15 @@ from kvasir.methods.ledger.questions import (
 )
 from kvasir.methods.ledger.repair import repair
 from kvasir.methods.ledger.signatures import Brief, Decompose, Outline
-from kvasir.models import Criterion, ResearchClaim, ResearchRequest, ResearchResult, Row
-from kvasir.progress import BACKGROUND, BRIEF, RESEARCH, WRITE, ProgressStream
 from kvasir.research import verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim
 from kvasir.research.render import matrix, render
 from kvasir.research.text import names
 from kvasir.runners import build_research_models, build_research_tools
+from kvasir.runs.progress import BACKGROUND, BRIEF, RESEARCH, WRITE, ProgressStream
+from kvasir.schemas.requests import ResearchRequest
+from kvasir.schemas.results import Criterion, ResearchClaim, ResearchResult, Row
 
 # Questions the first split of the brief adds at most.
 FIRST_QUESTIONS = 6

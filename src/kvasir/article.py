@@ -7,10 +7,11 @@ import time
 from pathlib import Path
 
 from kvasir.config import Settings
-from kvasir.models import ArticleRequest, ArticleResult
 from kvasir.outputs import read_article, read_citations, read_outline
-from kvasir.progress import ProgressStream, StormProgressHandler
 from kvasir.runners import build_storm_runner
+from kvasir.runs.progress import ProgressStream, StormProgressHandler
+from kvasir.schemas.requests import ArticleRequest
+from kvasir.schemas.results import ArticleResult
 
 
 def run_article(

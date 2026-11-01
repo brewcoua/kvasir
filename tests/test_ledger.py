@@ -13,10 +13,11 @@ from kvasir.methods.ledger.method import NO_EVIDENCE, run_research
 from kvasir.methods.ledger.questions import Question, add_questions, open_questions
 from kvasir.methods.ledger.repair import repair
 from kvasir.methods.ledger.signatures import SearchFor
-from kvasir.models import Clarification, RemovedSentence, ResearchRequest
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import FetchError, extract
 from kvasir.research.search import SearchUnavailable
+from kvasir.schemas.requests import Clarification, ResearchRequest
+from kvasir.schemas.results import RemovedSentence
 
 
 @pytest.fixture

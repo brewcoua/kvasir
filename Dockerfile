@@ -55,6 +55,7 @@ USER 65532:65532
 
 EXPOSE 8080
 
-# Not `uvicorn kvasir.main:app`: the module configures logging before uvicorn can install its own,
-# which is what keeps the access log in the same format as everything else. See kvasir/__main__.py.
+# Not `uvicorn kvasir.api.app:app`: the module configures logging before uvicorn can install its
+# own, which is what keeps the access log in the same format as everything else. See
+# kvasir/__main__.py.
 CMD ["python", "-m", "kvasir"]

@@ -9,7 +9,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "e2e": "playwright test",
-    "types": "cd .. && uv run python -c 'import json; from kvasir.main import app; print(json.dumps(app.openapi()))' > web/.tmp-openapi.json && cd web && openapi-typescript .tmp-openapi.json -o src/lib/schema.d.ts && rm .tmp-openapi.json"
+    "types": "cd .. && uv run python -c 'import json; from kvasir.api.app import app; print(json.dumps(app.openapi()))' > web/.tmp-openapi.json && cd web && openapi-typescript .tmp-openapi.json -o src/lib/schema.d.ts && rm .tmp-openapi.json"
   },
   "packageManager": "pnpm@12.15.0",
   "dependencies": {

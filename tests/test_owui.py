@@ -14,8 +14,9 @@ from pathlib import Path
 import pytest
 import uvicorn
 
-from kvasir import main
-from kvasir.models import (
+from kvasir import conversation
+from kvasir.api.app import app
+from kvasir.schemas.results import (
     ArticleResult,
     Citation,
     RemovedSentence,
@@ -101,15 +102,13 @@ def service(monkeypatch, tmp_path):
         stream.publish("polish", "polishing the article")
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
 
-    server = uvicorn.Server(
-        uvicorn.Config(main.app, host="127.0.0.1", port=port, log_level="error")
-    )
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     while not server.started:
@@ -150,9 +149,9 @@ def engine(service, monkeypatch):
         calls.append(("report", session_id))
         return Report(report="# Report\n\nFindings.", citations=AGENT_TURN.citations)
 
-    monkeypatch.setattr(main.conversation, "create", create)
-    monkeypatch.setattr(main.conversation, "step", step)
-    monkeypatch.setattr(main.conversation, "report", report)
+    monkeypatch.setattr(conversation, "create", create)
+    monkeypatch.setattr(conversation, "step", step)
+    monkeypatch.setattr(conversation, "report", report)
     return calls
 
 
@@ -297,9 +296,12 @@ async def test_a_task_goes_to_the_fast_model_and_takes_no_run(pipe, monkeypatch)
     run they describe.
     """
     researched = []
-    monkeypatch.setattr(main, "run_article", lambda *args: researched.append(args) or RESULT)
     monkeypatch.setattr(
-        main, "build_task_model", lambda settings: lambda messages: ['{"title": "Kvasir Stone"}']
+        "kvasir.api.runs.run_article", lambda *args: researched.append(args) or RESULT
+    )
+    monkeypatch.setattr(
+        "kvasir.api.tasks.build_task_model",
+        lambda settings: lambda messages: ['{"title": "Kvasir Stone"}'],
     )
     body = storm(TITLE_PROMPT)
 
@@ -314,7 +316,7 @@ async def test_a_failed_task_is_silent(pipe, monkeypatch):
     def failing(settings):
         raise RuntimeError("the gateway refused")
 
-    monkeypatch.setattr(main, "build_task_model", failing)
+    monkeypatch.setattr("kvasir.api.tasks.build_task_model", failing)
 
     # An unnamed chat is better than an error bubble in the conversation.
     assert await run(pipe, storm(TITLE_PROMPT), task="title_generation") == ""
@@ -355,7 +357,7 @@ async def test_a_failed_run_closes_the_reasoning_block(pipe, monkeypatch):
     def failing_run(settings, request, stream):
         raise RuntimeError("searxng returned nothing")
 
-    monkeypatch.setattr(main, "run_article", failing_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", failing_run)
     events = Events()
 
     answer = await run(pipe, storm("x"), events)
@@ -367,11 +369,11 @@ async def test_a_failed_run_closes_the_reasoning_block(pipe, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_it_reports_saturation_rather_than_hanging(pipe):
-    assert main.app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire(blocking=False)
     try:
         answer = await run(pipe, storm("x"))
     finally:
-        main.app.state.run_slots.release()
+        app.state.run_slots.release()
 
     assert "429" in answer and "busy" in answer
 
@@ -410,7 +412,7 @@ async def test_only_the_last_user_message_is_researched(pipe, monkeypatch):
         sent["topic"] = request.topic
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", capture)
+    monkeypatch.setattr("kvasir.api.runs.run_article", capture)
     await run(
         pipe,
         {
@@ -435,7 +437,7 @@ async def test_unset_valves_leave_the_defaults_to_the_service(pipe, monkeypatch)
         sent["request"] = request
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", capture)
+    monkeypatch.setattr("kvasir.api.runs.run_article", capture)
     await run(pipe, storm("x"))
 
     request = sent["request"]
@@ -452,7 +454,7 @@ async def test_a_user_valve_overrides_the_admin_one(pipe, monkeypatch):
         sent["request"] = request
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", capture)
+    monkeypatch.setattr("kvasir.api.runs.run_article", capture)
     pipe.valves.SEARCH_TOP_K = 3
     user = {"valves": {"SEARCH_TOP_K": 9, "POLISH": "off"}}
 
@@ -553,7 +555,7 @@ async def test_a_failing_call_is_reported_not_raised(pipe, engine, monkeypatch):
     def failing(settings, store, request, stream):
         raise RuntimeError("searxng returned nothing")
 
-    monkeypatch.setattr(main.conversation, "create", failing)
+    monkeypatch.setattr(conversation, "create", failing)
 
     assert "searxng returned nothing" in await run(pipe, costorm("x"), None, METADATA)
 
@@ -612,8 +614,8 @@ def researcher(service, monkeypatch):
         calls["request"] = request
         return RESEARCH
 
-    monkeypatch.setattr(main, "clarify", clarify)
-    monkeypatch.setattr(main, "run_research", run_research)
+    monkeypatch.setattr("kvasir.api.tasks.clarify", clarify)
+    monkeypatch.setattr("kvasir.api.runs.run_research", run_research)
     return calls
 
 

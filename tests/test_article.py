@@ -12,8 +12,8 @@ from types import SimpleNamespace
 import pytest
 
 from kvasir import article
-from kvasir.models import ArticleRequest
-from kvasir.progress import ARTICLE, POLISH, ProgressStream
+from kvasir.runs.progress import ARTICLE, POLISH, ProgressStream
+from kvasir.schemas.requests import ArticleRequest
 
 
 class _Runner:

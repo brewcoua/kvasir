@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from kvasir.models import Citation
+from kvasir.schemas.results import Citation
 
 POLISHED_ARTICLE = "storm_gen_article_polished.txt"
 DRAFT_ARTICLE = "storm_gen_article.txt"

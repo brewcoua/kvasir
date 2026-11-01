@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from kvasir.methods.ledger.loop import Judge, Research
 from kvasir.methods.ledger.questions import Question
-from kvasir.models import RemovedSentence
-from kvasir.progress import VERIFY, ProgressStream
 from kvasir.research import verify, write
 from kvasir.research.claims import Claim
+from kvasir.runs.progress import VERIFY, ProgressStream
+from kvasir.schemas.results import RemovedSentence
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 

@@ -9,13 +9,13 @@ import pytest
 from dspy.utils.dummies import DummyLM
 
 from fakes import PAGE, Stream, claim, research_settings
-from kvasir.models import Cell, Criterion, Row
 from kvasir.research import fetch, verify
 from kvasir.research.clarify import clarify
 from kvasir.research.fetch import FetchError, extract, split
 from kvasir.research.read import intake
 from kvasir.research.render import matrix, render
 from kvasir.research.text import names, quoted
+from kvasir.schemas.results import Cell, Criterion, Row
 
 
 @pytest.fixture

@@ -12,11 +12,11 @@ from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyp
 from kvasir.methods.ledger.loop import Research
 from kvasir.methods.ledger.questions import Question
 from kvasir.methods.ledger.signatures import Assess, RankCriterion
-from kvasir.models import Cell, Criterion, Row
-from kvasir.progress import ASSESS, ProgressStream
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, listed, nearest
 from kvasir.research.text import names
+from kvasir.runs.progress import ASSESS, ProgressStream
+from kvasir.schemas.results import Cell, Criterion, Row
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 

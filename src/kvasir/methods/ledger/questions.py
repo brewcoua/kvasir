@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from kvasir.models import ResearchQuestion
+from kvasir.schemas.results import ResearchQuestion
 from kvasir.storm.encoder import Encoder, cosine_similarity
 
 # `open`: nothing found yet. `weak`: part of an answer. `contradicted`: sources disagree.

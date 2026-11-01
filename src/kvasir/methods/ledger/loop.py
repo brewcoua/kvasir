@@ -9,11 +9,11 @@ from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyp
 
 from kvasir.methods.ledger.questions import Question
 from kvasir.methods.ledger.signatures import CheckAnswer, SearchFor
-from kvasir.progress import RESEARCH, ProgressStream
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, closest, quoted_claims
 from kvasir.research.read import read
 from kvasir.research.search import SearchUnavailable, search
+from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG

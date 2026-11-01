@@ -14,11 +14,11 @@ from collections.abc import Callable
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 
-from kvasir.models import RemovedSentence
-from kvasir.progress import VERIFY, ProgressStream
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
 from kvasir.research.signatures import Verify
+from kvasir.runs.progress import VERIFY, ProgressStream
+from kvasir.schemas.results import RemovedSentence
 from kvasir.storm.lm import GatewayModel
 
 # A claim id as the writer cites it: `[3]`, or `[3, 7]`.

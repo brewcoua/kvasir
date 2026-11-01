@@ -142,7 +142,7 @@ def test_configuring_twice_does_not_duplicate_lines(emit):
 
 
 def test_the_entrypoint_configures_logging_before_uvicorn_can(emit, monkeypatch, capsys):
-    """Started as `uvicorn kvasir.main:app`, uvicorn pins its own handler on `uvicorn.access` and
+    """Started as `uvicorn kvasir.api.app:app`, uvicorn pins its own handler on `uvicorn.access` and
     stops it propagating, so the access log printed as plain text next to everyone else's JSON.
 
     `emit` is taken only for its teardown, which puts the root handlers back.

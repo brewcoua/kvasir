@@ -8,12 +8,12 @@ from typing import Any
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 
-from kvasir.progress import RESEARCH, ProgressStream
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, closest
 from kvasir.research.fetch import FetchError, fetch_text, split
 from kvasir.research.signatures import Intake
 from kvasir.research.text import quoted
+from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel

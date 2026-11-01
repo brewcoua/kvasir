@@ -21,8 +21,8 @@ import pytest
 from kvasir.article import run_article
 from kvasir.config import Settings, apply_environment
 from kvasir.conversation import create, report, step
-from kvasir.models import ArticleRequest, SessionRequest
-from kvasir.progress import ProgressStream
+from kvasir.runs.progress import ProgressStream
+from kvasir.schemas.requests import ArticleRequest, SessionRequest
 from kvasir.sessions import SessionStore
 
 pytestmark = pytest.mark.integration

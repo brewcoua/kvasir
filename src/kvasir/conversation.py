@@ -9,9 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from kvasir.config import Settings
-from kvasir.models import Citation, Report, SessionInfo, SessionRequest, Turn
-from kvasir.progress import ARTICLE, CoStormProgressHandler, ProgressStream
 from kvasir.runners import build_costorm_runner, load_costorm_runner
+from kvasir.runs.progress import ARTICLE, CoStormProgressHandler, ProgressStream
+from kvasir.schemas.requests import SessionRequest
+from kvasir.schemas.results import Citation, Report, SessionInfo, Turn
 from kvasir.sessions import SessionStore
 
 

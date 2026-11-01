@@ -24,7 +24,7 @@ export default defineConfig({
     },
     {
       // From web/, so a developer's kvasir.toml at the repository root is not read.
-      command: "pnpm build && uv run uvicorn kvasir.main:app --host 127.0.0.1 --port 8765",
+      command: "pnpm build && uv run uvicorn kvasir.api.app:app --host 127.0.0.1 --port 8765",
       url: `${SERVICE}/healthz`,
       env: {
         OPENAI_API_KEY: "unused",

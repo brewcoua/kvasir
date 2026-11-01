@@ -7,7 +7,7 @@ from typing import Literal
 import dspy  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
-from kvasir.models import Output
+from kvasir.schemas.results import Output
 
 
 class Brief(dspy.Signature):

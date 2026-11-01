@@ -8,9 +8,18 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from kvasir import main
-from kvasir.models import ArticleResult, Citation, Report, ResearchResult, SessionInfo, Turn
-from kvasir.runs import RunRegistry
+from kvasir import conversation
+from kvasir.api import streaming
+from kvasir.api.app import app
+from kvasir.runs.registry import RunRegistry
+from kvasir.schemas.results import (
+    ArticleResult,
+    Citation,
+    Report,
+    ResearchResult,
+    SessionInfo,
+    Turn,
+)
 
 ENVIRONMENT = {
     "OPENAI_API_KEY": "key",
@@ -38,7 +47,7 @@ def environment(monkeypatch, tmp_path):
 
 @pytest.fixture
 def client(environment):
-    with TestClient(main.app) as client:
+    with TestClient(app) as client:
         yield client
 
 
@@ -61,14 +70,14 @@ def test_healthz_checks_no_dependency(client):
 def test_index_serves_the_built_page(client, monkeypatch, tmp_path):
     page = tmp_path / "index.html"
     page.write_text("<!doctype html>")
-    monkeypatch.setattr(main, "INDEX", page)
+    monkeypatch.setattr("kvasir.api.app.INDEX", page)
     response = client.get("/")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
 
 
 def test_index_says_when_the_page_is_not_built(client, monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "INDEX", tmp_path / "index.html")
+    monkeypatch.setattr("kvasir.api.app.INDEX", tmp_path / "index.html")
     response = client.get("/")
     assert response.status_code == 503
     assert "pnpm build" in response.text
@@ -78,7 +87,7 @@ def test_defaults_report_the_configuration(environment, monkeypatch):
     monkeypatch.setenv("KVASIR_RESEARCH_MAX_SEARCHES", "9")
     monkeypatch.setenv("KVASIR_RESEARCH_FOLLOW_UPS", "false")
 
-    with TestClient(main.app) as client:
+    with TestClient(app) as client:
         defaults = client.get("/v1/defaults").json()
 
     assert defaults["max_searches"] == 9
@@ -92,7 +101,7 @@ def test_startup_fails_loudly_on_missing_configuration(monkeypatch):
     for name in ENVIRONMENT:
         monkeypatch.delenv(name, raising=False)
 
-    with pytest.raises(Exception, match="OPENAI_API_KEY"), TestClient(main.app):
+    with pytest.raises(Exception, match="OPENAI_API_KEY"), TestClient(app):
         pass
 
 
@@ -106,7 +115,7 @@ def test_readyz_hard_fails_when_either_dependency_is_down(
     async def reachable(url, headers=None):
         return gateway_ok if "gateway" in url else searxng_ok
 
-    monkeypatch.setattr(main, "_reachable", reachable)
+    monkeypatch.setattr("kvasir.api.app._reachable", reachable)
     response = client.get("/readyz")
 
     assert response.status_code == expected
@@ -128,7 +137,7 @@ def test_article_streams_progress_then_the_article(client, monkeypatch):
         stream.publish("article", "writing sections")
         return RESULT
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     response = client.post("/v1/article", json={"topic": "The Kvasir stone"})
 
     assert response.status_code == 200
@@ -148,7 +157,7 @@ def test_article_reports_a_failure_as_an_error_event(client, monkeypatch):
     def fake_run(settings, request, stream):
         raise RuntimeError("gateway refused the connection")
 
-    monkeypatch.setattr(main, "run_article", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_article", fake_run)
     events = parse(client.post("/v1/article", json={"topic": "x"}).text)
 
     assert [name for name, _ in events] == ["run", "error"]
@@ -173,7 +182,7 @@ def test_research_streams_progress_then_the_report(client, monkeypatch):
             duration_seconds=1.0,
         )
 
-    monkeypatch.setattr(main, "run_research", fake_run)
+    monkeypatch.setattr("kvasir.api.runs.run_research", fake_run)
     body = {
         "question": "Which battery makers lead?",
         "clarifications": [{"question": "Region?", "answer": "Europe"}],
@@ -194,14 +203,14 @@ def test_research_rejects_an_empty_question(client):
 
 
 def test_clarify_answers_without_a_run_or_a_slot(client, monkeypatch):
-    monkeypatch.setattr(main, "clarify", lambda settings, question: ["Which region?"])
+    monkeypatch.setattr("kvasir.api.tasks.clarify", lambda settings, question: ["Which region?"])
     # Held for the whole call, as for a task: clarifying must work while a run is in flight.
-    assert main.app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire(blocking=False)
 
     try:
         response = client.post("/v1/research/clarify", json={"question": "best makers"})
     finally:
-        main.app.state.run_slots.release()
+        app.state.run_slots.release()
 
     assert response.json() == {"questions": ["Which region?"]}
     assert client.get("/v1/runs").json() == []
@@ -219,7 +228,7 @@ def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
 
         return call
 
-    monkeypatch.setattr(main, "build_task_model", fake_model)
+    monkeypatch.setattr("kvasir.api.tasks.build_task_model", fake_model)
     messages = [{"role": "user", "content": "### Task: Generate a concise title"}]
     response = client.post("/v1/tasks", json={"messages": messages})
 
@@ -229,16 +238,18 @@ def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
 
 
 def test_a_task_takes_no_run_and_no_slot(client, monkeypatch):
-    monkeypatch.setattr(main, "build_task_model", lambda settings: lambda messages: ["ok"])
+    monkeypatch.setattr(
+        "kvasir.api.tasks.build_task_model", lambda settings: lambda messages: ["ok"]
+    )
     # Standing in for the run this task is describing: with one slot, a task routed through
     # /v1/article would be refused by it. Held for the whole call, so a slot taken and released
     # would not go unnoticed either.
-    assert main.app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire(blocking=False)
 
     try:
         response = client.post("/v1/tasks", json={"messages": [{"role": "user", "content": "x"}]})
     finally:
-        main.app.state.run_slots.release()
+        app.state.run_slots.release()
 
     assert response.status_code == 200
     assert client.get("/v1/runs").json() == []
@@ -249,22 +260,22 @@ def test_a_task_needs_at_least_one_message(client):
 
 
 def test_a_slot_is_released_after_every_run(client, monkeypatch):
-    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
+    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
 
     for _ in range(3):
         assert client.post("/v1/article", json={"topic": "x"}).status_code == 200
 
 
 def test_saturation_returns_429_rather_than_queueing(client, monkeypatch):
-    monkeypatch.setattr(main, "run_article", lambda *args: RESULT)
+    monkeypatch.setattr("kvasir.api.runs.run_article", lambda *args: RESULT)
     # Standing in for a run already in flight. TestClient buffers a streaming response, so an
     # actual concurrent request cannot be held open here.
-    assert main.app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire(blocking=False)
 
     try:
         response = client.post("/v1/article", json={"topic": "second"})
     finally:
-        main.app.state.run_slots.release()
+        app.state.run_slots.release()
 
     assert response.status_code == 429
     assert "busy" in response.json()["message"]
@@ -283,7 +294,7 @@ async def test_a_client_that_disconnects_keeps_the_slot_until_the_work_ends(envi
         return RESULT
 
     record = RunRegistry(10).start("storm", "x")
-    events = main._events(work, "x", record, slots)
+    events = streaming.events(work, "x", record, slots)
     await anext(events)
     # Waiting for the first progress event when the client goes away, as a disconnect does.
     reading = asyncio.create_task(anext(events))
@@ -303,7 +314,7 @@ async def test_a_client_that_leaves_before_the_work_starts_frees_the_slot(enviro
     assert slots.acquire(blocking=False)
     record = RunRegistry(10).start("storm", "x")
 
-    events = main._events(lambda stream: RESULT, "x", record, slots)
+    events = streaming.events(lambda stream: RESULT, "x", record, slots)
     await anext(events)
     await events.aclose()
 
@@ -313,7 +324,7 @@ async def test_a_client_that_leaves_before_the_work_starts_frees_the_slot(enviro
 @pytest.fixture
 def sessions(client):
     """The store the running app is actually using, under the temporary data directory."""
-    return main.app.state.sessions
+    return app.state.sessions
 
 
 TURN = Turn(
@@ -339,7 +350,7 @@ def test_creating_a_session_streams_warm_start_progress(client, sessions, monkey
         stream.publish("warm_start", "gathering background")
         return INFO
 
-    monkeypatch.setattr(main.conversation, "create", fake_create)
+    monkeypatch.setattr(conversation, "create", fake_create)
     events = parse(client.post("/v1/session", json={"session_id": "chat-1", "topic": "x"}).text)
 
     assert [name for name, _ in events] == ["run", "progress", "done"]
@@ -348,7 +359,7 @@ def test_creating_a_session_streams_warm_start_progress(client, sessions, monkey
 
 
 def test_creating_a_session_twice_is_refused(client, sessions, monkeypatch):
-    monkeypatch.setattr(main.conversation, "create", lambda *args: INFO)
+    monkeypatch.setattr(conversation, "create", lambda *args: INFO)
     sessions.save("chat-1", {"runner_argument": {"topic": "x"}, "conversation_history": []})
 
     response = client.post("/v1/session", json={"session_id": "chat-1", "topic": "x"})
@@ -368,7 +379,7 @@ def test_stepping_streams_progress_then_the_turn(client, sessions, monkeypatch):
         stream.publish("turn", "searching for sources")
         return TURN
 
-    monkeypatch.setattr(main.conversation, "step", fake_step)
+    monkeypatch.setattr(conversation, "step", fake_step)
     events = parse(client.post("/v1/session/chat-1/step", json={"utterance": "why?"}).text)
 
     assert [name for name, _ in events] == ["run", "progress", "done"]
@@ -385,7 +396,7 @@ def test_stepping_without_an_utterance_advances_the_round_table(client, sessions
         seen["utterance"] = utterance
         return TURN
 
-    monkeypatch.setattr(main.conversation, "step", fake_step)
+    monkeypatch.setattr(conversation, "step", fake_step)
     client.post("/v1/session/chat-1/step", json={})
 
     assert seen["utterance"] == ""
@@ -403,7 +414,7 @@ def test_report_streams_markdown_and_citations(client, sessions, monkeypatch):
         stream.publish("article", "writing the report")
         return Report(report="# Report", citations=TURN.citations)
 
-    monkeypatch.setattr(main.conversation, "report", report)
+    monkeypatch.setattr(conversation, "report", report)
 
     events = parse(client.post("/v1/session/chat-1/report").text)
 

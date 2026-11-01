@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from kvasir.models import Error, Progress
-from kvasir.progress import (
+from kvasir.api.sse import frame
+from kvasir.runs.progress import (
     ARTICLE,
     OUTLINE,
     POLISH,
@@ -12,7 +12,7 @@ from kvasir.progress import (
     ProgressStream,
     StormProgressHandler,
 )
-from kvasir.sse import frame
+from kvasir.schemas.runs import Error, Progress
 
 
 async def drain(stream):

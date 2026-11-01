@@ -21,8 +21,8 @@ flowchart LR
     curl["Any HTTP client"]
 
     subgraph kvasir["kvasir process"]
-        api["FastAPI routes<br/>main.py"]
-        registry["RunRegistry<br/>runs.py"]
+        api["FastAPI routes<br/>api/"]
+        registry["RunRegistry<br/>runs/"]
         storm["STORM / Co-STORM<br/>storm/"]
         deep["Research methods<br/>methods/, research/"]
     end
@@ -49,13 +49,13 @@ flowchart LR
 
 | Module | Holds |
 | --- | --- |
-| `main.py` | Routes, the run slots, and `_streamed`, which turns blocking work into an SSE response. |
+| `api/` | The app and its routers: runs, tasks and Co-STORM sessions. `api/streaming.py` holds `streamed`, which turns blocking work into an SSE response. |
 | `__main__.py` | The entry point. Configures logging before uvicorn starts. |
 | `config.py` | `Settings`, resolved once from the environment over `kvasir.toml`. |
 | `runners.py` | Builds every model, the encoder and the retriever from settings, one model per role. |
-| `progress.py` | `ProgressStream`, and the callback handlers that turn STORM's callbacks into progress events. |
-| `runs.py` | `Run` and `RunRegistry`: state, stages, usage and live followers for each run. |
-| `run_store.py` | The optional SQLite history. |
+| `schemas/` | The request, result and run models the API serves. |
+| `runs/progress.py` | `ProgressStream`, and the callback handlers that turn STORM's callbacks into progress events. |
+| `runs/` | `Run` (`run.py`) and `RunRegistry` (`registry.py`): state, stages, usage and live followers for each run. `store.py` is the optional SQLite history. |
 | `sessions.py` | Co-STORM session files. |
 | `article.py`, `conversation.py` | Drive one STORM run, and one Co-STORM operation. |
 | `research/` | The steps every research method shares: search, reading, verification, writing, rendering. See [`research.md`](research.md). |
@@ -84,7 +84,7 @@ decided to start a run, so it must not take one.
 
 ## A run, from request to result
 
-Every run route goes through `_streamed` in `main.py`. The work itself is blocking: dspy, litellm
+Every run route goes through `streamed` in `api/streaming.py`. The work itself is blocking: dspy, litellm
 and the STORM fork are synchronous, and a run takes minutes. So the work runs in a worker thread,
 and the response is served from the event loop. A `ProgressStream` connects the two: an asyncio
 queue the worker writes to through `call_soon_threadsafe`.
@@ -120,7 +120,7 @@ sequenceDiagram
     end
 ```
 
-The order inside `_streamed` is deliberate:
+The order inside `streamed` is deliberate:
 
 1. **The run is registered before the slot is claimed.** A refused request then shows up on the
    runs page as `rejected`, rather than as a 429 with nothing behind it. Saturation is when the
@@ -321,7 +321,7 @@ Each row is a choice someone changing kvasir is likely to question, and the reas
 
 | Decision | Reason |
 | --- | --- |
-| No authentication, and none to be added here. | The service is reached over a private network behind the consumer's own policy layer. `main.py` says so at the top. |
+| No authentication, and none to be added here. | The service is reached over a private network behind the consumer's own policy layer. `api/__init__.py` says so at the top. |
 | One OpenAI-compatible gateway, reached through dspy only. | One place for credentials, routing, caching and pricing. litellm is not a direct dependency; dspy uses it as its transport. |
 | No response cache in kvasir. | The gateway caches. A second cache is a second place to invalidate, and upstream's cache, opened under the home directory at import, failed under a read-only root. |
 | Model names keep their provider prefix, and an unprefixed name is refused at startup. | dspy routes on and consumes the first segment. Prefixing silently would hide a misconfiguration. |
