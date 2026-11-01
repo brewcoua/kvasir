@@ -197,15 +197,17 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
    `criteria`, `matrix` and `duration_seconds`.
 
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
-`follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `ground`, `corroborate`, `contradict`,
-`model_fast`, `model_strong`. Each
-budget left out takes its `KVASIR_RESEARCH_*` default from
+`follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `corroborate`,
+`contradict`, `model_fast`, `model_strong`. Each budget left out takes its `KVASIR_RESEARCH_*` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
 shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
-`filetype:pdf`), then the broader topic. The report ends with an "Open questions" section listing
-what the research did not settle. A run that finds no claim at all says so in `report` and writes
-no sections.
+`filetype:pdf`), then the broader topic. Questions are searched least tried first. With
+`"frontier": "worth"` they are ordered by a score from the claims held, and a branch that stops
+adding claims is no longer searched, as
+[`docs/research.md`](docs/research.md#picking-by-worth) describes. The report ends with an "Open
+questions" section listing what the research did not settle. A run that finds no claim at all says
+so in `report` and writes no sections.
 
 ### Check claims more strictly
 

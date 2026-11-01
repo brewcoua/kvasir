@@ -16,6 +16,7 @@ from kvasir.methods.base import Method
 from kvasir.methods.ledger import loop
 from kvasir.methods.ledger.brief import candidates, clarifications
 from kvasir.methods.ledger.compare import assess, fill, rank
+from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.loop import Judge
 from kvasir.methods.ledger.questions import (
     Question,
@@ -135,7 +136,9 @@ def run_research(
 
     searched = 0
 
-    def research(questions: list[Question], budget: int, judge: Judge) -> None:
+    def research(
+        questions: list[Question], budget: int, judge: Judge, frontier: Frontier | None = None
+    ) -> None:
         nonlocal searched
         searched += loop.research(
             models,
@@ -152,9 +155,16 @@ def run_research(
             judge,
             searched,
             stream,
+            frontier,
         )
 
-    research(ledger, budget, check)
+    # Only the first pass: filling cells and repairing sentences search for set questions.
+    research(
+        ledger,
+        budget,
+        check,
+        Frontier(encoder, brief, claims) if options.frontier == "worth" else None,
+    )
 
     if not claims:
         # Writing sections from no evidence only produces paragraphs saying there is none.

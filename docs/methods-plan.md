@@ -1,7 +1,7 @@
 # Research methods: plan
 
-Status: written 2026-11-01. Steps 1 to 3 and 5 of the [build order](#build-order) are built, without
-the evaluations; step 4 is not run, and the rest is planned.
+Status: written 2026-11-01. Steps 1 to 3, 5 and 6 of the [build order](#build-order) are built, without
+the evaluations; step 4 is not run, and step 7 is planned.
 
 kvasir has one route per engine: `/v1/research` for the question ledger, `/v1/article` for STORM.
 Each has its own request model, run kind, stage list, role table, runs-page entry and Open WebUI
@@ -170,6 +170,12 @@ method is an experiment, kept or dropped on evaluation against `ledger`.
 A smaller experiment comes first, if the evaluation is cheap enough to run twice: the worth score,
 merging and the per-branch stop added to `ledger`. If that closes most of the gap, the graph
 method is not worth its code.
+
+As built in step 6, that experiment is the ledger option `frontier: "worth"`, in
+`methods/ledger/frontier.py`. A merged claim stays a claim of its own, cited as before, and is
+recorded as corroborating the claim it repeats when it comes from another site. A branch's share of
+the budget does not follow its score: the best-first order and the per-branch stop are the only
+controls.
 
 ## Verification, in tiers
 

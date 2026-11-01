@@ -9,6 +9,7 @@ import kvasir.methods.ledger.loop as research_loop
 from fakes import PAGE, Encoder, Search, Stream, claim, research_settings
 from kvasir.methods.ledger.brief import clarifications
 from kvasir.methods.ledger.compare import ordered
+from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.method import NO_EVIDENCE, run_research
 from kvasir.methods.ledger.questions import Question, add_questions, open_questions
 from kvasir.methods.ledger.repair import repair
@@ -385,7 +386,9 @@ class Pages:
         return [{"url": url, "title": url, "description": "", "snippets": []}]
 
 
-def loop(monkeypatch, questions, found, judge, budget=16, max_attempts=4, search=None):
+def loop(
+    monkeypatch, questions, found, judge, budget=16, max_attempts=4, search=None, frontier=None
+):
     """Run `_research` over `questions`, the model writing `query N` and reading `found`.
 
     `found` maps a query number to the claim texts its page yields. Returns the search, the shapes
@@ -421,6 +424,7 @@ def loop(monkeypatch, questions, found, judge, budget=16, max_attempts=4, search
         judge,
         0,
         Stream(),
+        frontier(claims) if frontier else None,
     )
     return searches, shapes, claims
 
@@ -583,3 +587,25 @@ def test_a_section_whose_removed_sentence_the_search_supports_is_written_again()
         ("Ranking", "Row [1]."),
         ("Findings", "It shines [2]."),
     ]
+
+
+def test_the_frontier_stops_searching_a_branch_that_adds_nothing(monkeypatch):
+    spent, answering = Question(id=1, text="a"), Question(id=2, text="b")
+    found = {2: ["x"], 4: ["y"], 5: ["z"], 6: ["w"]}
+
+    held = []
+
+    # Judged on every claim so far, so a question is not judged again until more arrive.
+    def judge(question):
+        question.judged_at = len(held[0])
+
+    def frontier(claims):
+        held.append(claims)
+        return Frontier(Encoder(), "brief", claims)
+
+    searches, _, _ = loop(monkeypatch, [spent, answering], found, judge, frontier=frontier)
+
+    # Breadth first, the first question would get every query shape before the run gave up on it.
+    assert spent.attempts == BRANCH_STALL
+    assert answering.attempts == 4
+    assert searches == BRANCH_STALL + 4

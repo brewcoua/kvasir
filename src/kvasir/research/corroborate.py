@@ -57,7 +57,10 @@ def cross_check(
     stream.publish(VERIFY, f"comparing {total} pairs of claims from different sites", 0, total)
     compared: set[tuple[int, int]] = set()
     for done, (claim, other) in enumerate(pairs, 1):
-        if corroborate and _supports(models, other, claim):
+        if other.id in claim.corroborated_by:
+            # Merged into it during the research already.
+            pass
+        elif corroborate and _supports(models, other, claim):
             claim.corroborated_by.append(other.id)
         elif contradict and (other.id, claim.id) not in compared:
             # Disagreeing is symmetric, so each pair is asked once.

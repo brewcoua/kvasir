@@ -405,6 +405,12 @@ export interface components {
             max_entities?: number | null;
             /** Max Criteria */
             max_criteria?: number | null;
+            /**
+             * Frontier
+             * @default breadth
+             * @enum {string}
+             */
+            frontier: "breadth" | "worth";
             /** Ground */
             ground?: boolean | null;
             /**
@@ -432,6 +438,7 @@ export interface components {
             input: components["schemas"]["Input"];
             /**
              * @default {
+             *       "frontier": "breadth",
              *       "corroborate": false,
              *       "contradict": false
              *     }

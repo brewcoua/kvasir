@@ -138,6 +138,24 @@ A search for one question often answers another. So before spending a search on 
 loop judges it again if claims arrived since its last judgement. A question already answered by
 another search costs one judgement instead of a search.
 
+### Picking by worth
+
+With the option `frontier` set to `worth`, `methods/ledger/frontier.py` replaces `pick` for the
+first pass of the loop. Filling cells and repairing sentences still search breadth first, since
+their questions are set. A branch is a first question and its follow-ups.
+
+- **Worth.** The question with the highest score goes next. The score is its cosine similarity to
+  the brief, plus its distance from the closest claim held, plus 0.2 for a `weak` or
+  `contradicted` question, less 0.15 per level of depth and 0.25 per query already tried. The
+  weights are a first guess, not tuned.
+- **Merging.** A new claim at a cosine similarity of 0.92 or more to one held (`DUPLICATE_CLAIM`)
+  repeats it. From another site, it adds a source: its id goes in the held claim's
+  `corroborated_by`. From the same site, it adds nothing. The repeat stays in `claims`, so it can
+  still be cited.
+- **Closing a branch.** A branch closes once 2 searches in a row on it (`BRANCH_STALL`) add no claim
+  and no source, and none of its questions is searched again. The run-wide stall limit and budget
+  still apply.
+
 ### Query shapes
 
 The model writes the words of a query. The shape is chosen in code, by how many queries the

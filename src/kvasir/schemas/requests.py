@@ -68,6 +68,9 @@ class LedgerOptions(BaseModel):
     # For a ranking or a table, when the run chooses them.
     max_entities: int | None = Field(default=None, ge=1)
     max_criteria: int | None = Field(default=None, ge=1)
+    # `breadth` searches the least tried question first. `worth` orders questions by a score
+    # computed from the claims held, merges repeated claims, and closes a branch that stops adding.
+    frontier: Literal["breadth", "worth"] = "breadth"
     # Check each claim, and each sentence citing one claim, with the grounding checker. On when
     # one is configured; without one, it does nothing.
     ground: bool | None = None

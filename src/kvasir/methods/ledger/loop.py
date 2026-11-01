@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 
+from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.questions import Question
 from kvasir.methods.ledger.signatures import CheckAnswer, SearchFor
 from kvasir.research.calls import predict
@@ -58,6 +59,7 @@ def research(
     judge: Judge,
     first_step: int,
     stream: ProgressStream,
+    frontier: Frontier | None = None,
 ) -> int:
     """Search for `questions` one at a time, and return how many searches that took.
 
@@ -65,11 +67,18 @@ def research(
     `STALL_SEARCHES` searches in a row find nothing. A question is judged again before it is
     searched for whenever claims arrived since its last judgement, since a search for one question
     often answers another. Adds what it finds to `claims`; `judge` may add to `questions`.
+
+    With a `frontier`, questions are taken in the order of their worth rather than breadth first,
+    and a branch that stops adding claims or sources is closed.
     """
     searches = stalled = failed = 0
     failures: list[str] = []
     while searches < budget and stalled < STALL_SEARCHES:
-        question = pick(questions, max_attempts)
+        question = (
+            frontier.pick(questions, max_attempts)
+            if frontier is not None
+            else pick(questions, max_attempts)
+        )
         if question is None:
             break
         if question.judged_at < len(claims):
@@ -114,6 +123,12 @@ def research(
             models.get("ground"),
         )
         claims.extend(new)
+        if frontier is not None and frontier.searched(questions, question, new):
+            stream.publish(
+                RESEARCH,
+                f"closing the branch of {question.text}: "
+                f"{BRANCH_STALL} searches in a row added nothing new",
+            )
         stalled = 0 if new else stalled + 1
         if new:
             judge(question)

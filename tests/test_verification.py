@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import Stream, claim, research_settings
+from fakes import Stream, Vectors, claim, research_settings
 from kvasir.config import Settings
 from kvasir.research import verify
 from kvasir.research.corroborate import cross_check, domain, neighbours
@@ -25,16 +24,6 @@ class Checker:
     def __call__(self, prompt):
         self.asked.append(prompt)
         return [self.answers.pop(0)]
-
-
-class Vectors:
-    """An encoder giving each text the vector it was told."""
-
-    def __init__(self, vectors):
-        self.vectors = vectors
-
-    def encode(self, texts):
-        return np.array([self.vectors[text] for text in texts], dtype=float)
 
 
 @pytest.mark.parametrize(("answer", "supported"), [("Yes", True), (" yes.", True), ("No", False)])

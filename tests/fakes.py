@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
+
 from kvasir.config import Settings
 from kvasir.methods import METHODS
 from kvasir.research.claims import Claim
@@ -40,6 +42,17 @@ class Encoder:
 
     def encode(self, texts):
         return [[0.0]] * len(texts)
+
+
+class Vectors:
+    """An encoder giving each text the vector it was told, and any other text `default`."""
+
+    def __init__(self, vectors, default=None):
+        self.vectors = vectors
+        self.default = default
+
+    def encode(self, texts):
+        return np.array([self.vectors.get(text, self.default) for text in texts], dtype=float)
 
 
 def claim(id, url, quote="q"):
