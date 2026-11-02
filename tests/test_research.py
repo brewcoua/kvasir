@@ -279,8 +279,7 @@ def test_a_sentence_keeps_the_markers_after_its_full_stop():
     ]
 
 
-def test_verification_removes_only_unsupported_cited_sentences():
-    claims = {1: claim(1, "https://a"), 2: claim(2, "https://b")}
+def test_editing_decides_only_cited_sentences():
     text = "\n".join(
         [
             "Intro without citation.",
@@ -293,11 +292,11 @@ def test_verification_removes_only_unsupported_cited_sentences():
     )
     asked = []
 
-    def check(sentence, evidence):
-        asked.append((sentence, [c.id for c in evidence]))
-        return (1 in [c.id for c in evidence], "no support")
+    def decide(sentence):
+        asked.append(sentence)
+        return "" if sentence.startswith(("Unsupported", "Invented", "Only")) else sentence
 
-    kept, removed = verify.verify("Findings", text, claims, check)
+    kept = verify.edit(text, decide)
 
     assert kept == "\n".join(
         [
@@ -308,31 +307,23 @@ def test_verification_removes_only_unsupported_cited_sentences():
             "### Heading [2]",
         ]
     )
-    assert [(r.sentence, r.reason) for r in removed] == [
-        ("Unsupported [2].", "no support"),
-        ("Invented [9].", "cites no claim the research gathered"),
-        ("Only unsupported [2].", "no support"),
-    ]
-    # An invented id costs no model call.
-    assert [sentence for sentence, _ in asked] == [
+    assert asked == [
         "Supported [1].",
         "Unsupported [2].",
+        "Invented [9].",
         "Only unsupported [2].",
         "Kept item [1].",
     ]
-    assert verify.count(text) == 5
 
 
-def test_an_unreadable_verdict_keeps_the_sentence(monkeypatch):
-    model = DummyLM([{"nonsense": "x"}] * 4)
-    stream = Stream()
+def test_an_unreadable_verdict_goes_to_the_reason_model(monkeypatch):
+    fast, reason = DummyLM([{"nonsense": "x"}] * 4), DummyLM([{"nonsense": "x"}] * 4)
+    models = {"verify": fast, "escalate": reason}
 
-    sections, removed = verify.report(
-        model, [("S", "A fact [1].")], {1: claim(1, "https://a")}, stream
-    )
+    checked = verify.report(models, [("S", "A fact [1].")], {1: claim(1, "https://a")}, Stream())
 
-    assert sections == [("S", "A fact [1].")]
-    assert removed == []
+    assert checked.sections == [("S", f"A fact [1]. {verify.UNVERIFIED}")]
+    assert checked.removed == []
 
 
 def test_a_table_has_no_rank_and_keeps_its_cells_whole():
@@ -407,20 +398,11 @@ def test_a_short_report_has_no_contents():
 
 
 def test_a_callout_keeps_its_supported_sentences_and_goes_once_it_has_none():
-    claims = {1: claim(1, "https://a")}
     text = "> [!WARNING] Disputed\n> **Dates** differ [1].\n\n> [!NOTE]\n> Wrong [1].\n\nAfter [1]."
-    asked = []
 
-    def check(sentence, evidence):
-        asked.append(sentence)
-        return not sentence.startswith("Wrong"), "no"
-
-    kept, removed = verify.verify("S", text, claims, check)
+    kept = verify.edit(text, lambda sentence: "" if sentence.startswith("Wrong") else sentence)
 
     assert kept == "> [!WARNING] Disputed\n> **Dates** differ [1].\n\n\nAfter [1]."
-    assert [r.sentence for r in removed] == ["Wrong [1]."]
-    # Bold is for the reader, not part of what is checked.
-    assert asked[0] == "Dates differ [1]."
 
 
 def test_the_style_pass_takes_out_filler_but_not_quotes_or_code():

@@ -7,7 +7,6 @@ from kvasir.methods.ledger.questions import Question
 from kvasir.research import verify, write
 from kvasir.research.claims import Claim
 from kvasir.runs.progress import VERIFY, ProgressStream
-from kvasir.schemas.results import RemovedSentence
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 
@@ -23,21 +22,21 @@ def repair(
     brief: str,
     titles: list[str],
     claims: list[Claim],
-    sections: list[tuple[str, str]],
-    removed: list[RemovedSentence],
+    checked: verify.Verified,
     research: Research,
     judge: Judge,
     stream: ProgressStream,
-) -> tuple[list[tuple[str, str]], list[RemovedSentence]]:
+) -> verify.Verified:
     """Search for what verification removed, and write again the sections the search supports.
 
     A removed sentence is often true, cited to a claim that does not say it. Each becomes a
     question; a section whose question the search answers is written again with the claims that
-    answer it, and checked again.
+    answer it, and checked again; what that check did to its sentences replaces what the first
+    check did.
     """
-    picked = [r for r in removed if r.section in titles][:REPAIR_SENTENCES]
+    picked = [r for r in checked.removed if r.section in titles][:REPAIR_SENTENCES]
     if not picked:
-        return sections, removed
+        return checked
     questions = [
         Question(id=n, text=verify.unmarked(r.sentence), missing=r.reason, judged_at=len(claims))
         for n, r in enumerate(picked, 1)
@@ -51,7 +50,8 @@ def repair(
     stream.publish(VERIFY, f"found support for {len(found)} of the sections they came from")
 
     by_id = {claim.id: claim for claim in claims}
-    sections = list(sections)
+    sections = list(checked.sections)
+    removed, revised, unverified = checked.removed, checked.revised, checked.unverified
     for title, ids in found.items():
         index = next(i for i, (t, _) in enumerate(sections) if t == title)
         stream.publish(VERIFY, f"writing {title} again")
@@ -65,9 +65,9 @@ def repair(
             claims,
             ids,
         )
-        [(_, kept)], again = verify.report(
-            models["verify"], [(title, text)], by_id, stream, models.get("ground")
-        )
-        sections[index] = (title, kept)
-        removed = [r for r in removed if r.section != title] + again
-    return sections, removed
+        again = verify.report(models, [(title, text)], by_id, stream)
+        sections[index] = again.sections[0]
+        removed = [r for r in removed if r.section != title] + again.removed
+        revised = [r for r in revised if r.section != title] + again.revised
+        unverified = [u for u in unverified if u.section != title] + again.unverified
+    return verify.Verified(sections, removed, revised, unverified)

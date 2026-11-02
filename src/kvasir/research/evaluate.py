@@ -133,9 +133,9 @@ def score(judge: GatewayModel, question: Question, result: dict[str, Any]) -> Sc
         if not evidence:
             failures.append(f"citation: {sentence} (cites no source the run listed)")
             continue
-        passed, reason = _ask(judge, Verify, "supported", sentence=sentence, evidence=evidence)
-        supported += passed
-        if not passed:
+        verdict, reason = _ask(judge, Verify, "verdict", sentence=sentence, evidence=evidence)
+        supported += verdict == "supported"
+        if verdict != "supported":
             failures.append(f"citation: {sentence} ({reason})")
 
     return Score(
@@ -179,13 +179,13 @@ def _evidence(result: dict[str, Any], numbers: list[int]) -> str:
 
 
 def _ask(model: GatewayModel, signature: type[dspy.Signature], field: str, **inputs: Any) -> Any:
-    """The verdict's boolean and reason. An unreadable verdict counts as a failure, and says so."""
+    """The verdict's `field` and reason. An unreadable verdict counts as a failure, and says so."""
     try:
         with dspy.context(lm=model):
             verdict = dspy.Predict(signature)(**inputs)
     except AdapterParseError:
         return False, "the judge's verdict could not be read"
-    return bool(getattr(verdict, field)), str(verdict.reason)
+    return getattr(verdict, field), str(verdict.reason)
 
 
 def summary(scores: list[Score], errors: dict[str, str]) -> str:

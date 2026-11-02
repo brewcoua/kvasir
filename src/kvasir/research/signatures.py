@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import dspy  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
 from kvasir.research.claims import Confidence
+
+Support = Literal["supported", "partial", "unsupported"]
 
 
 class Finding(BaseModel):
@@ -80,14 +84,33 @@ class Verify(dspy.Signature):
     """Decide whether a sentence from a report is supported by the evidence it cites.
 
     Supported means every fact in the sentence is stated in the quotes, or follows directly from
-    them. A sentence that adds a number, a name or a comparison the quotes do not contain is not
-    supported. Wording may differ.
+    them. Partial means some facts are stated and others are added: a number, a name or a
+    comparison the quotes do not contain. Unsupported means the quotes do not state what the
+    sentence says. Wording may differ.
     """
 
     sentence: str = dspy.InputField()
     evidence: str = dspy.InputField(desc="each cited claim, with the quote it was read from")
-    supported: bool = dspy.OutputField()
+    verdict: Support = dspy.OutputField()
     reason: str = dspy.OutputField(desc="one short sentence")
+
+
+class Escalate(dspy.Signature):
+    """Decide whether a sentence from a report is supported by the evidence it cites, and when it
+    is only partly, rewrite it.
+
+    Supported means every fact in the sentence is stated in the quotes, or follows directly from
+    them. Partial means some facts are stated and others are added: a number, a name or a
+    comparison the quotes do not contain. Unsupported means the quotes do not state what the
+    sentence says. Wording may differ. For a partial sentence, rewrite it to state only what the
+    quotes say, in the same style, keeping only the claim markers it already cites.
+    """
+
+    sentence: str = dspy.InputField()
+    evidence: str = dspy.InputField(desc="each cited claim, with the quote it was read from")
+    verdict: Support = dspy.OutputField()
+    reason: str = dspy.OutputField(desc="one short sentence")
+    rewrite: str = dspy.OutputField(desc="the rewritten sentence if partial, otherwise empty")
 
 
 class Contradicts(dspy.Signature):

@@ -66,11 +66,35 @@ class ResearchQuestion(BaseModel):
     missing: str
 
 
+# The step of verification that decided a sentence. See `kvasir.research.verify`.
+Stage = Literal["citation", "checker", "verify", "escalate", "rewrite"]
+
+
 class RemovedSentence(BaseModel):
     """A sentence verification took out of the report, and why."""
 
     section: str
     # As written, so its `[n]` markers are claim ids rather than source numbers.
+    sentence: str
+    reason: str
+    # Defaulted, so a run stored before verification had steps still loads: it had only one.
+    stage: Stage = "verify"
+
+
+class RevisedSentence(BaseModel):
+    """A sentence verification found partly unsupported and rewrote to what its quotes say."""
+
+    section: str
+    # Both as written, with claim ids.
+    before: str
+    after: str
+    reason: str
+
+
+class UnverifiedSentence(BaseModel):
+    """A sentence no step could judge, left in the report marked `[unverified]`."""
+
+    section: str
     sentence: str
     reason: str
 
@@ -115,6 +139,8 @@ class ResearchResult(BaseModel):
     questions: list[ResearchQuestion] = []
     # Defaulted, so a run stored before verification existed still loads.
     removed: list[RemovedSentence] = []
+    revised: list[RevisedSentence] = []
+    unverified: list[UnverifiedSentence] = []
     output: Output = "report"
     criteria: list[Criterion] = []
     # Best first for a ranking. Empty for a report.

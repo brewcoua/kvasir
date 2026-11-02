@@ -273,7 +273,7 @@ def test_a_run_writes_one_section_per_branch_that_found_something(monkeypatch):
             "outline": [{"sections": [{"title": "The find", "questions": [1]}]}],
             "write": [{"text": "It was found in 1904 [1]."}],
             "tldr": [{"points": ["It was found in **1904** [1]."]}],
-            "verify": 2 * [{"supported": True, "reason": "the quote gives the year"}],
+            "verify": 2 * [{"verdict": "supported", "reason": "the quote gives the year"}],
         }.items()
     }
     monkeypatch.setattr("kvasir.methods.graph.method.build_research_models", lambda *a: models)

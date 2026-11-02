@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import numpy as np
+from dspy.utils.dummies import DummyLM
 
 from kvasir.config import Settings
 from kvasir.methods import METHODS
@@ -53,6 +54,18 @@ class Vectors:
 
     def encode(self, texts, query=False):
         return np.array([self.vectors.get(text, self.default) for text in texts], dtype=float)
+
+
+class Logged(DummyLM):
+    """A fake model that appends its name to `log` on every call, to show the order of calls."""
+
+    def __init__(self, name, log, answers=()):
+        super().__init__(list(answers))
+        self.name, self.log = name, log
+
+    def __call__(self, *args, **kwargs):
+        self.log.append(self.name)
+        return super().__call__(*args, **kwargs)
 
 
 def claim(id, url, quote="q"):

@@ -131,13 +131,17 @@ def run_graph(
 
     by_id = {claim.id: claim for claim in claims}
     # The summary is checked with the sections, so the checker is loaded once.
-    checked, removed = verify.report(
-        models["verify"], [(SUMMARY, summary), *sections], by_id, stream, models.get("ground")
-    )
-    (_, summary), *sections = checked
+    checked = verify.report(models, [(SUMMARY, summary), *sections], by_id, stream)
+    (_, summary), *sections = checked.sections
     cross_check(models, encoder, claims, stream, options.corroborate, options.contradict)
     report, citations = render(sections, by_id, summary)
-    return result(report, citations=citations, removed=removed)
+    return result(
+        report,
+        citations=citations,
+        removed=checked.removed,
+        revised=checked.revised,
+        unverified=checked.unverified,
+    )
 
 
 def outline(

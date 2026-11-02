@@ -106,7 +106,7 @@ def _supports(models: dict[str, GatewayModel], other: Claim, claim: Claim) -> bo
     except AdapterParseError as exc:
         logger.warning("could not read whether [%d] supports [%d]: %s", other.id, claim.id, exc)
         return False
-    return bool(verdict.supported)
+    return bool(verdict.verdict == "supported")
 
 
 def _contradicts(model: GatewayModel, claim: Claim, other: Claim) -> bool:

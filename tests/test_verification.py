@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import Stream, Vectors, claim, research_settings
+from fakes import Logged, Stream, Vectors, claim, research_settings
 from kvasir.config import Settings
 from kvasir.research import verify
 from kvasir.research.corroborate import cross_check, domain, neighbours
@@ -17,12 +17,14 @@ from kvasir.runners import build_checker
 class Checker:
     """A grounding checker answering from a list, recording each document and claim it was shown."""
 
-    def __init__(self, *answers):
+    def __init__(self, *answers, log=None):
         self.answers = list(answers)
         self.asked = []
+        self.log = log if log is not None else []
 
     def __call__(self, prompt):
         self.asked.append(prompt)
+        self.log.append("checker")
         return [self.answers.pop(0)]
 
 
@@ -81,20 +83,183 @@ def test_intake_drops_a_claim_its_piece_does_not_support():
 
 def test_the_checker_decides_every_cited_sentence_against_all_it_cites():
     claims = {1: claim(1, "https://a"), 2: claim(2, "https://b")}
-    checker = Checker("No", "Yes")
-    # Never asked: the checker decides every sentence.
-    model = DummyLM([])
+    checker = Checker("Yes", "Yes")
+    # Never asked: the checker keeps both.
+    models = {"ground": checker, "verify": DummyLM([]), "escalate": DummyLM([])}
 
-    sections, removed = verify.report(
-        model, [("S", "One [1]. Both [1][2].")], claims, Stream(), checker
-    )
+    checked = verify.report(models, [("S", "One [1]. Both [1][2].")], claims, Stream())
 
-    assert sections == [("S", "Both [1][2].")]
-    assert [r.sentence for r in removed] == ["One [1]."]
+    assert checked.sections == [("S", "One [1]. Both [1][2].")]
     assert checker.asked == [
         PROMPT.format(document="claim 1\nq", claim="One."),
         PROMPT.format(document="claim 1\nq\n\nclaim 2\nq", claim="Both."),
     ]
+
+
+def run(sentence="Fact [1].", *, checker=(), fast=(), reason=(), claims=None):
+    """The report of one section holding `sentence`, with each model answering as told, and the
+    order in which the models were called."""
+    log = []
+    models = {
+        "verify": Logged("fast", log, fast),
+        "escalate": Logged("escalate", log, reason),
+    }
+    if checker:
+        models["ground"] = Checker(*checker, log=log)
+    claims = claims or {1: claim(1, "https://a")}
+    return verify.report(models, [("S", sentence)], claims, Stream()), log
+
+
+def answer(verdict, reason="because", rewrite=""):
+    return {"verdict": verdict, "reason": reason, "rewrite": rewrite}
+
+
+def test_a_sentence_citing_no_known_claim_is_removed_without_a_call():
+    checked, log = run("Invented [9].")
+
+    assert checked.sections == [("S", "")]
+    assert [(r.stage, r.reason) for r in checked.removed] == [
+        ("citation", "cites no claim the research gathered")
+    ]
+    assert log == []
+
+
+def test_a_sentence_the_checker_supports_never_reaches_the_fast_model():
+    checked, log = run(checker=["Yes"])
+
+    assert checked.sections == [("S", "Fact [1].")]
+    assert log == ["checker"]
+
+
+def test_a_sentence_the_checker_and_the_fast_model_reject_is_removed():
+    checked, log = run(checker=["No"], fast=[answer("unsupported", "not in the quote")])
+
+    assert checked.sections == [("S", "")]
+    assert [(r.stage, r.reason) for r in checked.removed] == [("verify", "not in the quote")]
+    assert log == ["checker", "fast"]
+
+
+def test_a_sentence_the_fast_model_supports_against_the_checker_goes_to_the_reason_model():
+    checked, log = run(checker=["No"], fast=[answer("supported")], reason=[answer("supported")])
+
+    assert checked.sections == [("S", "Fact [1].")]
+    assert log == ["checker", "fast", "escalate"]
+
+
+def test_the_reason_model_may_remove_a_sentence():
+    checked, _ = run(
+        checker=["No"], fast=[answer("partial")], reason=[answer("unsupported", "adds a date")]
+    )
+
+    assert checked.sections == [("S", "")]
+    assert [(r.stage, r.reason) for r in checked.removed] == [("escalate", "adds a date")]
+
+
+def test_a_partial_sentence_is_rewritten_when_the_rewrite_passes_the_checker():
+    rewrite = "Fact [1]."
+    checked, log = run(
+        "Fact in 1904 [1].",
+        checker=["No", "Yes"],
+        fast=[answer("partial")],
+        reason=[answer("partial", "the year is not quoted", rewrite)],
+    )
+
+    assert checked.sections == [("S", rewrite)]
+    assert [(r.before, r.after, r.reason) for r in checked.revised] == [
+        ("Fact in 1904 [1].", rewrite, "the year is not quoted")
+    ]
+    assert checked.removed == []
+    assert log == ["checker", "fast", "escalate", "checker"]
+
+
+def test_a_rewrite_without_a_checker_is_checked_by_the_fast_model():
+    checked, log = run(
+        fast=[answer("partial"), answer("supported")],
+        reason=[answer("partial", rewrite="**Fact** [1].")],
+    )
+
+    assert checked.sections == [("S", "**Fact** [1].")]
+    assert log == ["fast", "escalate", "fast"]
+
+
+def test_a_rewrite_the_checker_rejects_is_removed():
+    checked, _ = run(
+        checker=["No", "No"],
+        fast=[answer("partial")],
+        reason=[answer("partial", rewrite="Less [1].")],
+    )
+
+    assert checked.sections == [("S", "")]
+    assert [r.stage for r in checked.removed] == ["rewrite"]
+    assert checked.revised == []
+
+
+def test_a_rewrite_citing_a_new_claim_is_removed_unchecked():
+    claims = {1: claim(1, "https://a"), 2: claim(2, "https://b")}
+    checked, log = run(
+        checker=["No"],
+        fast=[answer("partial")],
+        reason=[answer("partial", rewrite="Fact [1][2].")],
+        claims=claims,
+    )
+
+    assert checked.sections == [("S", "")]
+    assert [r.stage for r in checked.removed] == ["rewrite"]
+    assert log == ["checker", "fast", "escalate"]
+
+
+def test_a_partial_verdict_without_a_rewrite_removes_the_sentence():
+    checked, _ = run(fast=[answer("partial")], reason=[answer("partial")])
+
+    assert [r.stage for r in checked.removed] == ["rewrite"]
+
+
+def test_a_verdict_that_cannot_be_read_leaves_the_sentence_marked():
+    checked, _ = run(
+        "Fact [1]. Other [1].",
+        fast=[answer("partial"), answer("supported")],
+        reason=[{"nonsense": "x"}] * 4,
+    )
+
+    assert checked.sections == [("S", f"Fact [1]. {verify.UNVERIFIED} Other [1].")]
+    assert [u.sentence for u in checked.unverified] == ["Fact [1]."]
+    assert checked.removed == []
+
+
+def test_without_a_checker_the_fast_model_keeps_a_supported_sentence_and_alone():
+    checked, log = run(fast=[answer("supported")])
+
+    assert checked.sections == [("S", "Fact [1].")]
+    assert log == ["fast"]
+
+
+def test_every_checker_call_comes_before_the_first_fast_call():
+    log = []
+    models = {
+        "ground": Checker("No", "Yes", "No", log=log),
+        "verify": Logged("fast", log, [answer("unsupported"), answer("unsupported")]),
+        "escalate": Logged("escalate", log),
+    }
+    claims = {1: claim(1, "https://a")}
+
+    checked = verify.report(
+        models, [("A", "One [1]. Two [1]."), ("B", "Three [1].")], claims, Stream()
+    )
+
+    assert log == ["checker"] * 3 + ["fast"] * 2
+    assert checked.sections == [("A", "Two [1]."), ("B", "")]
+
+
+def test_the_unverified_mark_stays_with_its_sentence_and_is_not_a_claim():
+    line = f"One [1]. {verify.UNVERIFIED} Two [2]. {verify.UNVERIFIED} Three."
+
+    assert verify.sentences(line) == [
+        f"One [1]. {verify.UNVERIFIED}",
+        f"Two [2]. {verify.UNVERIFIED}",
+        "Three.",
+    ]
+    assert verify.cited(line) == [1, 2]
+    assert verify.unmarked(f"One [1]. {verify.UNVERIFIED}") == "One."
 
 
 def test_neighbours_are_close_claims_from_other_sites():

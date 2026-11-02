@@ -212,29 +212,28 @@ def run_research(
 
     by_id = {claim.id: claim for claim in claims}
     # The summary is checked with the sections, so the checker is loaded once. Repair leaves it be.
-    checked, removed = verify.report(
-        models["verify"], [(SUMMARY, summary), *sections], by_id, stream, models.get("ground")
-    )
-    (_, summary), *sections = checked
+    checked = verify.report(models, [(SUMMARY, summary), *sections], by_id, stream)
+    (_, summary), *sections = checked.sections
+    checked.sections = sections
 
     def judge(question: Question) -> None:
         loop.check(models["check"], encoder, brief, claims, question)
 
-    sections, removed = repair(
-        models, encoder, brief, titles, claims, sections, removed, research, judge, stream
-    )
+    checked = repair(models, encoder, brief, titles, claims, checked, research, judge, stream)
 
     cross_check(models, encoder, claims, stream, options.corroborate, options.contradict)
 
     by_id = {claim.id: claim for claim in claims}
-    report, citations = render(sections, by_id, summary)
+    report, citations = render(checked.sections, by_id, summary)
     return ResearchResult(
         report=report,
         assumptions=list(framed.assumptions),
         citations=citations,
         claims=[ResearchClaim(**vars(claim)) for claim in claims],
         questions=as_results(ledger),
-        removed=removed,
+        removed=checked.removed,
+        revised=checked.revised,
+        unverified=checked.unverified,
         output=output,
         criteria=criteria if rows else [],
         matrix=rows,

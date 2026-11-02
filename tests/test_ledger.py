@@ -17,8 +17,9 @@ from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import FetchError, extract
 from kvasir.research.search import SearchUnavailable
+from kvasir.research.verify import Verified
 from kvasir.schemas.requests import Clarification, Input, LedgerOptions
-from kvasir.schemas.results import RemovedSentence
+from kvasir.schemas.results import RemovedSentence, RevisedSentence, UnverifiedSentence
 
 
 def ask(question, **options):
@@ -74,8 +75,8 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
             # No summary, so the report is the sections alone.
             "tldr": [{"points": []}],
             "verify": [
-                {"supported": True, "reason": "the quote gives the year"},
-                {"supported": False, "reason": "the quote says nothing about gold"},
+                {"verdict": "supported", "reason": "the quote gives the year"},
+                {"verdict": "unsupported", "reason": "the quote says nothing about gold"},
             ],
         },
     )
@@ -225,7 +226,7 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
             "write": [{"text": "Alpha is the fastest [1]."}],
             # No summary, so the report is the sections alone.
             "tldr": [{"points": []}],
-            "verify": [{"supported": True, "reason": "the quote gives the speed"}],
+            "verify": [{"verdict": "supported", "reason": "the quote gives the speed"}],
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "speeds", "snippets": []}]
@@ -570,18 +571,26 @@ def test_a_section_whose_removed_sentence_the_search_supports_is_written_again()
     models = {
         "write": DummyLM([{"text": "It is gold [2]. It shines [2]."}]),
         "verify": DummyLM(
-            [{"supported": True, "reason": "says gold"}, {"supported": False, "reason": "no shine"}]
+            [
+                {"verdict": "supported", "reason": "says gold"},
+                {"verdict": "unsupported", "reason": "no shine"},
+            ]
         ),
     }
 
-    sections, left = repair(
+    checked = repair(
         models,
         Encoder(),
         "brief",
         ["Findings"],
         claims,
-        [("Ranking", "| table |"), ("Findings", "Found in 1904 [1].")],
-        removed,
+        Verified(
+            [("Ranking", "| table |"), ("Findings", "Found in 1904 [1].")],
+            removed,
+            # Stale once the section is written again.
+            [RevisedSentence(section="Findings", before="a [1].", after="b [1].", reason="r")],
+            [UnverifiedSentence(section="Findings", sentence="c [1].", reason="r")],
+        ),
         research,
         lambda q: None,
         Stream(),
@@ -589,8 +598,9 @@ def test_a_section_whose_removed_sentence_the_search_supports_is_written_again()
 
     # Only sentences from written sections: the ranking table is built, not written.
     assert searched == [[("It is gold.", "no gold")]]
-    assert sections == [("Ranking", "| table |"), ("Findings", "It is gold [2].")]
-    assert [(r.section, r.sentence) for r in left] == [
+    assert checked.sections == [("Ranking", "| table |"), ("Findings", "It is gold [2].")]
+    assert checked.revised == checked.unverified == []
+    assert [(r.section, r.sentence) for r in checked.removed] == [
         ("Ranking", "Row [1]."),
         ("Findings", "It shines [2]."),
     ]

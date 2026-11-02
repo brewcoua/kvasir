@@ -643,6 +643,12 @@ export interface components {
             sentence: string;
             /** Reason */
             reason: string;
+            /**
+             * Stage
+             * @default verify
+             * @enum {string}
+             */
+            stage: "citation" | "checker" | "verify" | "escalate" | "rewrite";
         };
         /**
          * Report
@@ -749,6 +755,16 @@ export interface components {
              */
             removed: components["schemas"]["RemovedSentence"][];
             /**
+             * Revised
+             * @default []
+             */
+            revised: components["schemas"]["RevisedSentence"][];
+            /**
+             * Unverified
+             * @default []
+             */
+            unverified: components["schemas"]["UnverifiedSentence"][];
+            /**
              * Output
              * @default report
              * @enum {string}
@@ -766,6 +782,20 @@ export interface components {
             matrix: components["schemas"]["Row"][];
             /** Duration Seconds */
             duration_seconds: number;
+        };
+        /**
+         * RevisedSentence
+         * @description A sentence verification found partly unsupported and rewrote to what its quotes say.
+         */
+        RevisedSentence: {
+            /** Section */
+            section: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+            /** Reason */
+            reason: string;
         };
         /**
          * Row
@@ -1094,6 +1124,18 @@ export interface components {
             citations: components["schemas"]["Citation"][];
             /** Mind Map Reorganised */
             mind_map_reorganised: boolean;
+        };
+        /**
+         * UnverifiedSentence
+         * @description A sentence no step could judge, left in the report marked `[unverified]`.
+         */
+        UnverifiedSentence: {
+            /** Section */
+            section: string;
+            /** Sentence */
+            sentence: string;
+            /** Reason */
+            reason: string;
         };
         /** ValidationError */
         ValidationError: {

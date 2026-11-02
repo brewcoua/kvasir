@@ -49,8 +49,8 @@ def test_a_result_is_scored_on_checks_and_citations():
         [
             {"met": True, "reason": "1904"},
             {"met": False, "reason": "no finder named"},
-            {"supported": True, "reason": "quoted"},
-            {"supported": False, "reason": "900 kg is not a tonne"},
+            {"verdict": "supported", "reason": "quoted"},
+            {"verdict": "unsupported", "reason": "900 kg is not a tonne"},
         ]
     )
 
