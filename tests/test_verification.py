@@ -226,6 +226,19 @@ def test_a_verdict_that_cannot_be_read_leaves_the_sentence_marked():
     assert checked.removed == []
 
 
+def test_a_sentence_left_unverified_still_counts_as_checked():
+    stream = Stream()
+    models = {
+        "verify": Logged("fast", [], [answer("partial"), answer("supported")]),
+        "escalate": Logged("escalate", [], [{"nonsense": "x"}] * 4),
+    }
+
+    verify.report(models, [("S", "Fact [1]. Other [1].")], {1: claim(1, "https://a")}, stream)
+
+    checked = [detail for _, detail in stream.events if detail.startswith("checked ")]
+    assert checked[-1] == "checked 2 of 2 cited sentences"
+
+
 def test_without_a_checker_the_fast_model_keeps_a_supported_sentence_and_alone():
     checked, log = run(fast=[answer("supported")])
 

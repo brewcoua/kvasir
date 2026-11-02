@@ -23,6 +23,15 @@
     return resultText(result);
   });
 
+  const snippetNote = "from search snippet; page not fetched";
+  const stages = {
+    citation: "cites nothing gathered",
+    checker: "checker",
+    verify: "fast model",
+    escalate: "reason model",
+    rewrite: "rewrite failed",
+  };
+
   let copied = $state(false);
   async function copy(result: RunResult) {
     await navigator.clipboard.writeText(resultText(result));
@@ -104,7 +113,11 @@
                 <tbody>
                   {#each research.claims as claim (claim.id)}
                     <tr>
-                      <td>{claim.id}</td><td>{claim.text}</td><td>{claim.quote}</td>
+                      <td>{claim.id}</td><td>{claim.text}</td>
+                      <td>
+                        {claim.quote}
+                        {#if claim.from_snippet}<div class="meta">{snippetNote}</div>{/if}
+                      </td>
                       <td>{@render link(claim.title || claim.url, claim.url)}</td><td>{claim.confidence}</td>
                     </tr>
                   {/each}
@@ -122,9 +135,43 @@
             <p class="meta">[n] is the claim id in the evidence table.</p>
             <div class="scroll claims">
               <table>
-                <thead><tr><th>section</th><th>sentence</th><th>reason</th></tr></thead>
+                <thead><tr><th>section</th><th>sentence</th><th>reason</th><th>stage</th></tr></thead>
                 <tbody>
                   {#each research.removed as item, i (i)}
+                    <tr><td>{item.section}</td><td>{item.sentence}</td><td>{item.reason}</td><td>{stages[item.stage]}</td></tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        {/if}
+
+        {#if research && research.revised.length > 0}
+          <details>
+            <summary>Rewritten by verification ({research.revised.length} sentences)</summary>
+            <p class="meta">Rewritten to what their quotes say. [n] is the claim id in the evidence table.</p>
+            <div class="scroll claims">
+              <table>
+                <thead><tr><th>section</th><th>before</th><th>after</th><th>reason</th></tr></thead>
+                <tbody>
+                  {#each research.revised as item, i (i)}
+                    <tr><td>{item.section}</td><td>{item.before}</td><td>{item.after}</td><td>{item.reason}</td></tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        {/if}
+
+        {#if research && research.unverified.length > 0}
+          <details>
+            <summary>Unverified ({research.unverified.length} sentences)</summary>
+            <p class="meta">No model could judge these. They stay in the report, marked. [n] is the claim id in the evidence table.</p>
+            <div class="scroll claims">
+              <table>
+                <thead><tr><th>section</th><th>sentence</th><th>reason</th></tr></thead>
+                <tbody>
+                  {#each research.unverified as item, i (i)}
                     <tr><td>{item.section}</td><td>{item.sentence}</td><td>{item.reason}</td></tr>
                   {/each}
                 </tbody>

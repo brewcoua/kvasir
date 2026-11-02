@@ -24,6 +24,17 @@ const cite: TokenizerExtension = {
   },
 };
 
+// ` [unverified]`, which verification appends to a sentence no model could judge.
+const unverified: TokenizerExtension = {
+  name: "unverified",
+  level: "inline",
+  start: (source) => source.indexOf("[unverified]") >= 0 ? source.indexOf("[unverified]") : undefined,
+  tokenizer(source) {
+    const match = source.match(/^\[unverified\]/);
+    if (match) return { type: "unverified", raw: match[0] };
+  },
+};
+
 // A line that is nothing but bold text. Models write these as sub-headings.
 const boldLine: TokenizerExtension = {
   name: "boldLine",
@@ -56,7 +67,7 @@ const callout: TokenizerExtension = {
   },
 };
 
-const marked = new Marked({ gfm: true }).use({ extensions: [cite, boldLine, callout] });
+const marked = new Marked({ gfm: true }).use({ extensions: [cite, unverified, boldLine, callout] });
 
 // A heading's anchor as GitHub makes it, so a report's contents link to its headings.
 export function slug(text: string, taken: Map<string, number>): string {

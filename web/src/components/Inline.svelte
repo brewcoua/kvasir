@@ -37,6 +37,8 @@
     {token.text}
   {:else if token.type === "cite"}
     <Cite number={token.number} />
+  {:else if token.type === "unverified"}
+    <span class="unverified" title="No model could judge this sentence against its sources">unverified</span>
   {:else if token.type === "text" && token.tokens}
     <Inline tokens={token.tokens} />
   {:else if token.type === "text" || token.type === "escape"}

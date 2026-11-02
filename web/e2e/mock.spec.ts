@@ -74,6 +74,30 @@ test("a citation badge shows its number, and names its source on hover", async (
   await expect(page.locator(".popover")).toContainText("http");
 });
 
+test("a result marks unverified sentences, and lists what verification changed", async ({ page }) => {
+  await page.goto("/#/runs/report/result");
+  const badge = page.locator(".markdown .unverified").first();
+  await expect(badge).toHaveText("unverified");
+  await expect(badge).toHaveAttribute("title", /No model could judge/);
+
+  const removed = page.locator("details", { has: page.locator("summary", { hasText: "Removed by verification" }) });
+  await removed.locator("summary").click();
+  await expect(removed.getByRole("cell", { name: "reason model" })).toBeVisible();
+  await expect(removed.getByRole("cell", { name: "fast model" }).first()).toBeVisible();
+
+  const revised = page.locator("details", { has: page.locator("summary", { hasText: "Rewritten by verification (1 sentences)" }) });
+  await revised.locator("summary").click();
+  await expect(revised.getByRole("cell", { name: /after a public outcry/ })).toBeVisible();
+
+  const unverified = page.locator("details", { has: page.locator("summary", { hasText: "Unverified (1 sentences)" }) });
+  await unverified.locator("summary").click();
+  await expect(unverified.getByRole("cell", { name: "The reason model returned no readable verdict." })).toBeVisible();
+
+  const evidence = page.locator("details", { has: page.locator("summary", { hasText: "Evidence (" }) });
+  await evidence.locator("summary").click();
+  await expect(evidence.getByText("from search snippet; page not fetched")).toHaveCount(1);
+});
+
 test("a research run asks its questions first, and sends the settings changed", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Settings").click();

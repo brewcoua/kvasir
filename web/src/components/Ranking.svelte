@@ -35,7 +35,10 @@
       quotes: cell.claims
         .map((id) => claims.get(id))
         .filter((claim) => claim !== undefined)
-        .map((claim) => ({ quote: claim.quote, meta: `[${numbers.get(claim.url) ?? "?"}] ${host(claim.url)}` })),
+        .map((claim) => ({
+          quote: claim.quote,
+          meta: `[${numbers.get(claim.url) ?? "?"}] ${host(claim.url)}${claim.from_snippet ? " (from search snippet; page not fetched)" : ""}`,
+        })),
     };
   }
 </script>

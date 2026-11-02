@@ -550,6 +550,22 @@ td.track-cell {
   text-decoration: none;
   vertical-align: 0.1em;
 }
+.unverified {
+  display: inline-flex;
+  align-items: baseline;
+  margin: 0 0.1em;
+  padding: 0 0.4em;
+  border: 1px solid color-mix(in srgb, var(--busy) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--busy) 12%, transparent);
+  color: var(--busy);
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+  cursor: help;
+}
 .popover {
   z-index: 2;
   max-width: 26rem;

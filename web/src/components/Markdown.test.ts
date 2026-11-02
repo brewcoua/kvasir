@@ -29,6 +29,22 @@ describe("Markdown", () => {
     expect(root.querySelector('a[href="https://example.org"]')!.textContent).toBe("4");
   });
 
+  it("turns the unverified marker into a badge, in paragraphs, lists, callouts and tables", () => {
+    const root = show(
+      "Prices rose [2]. [unverified]\n\n- Item [3]. [unverified]\n\n> [!NOTE]\n> Quoted. [unverified]\n\n| a |\n|---|\n| cell [unverified] |",
+    );
+    expect(root.querySelectorAll(".unverified")).toHaveLength(4);
+    for (const badge of root.querySelectorAll(".unverified")) {
+      expect(badge.textContent).toBe("unverified");
+      expect(badge.getAttribute("title")).toContain("No model could judge");
+      expect(badge.closest("a")).toBeNull();
+    }
+    expect(root.querySelectorAll(".cite")).toHaveLength(2);
+    expect(root.querySelector("li .unverified")).not.toBeNull();
+    expect(root.querySelector(".callout .unverified")).not.toBeNull();
+    expect(root.querySelector("td .unverified")).not.toBeNull();
+  });
+
   it("moves headings down one level, to h4 at most", () => {
     const root = show("## Section\n\n#### Deep");
     expect(root.querySelector("h3")!.textContent).toBe("Section");
