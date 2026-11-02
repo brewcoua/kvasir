@@ -7,6 +7,7 @@
   let { method, picked, defaults }: { method: Method; picked: Picked; defaults: Partial<Defaults> } = $props();
 
   const shown = $derived(values(method, defaults));
+  const models = $derived(MODELS.filter((name) => setting(name).for.includes(method.kind)));
 </script>
 
 <ol class="plan">
@@ -27,6 +28,6 @@
   {/each}
 </ol>
 <details class="models">
-  <summary class="meta">models: {MODELS.map((name) => String(value(name, defaults) ?? "").replace(/^openai\//, "")).join(", ")}</summary>
-  {#each MODELS as name (name)}<SettingField setting={setting(name)} {defaults} />{/each}
+  <summary class="meta">models: {models.map((name) => String(value(name, defaults) ?? "").replace(/^openai\//, "")).join(", ")}</summary>
+  {#each models as name (name)}<SettingField setting={setting(name)} {defaults} />{/each}
 </details>

@@ -13,7 +13,12 @@
     <p><Inline tokens={token.tokens ?? []} /></p>
   {:else if token.type === "heading"}
     <!-- The report's own `##` sits under the page title, so every level moves down one. -->
-    <svelte:element this={`h${Math.min(token.depth + 1, 4)}`}><Inline tokens={token.tokens ?? []} /></svelte:element>
+    <svelte:element this={`h${Math.min(token.depth + 1, 4)}`} id={token.id}><Inline tokens={token.tokens ?? []} /></svelte:element>
+  {:else if token.type === "callout"}
+    <aside class={`callout ${token.kind}`}>
+      <div class="title">{token.title}</div>
+      <Blocks tokens={token.tokens ?? []} />
+    </aside>
   {:else if token.type === "boldLine"}
     <h4><Inline tokens={token.tokens ?? []} /></h4>
   {:else if token.type === "list"}

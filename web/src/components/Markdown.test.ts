@@ -59,4 +59,23 @@ describe("Markdown", () => {
     expect(root.querySelector("ol > li > ul > li")!.textContent).toBe("inner");
     expect(root.querySelectorAll("ol > li")).toHaveLength(3);
   });
+
+  it("shows a callout with its kind and title", () => {
+    const root = show("> [!WARNING] Disputed\n> The dates **disagree** [2].\n\nAfter.");
+    const callout = root.querySelector("aside.callout.warning")!;
+    expect(callout.querySelector(".title")!.textContent).toBe("Disputed");
+    expect(callout.querySelector("strong")!.textContent).toBe("disagree");
+    expect(callout.querySelector(".cite")).not.toBeNull();
+    expect(root.lastElementChild!.textContent).toBe("After.");
+  });
+
+  it("titles a callout by its kind when it has no title", () => {
+    expect(show("> [!NOTE]\n> Text.").querySelector(".callout .title")!.textContent).toBe("Note");
+  });
+
+  it("anchors headings as GitHub does, and links the contents to them", () => {
+    const root = show("- [Trade & war](#trade--war)\n\n## Trade & war\n\n## Trade & war");
+    expect([...root.querySelectorAll("h3")].map((h) => h.id)).toEqual(["trade--war", "trade--war-1"]);
+    expect(root.querySelector('a[href="#trade--war"]')).not.toBeNull();
+  });
 });

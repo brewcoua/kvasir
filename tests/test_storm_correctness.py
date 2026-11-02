@@ -200,7 +200,7 @@ def test_a_section_query_against_nothing_collected_retrieves_nothing():
     from kvasir.storm.storm_wiki.modules.storm_dataclass import StormInformationTable
 
     class _Encoder:
-        def encode(self, texts):
+        def encode(self, texts, query=False):
             return np.ones(768) if isinstance(texts, str) else np.empty((0, 0))
 
     table = StormInformationTable([])

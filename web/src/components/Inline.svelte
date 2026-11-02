@@ -21,6 +21,15 @@
   {:else if token.type === "link"}
     {#if isWeb(token.href)}
       <a href={token.href} target="_blank" rel="noreferrer noopener"><Inline tokens={token.tokens ?? []} /></a>
+    {:else if token.href.startsWith("#")}
+      <!-- A heading of the same text. Scrolled to rather than followed: the hash holds the route. -->
+      <a
+        href={token.href}
+        onclick={(event) => {
+          event.preventDefault();
+          document.getElementById(decodeURIComponent(token.href.slice(1)))?.scrollIntoView({ behavior: "smooth" });
+        }}><Inline tokens={token.tokens ?? []} /></a
+      >
     {:else}
       <Inline tokens={token.tokens ?? []} />
     {/if}

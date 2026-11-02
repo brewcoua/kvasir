@@ -35,16 +35,45 @@ class WriteSection(dspy.Signature):
 
     Use only the evidence. Cite every factual sentence with the bracketed ids of the claims that
     support it, such as [3] or [3][7]. Say plainly what the evidence does not settle. Do not repeat
-    what earlier sections said. Do not write the section title. Mark a sub-section with a `###`
-    heading, not a line of bold text.
+    what earlier sections said. Do not write the section title. When subsections are given, write
+    each under its own `###` heading, in that order, and add no other heading.
+
+    Style:
+    - Start with the finding, not with what the section will cover. Name who did what, in the
+      active voice.
+    - Prefer the evidence's numbers, dates and names to general words.
+    - One idea per sentence, and sentences of different lengths.
+    - No filler: no "it is important to note", "notably", "overall", "in conclusion", no
+      rhetorical questions, no "not X but Y" setups, no lists of three for rhythm, no em dashes.
+    - No inflated words such as "crucial", "pivotal", "landscape", "delve", "multifaceted",
+      "testament", "tapestry".
+    - Bold the one or two terms a reader scanning the paragraph should catch, with **, no more.
+    - At most one callout, and only for a point that needs one: a line `> [!WARNING]` for evidence
+      that is disputed or contradicted, `> [!CAUTION]` for a likely misreading, `> [!IMPORTANT]`
+      for the point the section turns on, or `> [!NOTE]` for context, then its cited sentences on
+      lines starting with `> `.
     """
 
     brief: str = dspy.InputField()
     outline: str = dspy.InputField()
     section: str = dspy.InputField()
+    subsections: str = dspy.InputField(desc="the `###` headings to use, one per line, or empty")
     earlier_sections: str = dspy.InputField(desc="the start of each section already written")
     evidence: str = dspy.InputField(desc="one claim per line, prefixed by its id in brackets")
     text: str = dspy.OutputField(desc="the section's paragraphs, in markdown")
+
+
+class Summarize(dspy.Signature):
+    """Sum up a research report for a reader who reads nothing else.
+
+    Each point is one plain sentence giving a finding, most important first, and keeps the
+    bracketed claim ids the report cites for it. The first point answers the brief. Add nothing the
+    report does not say. No filler, no em dashes.
+    """
+
+    brief: str = dspy.InputField()
+    report: str = dspy.InputField(desc="the start of each section, with its claim ids")
+    points: list[str] = dspy.OutputField(desc="three to five points, each citing claim ids")
 
 
 class Verify(dspy.Signature):

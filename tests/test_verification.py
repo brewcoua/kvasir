@@ -10,7 +10,7 @@ from kvasir.config import Settings
 from kvasir.research import verify
 from kvasir.research.corroborate import cross_check, domain, neighbours
 from kvasir.research.ground import PROMPT, grounded
-from kvasir.research.read import intake
+from kvasir.research.read import GAP, intake
 from kvasir.runners import build_checker
 
 
@@ -78,10 +78,11 @@ def test_intake_drops_a_claim_its_piece_does_not_support():
     assert checker.asked[0] == PROMPT.format(document=piece, claim="Found in 1904")
 
 
-def test_the_checker_decides_a_sentence_citing_one_claim_and_the_model_the_rest():
+def test_the_checker_decides_every_cited_sentence_against_all_it_cites():
     claims = {1: claim(1, "https://a"), 2: claim(2, "https://b")}
-    checker = Checker("No")
-    model = DummyLM([{"supported": True, "reason": "both quotes say so"}])
+    checker = Checker("No", "Yes")
+    # Never asked: the checker decides every sentence.
+    model = DummyLM([])
 
     sections, removed = verify.report(
         model, [("S", "One [1]. Both [1][2].")], claims, Stream(), checker
@@ -89,7 +90,10 @@ def test_the_checker_decides_a_sentence_citing_one_claim_and_the_model_the_rest(
 
     assert sections == [("S", "Both [1][2].")]
     assert [r.sentence for r in removed] == ["One [1]."]
-    assert checker.asked == [PROMPT.format(document="claim 1\nq", claim="One.")]
+    assert checker.asked == [
+        PROMPT.format(document="claim 1\nq", claim="One."),
+        PROMPT.format(document="claim 1\nq\n\nclaim 2\nq", claim="Both."),
+    ]
 
 
 def test_neighbours_are_close_claims_from_other_sites():
@@ -133,3 +137,23 @@ def test_cross_checking_asks_nothing_unless_asked_to():
     cross_check({}, None, [a, b], Stream(), corroborate=False, contradict=False)
 
     assert a.corroborated_by == b.corroborated_by == []
+
+
+def test_a_claim_is_grounded_on_the_piece_its_quote_is_in():
+    first, second = "The stone was found in 1904.", "It weighs 900 kg."
+    model = DummyLM(
+        [
+            {
+                "findings": [
+                    {"claim": "Weighs 900 kg", "quote": "It weighs 900 kg", "confidence": "high"}
+                ]
+            }
+        ]
+    )
+    checker = Checker("Yes")
+    hit = {"url": "https://a", "title": "A"}
+
+    claims = intake(model, "brief", "question", hit, f"{first}{GAP}{second}", 1, 1, checker)
+
+    assert [c.text for c in claims] == ["Weighs 900 kg"]
+    assert checker.asked[0] == PROMPT.format(document=second, claim="Weighs 900 kg")

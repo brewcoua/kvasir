@@ -115,14 +115,17 @@ export const METHODS: Method[] = [
       {
         name: "research",
         does: (v) =>
-          `Up to ${v.max_searches} searches, reading ${v.results_per_query} pages each, ${v.max_attempts} attempts per question, ` +
-          `${v.branch_searches} per branch, raised questions ${v.max_depth} level${v.max_depth === 1 ? "" : "s"} deep.`,
-        settings: ["max_searches", "results_per_query", "max_attempts", "branch_searches", "max_depth"],
+          `Searches for ${v.research_minutes} minutes${v.max_searches ? `, ${v.max_searches} searches at most` : ""}, ` +
+          `reading ${v.results_per_query} pages each, ${v.max_attempts} attempts per question, ` +
+          `raised questions ${v.max_depth} level${v.max_depth === 1 ? "" : "s"} deep, more where a question is hard.`,
+        settings: ["research_minutes", "max_searches", "results_per_query", "max_attempts", "max_depth"],
       },
       { name: "write", does: () => "Writes one section per branch that found something, each claim citing its source.", settings: [] },
       { name: "verify", does: () => "Checks each cited sentence against its quote, and removes what is unsupported.", settings: [] },
     ],
-    size: (v) => `At most ${v.max_searches} searches, reading ${(v.max_searches ?? 0) * (v.results_per_query ?? 0)} pages.`,
+    size: (v) =>
+      `About ${v.research_minutes} minutes of searching` +
+      (v.max_searches ? `, at most ${v.max_searches} searches reading ${v.max_searches * (v.results_per_query ?? 0)} pages.` : "."),
   },
   {
     kind: "article",
@@ -153,7 +156,7 @@ export const METHODS: Method[] = [
   },
 ];
 
-export const MODELS: (keyof Defaults)[] = ["model_fast", "model_strong"];
+export const MODELS: (keyof Defaults)[] = ["model_fast", "model_strong", "model_writer"];
 
 // Every value the stages read, defaults included, so a plan reads as the run would go.
 export const values = (method: Method, defaults: Values): Values =>

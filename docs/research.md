@@ -17,9 +17,9 @@ applies them.
 | Rule | Consequence |
 | --- | --- |
 | Code decides how much to search and when to stop. The model decides what to search for, what a page says, and how to write it. | Budgets, stop conditions, query shapes and ranking arithmetic are constants in the modules of `methods/ledger/` and `research/`, not prompts. A prompted small model searches too little when left to decide. |
-| No call sees more than one small input. | A page is cut into pieces of about 1,500 tokens, and each call reads one piece, one question and the brief. Nothing carries the run's history. |
+| No call sees more than one page. | A page is cut into pieces of about 1,500 tokens, and one call reads as many of its closest pieces as the context holds, with one question and the brief. Nothing carries the run's history. |
 | Nothing counts as evidence unless a page says it word for word. | Every claim carries a quote, and a claim whose quote is not on the page is dropped. Every cited sentence is later checked against those quotes. |
-| Calls are sequential. | A local server answers one request at a time, so parallel model calls buy no speed. Only page downloads run in a pool. |
+| Calls are sequential, but for intake and downloads. | Intake calls run in a pool as wide as `KVASIR_MAX_THREADS`. A local server batches requests it holds at once, one pass over the weights serving each, so this is faster only when it holds several: for Ollama, set `OLLAMA_NUM_PARALLEL` to the same width. Each slot takes its own context's worth of memory. |
 
 ## The stages
 
@@ -159,22 +159,68 @@ their questions are set. A branch is a first question and its follow-ups.
 ### The graph method
 
 The `graph` method, in `methods/graph/`, keeps the ledger's brief, first questions, query shapes,
-intake and verification, and the worth score, merging and branch closing above, always on. It
-differs in three ways.
+intake and verification, and the worth score and merging above, always on. It spends its effort
+where questions are hard: a question answered on its first search costs one search and raises one
+follow-up, while one that keeps coming back `weak` is searched again and split into children.
 
-- **Raised questions.** After a search that adds claims, `Expand` judges the question on the claims
-  it already rests on and the new ones, and returns up to 2 questions the evidence raises
-  (`RAISED`), added as its children while it is above `max_depth`. The ledger adds follow-ups only
-  to an answered question; here a `weak` or `contradicted` one raises them too.
+- **Time, not a count.** Research runs for `research_minutes` (20 by default) from the start of the
+  run, then the report is written. `max_searches` is an optional cap on top, unset by default.
+- **Gaps.** Once no question can still be settled and time is left, a `Gaps` call reads the brief
+  and every question's name, text and status, and returns up to `GAP_QUESTIONS` (3) new first
+  questions on what the report still lacks, each starting a new branch. The research ends early
+  once `GAP_STALL` (2) gap calls in a row are dry: a call is dry when it adds no question, after
+  the duplicate check and the `MAX_QUESTIONS` cap, or when the searches for what it added found
+  fewer than `GAP_YIELD` (2) claims a search. Without gap calls, a live run ended at 8 of its 20
+  minutes: its answered questions raised no follow-up and its other branches had closed. Without
+  the yield check, a live run spent its last 9 minutes on niche questions that added few claims.
+  Ending on one dry call, a live run stopped at 8 minutes on a single question that found nothing.
+- **Picking: proof numbers.** `methods/graph/proof.py` applies proof-number search
+  ([Allis 1994](https://en.wikipedia.org/wiki/Proof-number_search)). A question is settled either
+  by a search for it or by settling every child it raised. Its work, the searches still needed, is
+  0 once answered, 1 if never searched, `1 + attempts` for a retry, and the cheaper of a retry and
+  the sum of its children's work when it has children. A question past `max_attempts`, or in a
+  closed branch, never settles. The run takes the first question with the most worth per unit of
+  work, then walks down it, stopping at a question whose retry costs less than its children, else
+  moving to its child with the least work. A question searched once with two untried
+  children costs 2 either way, and the tie goes to the children, so a new question is searched
+  before its parent is tried again.
+- **Children: progressive widening.** After a search that adds claims, `Expand` judges the
+  question on the claims it already rests on and the new ones, and asks one question per part of
+  what is still missing. A question not answered, searched n times, may hold at most
+  `ceil(WIDEN * n ** ALPHA)` children (2 and 0.5), and never more than `MAX_CHILDREN` (4), as in
+  progressive widening for Monte Carlo tree search
+  ([Couëtoux et al. 2011](https://juliapomdp.github.io/MCTS.jl/dev/dpw)). An answered question
+  holds at most `FOLLOW_UPS` (1), a harder question taking the answer deeper, so the research
+  does not end once the first questions are answered. Its work is that of its follow-ups, so the
+  pick still reaches them; so is that of a question given up. Children are added while the
+  question is above `max_depth` (4 by default), up to `MAX_QUESTIONS` (80) in the graph.
+- **Settling up.** Once every child of a question is answered, `Expand` judges the question again
+  on the claims its children rest on, without a search and without raising anything, and so on up
+  the path.
+- **Closing a branch.** As in the ledger, once `BRANCH_STALL` (2) searches in a row on it add no
+  claim and no source. A rule from the marginal value theorem, closing a branch whose last 2
+  searches added less than half of what a search of the run adds, was tried and dropped: in a live
+  run it closed a branch whose first question found 4 claims and whose child found none, with 3
+  retries of that question left.
 - **Path, not ledger.** `Expand` reads the question's path from its first question, never the
   whole graph. So a question is not judged again on what another branch found, as the ledger's
   loop does.
-- **Branch budget.** A branch also closes once it has spent `branch_searches` searches. There is
-  no run-wide stall limit: the run ends when the budget is spent or every branch is closed.
 
-The report has one section per branch with a claim its questions rest on, titled by the first
-question and always given those claims, then "Open questions". There is no outline call and no
-repair pass. The design is untested against the ledger; see
+The constants `WIDEN`, `ALPHA`, `MAX_CHILDREN`, `FOLLOW_UPS`, `GAP_QUESTIONS`, `GAP_STALL`,
+`GAP_YIELD`, `MAX_QUESTIONS`, `MAX_SECTIONS`, `OPEN_QUESTIONS` and the default depth and time are untuned first guesses, kept or changed on evaluation.
+
+After the research, one `Outline` call reads each question with claims (its id, name, status,
+claim count and what is missing) and groups them into three to seven sections under short
+headings, ordered as the answer reads best, as STORM refines its outline from what its research
+found. A section covering distinct parts gets two to four subsections, written as `###` headings.
+A section is always given the claims its questions rest on. A repeated title adds to its first
+section, and sections past `MAX_SECTIONS` (7) are dropped. A question with claims no section keeps
+adds them to the section whose title is closest by embedding. When the outline cannot be read,
+or names no question with claims, each branch is a section titled by its first question's name.
+
+"Open questions" lists the first questions not answered, then the raised questions that ended
+`weak` or `contradicted`, at most `OPEN_QUESTIONS` (10). A raised question the research found
+nothing for was its own lead, not part of the brief, so it is left out. There is no repair pass. The design is untested against the ledger; see
 [`methods-plan.md`](methods-plan.md#the-graph-method).
 
 ### Query shapes
@@ -236,6 +282,7 @@ flowchart LR
     snippet["search snippet"]
     split["split<br/>6,000-character pieces"]
     filter["3 pieces closest<br/>to the question"]
+    pack["pack the pieces<br/>to fit the context"]
     intake["Intake<br/>claims with quotes"]
     quote{"quote on<br/>the page?"}
     ground{"piece supports<br/>the claim?"}
@@ -244,10 +291,10 @@ flowchart LR
 
     fetch --> split
     fetch -- unreadable --> snippet --> split
-    split --> filter --> intake --> quote
+    split --> filter --> pack --> intake --> quote
     quote -- yes --> ground
     quote -- no --> drop
-    ground -- yes, or no checker --> store
+    ground -- yes, or ground_intake off --> store
     ground -- no --> drop
 ```
 
@@ -258,24 +305,44 @@ flowchart LR
   (another format, a scanned or truncated PDF, an HTTP error) falls back to its search snippet.
   There is no OCR.
 - **Split.** Pieces of at most 6,000 characters (`PIECE_CHARACTERS`), about 1,500 tokens, cut
-  between lines. That leaves room in a 16k context for the brief, the instructions and the answer.
+  between lines. This is sized for the embedding filter, not the reading model: `nomic-embed-text`
+  was trained on 2,048 tokens, and a longer piece would be ranked on less than all of it.
 - **Filter.** Only the 3 pieces closest by embedding to the question (`PIECES_PER_PAGE`) are read.
   Closest to the question, not the brief: a page found for one narrow fact holds it in one piece,
-  which the brief would not rank first.
-- **Intake.** One fast-model call per piece. It reads the brief, the question the page was found
-  for, the page title and the piece, and returns claims, each with a quote and a confidence.
+  which the brief would not rank first. With `nomic-embed-text`, the encoder prefixes the question
+  `search_query: ` and each piece `search_document: `, as the model was trained to read them;
+  texts compared with each other, such as two questions, all take the document prefix.
+- **Pack.** The kept pieces of a page are joined in page order, marked apart by `[...]`, into as
+  few texts as fit one call (`pack`). A call holds `page_characters(context_tokens)` characters:
+
+  ```text
+  (context_tokens - PROMPT_TOKENS - context_tokens / 4) * MARGIN * CHARACTERS_PER_TOKEN
+  ```
+
+  The context is `KVASIR_CONTEXT_TOKENS` (16384 by default), the window the models are served with.
+  The prompt besides the page is `PROMPT_TOKENS` (1,000), the answer gets a quarter of the
+  context, `MARGIN` is 0.9 and `CHARACTERS_PER_TOKEN` is 3.5. The 47 intake calls of one run on
+  gpt-oss came to 34 + characters / 4.07 prompt tokens, with about 600 for the prompt besides the
+  page, and answers of at most about 500 tokens for one piece. Each constant is rounded towards a
+  smaller page, since a token holds fewer characters in figures, PDFs and other languages. At
+  16384 a call holds 35,557 characters, so the 3 pieces of a page are read in one call.
+- **Intake.** One fast-model call per packed text, the calls of a search running side by side. It
+  reads the brief, the question the page was found for, the page title and the text, and returns
+  claims, each with a quote and a confidence. Claims are numbered in page order once read.
 - **Quote check.** `quoted` keeps a claim only if its quote appears in the piece word for word.
   The comparison is on words alone, lower-cased, so a non-breaking hyphen or a line break where the
   page had an inline tag does not count as a difference. An ellipsis in the quote stands for words
   left out, and the fragments must appear in order.
-- **Grounding.** With the `ground` option and a checker configured, `research/ground.py` asks the
-  checker whether the piece supports the claim, and drops the claim if not. The piece is the
-  document rather than the quote, since a claim names what its quote leaves to the page, such as
+- **Grounding.** With the `ground_intake` option and a checker configured, `research/ground.py` asks the
+  checker whether the piece its quote is in supports the claim, and drops the claim if not. The
+  piece is the document rather than the quote, since a claim names what its quote leaves to the page, such as
   the subject of "it was found in 1904". A quote on the page shows the claim was read there, not
-  that the page says it.
+  that the page says it. The option is off by default: on a GPU that cannot hold the checker beside
+  the fast model, every page would swap the two.
 
-Intake is most of a run's calls: a search reads up to 3 pages of 3 pieces, so up to 9 intake calls.
-Each piece is its own progress event, since the page being read is what a follower wants to see.
+Intake is most of a run's calls: a search reads up to 3 pages, one call each at the default
+context. Each call is its own progress event once it returns, since the page read is what a
+follower wants to see.
 
 ## Ranking and comparing
 
@@ -318,7 +385,21 @@ earlier section (`EARLIER_SECTION_CHARACTERS`), and the 15 claims closest to its
 (`CLAIMS_PER_SECTION`). It cites each factual sentence with claim ids such as `[3][7]`, and says
 plainly what the evidence does not settle.
 
-An "Open questions" section is added from the ledger: every first question, and every question that
+Its style rules are adapted from [stop-slop](https://github.com/hardikpandya/stop-slop): lead with
+the finding, name the actor, prefer the evidence's numbers and names, and leave out filler
+openers, rhetorical setups, rhythmic triplets, inflated words and em dashes. It bolds the one or
+two key terms of a paragraph, and may add one callout: `> [!WARNING]` for disputed evidence,
+`> [!CAUTION]` for a likely misreading, `> [!IMPORTANT]` for the point a section turns on, or
+`> [!NOTE]` for context. A small model breaks such rules anyway, so `research/style.py` then takes
+out what it can without touching a fact: filler openers such as "Notably," and "It is important to
+note that", intensifiers such as "very" and "really", and em dashes, which become commas, or an en
+dash between numbers. Text in double quotes and code is left as written.
+
+Once the sections are written, one `Summarize` call reads the start of each, as much as the
+context holds shared between them, and returns three to five cited points, the answer first. They
+are checked with the sections, and become the report's TL;DR.
+
+In the ledger, an "Open questions" section is added: every first question, and every question that
 was searched for, that did not end `answered`. Empty cells are left out, since the table shows them
 as a dash.
 
@@ -345,14 +426,16 @@ sequenceDiagram
 a claim. `Verify` reads the sentence and the cited claims with their quotes, and decides whether
 every fact in the sentence is stated in the quotes or follows directly from them. An added number,
 name or comparison makes it unsupported. An unsupported sentence is removed and recorded in
-`removed`, with its section and the reason. Headings, tables and code are left alone, since a table
+`removed`, with its section and the reason. Bold is taken out of the sentence before it is checked.
+A callout keeps its supported sentences, and goes when none is left. Headings, tables and code are
+left alone, since a table
 row is not a sentence and cutting one would break the table. A sentence citing nothing is left
 alone too: it is a transition, or a statement that the evidence does not settle something. A
 verdict that cannot be parsed keeps the sentence, since it says nothing about it.
 
-With the `ground` option and a checker configured, a sentence citing one claim goes to the checker
-instead, with the claim and its quote as the document. Only a sentence combining several claims
-still goes to `Verify`, since the checker reads one document and one claim.
+With the `ground` option and a checker configured, every cited sentence goes to the checker
+instead of `Verify`, with the claims it cites and their quotes joined as the document. The checker
+runs only once the report is written, so it is loaded once per run.
 
 **Corroborate and contradict.** With `corroborate` or `contradict`, `research/corroborate.py` runs
 after repair. Each claim is paired with up to 3 claims from other sites (`NEIGHBOURS`) at a cosine
@@ -373,7 +456,12 @@ the rewritten section's own removals stand.
 
 ## Rendering
 
-`render.render` joins the sections under `##` headings and turns claim ids into source numbers.
+`render.render` joins the sections under `##` headings and turns claim ids into source numbers. The
+summary goes first, as a `> [!SUMMARY] TL;DR` callout. With 3 sections or more
+(`CONTENTS_SECTIONS`), a `> [!ABSTRACT] Contents` callout follows, a nested list linking each `##`
+and `###` heading by the anchor GitHub gives it. Callouts are GitHub and Obsidian syntax: the runs
+page draws them as tinted boxes, and a renderer without them, such as Open WebUI, shows a quote
+starting with `[!SUMMARY]`.
 Sources are numbered by first citation, one number per page rather than per claim, so `[3][7]` from
 the same page becomes one `[n]`. A marker naming a claim that does not exist is dropped: the model
 made it up. Each citation carries the quote of the claim that first cited that page, which the runs
@@ -399,10 +487,14 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | `entities` | `Entities` | strong | 600 |
 | `assess` | `Assess` | fast | 600 |
 | `judge` | `RankCriterion` | strong | 800 |
-| `outline` | `Outline` | strong | 500 |
-| `write` | `WriteSection` | strong | 2000 |
+| `outline` | `Outline` | writer | 2500 |
+| `write` | `WriteSection` | writer | 4000 |
+| `tldr` | `Summarize` | writer | 2000 |
 | `verify` | `Verify` | fast | 600 |
 | `contradict` | `Contradicts` | fast | 400 |
+
+The writer is `KVASIR_MODEL_WRITER`, or the strong model when it is unset. It runs only after the
+research, so a writer too large to share memory with the fast model is loaded once.
 
 The grounding checker is its own model, `KVASIR_MODEL_CHECKER`, with the role `ground`, 10 tokens
 and temperature 0.

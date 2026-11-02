@@ -10,12 +10,21 @@ from kvasir.schemas.results import Cell, Citation, Criterion, Row
 # `[3]`, and `[3, 7]`, which models write despite being asked for `[3][7]`.
 _MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 _REPEAT = re.compile(r"(\[\d+\])\1+")
+_HEADING = re.compile(r"^(#{2,3}) +(.+?) *#*$")
+# The summary's title, under which verification reports what it removed from it.
+SUMMARY = "TL;DR"
+# Sections a report needs before contents help a reader find their way.
+CONTENTS_SECTIONS = 3
 
 
-def render(sections: list[tuple[str, str]], claims: dict[int, Claim]) -> tuple[str, list[Citation]]:
-    """Number sources by first citation, one number per page rather than per claim.
+def render(
+    sections: list[tuple[str, str]], claims: dict[int, Claim], summary: str = ""
+) -> tuple[str, list[Citation]]:
+    """The report, its sources numbered by first citation: one number per page, not per claim.
 
-    A marker naming a claim that does not exist is dropped: the model made it up.
+    A marker naming a claim that does not exist is dropped: the model made it up. The `summary`
+    goes first, as a TL;DR callout, then the contents once there are enough sections, as callouts
+    GitHub and Obsidian render and other renderers show as quotes.
     """
     numbers: dict[str, int] = {}
     citations: list[Citation] = []
@@ -39,12 +48,42 @@ def render(sections: list[tuple[str, str]], claims: dict[int, Claim]) -> tuple[s
             markers.append(f"[{numbers[claim.url]}]")
         return "".join(markers)
 
-    body = "\n\n".join(
-        f"## {title}\n\n"
-        + _REPEAT.sub(r"\1", _MARKER.sub(renumber, _untitled(title, text.strip())))
-        for title, text in sections
-    )
-    return body, citations
+    def cited(text: str) -> str:
+        return _REPEAT.sub(r"\1", _MARKER.sub(renumber, text))
+
+    parts = [_callout("SUMMARY", SUMMARY, cited(summary.strip()))] if summary.strip() else []
+    body = [f"## {title}\n\n" + _untitled(title, text.strip()) for title, text in sections]
+    if len(sections) >= CONTENTS_SECTIONS:
+        parts.append(_callout("ABSTRACT", "Contents", contents(body)))
+    parts.extend(cited(text) for text in body)
+    return "\n\n".join(parts), citations
+
+
+def _callout(kind: str, title: str, text: str) -> str:
+    return "\n".join([f"> [!{kind}] {title}"] + [f"> {line}".rstrip() for line in text.split("\n")])
+
+
+def contents(sections: list[str]) -> str:
+    """A nested list linking to each `##` and `###` heading, by GitHub's anchors."""
+    taken: dict[str, int] = {}
+    lines, fenced = [], False
+    for line in "\n\n".join(sections).split("\n"):
+        if line.startswith("```"):
+            fenced = not fenced
+        if fenced or not (match := _HEADING.match(line)):
+            continue
+        title = " ".join(_MARKER.sub("", match.group(2)).split())
+        indent = "  " * (len(match.group(1)) - 2)
+        lines.append(f"{indent}- [{title}](#{slug(title, taken)})")
+    return "\n".join(lines)
+
+
+def slug(title: str, taken: dict[str, int]) -> str:
+    """The anchor GitHub gives a heading, `-1`, `-2` and on added to one already taken."""
+    base = re.sub(r"[^\w\s-]", "", title.lower().strip()).replace(" ", "-")
+    count = taken.get(base, 0)
+    taken[base] = count + 1
+    return f"{base}-{count}" if count else base
 
 
 def _untitled(title: str, text: str) -> str:

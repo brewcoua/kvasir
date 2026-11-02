@@ -120,7 +120,7 @@ def research(
             first_step + searches,
             f"search {searches}",
             stream,
-            models.get("ground"),
+            models.get("ground_intake"),
         )
         claims.extend(new)
         if frontier is not None and frontier.searched(questions, question, new):

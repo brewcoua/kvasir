@@ -71,9 +71,12 @@ class LedgerOptions(BaseModel):
     # `breadth` searches the least tried question first. `worth` orders questions by a score
     # computed from the claims held, merges repeated claims, and closes a branch that stops adding.
     frontier: Literal["breadth", "worth"] = "breadth"
-    # Check each claim, and each sentence citing one claim, with the grounding checker. On when
+    # Check each cited sentence with the grounding checker, rather than the fast model. On when
     # one is configured; without one, it does nothing.
     ground: bool | None = None
+    # Also check each claim against its page as it is read. Off by default: a checker that does not
+    # share memory with the fast model is then loaded again for every page.
+    ground_intake: bool = False
     # Compare each claim with the closest claims from other sites, for support and for
     # disagreement.
     corroborate: bool = False
@@ -81,6 +84,7 @@ class LedgerOptions(BaseModel):
     # Passed to the gateway verbatim. Not validated against any list of known models.
     model_fast: str | None = None
     model_strong: str | None = None
+    model_writer: str | None = None
 
 
 class GraphOptions(BaseModel):
@@ -88,18 +92,21 @@ class GraphOptions(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Minutes the research may search for, before the report is written.
+    research_minutes: float = Field(default=20, gt=0)
+    # Searches at most, on top of the time. None: only the time bounds them.
     max_searches: int | None = Field(default=None, ge=1)
     results_per_query: int | None = Field(default=None, ge=1)
     max_attempts: int | None = Field(default=None, ge=1)
     # Levels of raised questions below the first questions.
     max_depth: int | None = Field(default=None, ge=1)
-    # Searches one branch may spend before it is closed, however much it still adds.
-    branch_searches: int = Field(default=6, ge=1)
     ground: bool | None = None
+    ground_intake: bool = False
     corroborate: bool = False
     contradict: bool = False
     model_fast: str | None = None
     model_strong: str | None = None
+    model_writer: str | None = None
 
 
 class StormOptions(BaseModel):

@@ -25,8 +25,43 @@ from kvasir.storm.lm import GatewayModel
 
 # Pieces of one page kept by the embedding filter, the only ones a model reads.
 PIECES_PER_PAGE = 3
+# What an intake call holds besides the page, and how many characters a token is, from the 47
+# intake calls of one run on gpt-oss: prompt tokens came to 34 + characters / 4.07, with brief,
+# instructions and title about 600. Both are rounded towards a smaller page, as is the margin: a
+# token holds fewer characters in figures, PDFs and languages other than English.
+PROMPT_TOKENS = 1000
+CHARACTERS_PER_TOKEN = 3.5
+MARGIN = 0.9
+# Joins the pieces of a page read in one call. They need not be adjacent on the page, so they are
+# marked apart, and a claim is grounded on the one piece its quote is in.
+GAP = "\n\n[...]\n\n"
 
 logger = logging.getLogger(__name__)
+
+
+def answer_tokens(context_tokens: int) -> int:
+    """The room an intake call's answer gets: a quarter of the context. The same run's answers
+    peaked at about 500 tokens for one piece, and one call now reads up to five."""
+    return context_tokens // 4
+
+
+def page_characters(context_tokens: int) -> int:
+    """How much of a page one intake call reads: what the context holds once the prompt and the
+    answer are taken out, less the margin."""
+    tokens = context_tokens - PROMPT_TOKENS - answer_tokens(context_tokens)
+    return int(tokens * MARGIN * CHARACTERS_PER_TOKEN)
+
+
+def pack(pieces: list[str], size: int) -> list[str]:
+    """`pieces` joined into as few texts of at most `size` characters as their order allows. A
+    piece longer than `size` is a text of its own."""
+    texts: list[list[str]] = []
+    for piece in pieces:
+        if texts and len(GAP.join([*texts[-1], piece])) <= size:
+            texts[-1].append(piece)
+        else:
+            texts.append([piece])
+    return [GAP.join(text) for text in texts]
 
 
 def read(
@@ -50,23 +85,34 @@ def read(
         (hit, relevant_pieces(encoder, question, text))
         for hit, text in zip(hits, fetch_all(hits), strict=True)
     ]
-    pieces = [
-        (page, part, hit, piece)
+    size = page_characters(runtime.context_tokens())
+    texts = [
+        (page, hit, text)
         for page, (hit, parts) in enumerate(pages, 1)
-        for part, piece in enumerate(parts, 1)
+        for text in pack(parts, size)
     ]
+
+    def take(call: tuple[int, dict[str, Any], str]) -> list[Claim]:
+        _, hit, text = call
+        return intake(model, brief, question, hit, text, 0, step, checker)
+
     new: list[Claim] = []
-    # Intake is most of a run's time, so each piece is its own event: the page being read is what
-    # a follower wants to see.
-    for done, (page, part, hit, piece) in enumerate(pieces):
-        stream.publish(
-            RESEARCH,
-            f"{label}: page {page}/{len(pages)}, "
-            f"part {part}/{len(pages[page - 1][1])}: {hit['title'] or hit['url']}",
-            done,
-            len(pieces),
-        )
-        new.extend(intake(model, brief, question, hit, piece, first_id + len(new), step, checker))
+    # Intake is most of a run's time, so its calls run side by side, as wide as the pools, and each
+    # is its own event: the page read is what a follower wants to see.
+    with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
+        for done, ((page, hit, _), found) in enumerate(
+            zip(texts, pool.map(take, texts), strict=True), 1
+        ):
+            stream.publish(
+                RESEARCH,
+                f"{label}: read page {page}/{len(pages)}: {hit['title'] or hit['url']}",
+                done,
+                len(texts),
+            )
+            # Numbered in page order once read, however the calls finished.
+            for claim in found:
+                claim.id = first_id + len(new)
+                new.append(claim)
     return new
 
 
@@ -116,7 +162,9 @@ def intake(
         if not quoted(finding.quote, piece):
             logger.info("dropped a claim whose quote is not on %s: %r", hit["url"], finding.quote)
             continue
-        if checker is not None and not grounded(checker, piece, finding.claim):
+        # The piece of the page its quote is in, which is all a small checker has room for.
+        source = next((p for p in piece.split(GAP) if quoted(finding.quote, p)), piece)
+        if checker is not None and not grounded(checker, source, finding.claim):
             logger.info("dropped a claim %s does not support: %r", hit["url"], finding.claim)
             continue
         claims.append(

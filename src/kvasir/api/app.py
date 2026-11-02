@@ -28,7 +28,7 @@ from kvasir.runs.registry import (
 )
 from kvasir.runs.store import RunStore
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
-from kvasir.storm.runtime import configure_concurrency
+from kvasir.storm.runtime import configure_concurrency, configure_context
 
 READINESS_TIMEOUT_SECONDS = 5.0
 # Built from web/ by `pnpm build`, which the image does and a checkout has to.
@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings.from_env()
     apply_environment()
     configure_concurrency(settings.max_threads)
+    configure_context(settings.context_tokens)
     logs.configure(settings)
 
     app.state.settings = settings

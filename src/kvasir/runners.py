@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from kvasir.config import Settings
+from kvasir.research.read import answer_tokens
 from kvasir.storm.collaborative_storm.engine import (
     CollaborativeStormLMConfigs,
     CoStormRunner,
@@ -64,21 +65,25 @@ _COSTORM_ROLES = {
 
 
 # The deep research pipeline's steps. Extraction and planning are many small calls and go to the
-# fast model; the brief, the outline and the prose a reader sees go to the strong one. Intake and
-# notes return lists of claims, which need more room than a plan's handful of queries.
+# fast model; the brief and the judgements go to the strong one, and the outline and the prose a
+# reader sees to the writer, the strong model unless another is configured. The writer runs only
+# once the research is done, so a writer too large to share memory with the others is loaded
+# once. Intake and notes return lists of claims, which need more room than a plan's handful of
+# queries.
 _RESEARCH_ROLES = {
     "clarify": ("fast", 500),
     "brief": ("strong", 1000),
     "decompose": ("strong", 600),
     "plan": ("fast", 500),
-    "intake": ("fast", 2000),
     "check": ("strong", 800),
     "criteria": ("strong", 1000),
     "entities": ("strong", 600),
     "assess": ("fast", 600),
     "judge": ("strong", 800),
-    "outline": ("strong", 500),
-    "write": ("strong", 2000),
+    # A thinking writer spends some 700 tokens reasoning before it answers, within these.
+    "outline": ("writer", 2500),
+    "write": ("writer", 4000),
+    "tldr": ("writer", 2000),
     "verify": ("fast", 600),
     "contradict": ("fast", 400),
 }
@@ -91,7 +96,11 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
     `kvasir.config._model`.
     """
     return GatewayModel(
-        model=settings.model_fast if tier == "fast" else settings.model_strong,
+        model={
+            "fast": settings.model_fast,
+            "strong": settings.model_strong,
+            "writer": settings.model_writer or settings.model_strong,
+        }[tier],
         # Reported with the model's usage, so a run can be read as which stage spent what.
         role=role,
         api_key=settings.openai_api_key,
@@ -121,14 +130,24 @@ def build_task_model(settings: Settings) -> GatewayModel:
 
 
 def build_research_models(
-    settings: Settings, model_fast: str | None = None, model_strong: str | None = None
+    settings: Settings,
+    model_fast: str | None = None,
+    model_strong: str | None = None,
+    model_writer: str | None = None,
 ) -> dict[str, GatewayModel]:
     """One model per deep research step, keyed by step."""
     settings = _with_model_overrides(settings, model_fast, model_strong)
-    return {
+    if model_writer is not None:
+        settings = replace(settings, model_writer=model_writer)
+    models = {
         role: _language_model(settings, role, tier, max_tokens)
         for role, (tier, max_tokens) in _RESEARCH_ROLES.items()
     }
+    # An intake call reads as much of a page as the context holds, so its answer grows with it.
+    models["intake"] = _language_model(
+        settings, "intake", "fast", answer_tokens(settings.context_tokens)
+    )
+    return models
 
 
 def build_checker(settings: Settings) -> GatewayModel | None:

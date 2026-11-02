@@ -40,7 +40,7 @@ def nearest(encoder: Encoder, query: str, vectors: np.ndarray, k: int) -> list[i
     """`closest`, over texts already encoded, for when many queries search the same texts."""
     if len(vectors) <= k:
         return list(range(len(vectors)))
-    scores = cosine_similarity(encoder.encode([query]), vectors)[0]
+    scores = cosine_similarity(encoder.encode([query], query=True), vectors)[0]
     return sorted(int(i) for i in np.argsort(scores)[::-1][:k])
 
 

@@ -669,6 +669,36 @@ summary {
   border-left: 3px solid var(--line);
   color: var(--dim);
 }
+/* GitHub's callout kinds, in the theme's colours. Unknown kinds read as a note. */
+.markdown .callout {
+  --tone: var(--accent);
+  margin: 0 0 0.85rem;
+  padding: 0.6rem 0.85rem;
+  border-left: 3px solid var(--tone);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--tone) 7%, transparent);
+}
+.markdown .callout.tip,
+.markdown .callout.success {
+  --tone: var(--ok);
+}
+.markdown .callout.warning {
+  --tone: var(--busy);
+}
+.markdown .callout.caution,
+.markdown .callout.danger,
+.markdown .callout.error {
+  --tone: var(--bad);
+}
+.markdown .callout .title {
+  margin-bottom: 0.3rem;
+  color: var(--tone);
+  font-weight: 600;
+}
+.markdown .callout > :last-child,
+.markdown .callout ul {
+  margin-bottom: 0;
+}
 .markdown hr {
   border: 0;
   border-top: 1px solid var(--line);

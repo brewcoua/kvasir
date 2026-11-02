@@ -214,3 +214,18 @@ def test_cosine_similarity_tolerates_a_zero_vector() -> None:
     similarities = cosine_similarity([np.array([0.0, 0.0])], np.array([[1.0, 0.0]]))
 
     assert similarities[0][0] == 0.0
+
+
+def test_nomic_is_told_a_query_from_a_document(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[str] = []
+
+    def embed(self: Encoder, texts: list[str]) -> np.ndarray:
+        sent.extend(texts)
+        return np.zeros((len(texts), DIMENSIONS))
+
+    monkeypatch.setattr(Encoder, "_embed", embed)
+    Encoder(model="openai/nomic-embed-text:latest").encode(["a claim"])
+    Encoder(model="openai/nomic-embed-text:latest").encode("a title", query=True)
+    Encoder(model="openai/m").encode(["plain"])
+
+    assert sent == ["search_document: a claim", "search_query: a title", "plain"]

@@ -40,7 +40,7 @@ class Stream:
 class Encoder:
     """Every text the same vector, so nothing is closer than anything else and none repeats."""
 
-    def encode(self, texts):
+    def encode(self, texts, query=False):
         return [[0.0]] * len(texts)
 
 
@@ -51,7 +51,7 @@ class Vectors:
         self.vectors = vectors
         self.default = default
 
-    def encode(self, texts):
+    def encode(self, texts, query=False):
         return np.array([self.vectors.get(text, self.default) for text in texts], dtype=float)
 
 

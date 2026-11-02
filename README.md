@@ -161,8 +161,8 @@ is refused with 422, before any run starts.
 
 The `ledger` method answers a question with a cited report. It splits the brief into questions and
 searches for one at a time: a question the search leaves open is searched for again with a narrower
-query, and one it answers can add harder follow-ups. It reads each page in pieces small enough for
-a 16k context, keeps only claims whose quote appears word for word on the page, and writes the
+query, and one it answers can add harder follow-ups. It reads as much of each page in one call as
+`KVASIR_CONTEXT_TOKENS` holds, keeps only claims whose quote appears word for word on the page, and writes the
 report one section at a time from those claims. Each sentence that cites a claim is then checked
 against the claim's quote, and taken out if the quote does not support it. Up to 4 removed
 sentences are searched for again, and a section whose search finds support is written and checked
@@ -191,15 +191,16 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
 
    It streams like an article run. Stages are `brief`, `background`, `research`, `assess`,
    `write` and `verify`; `background` and `assess` run only for a ranking or a table. The `done`
-   frame carries `report` (markdown, with `[n]` markers), `assumptions` (what the brief decided on
+   frame carries `report` (markdown, with `[n]` markers, opening with a TL;DR callout and, from 3
+   sections, a contents callout), `assumptions` (what the brief decided on
    your behalf), `citations`, `claims` (every claim gathered, each with its quote and source),
    `questions` (each question searched for, with its status, queries and supporting claims),
    `removed` (each sentence verification took out, with its section and the reason), `output`,
    `criteria`, `matrix` and `duration_seconds`.
 
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
-`follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `corroborate`,
-`contradict`, `model_fast`, `model_strong`. Each budget left out takes its `KVASIR_RESEARCH_*` default from
+`follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `ground_intake`,
+`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_writer`. Each budget left out takes its `KVASIR_RESEARCH_*` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
 shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
@@ -213,12 +214,15 @@ so in `report` and writes no sections.
 ### Follow what the research raises
 
 The `graph` method answers a question with a cited report, like `ledger`, but explores rather than
-works through a list. It searches the question worth most first, and the evidence a search finds
-raises child questions under it. Each judgement reads only the question's path from its first
-question and the claims found for it. A branch, a first question and every question raised under
-it, closes after 2 searches in a row add nothing, or once it has spent `branch_searches` (6 by
-default). The report has one section per branch that found something. It never makes a ranking or
-a table.
+works through a list. It searches for `research_minutes` (20 by default), not a fixed number of
+searches. A question it answers raises one harder follow-up; one it only partly answers raises
+child questions for what is missing, more the more often it comes back unanswered. Each judgement
+reads only the question's path from its first question and the claims found for it. A branch, a
+first question and every question raised under it, closes after 2 searches in a row add nothing.
+When no question is left with time to spare, a call asks what the report still lacks and adds new
+first questions, until those stop finding at least 2 claims a search. An outline call then groups
+the questions into at most 7 sections, with subsections where a section has distinct parts. It
+never makes a ranking or a table.
 
 ```bash
 curl -N -X POST localhost:8080/v1/runs \
@@ -227,17 +231,19 @@ curl -N -X POST localhost:8080/v1/runs \
 ```
 
 Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has the same fields as a
-`ledger` run. Options: `max_searches`, `results_per_query`, `max_attempts`, `max_depth`,
-`branch_searches`, `ground`, `corroborate`, `contradict`, `model_fast`, `model_strong`. See
+`ledger` run. Options: `research_minutes`, `max_searches` (an optional cap on top of the time),
+`results_per_query`, `max_attempts`, `max_depth` (4 by default), `ground`, `ground_intake`,
+`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_writer`. See
 [`docs/research.md`](docs/research.md#the-graph-method).
 
 ### Check claims more strictly
 
-Three options add checks past the quote check, each at a cost in calls.
+Four options add checks past the quote check, each at a cost in calls.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker drops each claim the page piece it was read from does not support, and decides each sentence citing one claim. Without a checker it does nothing. |
+| `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker decides each cited sentence, shown the claims it cites and their quotes together, in place of the fast model. Without a checker it does nothing. |
+| `ground_intake` | `false` | The checker also drops each claim the page piece it was read from does not support. Off by default: unless the checker stays loaded beside the fast model, every page then swaps the two. |
 | `corroborate` | `false` | Each claim is compared with up to 3 close claims from other sites. Those that support it go in its `corroborated_by`. |
 | `contradict` | `false` | Close claims from other sites that disagree with it go in its `contradicted_by`, both ways. |
 
@@ -250,7 +256,7 @@ export KVASIR_MODEL_CHECKER=openai/bespoke-minicheck
 
 Bespoke-MiniCheck-7B is licensed CC BY-NC 4.0. Whether Ollama keeps it loaded next to the main
 model, or swaps the two on each call, depends on its memory; a swap on every check makes a run far
-slower.
+slower. With `ground` alone, the checker runs only once the report is written, so it is loaded once.
 
 ### Rank or compare options
 
@@ -445,6 +451,7 @@ is a complete file for a local Ollama.
 | `KVASIR_MODEL_STRONG` | required | Outline and article generation. |
 | `KVASIR_SEARXNG_URL` | required | SearXNG base URL. |
 | `KVASIR_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model. Used by both modes. |
+| `KVASIR_MODEL_WRITER` | unset | Research: the outline and the report's prose. Unset uses `KVASIR_MODEL_STRONG`. It runs once the research is done, so a model too large to share memory with the fast one is loaded once. |
 | `KVASIR_MODEL_CHECKER` | unset | Research: a grounding checker such as MiniCheck, which answers Yes or No. Unset leaves every check to the fast model. |
 | `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions, and for the run database. |
 | `KVASIR_SESSION_TTL_HOURS` | `168` | Session expiry, applied at startup. |
@@ -453,7 +460,8 @@ is a complete file for a local Ollama.
 | `KVASIR_RUN_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
 | `KVASIR_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
 | `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
-| `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. |
+| `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. Intake calls run this wide; for Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
+| `KVASIR_CONTEXT_TOKENS` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
 | `KVASIR_MAX_CONV_TURN` | `3` | Questions per perspective. |
 | `KVASIR_MAX_PERSPECTIVE` | `3` | Perspectives to research. |

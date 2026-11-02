@@ -22,8 +22,10 @@ from contextvars import ContextVar
 from typing import Any, Protocol, TypeVar
 
 DEFAULT_MAX_THREADS = 10
+DEFAULT_CONTEXT_TOKENS = 16384
 
 _max_threads = DEFAULT_MAX_THREADS
+_context_tokens = DEFAULT_CONTEXT_TOKENS
 _fetch_slots = threading.BoundedSemaphore(DEFAULT_MAX_THREADS)
 
 
@@ -41,6 +43,17 @@ def configure_concurrency(max_threads: int) -> None:
 def max_threads() -> int:
     """How wide one thread pool in the pipeline may run."""
     return _max_threads
+
+
+def configure_context(tokens: int) -> None:
+    """Set the context window, in tokens, the models are served with."""
+    global _context_tokens
+    _context_tokens = tokens
+
+
+def context_tokens() -> int:
+    """The context window, in tokens, the models are served with."""
+    return _context_tokens
 
 
 @contextmanager
@@ -202,9 +215,12 @@ class ContextThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 
 __all__ = [
     "ContextThreadPoolExecutor",
+    "DEFAULT_CONTEXT_TOKENS",
     "DEFAULT_MAX_THREADS",
     "UsageSink",
     "configure_concurrency",
+    "configure_context",
+    "context_tokens",
     "current_usage_sink",
     "fetch_slot",
     "lm_ended",

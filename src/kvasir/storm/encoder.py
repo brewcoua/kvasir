@@ -26,6 +26,11 @@ class EmbeddingError(RuntimeError):
     """
 
 
+# Models trained to be told what a text is for: nomic-embed-text reads a query and a document
+# apart only with these prefixes, and embeds either worse without one.
+_PREFIXES = {"nomic-embed-text": ("search_query: ", "search_document: ")}
+
+
 class Encoder:
     """Embeddings from an OpenAI-compatible endpoint.
 
@@ -40,21 +45,27 @@ class Encoder:
         api_base: Optional[str] = None,
     ):
         self.embedding_model_name = model
+        self.prefixes = next((p for name, p in _PREFIXES.items() if name in model), ("", ""))
         # The gateway caches, so caching here would be a second place to invalidate.
         self.embedder = dspy.Embedder(model, caching=False, api_key=api_key, api_base=api_base)
         _register_usage_callback()
 
-    def encode(self, texts: Union[str, List[str]], max_workers: int = 5) -> np.ndarray:
+    def encode(
+        self, texts: Union[str, List[str]], max_workers: int = 5, query: bool = False
+    ) -> np.ndarray:
         """Embed one text into a 1-D array, or a list of texts into a 2-D array, row per text.
 
-        `max_workers` is accepted and ignored. Upstream issued one request per text across a thread
-        pool; dspy batches a list instead. The argument stays so existing call sites keep working.
+        `query` marks texts searched with, against texts encoded without it; texts compared with
+        each other are all encoded alike. `max_workers` is accepted and ignored. Upstream issued
+        one request per text across a thread pool; dspy batches a list instead. The argument stays
+        so existing call sites keep working.
         """
+        prefix = self.prefixes[0 if query else 1]
         if isinstance(texts, str):
-            return self._embed([texts])[0]
+            return self._embed([prefix + texts])[0]
         if not texts:
             return np.empty((0, 0))
-        return self._embed(texts)
+        return self._embed([prefix + text for text in texts])
 
     def _embed(self, texts: List[str]) -> np.ndarray:
         try:

@@ -5,8 +5,8 @@ is shown with the quotes of the claims it cites, and taken out when they do not 
 sentence that cites nothing is left alone: it is a transition, or a statement that the evidence
 does not settle something, which is what the writer is asked to say.
 
-With a grounding checker, a sentence citing one claim is checked by it, and only a sentence
-combining several claims goes to the model: tiers 2 and 3 of verification.
+With a grounding checker, every cited sentence is checked by it against the claims it cites and
+their quotes, together; the model is asked only without one. Tier 2 of verification.
 """
 
 from __future__ import annotations
@@ -32,6 +32,8 @@ _MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 _END = re.compile(r"(?<=[.!?])((?:\s*\[\d+(?:\s*,\s*\d+)*\])*)\s+(?=[A-Z*_(\"“\[])")
 # What a line keeps when its sentences are checked: a list bullet, a number, a quote marker.
 _PREFIX = re.compile(r"^(\s*(?:[-*+]|\d+\.|>)\s+)")
+# The first line of a callout, `> [!WARNING]` and its title.
+_CALLOUT = re.compile(r"^\s*> ?\[!\w+\]")
 
 Check = Callable[[str, list[Claim]], tuple[bool, str]]
 
@@ -51,11 +53,11 @@ def report(
     stream.publish(VERIFY, f"checking {total} cited sentences against their quotes", 0, total)
 
     def check(sentence: str, evidence: list[Claim]) -> tuple[bool, str]:
-        if checker is not None and len(evidence) == 1:
-            [claim] = evidence
-            if grounded(checker, f"{claim.text}\n{claim.quote}", unmarked(sentence)):
+        if checker is not None:
+            document = "\n\n".join(f"{claim.text}\n{claim.quote}" for claim in evidence)
+            if grounded(checker, document, unmarked(sentence)):
                 return True, ""
-            return False, "the grounding checker found the claim does not support it"
+            return False, "the grounding checker found the claims do not support it"
         try:
             verdict = predict(model, Verify, sentence=sentence, evidence=quoted_claims(evidence))
         except AdapterParseError as exc:
@@ -136,7 +138,8 @@ def verify(
             if not evidence:
                 supported, reason = False, "cites no claim the research gathered"
             else:
-                supported, reason = check(sentence.strip(), evidence)
+                # Bold marks a key term for the reader, and is no part of what is checked.
+                supported, reason = check(sentence.strip().replace("**", ""), evidence)
             checked()
             if supported:
                 kept.append(sentence)
@@ -147,6 +150,12 @@ def verify(
         # A list item with nothing left goes entirely, rather than leaving an empty bullet.
         if kept:
             kept_lines.append(prefix + " ".join(part.strip() for part in kept))
+    # A callout with every sentence removed goes too, rather than leaving its title alone.
+    kept_lines = [
+        line
+        for line, after in zip(kept_lines, [*kept_lines[1:], ""], strict=True)
+        if not _CALLOUT.match(line) or after.lstrip().startswith(">")
+    ]
     return "\n".join(kept_lines), removed
 
 

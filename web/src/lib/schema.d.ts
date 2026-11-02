@@ -387,6 +387,11 @@ export interface components {
          * @description Options of the `graph` method. The budgets fall back to the configured defaults.
          */
         GraphOptions: {
+            /**
+             * Research Minutes
+             * @default 20
+             */
+            research_minutes: number;
             /** Max Searches */
             max_searches?: number | null;
             /** Results Per Query */
@@ -395,13 +400,13 @@ export interface components {
             max_attempts?: number | null;
             /** Max Depth */
             max_depth?: number | null;
-            /**
-             * Branch Searches
-             * @default 6
-             */
-            branch_searches: number;
             /** Ground */
             ground?: boolean | null;
+            /**
+             * Ground Intake
+             * @default false
+             */
+            ground_intake: boolean;
             /**
              * Corroborate
              * @default false
@@ -416,6 +421,8 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
+            /** Model Writer */
+            model_writer?: string | null;
         };
         /** GraphRun */
         GraphRun: {
@@ -427,7 +434,8 @@ export interface components {
             input: components["schemas"]["Input"];
             /**
              * @default {
-             *       "branch_searches": 6,
+             *       "research_minutes": 20,
+             *       "ground_intake": false,
              *       "corroborate": false,
              *       "contradict": false
              *     }
@@ -486,6 +494,11 @@ export interface components {
             /** Ground */
             ground?: boolean | null;
             /**
+             * Ground Intake
+             * @default false
+             */
+            ground_intake: boolean;
+            /**
              * Corroborate
              * @default false
              */
@@ -499,6 +512,8 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
+            /** Model Writer */
+            model_writer?: string | null;
         };
         /** LedgerRun */
         LedgerRun: {
@@ -511,6 +526,7 @@ export interface components {
             /**
              * @default {
              *       "frontier": "breadth",
+             *       "ground_intake": false,
              *       "corroborate": false,
              *       "contradict": false
              *     }

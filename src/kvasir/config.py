@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-from kvasir.storm.runtime import DEFAULT_MAX_THREADS
+from kvasir.storm.runtime import DEFAULT_CONTEXT_TOKENS, DEFAULT_MAX_THREADS
 
 DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
@@ -49,6 +49,8 @@ class Settings:
     openai_api_base: str
     model_fast: str
     model_strong: str
+    # The model research reports are outlined and written with. None: the strong model.
+    model_writer: str | None
     embedding_model: str
     # A grounding checker such as MiniCheck, or none. See `kvasir.research.ground`.
     model_checker: str | None
@@ -61,6 +63,7 @@ class Settings:
     keep_call_content: bool
     max_concurrent_runs: int
     max_threads: int
+    context_tokens: int
     search_top_k: int
     max_conv_turn: int
     max_perspective: int
@@ -109,6 +112,11 @@ class Settings:
             openai_api_base=env["OPENAI_API_BASE"].strip().rstrip("/"),
             model_fast=_model(env, "KVASIR_MODEL_FAST"),
             model_strong=_model(env, "KVASIR_MODEL_STRONG"),
+            model_writer=(
+                _model(env, "KVASIR_MODEL_WRITER")
+                if env.get("KVASIR_MODEL_WRITER", "").strip()
+                else None
+            ),
             embedding_model=(
                 _model(env, "KVASIR_EMBEDDING_MODEL")
                 if env.get("KVASIR_EMBEDDING_MODEL", "").strip()
@@ -134,6 +142,9 @@ class Settings:
             # How wide each of the pipeline's thread pools runs, and how many search or page
             # requests may be in flight at once across the whole process.
             max_threads=_positive_int(env, "KVASIR_MAX_THREADS", DEFAULT_MAX_THREADS),
+            # The context window the models are served with, such as Ollama's `num_ctx`. It sizes
+            # how much of a page one intake call reads, and the room left for its answer.
+            context_tokens=_positive_int(env, "KVASIR_CONTEXT_TOKENS", DEFAULT_CONTEXT_TOKENS),
             search_top_k=_positive_int(env, "KVASIR_SEARCH_TOP_K", 3),
             max_conv_turn=_positive_int(env, "KVASIR_MAX_CONV_TURN", 3),
             max_perspective=_positive_int(env, "KVASIR_MAX_PERSPECTIVE", 3),

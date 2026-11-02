@@ -12,8 +12,9 @@ from fakes import PAGE, Stream, claim, research_settings
 from kvasir.research import fetch, verify
 from kvasir.research.clarify import clarify
 from kvasir.research.fetch import FetchError, extract, split
-from kvasir.research.read import intake
+from kvasir.research.read import GAP, intake, pack, page_characters
 from kvasir.research.render import matrix, render
+from kvasir.research.style import clean
 from kvasir.research.text import names, quoted
 from kvasir.schemas.results import Cell, Criterion, Row
 
@@ -273,3 +274,76 @@ def test_a_table_has_no_rank_and_keeps_its_cells_whole():
 )
 def test_a_cited_claim_must_name_the_option(entity, text, named):
     assert names(entity, text) is named
+
+
+def test_a_call_reads_what_the_context_holds_once_the_prompt_and_answer_are_out():
+    # (16384 - 1000 prompt - 4096 answer) tokens, at 3.5 characters each, less a tenth.
+    assert page_characters(16384) == 35557
+    assert page_characters(32768) > 2 * page_characters(16384)
+
+
+def test_pieces_are_packed_in_order_into_texts_that_fit():
+    assert pack(["aaaa", "bb", "cccccc", "d"], 6 + len(GAP) + 1) == [
+        f"aaaa{GAP}bb",
+        f"cccccc{GAP}d",
+    ]
+    # Too long to share, a piece is read alone.
+    assert pack(["a" * 20, "b"], 10) == ["a" * 20, "b"]
+
+
+def test_a_report_opens_with_its_summary_then_contents_linking_each_heading():
+    claims = {1: claim(1, "https://a"), 2: claim(2, "https://b")}
+    sections = [
+        ("Trade & war", "### Ships\n\nShips sank [2].\n\n### Ports [2]\n\nPorts burned."),
+        ("Trade & war", "Again."),
+        ("Drought", "Rain failed [1]."),
+    ]
+
+    report, citations = render(sections, claims, "- Rain failed [1].\n- Ships sank [2].")
+
+    assert report.split("\n\n## ")[0] == (
+        "> [!SUMMARY] TL;DR\n> - Rain failed [1].\n> - Ships sank [2].\n\n"
+        "> [!ABSTRACT] Contents\n"
+        "> - [Trade & war](#trade--war)\n"
+        ">   - [Ships](#ships)\n"
+        ">   - [Ports](#ports)\n"
+        "> - [Trade & war](#trade--war-1)\n"
+        "> - [Drought](#drought)"
+    )
+    # Sources are numbered in reading order, the summary first.
+    assert [c.url for c in citations] == ["https://a", "https://b"]
+
+
+def test_a_short_report_has_no_contents():
+    report, _ = render([("A", "a"), ("B", "b")], {})
+
+    assert report == "## A\n\na\n\n## B\n\nb"
+
+
+def test_a_callout_keeps_its_supported_sentences_and_goes_once_it_has_none():
+    claims = {1: claim(1, "https://a")}
+    text = "> [!WARNING] Disputed\n> **Dates** differ [1].\n\n> [!NOTE]\n> Wrong [1].\n\nAfter [1]."
+    asked = []
+
+    def check(sentence, evidence):
+        asked.append(sentence)
+        return not sentence.startswith("Wrong"), "no"
+
+    kept, removed = verify.verify("S", text, claims, check)
+
+    assert kept == "> [!WARNING] Disputed\n> **Dates** differ [1].\n\n\nAfter [1]."
+    assert [r.sentence for r in removed] == ["Wrong [1]."]
+    # Bold is for the reader, not part of what is checked.
+    assert asked[0] == "Dates differ [1]."
+
+
+def test_the_style_pass_takes_out_filler_but_not_quotes_or_code():
+    text = (
+        "Notably, **Ugarit** fell 1190—1185 BC [1]. It is important to note that trade — "
+        'the lifeline — was really very fragile. He wrote "very — late" and `a — b`.'
+    )
+
+    assert clean(text) == (
+        "**Ugarit** fell 1190–1185 BC [1]. Trade, the lifeline, was fragile. "
+        'He wrote "very — late" and `a — b`.'
+    )

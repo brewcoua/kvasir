@@ -1,19 +1,24 @@
-"""Exploring the graph: search for the question worth most, take in its claims, ask what they raise.
+"""Exploring the graph: search for the question proof numbers pick, take in its claims, ask what
+they raise.
 
 Each step reads only the question's path from its first question and the evidence found for it,
 never the whole graph, so its input stays small however large the graph grows. A question is not
-judged again on what other branches find: that would read the whole graph.
+judged again on what other branches find: that would read the whole graph. It is judged again on
+what its own children find, once they are all answered.
 """
 
 from __future__ import annotations
 
 import logging
+import math
+import time
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 
 from kvasir.methods.graph.graph import path
-from kvasir.methods.graph.signatures import Expand
-from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier, roots
+from kvasir.methods.graph.proof import children, pick
+from kvasir.methods.graph.signatures import Expand, Gaps
+from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.loop import FAILED_SEARCHES, QUERY_SHAPES
 from kvasir.methods.ledger.questions import Question, add_questions, as_results
 from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
@@ -27,9 +32,25 @@ from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG
 
-# Questions one step raises at most.
-RAISED = 2
-
+# Progressive widening (Couëtoux et al. 2011): a question not yet answered, searched n times, may
+# hold at most ceil(WIDEN * n ** ALPHA) children, and never more than MAX_CHILDREN; one that keeps
+# coming back weak earns more. An answered question holds at most FOLLOW_UPS, a harder question
+# going deeper, so the research does not end once the first questions are answered. Untuned first
+# guesses.
+WIDEN = 2
+ALPHA = 0.5
+MAX_CHILDREN = 4
+FOLLOW_UPS = 1
+# New first questions one gap call adds at most, and dry gap calls in a row before the research
+# ends. A gap call is made once no question can still be settled and time is left. It is dry when it
+# adds no question, or the questions it added found fewer than `GAP_YIELD` claims a search: the
+# research has drifted from the brief to questions the web says little about.
+GAP_QUESTIONS = 3
+GAP_STALL = 2
+GAP_YIELD = 2
+# Questions in the graph at most. The time budget bounds what is searched; this bounds the input
+# of the writing and the size of the graph shown.
+MAX_QUESTIONS = 80
 logger = logging.getLogger(__name__)
 
 
@@ -42,29 +63,52 @@ def explore(
     questions: list[Question],
     claims: list[Claim],
     frontier: Frontier,
-    budget: int,
+    deadline: float,
+    budget: int | None,
     per_query: int,
     max_attempts: int,
     max_depth: int,
-    branch_searches: int,
     stream: ProgressStream,
 ) -> int:
-    """Explore from `questions` best first, and return how many searches that took.
+    """Explore from `questions`, and return how many searches that took.
 
-    Stops when `budget` searches are spent or every branch is closed. A branch closes when
-    `BRANCH_STALL` searches in a row on it add no claim and no source, or once it has spent
-    `branch_searches`. A question raises others only above `max_depth`.
+    Stops at `deadline`, a `time.monotonic()`, once `budget` searches are spent when there is one,
+    or once `GAP_STALL` gap calls in a row are dry. A question raises others only above
+    `max_depth`.
     """
     seen: set[str] = set()
-    spent: dict[int, int] = {}
-    searches = failed = 0
+    searches = failed = stalled = 0
     failures: list[str] = []
-    while searches < budget:
-        question = frontier.pick(questions, max_attempts)
+    # Searches and claims when the last gap call was made.
+    gapped: tuple[int, int] | None = None
+    while time.monotonic() < deadline and (budget is None or searches < budget):
+        question = pick(questions, frontier, max_attempts)
         if question is None:
-            break
+            if gapped is not None and (spent := searches - gapped[0]):
+                found = len(claims) - gapped[1]
+                stalled = stalled + 1 if found < GAP_YIELD * spent else 0
+            if stalled >= GAP_STALL:
+                stream.publish(
+                    RESEARCH, f"stopping: the last {GAP_STALL} gaps found little or nothing new"
+                )
+                break
+            gapped = (searches, len(claims))
+            asked = len(questions)
+            add_questions(
+                encoder, questions, gaps(models["decompose"], brief, questions), None, MAX_QUESTIONS
+            )
+            if len(questions) == asked:
+                stalled += 1
+            record_questions(as_results(questions))
+            stream.publish(
+                RESEARCH,
+                f"no question left to settle; asked what the report still lacks: "
+                f"{len(questions) - asked} new questions",
+            )
+            continue
         searches += 1
-        stream.publish(RESEARCH, f"search {searches} of at most {budget}, for: {question.text}")
+        left = math.ceil((deadline - time.monotonic()) / 60)
+        stream.publish(RESEARCH, f"search {searches}, {left} min left, for: {question.text}")
         query = str(
             predict(
                 models["plan"],
@@ -98,27 +142,25 @@ def explore(
             searches,
             f"search {searches}",
             stream,
-            models.get("ground"),
+            models.get("ground_intake"),
         )
         claims.extend(new)
-        root = roots(questions)[question.id]
-        spent[root] = spent.get(root, 0) + 1
         if frontier.searched(questions, question, new):
             stream.publish(
                 RESEARCH,
                 f"closing the branch of {question.text}: "
                 f"{BRANCH_STALL} searches in a row added nothing new",
             )
-        elif spent[root] >= branch_searches and root not in frontier.closed:
-            frontier.closed.add(root)
-            stream.publish(
-                RESEARCH,
-                f"closing the branch of {question.text}: it spent its {branch_searches} searches",
-            )
         if new:
             raised = expand(models["check"], brief, questions, claims, question, new)
-            if question.depth < max_depth:
-                add_questions(encoder, questions, raised[:RAISED], question)
+            if question.status == "answered":
+                room = FOLLOW_UPS
+            else:
+                room = min(MAX_CHILDREN, math.ceil(WIDEN * question.attempts**ALPHA))
+            room -= len(children(questions)[question.id])
+            if question.depth < max_depth and room > 0:
+                add_questions(encoder, questions, raised[:room], question, MAX_QUESTIONS)
+            settle(models["check"], brief, questions, claims, question)
         if question.status == "open" and question.attempts >= max_attempts:
             question.status = "unresolved"
         # Before the event, so the status that follows it carries the graph as it now stands.
@@ -129,6 +171,38 @@ def explore(
             f"{question.text}: {question.status}",
         )
     return searches
+
+
+def gaps(model: GatewayModel, brief: str, questions: list[Question]) -> list[NamedQuestion]:
+    """New first questions on what the questions asked so far leave out of the brief."""
+    listed = "\n".join(f"{q.title or q.text}: {q.text} ({q.status})" for q in questions)
+    try:
+        return list(predict(model, Gaps, brief=brief, questions=listed).raised)[:GAP_QUESTIONS]
+    except AdapterParseError as exc:
+        logger.warning("could not read what the report still lacks: %s", exc)
+        return []
+
+
+def settle(
+    model: GatewayModel,
+    brief: str,
+    questions: list[Question],
+    claims: list[Claim],
+    question: Question,
+) -> None:
+    """Once `question` is answered and so is every question beside it, judge their parent again
+    on what they rest on, and so on up while each parent is answered in turn."""
+    by_id = {c.id: c for c in claims}
+    below = children(questions)
+    above = {q.id: q for q in questions}
+    while question.status == "answered" and question.parent is not None:
+        parent = above[question.parent]
+        if parent.status == "answered" or any(c.status != "answered" for c in below[parent.id]):
+            return
+        ids = sorted({i for c in below[parent.id] for i in c.claims} - set(parent.claims))
+        # Raises nothing: a parent its children answered has nothing left to raise.
+        expand(model, brief, questions, claims, parent, [by_id[i] for i in ids])
+        question = parent
 
 
 def expand(

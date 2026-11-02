@@ -31,7 +31,7 @@ from kvasir.research import verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim
 from kvasir.research.corroborate import cross_check
-from kvasir.research.render import matrix, render
+from kvasir.research.render import SUMMARY, matrix, render
 from kvasir.research.text import names
 from kvasir.runners import build_checker, build_research_models, build_research_tools
 from kvasir.runs.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
@@ -66,10 +66,14 @@ def run_research(
 ) -> ResearchResult:
     """Research a question to a cited report, blocking for minutes. Never call this on the loop."""
     started = time.monotonic()
-    models = build_research_models(settings, options.model_fast, options.model_strong)
+    models = build_research_models(
+        settings, options.model_fast, options.model_strong, options.model_writer
+    )
     checker = build_checker(settings)
     if checker is not None and _setting(options.ground, True):
         models["ground"] = checker
+    if checker is not None and options.ground_intake:
+        models["ground_intake"] = checker
     encoder, searxng = build_research_tools(settings)
     budget = _setting(options.max_searches, settings.research_max_searches)
     per_query = _setting(options.results_per_query, settings.research_results_per_query)
@@ -198,16 +202,20 @@ def run_research(
         sections.append(
             (title, write.section(models["write"], encoder, brief, titles, title, sections, claims))
         )
-    stream.publish(WRITE, "assembled the report", len(titles), len(titles))
     if rows:
         sections.insert(0, (TABLE_TITLES[output], matrix(rows, criteria)))
+    stream.publish(WRITE, "summing up the report", len(titles), len(titles))
+    summary = write.summary(models["tldr"], brief, sections)
+    stream.publish(WRITE, "assembled the report", len(titles), len(titles))
     if left := open_questions(ledger):
         sections.append(("Open questions", left))
 
     by_id = {claim.id: claim for claim in claims}
-    sections, removed = verify.report(
-        models["verify"], sections, by_id, stream, models.get("ground")
+    # The summary is checked with the sections, so the checker is loaded once. Repair leaves it be.
+    checked, removed = verify.report(
+        models["verify"], [(SUMMARY, summary), *sections], by_id, stream, models.get("ground")
     )
+    (_, summary), *sections = checked
 
     def judge(question: Question) -> None:
         loop.check(models["check"], encoder, brief, claims, question)
@@ -219,7 +227,7 @@ def run_research(
     cross_check(models, encoder, claims, stream, options.corroborate, options.contradict)
 
     by_id = {claim.id: claim for claim in claims}
-    report, citations = render(sections, by_id)
+    report, citations = render(sections, by_id, summary)
     return ResearchResult(
         report=report,
         assumptions=list(framed.assumptions),
@@ -258,6 +266,7 @@ def _defaults(settings: Settings) -> dict[str, Any]:
         "ground": settings.model_checker is not None,
         "model_fast": settings.model_fast,
         "model_strong": settings.model_strong,
+        "model_writer": settings.model_writer or settings.model_strong,
     }
 
 

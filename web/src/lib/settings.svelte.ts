@@ -20,12 +20,12 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
     label: "Research",
     title: "Research",
     settings: [
-      { name: "max_searches", label: "Searches", type: "number", for: ["research", "graph"], hint: "Searches in the whole run, before those for empty table cells." },
+      { name: "research_minutes", label: "Research minutes", type: "number", for: ["graph"], hint: "Graph only: minutes spent searching before the report is written." },
+      { name: "max_searches", label: "Searches", type: "number", for: ["research", "graph"], hint: "Searches in the whole run, before those for empty table cells. Graph: an optional cap on top of the time." },
       { name: "results_per_query", label: "Pages per search", type: "number", for: ["research", "graph"], hint: "Results read from each search." },
       { name: "max_attempts", label: "Attempts per question", type: "number", for: ["research", "graph"], hint: "Differently shaped queries tried before a question is given up." },
       { name: "follow_ups", label: "Follow-up questions", type: "checkbox", for: ["research"], hint: "Whether an answered question can add harder ones." },
       { name: "max_depth", label: "Follow-up depth", type: "number", for: ["research", "graph"], hint: "Levels of follow-ups below the first questions." },
-      { name: "branch_searches", label: "Searches per branch", type: "number", for: ["graph"], hint: "Graph only: searches one first question and its follow-ups may spend." },
     ],
   },
   {
@@ -42,7 +42,8 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
     label: "Verification",
     title: "Verification",
     settings: [
-      { name: "ground", label: "Grounding checker", type: "checkbox", for: ["research", "graph"], hint: "Check each claim against its page, and each sentence citing one claim. Needs KVASIR_MODEL_CHECKER." },
+      { name: "ground", label: "Grounding checker", type: "checkbox", for: ["research", "graph"], hint: "Check each cited sentence against the claims it cites. Needs KVASIR_MODEL_CHECKER." },
+      { name: "ground_intake", label: "Ground claims", type: "checkbox", for: ["research", "graph"], hint: "Also check each claim against its page as it is read. Slow when the checker cannot stay loaded beside the fast model." },
       { name: "corroborate", label: "Corroborate", type: "checkbox", for: ["research", "graph"], hint: "Look for other sites supporting each claim." },
       { name: "contradict", label: "Contradictions", type: "checkbox", for: ["research", "graph"], hint: "Look for other sites disagreeing with each claim." },
     ],
@@ -65,6 +66,7 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
     settings: [
       { name: "model_fast", label: "Fast model", type: "text", for: ["research", "graph", "article"], hint: "For research and articles. Passed to the gateway as written." },
       { name: "model_strong", label: "Strong model", type: "text", for: ["research", "graph", "article"], hint: "For research and articles. Passed to the gateway as written." },
+      { name: "model_writer", label: "Writer model", type: "text", for: ["research", "graph"], hint: "Outlines and writes research reports. Passed to the gateway as written." },
     ],
   },
 ];

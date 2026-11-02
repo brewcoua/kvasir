@@ -53,7 +53,10 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
             # The question's search, then the repair's four for the removed sentence, which find
             # only pages already read.
             "plan": [{"query": "kvasir stone found"}] + [{"query": f"gold {n}"} for n in range(4)],
-            "intake": [
+            # The same for both pages: they are read in parallel, so either may take either reply.
+            # Neither quote is in the snippet page B falls back to.
+            "intake": 2
+            * [
                 {
                     "findings": [
                         {
@@ -63,12 +66,13 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
                         },
                         {"claim": "Made of gold", "quote": "solid gold", "confidence": "low"},
                     ]
-                },
-                {"findings": []},
+                }
             ],
             "check": [{"status": "answered", "claims": [1, 7], "missing": "", "follow_ups": []}],
             "outline": [{"sections": ["Findings"]}],
             "write": [{"text": "It was found in 1904 [1][7]. It is made of gold [1]."}],
+            # No summary, so the report is the sections alone.
+            "tldr": [{"points": []}],
             "verify": [
                 {"supported": True, "reason": "the quote gives the year"},
                 {"supported": False, "reason": "the quote says nothing about gold"},
@@ -109,9 +113,9 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         ("When was the stone found?", "answered", [1], ["kvasir stone found"])
     ]
     assert [stage for stage, _ in stream.events][:2] == ["brief", "research"]
-    # One event per piece read, each naming its page, the snippet fallback included.
-    assert ("research", "search 1: page 1/2, part 1/1: A") in stream.events
-    assert ("research", "search 1: page 2/2, part 1/1: B") in stream.events
+    # One event per intake call, each naming its page, the snippet fallback included.
+    assert ("research", "search 1: read page 1/2: A") in stream.events
+    assert ("research", "search 1: read page 2/2: B") in stream.events
     assert (
         "research",
         "search 1: 1 new claims, 1 in all; When was the stone found?: answered",
@@ -219,6 +223,8 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
             "judge": [{"ranking": ["Alpha", "Beta"]}, {"ranking": ["1. alpha"]}],
             "outline": [{"sections": ["Alpha"]}],
             "write": [{"text": "Alpha is the fastest [1]."}],
+            # No summary, so the report is the sections alone.
+            "tldr": [{"points": []}],
             "verify": [{"supported": True, "reason": "the quote gives the speed"}],
         },
     )
@@ -514,7 +520,7 @@ def test_an_answer_resting_on_no_shown_claim_is_open(monkeypatch):
 
 def test_a_repeated_question_is_not_added(monkeypatch):
     class Words:
-        def encode(self, texts):
+        def encode(self, texts, query=False):
             return [[1.0, 0.0] if "year" in text else [0.0, 1.0] for text in texts]
 
     ledger = [Question(id=1, text="Which year?")]

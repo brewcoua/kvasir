@@ -61,8 +61,9 @@ def add_questions(
     ledger: list[Question],
     asked: list[NamedQuestion],
     parent: Question | None = None,
+    limit: int = MAX_QUESTIONS,
 ) -> None:
-    """Add to `ledger` those of `asked` that repeat no question in it, up to `MAX_QUESTIONS`."""
+    """Add to `ledger` those of `asked` that repeat no question in it, up to `limit`."""
     asked = [q for q in asked if q.question.strip()]
     if not asked:
         return
@@ -70,7 +71,7 @@ def add_questions(
     vectors = list(encoder.encode([q.text for q in ledger] + texts))
     kept = vectors[: len(ledger)]
     for named, text, vector in zip(asked, texts, vectors[len(ledger) :], strict=True):
-        if len(ledger) >= MAX_QUESTIONS:
+        if len(ledger) >= limit:
             return
         if kept and cosine_similarity([vector], kept).max() > DUPLICATE_QUESTION:
             continue
