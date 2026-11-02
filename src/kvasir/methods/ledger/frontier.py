@@ -60,7 +60,7 @@ class Frontier:
         and the queries already tried."""
         vector = self._question(question)
         relevance = float(cosine_similarity(vector, self.brief)[0][0])
-        held = self._held()
+        held = self.held()
         novelty = 1.0 - float(cosine_similarity(vector, held).max()) if len(held) else 1.0
         gap = GAP_BONUS if question.status in ("weak", "contradicted") else 0.0
         return (
@@ -87,7 +87,7 @@ class Frontier:
     def merge(self, new: list[Claim]) -> int:
         """How many of `new`, the last claims of the run, added a claim or a source. A repeat from
         another site is recorded as corroborating the claim it repeats."""
-        vectors = self._held()
+        vectors = self.held()
         before = len(self.claims) - len(new)
         # Row i is claim i, so the closest row names the claim repeated.
         held = list(vectors[:before])
@@ -107,7 +107,7 @@ class Frontier:
             added += 1
         return added
 
-    def _held(self) -> np.ndarray:
+    def held(self) -> np.ndarray:
         """Every claim's vector, encoding only those not encoded before."""
         missing = self.claims[len(self.claim_vectors) :]
         if missing:

@@ -99,7 +99,15 @@ def research(
             ).query
         ).strip()
         try:
-            hits = search(searxng, [query], per_query, seen)
+            hits = search(
+                searxng,
+                [query],
+                per_query,
+                seen,
+                encoder,
+                question.text,
+                frontier.held() if frontier is not None else None,
+            )
         except SearchUnavailable as exc:
             # The attempt is not spent, since the query was never answered; the budget is.
             failed += 1

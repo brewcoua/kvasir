@@ -63,7 +63,7 @@ src/kvasir/
     progress.py       ProgressStream and the stage names
   research/           shared by every research method
     calls.py          calling a model with a signature
-    search.py         searching, skipping URLs already read
+    search.py         searching, skipping URLs already read, choosing which results to read
     fetch.py          downloading a page or a PDF as text, splitting it into pieces
     read.py           fetching the hits, filtering pieces, intake
     text.py           matching quotes and names word for word

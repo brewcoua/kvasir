@@ -117,6 +117,7 @@ class SearXNG(dspy.Retrieve):
                                 "snippets": [r.get("content", "")],
                                 "title": r.get("title", ""),
                                 "url": r["url"],
+                                "score": r.get("score", 0.0),
                             }
                         )
             except Exception as e:

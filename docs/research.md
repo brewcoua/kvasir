@@ -166,6 +166,9 @@ follow-up, while one that keeps coming back `weak` is searched again and split i
 
 - **Time, not a count.** Research runs for `research_minutes` (20 by default) from the start of the
   run, then the report is written. `max_searches` is an optional cap on top, unset by default.
+- **Pages.** A search reads up to `RESULTS_PER_QUERY` (5) pages, where the ledger reads 3, since
+  the graph picks them through the fusion in [Reading a page](#reading-a-page). The graph does not
+  read `research.results_per_query`; a run sets `results_per_query` to change it.
 - **Gaps.** Once no question can still be settled and time is left, a `Gaps` call reads the brief
   and every question's name, text and status, and returns up to `GAP_QUESTIONS` (3) new first
   questions on what the report still lacks, each starting a new branch. The research ends early
@@ -274,11 +277,15 @@ could not search for more.
 
 ## Reading a page
 
-Each search keeps `results_per_query` results not read before in this run. Each page goes through
-the same steps.
+Each search ranks the results not read before in this run and reads the first `results_per_query`
+of them: 3 in the ledger, 5 in the graph. Each page goes through the same steps.
 
 ```mermaid
 flowchart LR
+    search["SearXNG results<br/>not read before"]
+    pool["top 20 by<br/>SearXNG score"]
+    fuse["fuse 3 rankings<br/>weighted RRF"]
+    pick["pick results_per_query<br/>skip repeats"]
     fetch["fetch_text<br/>HTML or PDF"]
     snippet["search snippet"]
     split["split<br/>6,000-character pieces"]
@@ -290,6 +297,7 @@ flowchart LR
     store[("claims")]
     drop["dropped"]
 
+    search --> pool --> fuse --> pick --> fetch
     fetch --> split
     fetch -- unreadable --> snippet --> split
     split --> filter --> pack --> intake --> quote
@@ -299,6 +307,19 @@ flowchart LR
     ground -- no --> drop
 ```
 
+- **Pick.** `research/search.py` sorts a query's unseen results by SearXNG's `score`, not by the
+  order of the response, which SearXNG groups by category, and keeps the first `POOL` (20). It
+  ranks them three ways: by SearXNG's score; by relevance, the cosine similarity between the
+  question and the result's `title` and snippet; and by novelty, 1 less the highest cosine
+  similarity to a claim the run holds. Novelty applies only when the run holds claims. The
+  rankings are fused as `Σ w / (RRF_K + rank)`, with `RRF_K` 60 and weights
+  `SEARXNG_WEIGHT` 1.0, `RELEVANCE_WEIGHT` 1.0 and `NOVELTY_WEIGHT` 0.5. The weights are a first
+  guess, not tuned. Results are then taken best first, skipping one whose domain was already taken
+  for the query, or whose snippet has a cosine similarity above `NEAR_DUPLICATE` (0.9) to one
+  taken, until `results_per_query` are taken. A skipped result is not marked seen, so a later
+  search can take it. Without an encoder, as in the
+  ledger's background search for `brief`, only the score order and the domain skip apply. The
+  ledger passes the claims held by its frontier when it has one, and the graph always does.
 - **Fetch.** `fetch_text` downloads with `httpx` inside a process-wide fetch permit, for 20 seconds
   at most and 20 MB at most. HTML is reduced to visible text with BeautifulSoup, dropping scripts,
   styles, navigation, headers, footers, asides and forms. A PDF's text layer is read with `pypdf`,
@@ -313,7 +334,8 @@ flowchart LR
   Closest to the question, not the brief: a page found for one narrow fact holds it in one piece,
   which the brief would not rank first. With `nomic-embed-text`, the encoder prefixes the question
   `search_query: ` and each piece `search_document: `, as the model was trained to read them;
-  texts compared with each other, such as two questions, all take the document prefix.
+  texts compared with each other, such as two questions, all take the document prefix. The search
+  ranking above encodes the question the same way.
 - **Pack.** The kept pieces of a page are joined in page order, marked apart by `[...]`, into as
   few texts as fit one call (`pack`). A call holds `page_characters(context_tokens)` characters:
 
@@ -347,9 +369,18 @@ flowchart LR
   that the page says it. The option is off by default: on a GPU that cannot hold the checker beside
   the fast model, every page would swap the two.
 
-Intake is most of a run's calls: a search reads up to 3 pages, one call each at the default
-context. Each call is its own progress event once it returns, since the page read is what a
-follower wants to see.
+Intake is most of a run's calls: a search reads up to 3 pages in the ledger and 5 in the graph, one
+call each at the default context. Each call is its own progress event once it returns, since the
+page read is what a follower wants to see.
+
+The methods behind picking:
+
+| Method | What it does | Use here |
+| --- | --- | --- |
+| Reciprocal Rank Fusion (Cormack, Clarke and Büttcher, SIGIR 2009) | Combines rankings with `score = Σ w_i / (k + rank_i)`, k = 60. It uses ranks only, so no score scaling is needed | Merges SearXNG's order with kvasir's own |
+| CombSUM / CombMNZ (Fox and Shaw 1994) | Adds normalized scores; MNZ multiplies by how many systems found the result | SearXNG's `score` already does this across engines |
+| Embedding similarity of the snippet | Cosine between the question and `title + snippet`, with the encoder kvasir already uses | kvasir's relevance ranking |
+| MMR (Carbonell and Goldstein 1998) | Picks greedily by `λ·relevance − (1−λ)·max similarity to what is already held or picked` | Avoids pages that repeat claims the run already has; kvasir uses the cheap form: novelty as a ranking, plus a near-duplicate and domain skip |
 
 ## Ranking and comparing
 

@@ -122,7 +122,9 @@ def explore(
             ).query
         ).strip()
         try:
-            hits = search(searxng, [query], per_query, seen)
+            hits = search(
+                searxng, [query], per_query, seen, encoder, question.text, frontier.held()
+            )
         except SearchUnavailable as exc:
             failed += 1
             failures += exc.failures

@@ -163,6 +163,24 @@ def test_searxng_follows_its_redirect_to_search(monkeypatch):
     assert [result["url"] for result in results] == ["https://example.invalid/a"]
 
 
+def test_searxng_passes_on_the_score_of_a_result(monkeypatch):
+    from kvasir.storm.rm import SearXNG
+
+    class _Response:
+        def json(self):
+            return {
+                "results": [
+                    {"url": "https://example.invalid/a", "score": 2.5},
+                    {"url": "https://example.invalid/b"},
+                ]
+            }
+
+    monkeypatch.setattr("kvasir.storm.rm.httpx.get", lambda url, **kwargs: _Response())
+    results = SearXNG(searxng_api_url="http://searxng.invalid")("a")
+
+    assert [r["score"] for r in results] == [2.5, 0.0]
+
+
 def test_searxng_says_why_a_query_came_back_empty(monkeypatch):
     """A rate-limited engine answers with no results, which reads as a topic nothing covers."""
     from kvasir.storm.rm import SearXNG

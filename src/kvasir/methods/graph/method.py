@@ -42,6 +42,9 @@ from kvasir.storm.lm import GatewayModel
 # Levels of raised questions below the first questions, unless the run sets it. Deeper than the
 # ledger's: the time budget, not the depth, is what bounds the graph.
 MAX_DEPTH = 4
+# Pages read per search. The ledger's setting is 3; the graph picks them through the fusion in
+# `research.search`, so it can afford to read more.
+RESULTS_PER_QUERY = 5
 # Sections a report has at most, as STORM's outlines do; more read as a list of findings.
 MAX_SECTIONS = 7
 # Questions the report lists as open, at most.
@@ -93,7 +96,7 @@ def run_graph(
         Frontier(encoder, brief, claims),
         started + options.research_minutes * 60,
         options.max_searches,
-        options.results_per_query or settings.research.results_per_query,
+        options.results_per_query or RESULTS_PER_QUERY,
         options.max_attempts or settings.research.max_attempts,
         options.max_depth or MAX_DEPTH,
         stream,
@@ -210,7 +213,7 @@ def open_questions(questions: list[Question]) -> str:
 
 def _defaults(settings: Settings) -> dict[str, Any]:
     return {
-        "results_per_query": settings.research.results_per_query,
+        "results_per_query": RESULTS_PER_QUERY,
         "max_attempts": settings.research.max_attempts,
         "max_depth": MAX_DEPTH,
         "ground": settings.model.checker is not None,

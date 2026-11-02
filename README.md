@@ -244,8 +244,8 @@ curl -N -X POST localhost:8080/v1/runs \
 
 Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has the same fields as a
 `ledger` run. Options: `research_minutes`, `max_searches` (an optional cap on top of the time),
-`results_per_query`, `max_attempts`, `max_depth` (4 by default), `ground`, `ground_intake`,
-`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_reason`. See
+`results_per_query` (5 by default), `max_attempts`, `max_depth` (4 by default), `ground`,
+`ground_intake`, `corroborate`, `contradict`, `model_fast`, `model_strong`, `model_reason`. See
 [`docs/research.md`](docs/research.md#the-graph-method).
 
 ### Check claims more strictly
@@ -517,7 +517,7 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 | `KVASIR_STORM_MAX_CONV_TURN` | `3` | Questions per perspective. |
 | `KVASIR_STORM_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
 | `KVASIR_RESEARCH_MAX_SEARCHES` | `16` | Research: searches in a run, before the 8 for empty cells. |
-| `KVASIR_RESEARCH_RESULTS_PER_QUERY` | `3` | Research: pages read per search. |
+| `KVASIR_RESEARCH_RESULTS_PER_QUERY` | `3` | Research: pages read per search by the ledger. The graph reads 5 unless a run sets `results_per_query`. |
 | `KVASIR_RESEARCH_MAX_ATTEMPTS` | `4` | Research: queries tried on one question before it is given up. |
 | `KVASIR_RESEARCH_FOLLOW_UPS` | `true` | Research: whether an answered question can add harder ones. `true` or `false`. |
 | `KVASIR_RESEARCH_MAX_DEPTH` | `2` | Research: levels of follow-ups below the first questions. |
