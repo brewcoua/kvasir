@@ -1318,3 +1318,87 @@ table.runs a.topic:hover {
   margin-top: 1em;
   border-top: 1px solid var(--line);
 }
+.steps-view {
+  height: 600px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  --xy-background-color: var(--bg);
+  --xy-edge-stroke: var(--dim);
+}
+.step-card {
+  box-sizing: border-box;
+  width: 220px;
+  height: 64px;
+  padding: 0.3rem 0.5rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: default;
+}
+.step-card.stage {
+  width: 240px;
+  height: 76px;
+  font-weight: 600;
+}
+.step-card.pending {
+  opacity: 0.55;
+}
+.step-card.done {
+  border-color: var(--ok);
+}
+.step-card.question.open.done {
+  border-color: var(--line);
+}
+.step-card.question.answered {
+  border-color: var(--ok);
+}
+.step-card.question.weak {
+  border-color: var(--busy);
+}
+.step-card.question.contradicted {
+  border-color: var(--bad);
+}
+.step-card.current {
+  border-color: var(--busy);
+  animation: step-pulse 1.4s ease-in-out infinite;
+}
+@keyframes step-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--busy) 35%, transparent);
+  }
+}
+.selected .step-card {
+  outline: 2px solid var(--accent);
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.step-kind {
+  color: var(--dim);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.step-count {
+  background: var(--line);
+  border-radius: 8px;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+}
+.step-toggle {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+.step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-chosen {
+  margin-top: 0.75rem;
+}

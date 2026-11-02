@@ -207,3 +207,48 @@ test("the theme is kept", async ({ page }) => {
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "amber");
 });
+
+test("steps lay a run out as stages that open into questions and attempts", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  const cards = run(page).locator(".step-card");
+  for (const stage of ["brief", "research", "write", "verify"]) {
+    await expect(run(page).getByTestId(`step-stage:${stage}`)).toBeVisible();
+  }
+  await expect(cards.filter({ hasText: /^question/ })).toHaveCount(0);
+
+  await run(page).getByTestId("step-stage:research").click();
+  await expect(cards.filter({ hasText: /^question/ }).first()).toBeVisible();
+  await expect(cards.filter({ hasText: /^attempt/ })).toHaveCount(0);
+
+  await run(page).getByTestId("step-q:1").click();
+  await expect(cards.filter({ hasText: /^attempt/ }).first()).toBeVisible();
+  // The pan brings the newly shown cards into the frame.
+  await expect(cards.filter({ hasText: /^attempt/ }).first()).toBeInViewport({ ratio: 1 });
+});
+
+test("steps show question cards for a run whose questions only its result holds", async ({ page }) => {
+  await page.goto("/#/runs/wal/steps");
+  await run(page).getByTestId("step-stage:research").click();
+  await expect(run(page).locator(".step-card").filter({ hasText: /^question/ }).first()).toBeVisible();
+});
+
+test("question cards show their status", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  await run(page).getByTestId("step-stage:research").click();
+  await expect(run(page).locator(".step-card.question .question-status").first()).toBeVisible();
+});
+
+test("a step with calls opens them in the calls tab", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  await run(page).getByTestId("step-stage:research").click();
+  await run(page).getByTestId("step-q:1").click();
+  await run(page).locator(".step-card.attempt").first().click();
+  await run(page).locator(".step-chosen").getByRole("button", { name: /calls?$/ }).click();
+  await expect(page).toHaveURL(/#\/runs\/graph\/calls$/);
+  await expect(run(page).locator(".filter", { hasText: "Calls after" })).toBeVisible();
+});
+
+test("a live run's current stage is marked as current", async ({ page }) => {
+  await page.goto("/#/runs/graph-live/steps");
+  await expect(run(page).locator(".step-card.stage.current")).toHaveCount(1);
+});

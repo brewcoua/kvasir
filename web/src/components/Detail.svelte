@@ -9,6 +9,7 @@
   import Graph from "./Graph.svelte";
   import Result from "./Result.svelte";
   import Searches from "./Searches.svelte";
+  import Steps from "./Steps.svelte";
   import UsageTable from "./UsageTable.svelte";
 
   let { run, tab, ontab }: { run: RunDetail; tab: string; ontab: (tab: string) => void } = $props();
@@ -71,6 +72,7 @@
   <Tabs.List class="views" aria-label="Run views">
     {#if run.result}<Tabs.Trigger value="result">Result</Tabs.Trigger>{/if}
     <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
+    <Tabs.Trigger value="steps">Steps</Tabs.Trigger>
     <Tabs.Trigger value="usage">Usage</Tabs.Trigger>
     <Tabs.Trigger value="calls">Calls <span class="meta">{count(run.calls.length)}</span></Tabs.Trigger>
     <Tabs.Trigger value="searches">Searches <span class="meta">{count(run.searches.length)}</span></Tabs.Trigger>
@@ -123,6 +125,10 @@
         </li>
       {/each}
     </ul>
+  </Tabs.Content>
+
+  <Tabs.Content value="steps">
+    <Steps {run} oncalls={showCalls} />
   </Tabs.Content>
 
   <Tabs.Content value="usage">
