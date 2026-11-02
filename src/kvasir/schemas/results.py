@@ -39,6 +39,9 @@ class ResearchClaim(BaseModel):
     confidence: Literal["high", "medium", "low"]
     # The search that found it. Defaulted, so a run stored when claims had rounds still loads.
     step: int = 0
+    # Read from the search snippet because the page could not be fetched. Defaulted, so a stored
+    # run still loads.
+    from_snippet: bool = False
     # Claims from other sites that support this one, and that disagree with it. Filled only when
     # the run was asked to corroborate, or to look for contradictions.
     corroborated_by: list[int] = []

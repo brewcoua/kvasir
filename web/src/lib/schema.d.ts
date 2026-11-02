@@ -680,6 +680,11 @@ export interface components {
              */
             step: number;
             /**
+             * From Snippet
+             * @default false
+             */
+            from_snippet: boolean;
+            /**
              * Corroborated By
              * @default []
              */

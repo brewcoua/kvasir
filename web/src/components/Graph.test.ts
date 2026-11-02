@@ -30,6 +30,7 @@ const claim = (id: number, corroborated_by: number[] = []): ResearchClaim => ({
   title: "t",
   confidence: "high",
   step: 1,
+  from_snippet: false,
   corroborated_by,
   contradicted_by: [],
 });

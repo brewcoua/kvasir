@@ -17,7 +17,7 @@ from kvasir.research.claims import Claim, closest
 from kvasir.research.fetch import FetchError, fetch_text, split
 from kvasir.research.ground import grounded
 from kvasir.research.signatures import Intake
-from kvasir.research.text import quoted
+from kvasir.research.text import misleading, quoted
 from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder
@@ -82,25 +82,25 @@ def read(
     piece, which the brief would not rank first.
     """
     pages = [
-        (hit, relevant_pieces(encoder, question, text))
-        for hit, text in zip(hits, fetch_all(hits), strict=True)
+        (hit, relevant_pieces(encoder, question, text), from_snippet)
+        for hit, (text, from_snippet) in zip(hits, fetch_all(hits), strict=True)
     ]
     size = page_characters(runtime.context_tokens())
     texts = [
-        (page, hit, text)
-        for page, (hit, parts) in enumerate(pages, 1)
+        (page, hit, text, from_snippet)
+        for page, (hit, parts, from_snippet) in enumerate(pages, 1)
         for text in pack(parts, size)
     ]
 
-    def take(call: tuple[int, dict[str, Any], str]) -> list[Claim]:
-        _, hit, text = call
-        return intake(model, brief, question, hit, text, 0, step, checker)
+    def take(call: tuple[int, dict[str, Any], str, bool]) -> list[Claim]:
+        _, hit, text, from_snippet = call
+        return intake(model, brief, question, hit, text, 0, step, checker, from_snippet)
 
     new: list[Claim] = []
     # Intake is most of a run's time, so its calls run side by side, as wide as the pools, and each
     # is its own event: the page read is what a follower wants to see.
     with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
-        for done, ((page, hit, _), found) in enumerate(
+        for done, ((page, hit, _, _), found) in enumerate(
             zip(texts, pool.map(take, texts), strict=True), 1
         ):
             stream.publish(
@@ -116,15 +116,16 @@ def read(
     return new
 
 
-def fetch_all(hits: list[dict[str, Any]]) -> Iterator[str]:
-    """Each page's text, or its search snippet when the page cannot be read."""
+def fetch_all(hits: list[dict[str, Any]]) -> Iterator[tuple[str, bool]]:
+    """Each page's text, or its search snippet when the page cannot be read, and whether it is the
+    snippet."""
 
-    def fetch(hit: dict[str, Any]) -> str:
+    def fetch(hit: dict[str, Any]) -> tuple[str, bool]:
         try:
-            return fetch_text(hit["url"])
+            return fetch_text(hit["url"]), False
         except FetchError as exc:
             logger.info("falling back to the snippet: %s", exc)
-            return str(hit["description"])
+            return str(hit["description"]), True
 
     with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
         yield from pool.map(fetch, hits)
@@ -144,8 +145,10 @@ def intake(
     first_id: int,
     step: int,
     checker: GatewayModel | None = None,
+    from_snippet: bool = False,
 ) -> list[Claim]:
-    """Claims whose quote really is in the piece. A paraphrased quote is not evidence.
+    """Claims whose quote really is in the piece. A paraphrased quote is not evidence, nor is one
+    that a negator or qualifier just before it, or inside its ellipsis, turns around.
 
     Checked against the piece rather than the quote alone: a claim names what its quote leaves to
     the surrounding text, such as the subject of "it was found in 1904".
@@ -164,6 +167,9 @@ def intake(
             continue
         # The piece of the page its quote is in, which is all a small checker has room for.
         source = next((p for p in piece.split(GAP) if quoted(finding.quote, p)), piece)
+        if misleading(finding.quote, source):
+            logger.info("dropped a claim whose quote leaves out a negation: %r", finding.quote)
+            continue
         if checker is not None and not grounded(checker, source, finding.claim):
             logger.info("dropped a claim %s does not support: %r", hit["url"], finding.claim)
             continue
@@ -176,6 +182,7 @@ def intake(
                 title=hit["title"],
                 confidence=finding.confidence,
                 step=step,
+                from_snippet=from_snippet,
             )
         )
     return claims

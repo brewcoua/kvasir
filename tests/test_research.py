@@ -12,10 +12,10 @@ from fakes import PAGE, Stream, claim, research_settings
 from kvasir.research import fetch, verify
 from kvasir.research.clarify import clarify
 from kvasir.research.fetch import FetchError, extract, split
-from kvasir.research.read import GAP, intake, pack, page_characters
+from kvasir.research.read import GAP, fetch_all, intake, pack, page_characters
 from kvasir.research.render import matrix, render
 from kvasir.research.style import clean
-from kvasir.research.text import names, quoted
+from kvasir.research.text import misleading, names, quoted
 from kvasir.schemas.results import Cell, Criterion, Row
 
 
@@ -165,6 +165,92 @@ def test_a_quote_not_on_the_page_is_refused(quote):
     page = "13B, quantised to 4 bits, RAM allocation 7.1 GB. A context window of 16,384 tokens."
 
     assert not quoted(quote, page)
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "It never grows in the dark.",
+        "It isn't grows in the dark.",
+        "Unless grows in the dark.",
+    ],
+)
+def test_a_quote_right_after_a_negation_is_misleading(page):
+    assert quoted("grows in the dark", page)
+
+    assert misleading("grows in the dark", page)
+
+
+def test_an_ellipsis_over_a_negator_is_misleading():
+    assert misleading("the drug ... works", "the drug does not work works")
+    assert misleading("it ... grows", "it is only said to grows")
+    assert misleading("this ... helps", "this isn't known to helps")
+
+
+@pytest.mark.parametrize(
+    ("quote", "page"),
+    [
+        ("grows in the dark", "It grows in the dark."),
+        ("the drug ... works", "The drug often really works."),
+        # A "t" that is not a contraction.
+        ("cells grow", "T cells grow."),
+        # The negation is after the quote, or in another sentence's end.
+        ("the drug works", "The drug works, not always."),
+    ],
+)
+def test_an_ordinary_quote_is_not_misleading(quote, page):
+    assert quoted(quote, page)
+
+    assert not misleading(quote, page)
+
+
+def snippet_hits(monkeypatch):
+    def fetch_text(url):
+        if url == "https://down":
+            raise FetchError("down")
+        return "the page"
+
+    monkeypatch.setattr("kvasir.research.read.fetch_text", fetch_text)
+    return [
+        {"url": "https://down", "title": "D", "description": "the snippet"},
+        {"url": "https://up", "title": "U", "description": "the snippet"},
+    ]
+
+
+def test_fetch_all_tells_which_pages_fell_back_to_the_snippet(monkeypatch):
+    hits = snippet_hits(monkeypatch)
+
+    assert list(fetch_all(hits)) == [("the snippet", True), ("the page", False)]
+
+
+@pytest.mark.parametrize("from_snippet", [True, False])
+def test_a_claim_knows_whether_it_was_read_from_a_snippet(from_snippet):
+    model = DummyLM(
+        [{"findings": [{"claim": "Found", "quote": "found in 1904", "confidence": "high"}]}]
+    )
+    hit = {"url": "https://a", "title": "A"}
+
+    claims = intake(model, "b", "q", hit, "It was found in 1904.", 1, 1, None, from_snippet)
+
+    assert [c.from_snippet for c in claims] == [from_snippet]
+
+
+def test_intake_drops_a_quote_a_negation_turns_around():
+    model = DummyLM(
+        [
+            {
+                "findings": [
+                    {"claim": "Grows", "quote": "grows in the dark", "confidence": "high"},
+                    {"claim": "Drug works", "quote": "the drug ... works", "confidence": "high"},
+                    {"claim": "Found", "quote": "found in 1904", "confidence": "high"},
+                ]
+            }
+        ]
+    )
+    hit = {"url": "https://a", "title": "A"}
+    piece = "It never grows in the dark. The drug is not known to works. It was found in 1904."
+
+    assert [c.text for c in intake(model, "b", "q", hit, piece, 1, 1)] == ["Found"]
 
 
 def test_unreadable_claims_cost_the_piece_not_the_run(monkeypatch):

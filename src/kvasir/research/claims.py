@@ -24,6 +24,9 @@ class Claim:
     confidence: Confidence
     # The step of the research that found it; 0 for the background searches.
     step: int
+    # Read from the search snippet because the page could not be fetched: the search engine's
+    # summary of the page, not the page.
+    from_snippet: bool = False
     # Claims from other sites that support this one, and that disagree with it.
     corroborated_by: list[int] = field(default_factory=list)
     contradicted_by: list[int] = field(default_factory=list)
