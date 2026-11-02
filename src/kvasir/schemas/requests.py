@@ -81,10 +81,10 @@ class LedgerOptions(BaseModel):
     # disagreement.
     corroborate: bool = False
     contradict: bool = False
-    # Passed to the gateway verbatim. Not validated against any list of known models.
+    # `<provider>/<name>`. The provider must be configured; the name is not checked against any
+    # list of known models.
     model_fast: str | None = None
     model_strong: str | None = None
-    model_writer: str | None = None
 
 
 class GraphOptions(BaseModel):
@@ -106,7 +106,6 @@ class GraphOptions(BaseModel):
     contradict: bool = False
     model_fast: str | None = None
     model_strong: str | None = None
-    model_writer: str | None = None
 
 
 class StormOptions(BaseModel):

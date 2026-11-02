@@ -156,7 +156,7 @@ export const METHODS: Method[] = [
   },
 ];
 
-export const MODELS: (keyof Defaults)[] = ["model_fast", "model_strong", "model_writer"];
+export const MODELS: (keyof Defaults)[] = ["model_fast", "model_strong"];
 
 // Every value the stages read, defaults included, so a plan reads as the run would go.
 export const values = (method: Method, defaults: Values): Values =>

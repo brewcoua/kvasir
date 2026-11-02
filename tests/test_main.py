@@ -26,11 +26,12 @@ from kvasir.schemas.results import (
 )
 
 ENVIRONMENT = {
-    "OPENAI_API_KEY": "key",
-    "OPENAI_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "openai/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "openai/ollama/strong:cloud",
-    "KVASIR_SEARXNG_URL": "http://searxng.example",
+    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
+    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
+    "KVASIR_MODEL_EMBEDDING": "gateway/embed",
+    "KVASIR_SEARCH_URL": "http://searxng.example",
 }
 
 RESULT = ArticleResult(
@@ -130,7 +131,7 @@ def test_startup_fails_loudly_on_missing_configuration(monkeypatch):
     for name in ENVIRONMENT:
         monkeypatch.delenv(name, raising=False)
 
-    with pytest.raises(Exception, match="OPENAI_API_KEY"), TestClient(app):
+    with pytest.raises(Exception, match="KVASIR_SEARCH_URL"), TestClient(app):
         pass
 
 
@@ -148,7 +149,7 @@ def test_readyz_hard_fails_when_either_dependency_is_down(
     response = client.get("/readyz")
 
     assert response.status_code == expected
-    assert response.json() == {"gateway": gateway_ok, "searxng": searxng_ok}
+    assert response.json() == {"providers": {"gateway": gateway_ok}, "searxng": searxng_ok}
 
 
 def test_readyz_treats_an_unreachable_dependency_as_not_ready(client, monkeypatch):
@@ -158,6 +159,44 @@ def test_readyz_treats_an_unreachable_dependency_as_not_ready(client, monkeypatc
     monkeypatch.setattr(httpx.AsyncClient, "get", refuse)
 
     assert client.get("/readyz").status_code == 503
+
+
+def test_readyz_probes_each_provider_a_model_uses_once(environment, monkeypatch):
+    monkeypatch.setenv("KVASIR_PROVIDER_OTHER_API_BASE", "https://other.example/v1")
+    monkeypatch.setenv("KVASIR_PROVIDER_UNUSED_API_BASE", "https://unused.example/v1")
+    monkeypatch.setenv("KVASIR_MODEL_STRONG", "other/strong")
+    probed = []
+
+    async def reachable(url, headers=None):
+        probed.append(url)
+        return "other" not in url
+
+    monkeypatch.setattr("kvasir.api.app._reachable", reachable)
+    with TestClient(app) as client:
+        response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {"providers": {"gateway": True, "other": False}, "searxng": True}
+    assert sorted(probed) == [
+        "http://searxng.example",
+        "https://gateway.example/v1/models",
+        "https://other.example/v1/models",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/v1/runs", article_run("x", model_strong="nope/x")),
+        ("/v1/session", {"session_id": "chat-1", "topic": "x", "model_fast": "nope/x"}),
+    ],
+)
+def test_a_model_override_naming_an_unknown_provider_is_a_client_error(client, path, body):
+    response = client.post(path, json=body)
+
+    assert response.status_code == 400
+    assert "unknown provider 'nope'" in response.json()["message"]
+    assert client.get("/v1/runs").json() == []
 
 
 def test_article_streams_progress_then_the_article(client, monkeypatch):
@@ -253,7 +292,7 @@ def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
     seen = {}
 
     def fake_model(settings):
-        assert settings.model_fast == ENVIRONMENT["KVASIR_MODEL_FAST"]
+        assert settings.model.fast == ENVIRONMENT["KVASIR_MODEL_FAST"]
 
         def call(messages):
             seen["messages"] = messages

@@ -156,14 +156,14 @@ Users can override five of these for themselves, under the function's user valve
 `POLISH` and `SHOW_USAGE`, where `default` defers and `on` or `off` decides.
 
 The embedding model and session lifetime are service configuration, set through
-`KVASIR_EMBEDDING_MODEL` and `KVASIR_SESSION_TTL_HOURS`, and are not valves here.
+`KVASIR_MODEL_EMBEDDING` and `KVASIR_SESSIONS_TTL_HOURS`, and are not valves here.
 
 ## Common failures
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `Could not reach kvasir at ...` | Wrong `KVASIR_URL`, or the service is down. | Check the URL resolves from the Open WebUI container, and that `/healthz` answers. |
-| `kvasir returned 429` | Another run is in progress. | Wait, or raise `KVASIR_MAX_CONCURRENT_RUNS` on the service. |
+| `kvasir returned 429` | Another run is in progress. | Wait, or raise `KVASIR_RUNS_MAX_CONCURRENT` on the service. |
 | An article with no references | SearXNG is not serving JSON. | Add `json` to `search.formats` in its `settings.yml`. |
 | `Open WebUI did not supply a chat id` | Co-STORM was called outside a normal chat. | Start a new chat. |
 | Progress appears as plain text rather than a collapsible block | Reasoning tag detection is off for this model. | Set **Reasoning Tags** to **Default** or **Enabled** under the model's advanced parameters. |

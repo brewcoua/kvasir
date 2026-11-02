@@ -66,20 +66,18 @@ def run_research(
 ) -> ResearchResult:
     """Research a question to a cited report, blocking for minutes. Never call this on the loop."""
     started = time.monotonic()
-    models = build_research_models(
-        settings, options.model_fast, options.model_strong, options.model_writer
-    )
+    models = build_research_models(settings, options.model_fast, options.model_strong)
     checker = build_checker(settings)
     if checker is not None and _setting(options.ground, True):
         models["ground"] = checker
     if checker is not None and options.ground_intake:
         models["ground_intake"] = checker
     encoder, searxng = build_research_tools(settings)
-    budget = _setting(options.max_searches, settings.research_max_searches)
-    per_query = _setting(options.results_per_query, settings.research_results_per_query)
-    attempts = _setting(options.max_attempts, settings.research_max_attempts)
-    follow_ups = _setting(options.follow_ups, settings.research_follow_ups)
-    max_depth = _setting(options.max_depth, settings.research_max_depth)
+    budget = _setting(options.max_searches, settings.research.max_searches)
+    per_query = _setting(options.results_per_query, settings.research.results_per_query)
+    attempts = _setting(options.max_attempts, settings.research.max_attempts)
+    follow_ups = _setting(options.follow_ups, settings.research.follow_ups)
+    max_depth = _setting(options.max_depth, settings.research.max_depth)
 
     # The model's sense of "now" is its training cutoff, so "best" would mean best then.
     today = datetime.date.today().isoformat()
@@ -111,8 +109,8 @@ def run_research(
             brief,
             criteria,
             entities,
-            _setting(options.max_criteria, settings.research_max_criteria),
-            _setting(options.max_entities, settings.research_max_entities),
+            _setting(options.max_criteria, settings.research.max_criteria),
+            _setting(options.max_entities, settings.research.max_entities),
             per_query,
             stream,
         )
@@ -256,17 +254,16 @@ def _stages(options: LedgerOptions) -> list[str]:
 
 def _defaults(settings: Settings) -> dict[str, Any]:
     return {
-        "max_searches": settings.research_max_searches,
-        "results_per_query": settings.research_results_per_query,
-        "max_attempts": settings.research_max_attempts,
-        "follow_ups": settings.research_follow_ups,
-        "max_depth": settings.research_max_depth,
-        "max_entities": settings.research_max_entities,
-        "max_criteria": settings.research_max_criteria,
-        "ground": settings.model_checker is not None,
-        "model_fast": settings.model_fast,
-        "model_strong": settings.model_strong,
-        "model_writer": settings.model_writer or settings.model_strong,
+        "max_searches": settings.research.max_searches,
+        "results_per_query": settings.research.results_per_query,
+        "max_attempts": settings.research.max_attempts,
+        "follow_ups": settings.research.follow_ups,
+        "max_depth": settings.research.max_depth,
+        "max_entities": settings.research.max_entities,
+        "max_criteria": settings.research.max_criteria,
+        "ground": settings.model.checker is not None,
+        "model_fast": settings.model.fast,
+        "model_strong": settings.model.strong,
     }
 
 

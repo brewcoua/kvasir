@@ -23,8 +23,9 @@ How the service fits together, from a request to its result, is in
 
 ## What it needs
 
-- An OpenAI-compatible gateway. All model and embedding traffic goes there, and nothing calls
-  `api.openai.com` directly.
+- At least one OpenAI-compatible endpoint, such as a local Ollama or a hosted provider. Each is a
+  provider, and all model and embedding traffic goes to the providers you configure. Nothing calls
+  `api.openai.com` unless you configure it.
 - A [SearXNG](https://docs.searxng.org/) instance **with the JSON output format enabled**. One
   serving HTML only fails as an empty result set rather than an error, which looks like a topic
   with no sources. Add `json` to `search.formats` in its `settings.yml`.
@@ -41,9 +42,12 @@ for SearXNG only.
 1. Pull the models the example configuration names:
 
    ```bash
-   ollama pull qwen3.8:27b
+   ollama pull gpt-oss:20b
    ollama pull nomic-embed-text
    ```
+
+   The example's strong model, `deepseek-v4.1-flash:cloud`, runs on Ollama's servers. It needs
+   `ollama signin`, and no key in kvasir. To stay local, point `strong` at a model you pulled.
 
    Ollama loads a model with a 4096-token context by default, which is too small for the article
    and polish prompts. Start it with a larger one, for example `OLLAMA_CONTEXT_LENGTH=16384 ollama
@@ -89,7 +93,7 @@ for SearXNG only.
 
    ```console
    $ curl -s localhost:8080/readyz
-   {"gateway":true,"searxng":true}
+   {"providers":{"local":true},"searxng":true}
    ```
 
 Then [write an article](#write-an-article). On one local model a run takes much longer than through
@@ -104,11 +108,12 @@ network.
 podman run --rm \
   --read-only --tmpfs /tmp --user 65532:65532 \
   -p 8080:8080 -v kvasir-data:/data \
-  -e OPENAI_API_KEY=... \
-  -e OPENAI_API_BASE=https://gateway.example/v1 \
-  -e KVASIR_MODEL_FAST=openai/ollama/fast-model:cloud \
-  -e KVASIR_MODEL_STRONG=openai/ollama/strong-model:cloud \
-  -e KVASIR_SEARXNG_URL=http://searxng.example \
+  -e KVASIR_PROVIDER_GATEWAY_API_BASE=https://gateway.example/v1 \
+  -e KVASIR_PROVIDER_GATEWAY_API_KEY=... \
+  -e KVASIR_MODEL_FAST=gateway/fast-model \
+  -e KVASIR_MODEL_STRONG=gateway/strong-model \
+  -e KVASIR_MODEL_EMBEDDING=gateway/embedding-model \
+  -e KVASIR_SEARCH_URL=http://searxng.example \
   ghcr.io/brewcoua/kvasir:0.1.0
 ```
 
@@ -118,10 +123,11 @@ Verify it started:
 $ curl -s localhost:8080/healthz
 {"status":"ok"}
 $ curl -s localhost:8080/readyz
-{"gateway":true,"searxng":true}
+{"providers":{"local":true},"searxng":true}
 ```
 
-`/readyz` returns 503 if either dependency is unreachable, and names which one. A missing or
+`/readyz` returns 503 if SearXNG or a provider is unreachable, and names which one. It probes only
+the providers a model refers to. A missing or
 unusable variable makes the container exit at startup, rather than starting and failing on the
 first request. Missing required variables are listed together; an unusable value is reported on its
 own, so fixing one may reveal the next.
@@ -162,7 +168,7 @@ is refused with 422, before any run starts.
 The `ledger` method answers a question with a cited report. It splits the brief into questions and
 searches for one at a time: a question the search leaves open is searched for again with a narrower
 query, and one it answers can add harder follow-ups. It reads as much of each page in one call as
-`KVASIR_CONTEXT_TOKENS` holds, keeps only claims whose quote appears word for word on the page, and writes the
+`KVASIR_MODEL_CONTEXT_TOKENS` holds, keeps only claims whose quote appears word for word on the page, and writes the
 report one section at a time from those claims. Each sentence that cites a claim is then checked
 against the claim's quote, and taken out if the quote does not support it. Up to 4 removed
 sentences are searched for again, and a section whose search finds support is written and checked
@@ -200,7 +206,7 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
 
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
 `follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `ground_intake`,
-`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_writer`. Each budget left out takes its `KVASIR_RESEARCH_*` default from
+`corroborate`, `contradict`, `model_fast`, `model_strong`. Each budget left out takes its `[research]` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
 shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
@@ -233,7 +239,7 @@ curl -N -X POST localhost:8080/v1/runs \
 Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has the same fields as a
 `ledger` run. Options: `research_minutes`, `max_searches` (an optional cap on top of the time),
 `results_per_query`, `max_attempts`, `max_depth` (4 by default), `ground`, `ground_intake`,
-`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_writer`. See
+`corroborate`, `contradict`, `model_fast`, `model_strong`. See
 [`docs/research.md`](docs/research.md#the-graph-method).
 
 ### Check claims more strictly
@@ -247,11 +253,11 @@ Four options add checks past the quote check, each at a cost in calls.
 | `corroborate` | `false` | Each claim is compared with up to 3 close claims from other sites. Those that support it go in its `corroborated_by`. |
 | `contradict` | `false` | Close claims from other sites that disagree with it go in its `contradicted_by`, both ways. |
 
-To use MiniCheck on Ollama, pull it, then point the checker at it through the gateway:
+To use MiniCheck on Ollama, pull it, then point the checker at it through the `local` provider:
 
 ```bash
 ollama pull bespoke-minicheck
-export KVASIR_MODEL_CHECKER=openai/bespoke-minicheck
+export KVASIR_MODEL_CHECKER=local/bespoke-minicheck
 ```
 
 Bespoke-MiniCheck-7B is licensed CC BY-NC 4.0. Whether Ollama keeps it loaded next to the main
@@ -361,18 +367,18 @@ own address, so a reload or a shared link keeps it.
 - Runs (`#/runs`) lists every run kept, with its state, elapsed time, tokens and cost.
 - A run (`#/runs/<id>`) shows the runs list beside it, and has a tab per view, each with its own
   address, such as `#/runs/<id>/calls`.
-  - Result is shown once the run has one, and the run opens on it. Each `[n]` is a badge naming
-    the source's site; hovering or focusing one shows its title, URL and quote.
+  - Result is shown once the run has one, and the run opens on it. Each `[n]` is a badge showing
+    only the number; hovering or focusing one shows the source's title, URL and quote.
   - Overview shows the stages on a timeline with each stage's duration, including the planned
     stages not reached yet, and the event log. An event that led to model calls links to them.
   - Usage shows elapsed time, totals for tokens in and out, reasoning tokens, cost, searches and
     embedding tokens, then the usage split by stage, by role and by model, with the time spent in
     calls, output tokens per second and the mean time per call.
   - Calls lists every model call with a clock on any still waiting. Opening one shows what it sent
-    and what it answered, when `KVASIR_KEEP_CALL_CONTENT` kept it.
+    and what it answered, when `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it.
   - Searches lists every query sent to SearXNG, with the event it followed, how many results came
     back and why it failed if it did. Opening one lists the results, when
-    `KVASIR_KEEP_CALL_CONTENT` kept them.
+    `KVASIR_RUNS_KEEP_CALL_CONTENT` kept them.
   - Graph is shown for a run of the `graph` method. It lays out the topic, the first questions
     hanging from it, each follow-up hanging from the question whose evidence raised it, and, once
     the run is done, the claims each question rests on, with the links between claims that
@@ -393,8 +399,8 @@ The same data is available as JSON.
 | --- | --- |
 | `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
 | `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 searches, its last 1000 events, the questions a `graph` run has asked so far, and its result. |
-| `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_KEEP_CALL_CONTENT` kept it. |
-| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. 404 unless `KVASIR_KEEP_CALL_CONTENT` kept it. |
+| `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
+| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls and the last 50 searches after each `progress` and every 2 seconds in between. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
@@ -419,52 +425,89 @@ a `cost` field in the response's `usage` object, either a number or split into `
 `completion_cost` as Bifrost reports it. A gateway that reports no cost, for a model dspy does not
 price, leaves it at zero, which is not the same as free.
 
-Runs are held in memory, capped at the `KVASIR_MAX_RUNS` most recent, and by default do not survive
-a restart. With `KVASIR_RUN_STORE=sqlite` they are also written to `$KVASIR_DATA_DIR/kvasir.db`,
+Runs are held in memory, capped at the `KVASIR_RUNS_MAX` most recent, and by default do not survive
+a restart. With `KVASIR_RUNS_STORE=sqlite` they are also written to `$KVASIR_DATA_DIR/kvasir.db`,
 once when they start and once when they end, and the list and detail routes read from it as well.
 A run still `queued` or `running` there at startup was cut short by the restart, and is marked
 `failed` with the error `interrupted by a restart`. Retention is applied at startup and after each
-run ends: older than `KVASIR_RUN_TTL_DAYS`, or beyond the `KVASIR_MAX_RUNS` most recent, is deleted.
+run ends: older than `KVASIR_RUNS_TTL_DAYS`, or beyond the `KVASIR_RUNS_MAX` most recent, is deleted.
 Only a run in this process's memory can be followed live; following a stored one sends its snapshot
 and ends. What calls sent and answered, and what searches returned, is kept only with
-`KVASIR_KEEP_CALL_CONTENT=true`, in the same store as the run and for as long as it. Their timings,
+`KVASIR_RUNS_KEEP_CALL_CONTENT=true`, in the same store as the run and for as long as it. Their timings,
 token counts, queries and result counts are kept either way.
 Memory is the default because a client such as Open WebUI keeps its own record of every
 answer, so the store is for debugging the service.
 
 ## Configuration
 
-Everything is an environment variable, or a key in a TOML file. The first five are required and the
-service will not start without them.
+Everything is an environment variable, or a key in a TOML file. The file is `$KVASIR_CONFIG`, or
+`kvasir.toml` in the working directory when that is unset. A variable that is set wins over the
+file. An unknown key, or a `KVASIR_CONFIG` that cannot be read, stops startup.
+[`kvasir.example.toml`](kvasir.example.toml) is a complete file for a local Ollama.
 
-The file is `$KVASIR_CONFIG`, or `kvasir.toml` in the working directory when that is unset. Its keys
-are the variable names in lower case without `KVASIR_`, so `KVASIR_MODEL_FAST` is `model_fast` and
-`OPENAI_API_BASE` is `openai_api_base`. A variable that is set wins over the file. An unknown key, or
-a `KVASIR_CONFIG` that cannot be read, stops startup. [`kvasir.example.toml`](kvasir.example.toml)
-is a complete file for a local Ollama.
+The file mirrors the settings: two top-level keys, a `[provider.<name>]` table per provider, and one
+table per section.
+
+```toml
+data_dir = "data"
+
+[provider.local]
+api_base = "http://localhost:11434/v1"
+
+[model]
+fast = "local/gpt-oss:20b"
+strong = "local/deepseek-v4.1-flash:cloud"
+embedding = "local/nomic-embed-text:latest"
+
+[search]
+url = "http://localhost:8888"
+
+[runs]
+store = "sqlite"
+```
+
+Each key has one variable, `KVASIR_<TABLE>_<KEY>` in upper case, and `KVASIR_<KEY>` for a top-level
+key. So `[model] fast` is `KVASIR_MODEL_FAST` and `[research] max_searches` is
+`KVASIR_RESEARCH_MAX_SEARCHES`.
+
+Providers are the exception to the naming rule. `[provider.<name>]` takes `api_base` and an optional
+`api_key`, and its variables are `KVASIR_PROVIDER_<NAME>_API_BASE` and `KVASIR_PROVIDER_<NAME>_API_KEY`.
+They merge over the file's provider of the same name field by field, so the key can stay out of the
+file. A name is lowercase letters, digits, `_` and `-`. Every provider is an OpenAI-compatible
+endpoint. Without an `api_key`, a placeholder is sent, which Ollama ignores. A signed-in local
+Ollama also serves `:cloud` models through `localhost` with no key. A second provider, such as
+`https://ollama.com/v1`, takes its key from `KVASIR_PROVIDER_CLOUD_API_KEY`.
+
+A model is written `<provider>/<name>`. Only the first `/` splits, so the name may hold more:
+`cloud/org/model:tag`. kvasir calls the provider's endpoint with the name. A provider that is not
+configured stops startup, and a request that overrides `model_fast` or `model_strong` with one gets
+400. An override may name a different provider.
+
+The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.url` and the
+`api_base` of every provider you declare.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | required | Gateway credential. |
-| `OPENAI_API_BASE` | required | Gateway base URL. |
-| `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing. |
-| `KVASIR_MODEL_STRONG` | required | Outline and article generation. |
-| `KVASIR_SEARXNG_URL` | required | SearXNG base URL. |
-| `KVASIR_EMBEDDING_MODEL` | `openai/text-embedding-3-small` | Embedding model. Used by both modes. |
-| `KVASIR_MODEL_WRITER` | unset | Research: the outline and the report's prose. Unset uses `KVASIR_MODEL_STRONG`. It runs once the research is done, so a model too large to share memory with the fast one is loaded once. |
+| `KVASIR_PROVIDER_<NAME>_API_BASE` | required | Provider base URL, such as `http://localhost:11434/v1`. |
+| `KVASIR_PROVIDER_<NAME>_API_KEY` | unset | Provider credential. |
+| `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing, and research intake. |
+| `KVASIR_MODEL_STRONG` | required | Outline and article generation, and the research outline, report and summary. |
+| `KVASIR_MODEL_EMBEDDING` | required | Embedding model. Used by both modes. |
 | `KVASIR_MODEL_CHECKER` | unset | Research: a grounding checker such as MiniCheck, which answers Yes or No. Unset leaves every check to the fast model. |
-| `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions, and for the run database. |
-| `KVASIR_SESSION_TTL_HOURS` | `168` | Session expiry, applied at startup. |
-| `KVASIR_RUN_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |
-| `KVASIR_MAX_RUNS` | `100` | Runs kept, most recent first, in either store. |
-| `KVASIR_RUN_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
-| `KVASIR_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
-| `KVASIR_MAX_CONCURRENT_RUNS` | `1` | Concurrent runs. Beyond this, requests get 429. |
-| `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. Intake calls run this wide; for Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
-| `KVASIR_CONTEXT_TOKENS` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
+| `KVASIR_MODEL_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body. Unset sends nothing. |
+| `KVASIR_MODEL_CONTEXT_TOKENS` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
+| `KVASIR_SEARCH_URL` | required | SearXNG base URL. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
-| `KVASIR_MAX_CONV_TURN` | `3` | Questions per perspective. |
-| `KVASIR_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
+| `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions, and for the run database. |
+| `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. Intake calls run this wide; for Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
+| `KVASIR_RUNS_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |
+| `KVASIR_RUNS_MAX` | `100` | Runs kept, most recent first, in either store. |
+| `KVASIR_RUNS_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
+| `KVASIR_RUNS_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
+| `KVASIR_RUNS_MAX_CONCURRENT` | `1` | Concurrent runs. Beyond this, requests get 429. |
+| `KVASIR_SESSIONS_TTL_HOURS` | `168` | Session expiry, applied at startup. |
+| `KVASIR_STORM_MAX_CONV_TURN` | `3` | Questions per perspective. |
+| `KVASIR_STORM_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
 | `KVASIR_RESEARCH_MAX_SEARCHES` | `16` | Research: searches in a run, before the 8 for empty cells. |
 | `KVASIR_RESEARCH_RESULTS_PER_QUERY` | `3` | Research: pages read per search. |
 | `KVASIR_RESEARCH_MAX_ATTEMPTS` | `4` | Research: queries tried on one question before it is given up. |
@@ -472,22 +515,14 @@ is a complete file for a local Ollama.
 | `KVASIR_RESEARCH_MAX_DEPTH` | `2` | Research: levels of follow-ups below the first questions. |
 | `KVASIR_RESEARCH_MAX_ENTITIES` | `8` | Research: options a ranking or table compares, when the run chooses them. |
 | `KVASIR_RESEARCH_MAX_CRITERIA` | `5` | Research: criteria, when the run chooses them. |
-| `LOG_LEVEL` | `INFO` | Standard logging level. |
-| `LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
-| `KVASIR_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body. Unset sends nothing. |
+| `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
+| `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 | `KVASIR_CONFIG` | `kvasir.toml` | Config file. Environment only. |
 
-Set `KVASIR_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts against
-each role's token budget, which is a few hundred tokens for the outline and article roles, so the
-answer is cut off before it starts. It goes in the request body rather than through litellm's own
-parameter, which litellm refuses for a model it does not know.
-
-`KVASIR_MODEL_FAST` and `KVASIR_MODEL_STRONG` must name a provider first: dspy routes on the leading
-`/`-separated segment and consumes it, and everything after it reaches the gateway untouched. For an
-OpenAI-compatible gateway that means an `openai/` prefix, so `openai/ollama/fast-model:cloud` asks
-the gateway for `ollama/fast-model:cloud`. A name without a prefix is rejected at startup rather
-than silently prefixed. `KVASIR_EMBEDDING_MODEL` works the same way, since embeddings go through
-dspy too.
+Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts
+against each role's token budget, which is a few hundred tokens for the outline and article roles,
+so the answer is cut off before it starts. It goes in the request body rather than through litellm's
+own parameter, which litellm refuses for a model it does not know.
 
 Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
@@ -497,21 +532,19 @@ Every line, including uvicorn's access log. Start the service as `python -m kvas
 install none of its own, which is what stops the access log printing as plain text. The image does
 this already.
 
-`OPENAI_API_KEY` and `OPENAI_API_BASE` keep those names because they are the conventional spelling
-for an OpenAI-compatible endpoint, which is what the gateway serves. Both are passed explicitly to
-every model and to the encoder; neither is exported back into the environment, so there is no path
-by which a default reaches `api.openai.com`.
+Each provider's base URL and key are passed explicitly to its models and to the encoder; neither is
+exported into the environment, so there is no path by which a default reaches `api.openai.com`.
 
 Saturation returns 429 rather than queueing, because a queued run would outlast any sensible client
 timeout.
 
 ## Cost and duration
 
-**Not measured here.** No gateway was reachable while this was built, so no honest figure for
+**Not measured here.** No provider was reachable while this was built, so no honest figure for
 tokens or wall-clock time on a default run can be given. The defaults come from upstream's own
 examples rather than from measurement.
 
-Measure against your own gateway. `GET /v1/runs/{id}` reports a finished run's tokens and cost split
+Measure against your own provider. `GET /v1/runs/{id}` reports a finished run's tokens and cost split
 by stage, by role and by model, which is enough to decide whether the defaults suit you. Note that
 `max_conv_turn` and `max_perspective` multiply: the research stage is roughly
 `max_perspective * max_conv_turn` conversations.
@@ -531,7 +564,7 @@ uv sync
 uv run pytest              # no network, no credentials
 uv run ruff check .
 uv run mypy
-uv run pytest -m integration   # needs a real gateway and SearXNG
+uv run pytest -m integration   # needs a real provider and SearXNG
 ```
 
 [`docs/fork-notes.md`](docs/fork-notes.md) records every divergence from upstream, what it fixes,
@@ -569,7 +602,7 @@ run started from the page replays a fixture the same way: `wal.json` for researc
 
 `<name>.calls.json` holds what a fixture's calls sent and answered, keyed by call id, and
 `<name>.searches.json` what its searches returned, keyed by search id. Only `wal` has the first and
-only `graph` the second, both recorded with `KVASIR_KEEP_CALL_CONTENT=true`.
+only `graph` the second, both recorded with `KVASIR_RUNS_KEEP_CALL_CONTENT=true`.
 
 A fixture is a run's detail as `GET /v1/runs/{id}` returns it. To add one from a run kept in the
 SQLite history:
@@ -579,7 +612,7 @@ curl -s localhost:8080/v1/runs/<run id> > web/fixtures/<name>.json
 ```
 
 To include its calls' content, with the run kept by a service started with
-`KVASIR_KEEP_CALL_CONTENT=true`:
+`KVASIR_RUNS_KEEP_CALL_CONTENT=true`:
 
 ```bash
 run=<run id>

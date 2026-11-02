@@ -1,4 +1,4 @@
-"""Runs kept in SQLite, so they survive a restart. Used when KVASIR_RUN_STORE is sqlite.
+"""Runs kept in SQLite, so they survive a restart. Used when KVASIR_RUNS_STORE is sqlite.
 
 A run is written twice: when it starts, so a restart mid-run leaves a trace of it, and when it ends,
 with everything observed. Nothing is written in between, so a run in progress is read from memory.
@@ -45,7 +45,8 @@ class RunStore:
                 "summary TEXT NOT NULL, detail TEXT NOT NULL)"
             )
             # Apart from the detail, which every list or open of a run reads: content is megabytes
-            # per run and is read one call at a time. Empty unless KVASIR_KEEP_CALL_CONTENT is on.
+            # per run and is read one call at a time. Empty unless KVASIR_RUNS_KEEP_CALL_CONTENT is
+            # on.
             db.execute(
                 "CREATE TABLE IF NOT EXISTS calls ("
                 "run_id TEXT NOT NULL, id INTEGER NOT NULL, content TEXT NOT NULL, "

@@ -231,7 +231,7 @@ Each step keeps the tests passing, and steps 1 and 2 change no behaviour.
 ## Open decisions
 
 - **The grounding checker's model.** Bespoke-MiniCheck-7B is licensed CC BY-NC 4.0; an earlier
-  revision said Apache-2.0. MiniCheck-Flan-T5-L is smaller but is not a chat model, so the gateway
+  revision said Apache-2.0. MiniCheck-Flan-T5-L is smaller but is not a chat model, so a provider
   may not serve it. Whether a second model can stay loaded next to the main one, or whether Ollama
   swaps them, is to be measured on the target machine. If it swaps, the checks of a run should be
   batched into one stage so it swaps once.

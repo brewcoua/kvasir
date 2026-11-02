@@ -319,7 +319,7 @@ flowchart LR
   (context_tokens - PROMPT_TOKENS - context_tokens / 4) * MARGIN * CHARACTERS_PER_TOKEN
   ```
 
-  The context is `KVASIR_CONTEXT_TOKENS` (16384 by default), the window the models are served with.
+  The context is `KVASIR_MODEL_CONTEXT_TOKENS` (16384 by default), the window the models are served with.
   The prompt besides the page is `PROMPT_TOKENS` (1,000), the answer gets a quarter of the
   context, `MARGIN` is 0.9 and `CHARACTERS_PER_TOKEN` is 3.5. The 47 intake calls of one run on
   gpt-oss came to 34 + characters / 4.07 prompt tokens, with about 600 for the prompt besides the
@@ -446,7 +446,7 @@ the two cannot both be true, and each goes in the other's `contradicted_by`. Bot
 for a reader and for the methods that weigh evidence; the ledger's report does not use them.
 
 A small model cites claims that do not say what its sentence says. That is why every cited sentence
-is checked, rather than trusting the writer.
+is checked, rather than trusting the strong model.
 
 **Repair.** A removed sentence is often true, cited to the wrong claim. Up to 4 removed sentences
 (`REPAIR_SENTENCES`) become questions, judged by `CheckAnswer`, and the loop searches for them with
@@ -487,14 +487,14 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | `entities` | `Entities` | strong | 600 |
 | `assess` | `Assess` | fast | 600 |
 | `judge` | `RankCriterion` | strong | 800 |
-| `outline` | `Outline` | writer | 2500 |
-| `write` | `WriteSection` | writer | 4000 |
-| `tldr` | `Summarize` | writer | 2000 |
+| `outline` | `Outline` | strong | 2500 |
+| `write` | `WriteSection` | strong | 4000 |
+| `tldr` | `Summarize` | strong | 2000 |
 | `verify` | `Verify` | fast | 600 |
 | `contradict` | `Contradicts` | fast | 400 |
 
-The writer is `KVASIR_MODEL_WRITER`, or the strong model when it is unset. It runs only after the
-research, so a writer too large to share memory with the fast model is loaded once.
+The outline, the sections and the summary use the strong model. They run only after the research,
+so a strong model too large to share memory with the fast model is loaded once.
 
 The grounding checker is its own model, `KVASIR_MODEL_CHECKER`, with the role `ground`, 10 tokens
 and temperature 0.

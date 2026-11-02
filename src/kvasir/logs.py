@@ -96,7 +96,7 @@ def configure(settings: Settings) -> None:
     """
     handler = logging.StreamHandler()
     handler.addFilter(RunContextFilter())
-    if settings.log_format == "json":
+    if settings.log.format == "json":
         handler.setFormatter(JsonFormatter())
     else:
         handler.setFormatter(
@@ -109,4 +109,4 @@ def configure(settings: Settings) -> None:
     for existing in root.handlers[:]:
         root.removeHandler(existing)
     root.addHandler(handler)
-    root.setLevel(settings.log_level)
+    root.setLevel(settings.log.level)

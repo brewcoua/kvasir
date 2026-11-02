@@ -1,26 +1,40 @@
 # Copy to kvasir.toml, which is read from the working directory when KVASIR_CONFIG is unset.
-# Keys are the README's variables in lower case, without KVASIR_. A variable that is set wins.
+# The tables mirror the settings, and each key's variable is KVASIR_<TABLE>_<KEY>, such as
+# KVASIR_MODEL_FAST. A variable that is set wins over the file.
 # These values run against a local Ollama and the SearXNG from the README's quickstart.
 
-openai_api_base = "http://localhost:11434/v1"
-openai_api_key = "ollama"  # required, ignored by Ollama
-model_fast = "openai/qwen3.8:27b"
-model_strong = "openai/qwen3.8:27b"
-# The model research reports are outlined and written with. Leave out to write with model_strong.
-# model_writer = "openai/qwen3.8:27b"
-embedding_model = "openai/nomic-embed-text:latest"
-# A grounding checker, after `ollama pull bespoke-minicheck`. Leave out to check with model_fast.
-# model_checker = "openai/bespoke-minicheck"
-# Thinking tokens count against each role's token budget, which leaves no room for the answer.
-reasoning_effort = "none"
-searxng_url = "http://localhost:8888"
-
 data_dir = "data"
-# Keeps runs across restarts in data/kvasir.db, for debugging. The default is memory.
-run_store = "sqlite"
 # Ollama answers one request at a time by default, so a wide pool only queues. Start it with
 # OLLAMA_NUM_PARALLEL=2 for intake calls to run side by side.
 max_threads = 2
+
+# Models are written <provider>/<name>, the provider being one of these tables.
+[provider.local]
+api_base = "http://localhost:11434/v1"
+# No api_key: Ollama ignores it. A signed-in local Ollama also serves `:cloud` models without one.
+
+# A second provider. Give its key as KVASIR_PROVIDER_CLOUD_API_KEY rather than writing it here.
+# [provider.cloud]
+# api_base = "https://ollama.com/v1"
+# api_key = "..."
+
+[model]
+fast = "local/gpt-oss:20b"
+strong = "local/deepseek-v4.1-flash:cloud"
+embedding = "local/nomic-embed-text:latest"
+# A grounding checker, after `ollama pull bespoke-minicheck`. Leave out to check with the fast model.
+# checker = "local/bespoke-minicheck"
+# Thinking tokens count against each role's token budget, which leaves no room for the answer.
+reasoning_effort = "none"
 # The models' num_ctx. Sizes how much of a page one intake call reads.
 context_tokens = 16384
-log_format = "text"
+
+[search]
+url = "http://localhost:8888"
+
+[runs]
+# Keeps runs across restarts in data/kvasir.db, for debugging. The default is memory.
+store = "sqlite"
+
+[log]
+format = "text"

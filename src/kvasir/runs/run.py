@@ -95,7 +95,7 @@ class Run:
     error: str | None = None
     planned_stages: list[str] = field(default_factory=list)
     result: RunResult | None = None
-    # Whether each call's messages and response are kept. See KVASIR_KEEP_CALL_CONTENT.
+    # Whether each call's messages and response are kept. See KVASIR_RUNS_KEEP_CALL_CONTENT.
     keep_content: bool = False
     # Called once the run reaches a terminal state, outside the lock.
     on_end: Callable[[Run], None] | None = field(default=None, repr=False)

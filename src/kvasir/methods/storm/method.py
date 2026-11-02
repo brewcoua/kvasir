@@ -74,11 +74,11 @@ def _stages(options: StormOptions) -> list[str]:
 
 def _defaults(settings: Settings) -> dict[str, Any]:
     return {
-        "search_top_k": settings.search_top_k,
-        "max_conv_turn": settings.max_conv_turn,
-        "max_perspective": settings.max_perspective,
-        "model_fast": settings.model_fast,
-        "model_strong": settings.model_strong,
+        "search_top_k": settings.search.top_k,
+        "max_conv_turn": settings.storm.max_conv_turn,
+        "max_perspective": settings.storm.max_perspective,
+        "model_fast": settings.model.fast,
+        "model_strong": settings.model.strong,
     }
 
 

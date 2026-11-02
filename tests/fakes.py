@@ -64,11 +64,12 @@ def claim(id, url, quote="q"):
 def research_settings() -> Settings:
     return Settings.from_env(
         {
-            "OPENAI_API_KEY": "key",
-            "OPENAI_API_BASE": "https://gateway.example/v1",
-            "KVASIR_MODEL_FAST": "openai/fast",
-            "KVASIR_MODEL_STRONG": "openai/strong",
-            "KVASIR_SEARXNG_URL": "http://searxng.example",
+            "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+            "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+            "KVASIR_MODEL_FAST": "gateway/fast",
+            "KVASIR_MODEL_STRONG": "gateway/strong",
+            "KVASIR_MODEL_EMBEDDING": "gateway/embed",
+            "KVASIR_SEARCH_URL": "http://searxng.example",
         }
     )
 

@@ -92,7 +92,7 @@ class LmCall(BaseModel):
 
 
 class LmCallContent(BaseModel):
-    """What one completion was sent and what it answered, kept with KVASIR_KEEP_CALL_CONTENT."""
+    """What one completion was sent and answered, kept with KVASIR_RUNS_KEEP_CALL_CONTENT."""
 
     # As sent to the gateway, in the OpenAI chat shape.
     messages: list[dict[str, Any]]
@@ -129,7 +129,7 @@ class SearchResult(BaseModel):
 
 
 class SearchContent(BaseModel):
-    """What one search returned, kept with KVASIR_KEEP_CALL_CONTENT."""
+    """What one search returned, kept with KVASIR_RUNS_KEEP_CALL_CONTENT."""
 
     results: list[SearchResult]
 

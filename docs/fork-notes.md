@@ -50,9 +50,9 @@ error taxonomy. What the subclass adds is the accounting dspy does not do: which
 spending, reported to the run's usage sink.
 
 The consequence to know about is the model name. dspy routes on the leading `/`-separated segment
-and consumes it, so `KVASIR_MODEL_FAST` and `KVASIR_MODEL_STRONG` carry an `openai/` prefix the
-gateway never sees; everything after it is forwarded untouched. `kvasir.config._model` rejects a
-name without one at startup rather than prefixing it silently.
+and consumes it. A configured model is written `<provider>/<name>`, and `Settings.resolve` turns it
+into `openai/<name>` with that provider's endpoint, so the provider never sees the prefix and
+everything after it is forwarded untouched. A name naming no configured provider fails at startup.
 
 Retrying is the subclass's, not litellm's. `dspy.LM` is constructed with `num_retries=0` because
 litellm retries a 400 as readily as a 429, and `forward` is wrapped in `backoff` over the four dspy
@@ -105,7 +105,7 @@ and required an `ENCODER_API_TYPE` environment variable.
 Both now use one `Encoder(model, api_key, api_base)`, a thin wrapper over `dspy.Embedder`:
 
 - No `ENCODER_API_TYPE`, no hardcoded model name, no Azure special case.
-- `KVASIR_EMBEDDING_MODEL` carries a provider prefix like the language models do, since it routes
+- `KVASIR_MODEL_EMBEDDING` names its provider like the language models do, since it routes
   through the same dspy.
 - One request for a whole list, rather than one request per text across a thread pool.
 - A failed or short response raises `EmbeddingError`. Upstream printed per-text failures and carried

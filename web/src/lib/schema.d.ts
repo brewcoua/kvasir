@@ -54,7 +54,7 @@ export interface paths {
         };
         /**
          * Call Content
-         * @description What one model call was sent and answered. Kept only with KVASIR_KEEP_CALL_CONTENT.
+         * @description What one model call was sent and answered. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT.
          */
         get: operations["call_content_v1_runs__run_id__calls__call_id__get"];
         put?: never;
@@ -74,7 +74,7 @@ export interface paths {
         };
         /**
          * Search Content
-         * @description What one search returned. Kept only with KVASIR_KEEP_CALL_CONTENT.
+         * @description What one search returned. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT.
          */
         get: operations["search_content_v1_runs__run_id__searches__search_id__get"];
         put?: never;
@@ -264,7 +264,7 @@ export interface paths {
         };
         /**
          * Healthz
-         * @description Liveness. Deliberately checks no dependency: a gateway outage must not restart the pod.
+         * @description Liveness. Deliberately checks no dependency: a provider outage must not restart the pod.
          */
         get: operations["healthz_healthz_get"];
         put?: never;
@@ -284,9 +284,10 @@ export interface paths {
         };
         /**
          * Readyz
-         * @description Readiness. Fails when either dependency is unreachable, since a run needs both.
+         * @description Readiness. Fails when SearXNG or any provider a model uses is unreachable.
          *
-         *     Neither check spends tokens. Listing models is free, and SearXNG is only asked for its root.
+         *     No check spends tokens. Listing models is free, and SearXNG is only asked for its root. A
+         *     provider no model refers to is not probed, since no run needs it.
          */
         get: operations["readyz_readyz_get"];
         put?: never;
@@ -421,8 +422,6 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
-            /** Model Writer */
-            model_writer?: string | null;
         };
         /** GraphRun */
         GraphRun: {
@@ -512,8 +511,6 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
-            /** Model Writer */
-            model_writer?: string | null;
         };
         /** LedgerRun */
         LedgerRun: {
@@ -564,7 +561,7 @@ export interface components {
         };
         /**
          * LmCallContent
-         * @description What one completion was sent and what it answered, kept with KVASIR_KEEP_CALL_CONTENT.
+         * @description What one completion was sent and answered, kept with KVASIR_RUNS_KEEP_CALL_CONTENT.
          */
         LmCallContent: {
             /** Messages */
@@ -936,7 +933,7 @@ export interface components {
         };
         /**
          * SearchContent
-         * @description What one search returned, kept with KVASIR_KEEP_CALL_CONTENT.
+         * @description What one search returned, kept with KVASIR_RUNS_KEEP_CALL_CONTENT.
          */
         SearchContent: {
             /** Results */

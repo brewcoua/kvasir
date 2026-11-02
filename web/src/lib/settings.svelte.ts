@@ -64,9 +64,8 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
     label: "Models",
     title: "Models",
     settings: [
-      { name: "model_fast", label: "Fast model", type: "text", for: ["research", "graph", "article"], hint: "For research and articles. Passed to the gateway as written." },
-      { name: "model_strong", label: "Strong model", type: "text", for: ["research", "graph", "article"], hint: "For research and articles. Passed to the gateway as written." },
-      { name: "model_writer", label: "Writer model", type: "text", for: ["research", "graph"], hint: "Outlines and writes research reports. Passed to the gateway as written." },
+      { name: "model_fast", label: "Fast model", type: "text", for: ["research", "graph", "article"], hint: "For research and articles. Written provider/name, the provider being one configured on the service." },
+      { name: "model_strong", label: "Strong model", type: "text", for: ["research", "graph", "article"], hint: "Outlines and writes research reports, and writes articles. Written provider/name, a provider configured on the service." },
     ],
   },
 ];

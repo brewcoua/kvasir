@@ -1,7 +1,7 @@
 """Construction of the two upstream runners from settings.
 
 Every language model role is set explicitly. The convenience initialiser
-`CollaborativeStormLMConfigs.init()` hardcodes `api_base=None` and cannot be pointed at a gateway,
+`CollaborativeStormLMConfigs.init()` hardcodes `api_base=None` and cannot be pointed at a provider,
 so it is never called.
 
 See docs/fork-notes.md for the signatures these rely on.
@@ -65,10 +65,8 @@ _COSTORM_ROLES = {
 
 
 # The deep research pipeline's steps. Extraction and planning are many small calls and go to the
-# fast model; the brief and the judgements go to the strong one, and the outline and the prose a
-# reader sees to the writer, the strong model unless another is configured. The writer runs only
-# once the research is done, so a writer too large to share memory with the others is loaded
-# once. Intake and notes return lists of claims, which need more room than a plan's handful of
+# fast model; the brief, the judgements, the outline and the prose a reader sees go to the strong
+# one. Intake and notes return lists of claims, which need more room than a plan's handful of
 # queries.
 _RESEARCH_ROLES = {
     "clarify": ("fast", 500),
@@ -80,31 +78,30 @@ _RESEARCH_ROLES = {
     "entities": ("strong", 600),
     "assess": ("fast", 600),
     "judge": ("strong", 800),
-    # A thinking writer spends some 700 tokens reasoning before it answers, within these.
-    "outline": ("writer", 2500),
-    "write": ("writer", 4000),
-    "tldr": ("writer", 2000),
+    # A thinking strong model spends some 700 tokens reasoning before it answers, within these.
+    "outline": ("strong", 2500),
+    "write": ("strong", 4000),
+    "tldr": ("strong", 2000),
     "verify": ("fast", 600),
     "contradict": ("fast", 400),
 }
 
 
 def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -> GatewayModel:
-    """A model bound to the gateway.
+    """A model bound to the endpoint of its provider.
 
-    The name's first segment routes and is consumed by dspy; the rest reaches the gateway. See
-    `kvasir.config._model`.
+    The name's first segment routes and is consumed by dspy; the rest reaches the provider. See
+    `Settings.resolve`.
     """
+    resolved = settings.resolve(
+        {"fast": settings.model.fast, "strong": settings.model.strong}[tier]
+    )
     return GatewayModel(
-        model={
-            "fast": settings.model_fast,
-            "strong": settings.model_strong,
-            "writer": settings.model_writer or settings.model_strong,
-        }[tier],
+        model=resolved.model,
         # Reported with the model's usage, so a run can be read as which stage spent what.
         role=role,
-        api_key=settings.openai_api_key,
-        api_base=settings.openai_api_base,
+        api_key=resolved.api_key,
+        api_base=resolved.api_base,
         max_tokens=max_tokens,
         # Upstream's examples use these for STORM. The multi-perspective research depends on the
         # simulated conversations diverging, which temperature 0 would suppress.
@@ -113,8 +110,8 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
         # In the body rather than as litellm's own `reasoning_effort`, which litellm refuses for a
         # model it has no entry for, such as anything served by Ollama.
         **(
-            {"extra_body": {"reasoning_effort": settings.reasoning_effort}}
-            if settings.reasoning_effort
+            {"extra_body": {"reasoning_effort": settings.model.reasoning_effort}}
+            if settings.model.reasoning_effort
             else {}
         ),
     )
@@ -133,19 +130,16 @@ def build_research_models(
     settings: Settings,
     model_fast: str | None = None,
     model_strong: str | None = None,
-    model_writer: str | None = None,
 ) -> dict[str, GatewayModel]:
     """One model per deep research step, keyed by step."""
     settings = _with_model_overrides(settings, model_fast, model_strong)
-    if model_writer is not None:
-        settings = replace(settings, model_writer=model_writer)
     models = {
         role: _language_model(settings, role, tier, max_tokens)
         for role, (tier, max_tokens) in _RESEARCH_ROLES.items()
     }
     # An intake call reads as much of a page as the context holds, so its answer grows with it.
     models["intake"] = _language_model(
-        settings, "intake", "fast", answer_tokens(settings.context_tokens)
+        settings, "intake", "fast", answer_tokens(settings.model.context_tokens)
     )
     return models
 
@@ -156,13 +150,14 @@ def build_checker(settings: Settings) -> GatewayModel | None:
     At temperature 0, unlike every other role: a verdict that changes between two calls on the
     same quote is no check. No reasoning effort is sent, since a checker is not a thinking model.
     """
-    if settings.model_checker is None:
+    if settings.model.checker is None:
         return None
+    resolved = settings.resolve(settings.model.checker)
     return GatewayModel(
-        model=settings.model_checker,
+        model=resolved.model,
         role="ground",
-        api_key=settings.openai_api_key,
-        api_base=settings.openai_api_base,
+        api_key=resolved.api_key,
+        api_base=resolved.api_base,
         max_tokens=CHECKER_MAX_TOKENS,
         temperature=0.0,
     )
@@ -170,7 +165,7 @@ def build_checker(settings: Settings) -> GatewayModel | None:
 
 def build_research_tools(settings: Settings) -> tuple[Encoder, SearXNG]:
     """The encoder and the search engine, for the deep research pipeline. It caps results itself."""
-    return _encoder(settings), _retriever(settings, settings.search_top_k)
+    return _encoder(settings), _retriever(settings, settings.search.top_k)
 
 
 def _encoder(settings: Settings) -> Encoder:
@@ -178,14 +173,11 @@ def _encoder(settings: Settings) -> Encoder:
 
     Co-STORM embeds to build its mind map; STORM embeds to rank snippets against each section's
     query. Upstream used two unrelated encoders for those, one hardcoded to `text-embedding-3-small`
-    and one a local sentence-transformer, and neither took the gateway. Both are one `dspy.Embedder`
-    now, so the name routes exactly as a language model's does.
+    and one a local sentence-transformer, and neither took a configured provider. Both are one
+    `dspy.Embedder` now, so the name routes exactly as a language model's does.
     """
-    return Encoder(
-        model=settings.embedding_model,
-        api_key=settings.openai_api_key,
-        api_base=settings.openai_api_base,
-    )
+    resolved = settings.resolve(settings.model.embedding)
+    return Encoder(model=resolved.model, api_key=resolved.api_key, api_base=resolved.api_base)
 
 
 def _retriever(settings: Settings, k: int) -> SearXNG:
@@ -194,7 +186,7 @@ def _retriever(settings: Settings, k: int) -> SearXNG:
     The instance must serve the JSON output format. One serving HTML only returns an empty result
     set rather than failing, which looks like a topic with no sources.
     """
-    return SearXNG(searxng_api_url=settings.searxng_url, k=k)
+    return SearXNG(searxng_api_url=settings.search.url, k=k)
 
 
 def build_storm_runner(
@@ -217,12 +209,12 @@ def build_storm_runner(
     for role, (tier, max_tokens) in _STORM_ROLES.items():
         getattr(lm_configs, f"set_{role}_lm")(_language_model(settings, role, tier, max_tokens))
 
-    top_k = search_top_k if search_top_k is not None else settings.search_top_k
+    top_k = search_top_k if search_top_k is not None else settings.search.top_k
     arguments = STORMWikiRunnerArguments(
         output_dir=str(output_dir),
-        max_conv_turn=max_conv_turn if max_conv_turn is not None else settings.max_conv_turn,
+        max_conv_turn=max_conv_turn if max_conv_turn is not None else settings.storm.max_conv_turn,
         max_perspective=(
-            max_perspective if max_perspective is not None else settings.max_perspective
+            max_perspective if max_perspective is not None else settings.storm.max_perspective
         ),
         search_top_k=top_k,
         max_thread_num=settings.max_threads,
@@ -252,13 +244,13 @@ def build_costorm_runner(
         lm_config=lm_config,
         runner_argument=RunnerArgument(
             topic=topic,
-            retrieve_top_k=settings.search_top_k,
+            retrieve_top_k=settings.search.top_k,
             max_search_thread=settings.max_threads,
             max_thread_num=settings.max_threads,
         ),
         logging_wrapper=LoggingWrapper(lm_config),
         encoder=_encoder(settings),
-        rm=_retriever(settings, settings.search_top_k),
+        rm=_retriever(settings, settings.search.top_k),
     )
     return runner
 
@@ -274,7 +266,7 @@ def load_costorm_runner(settings: Settings, state: dict[str, Any]) -> CoStormRun
         state,
         lm_config=_costorm_lm_config(settings),
         encoder=_encoder(settings),
-        rm=_retriever(settings, settings.search_top_k),
+        rm=_retriever(settings, settings.search.top_k),
     )
 
 
@@ -285,6 +277,22 @@ def _with_model_overrides(
         return settings
     return replace(
         settings,
-        model_fast=model_fast or settings.model_fast,
-        model_strong=model_strong or settings.model_strong,
+        model=replace(
+            settings.model,
+            fast=model_fast or settings.model.fast,
+            strong=model_strong or settings.model.strong,
+        ),
     )
+
+
+def check_model_overrides(
+    settings: Settings, model_fast: str | None, model_strong: str | None
+) -> None:
+    """Raise `ConfigError` if a per-request model names no configured provider.
+
+    Called by the routes before a run starts, so a bad override is refused rather than failing
+    minutes in, at the first model call.
+    """
+    for ref in (model_fast, model_strong):
+        if ref is not None:
+            settings.resolve(ref)

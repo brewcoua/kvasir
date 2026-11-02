@@ -9,8 +9,8 @@ are started, streamed, accounted for or stored. The research pipeline has its ow
 ## The pieces
 
 kvasir is one Python process. It holds no state that a restart must recover except Co-STORM
-sessions, and optionally a run history. Every model and embedding call goes to one
-OpenAI-compatible gateway, and every search goes to one SearXNG instance.
+sessions, and optionally a run history. Every model and embedding call goes to an
+OpenAI-compatible provider, and every search goes to one SearXNG instance.
 
 Solid arrows are requests kvasir makes or serves. Dotted arrows are files it writes.
 
@@ -27,7 +27,7 @@ flowchart LR
         deep["Research methods<br/>methods/, research/"]
     end
 
-    gateway["OpenAI-compatible<br/>gateway"]
+    gateway["OpenAI-compatible<br/>providers"]
     searxng["SearXNG"]
     web["Web pages<br/>and PDFs"]
     data[("/data<br/>sessions/*.json<br/>kvasir.db")]
@@ -137,7 +137,7 @@ The order inside `streamed` is deliberate:
 A disconnecting client does not stop the work: there is no way to cancel a STORM run, so the
 thread carries on to completion. The worker thread releases the slot when the work ends, not when
 the response does, so a client that leaves mid-run cannot let more runs start than
-`KVASIR_MAX_CONCURRENT_RUNS` allows. A client that leaves before the work starts frees the slot at
+`KVASIR_RUNS_MAX_CONCURRENT` allows. A client that leaves before the work starts frees the slot at
 once.
 
 ### Run states
@@ -155,7 +155,7 @@ stateDiagram-v2
     rejected --> [*]
 ```
 
-`failed` after a restart only exists with `KVASIR_RUN_STORE=sqlite`. A memory-only registry
+`failed` after a restart only exists with `KVASIR_RUNS_STORE=sqlite`. A memory-only registry
 forgets the run instead.
 
 ### Following a run
@@ -206,7 +206,7 @@ flowchart TD
 Concurrency is bounded process-wide. `KVASIR_MAX_THREADS` sizes every pool, and each outbound
 search or page request takes a permit from one semaphore, `runtime.fetch_slot()`. Upstream sized
 each pool level independently, which multiplied out to hundreds of simultaneous requests against a
-self-hosted gateway. Fetches are the innermost level and wait on nothing, so holding a permit
+self-hosted provider. Fetches are the innermost level and wait on nothing, so holding a permit
 cannot deadlock against the pools above.
 
 ## Models and accounting
@@ -217,7 +217,7 @@ budget. The rule for tiers: the fast model handles many small calls (simulating 
 asking questions, extracting claims, checking sentences), and the strong model writes what a reader
 sees and makes the judgements that steer a run.
 
-Every model is a chat model on the gateway at temperature 1.0 and `top_p` 0.9. STORM's
+Every model is a chat model on its provider at temperature 1.0 and `top_p` 0.9. STORM's
 multi-perspective research needs its simulated conversations to diverge, which temperature 0 would
 suppress. `api_key` and `api_base` are passed to each model explicitly and never exported to the
 environment, so no default can reach `api.openai.com`.
@@ -252,10 +252,10 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify
 
 | Data | Where | Lifetime | Why there |
 | --- | --- | --- | --- |
-| Runs | Memory, in `RunRegistry` | The `KVASIR_MAX_RUNS` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
-| Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `KVASIR_RUN_STORE=sqlite` | `KVASIR_RUN_TTL_DAYS` and `KVASIR_MAX_RUNS` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
-| Model call content and search results | With its run, in memory and in `kvasir.db`, with `KVASIR_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. Search results follow the same setting. |
-| Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSION_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
+| Runs | Memory, in `RunRegistry` | The `KVASIR_RUNS_MAX` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
+| Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `KVASIR_RUNS_STORE=sqlite` | `KVASIR_RUNS_TTL_DAYS` and `KVASIR_RUNS_MAX` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
+| Model call content and search results | With its run, in memory and in `kvasir.db`, with `KVASIR_RUNS_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. Search results follow the same setting. |
+| Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSIONS_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
 | STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `methods/storm/method.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
 
@@ -323,11 +323,11 @@ Each row is a choice someone changing kvasir is likely to question, and the reas
 | Decision | Reason |
 | --- | --- |
 | No authentication, and none to be added here. | The service is reached over a private network behind the consumer's own policy layer. `api/__init__.py` says so at the top. |
-| One OpenAI-compatible gateway, reached through dspy only. | One place for credentials, routing, caching and pricing. litellm is not a direct dependency; dspy uses it as its transport. |
-| No response cache in kvasir. | The gateway caches. A second cache is a second place to invalidate, and upstream's cache, opened under the home directory at import, failed under a read-only root. |
-| Model names keep their provider prefix, and an unprefixed name is refused at startup. | dspy routes on and consumes the first segment. Prefixing silently would hide a misconfiguration. |
+| Every provider is OpenAI-compatible, reached through dspy only. | One wire protocol, with the endpoint and key per provider in `[provider.<name>]`. A gateway in front gives one place for credentials, routing, caching and pricing. litellm is not a direct dependency; dspy uses it as its transport. |
+| No response cache in kvasir. | The provider or a gateway caches. A second cache is a second place to invalidate, and upstream's cache, opened under the home directory at import, failed under a read-only root. |
+| A model is `<provider>/<name>`, and an unknown provider is refused at startup. | The provider picks the endpoint and key; dspy is given `openai/<name>`. Guessing a provider would hide a misconfiguration. |
 | Configuration is read once, at startup, and a bad value stops it. | A container that starts and fails on the first request is harder to diagnose than one that refuses to start. |
-| `/healthz` checks nothing; `/readyz` checks the gateway and SearXNG without spending tokens. | A gateway outage must not restart the pod. |
+| `/healthz` checks nothing; `/readyz` checks the providers the models use and SearXNG without spending tokens. | A provider outage must not restart the pod. |
 | Logs are one JSON object per line, each with `run_id`, `run_kind` and `stage`. | Runs interleave across threads, so lines must be separable by machine. `python -m kvasir` routes uvicorn's access log through the same handler. |
 | The runs page is a Svelte app built at image build time, and loads nothing from another origin. | The image is read-only and may be offline. Markdown is only lexed, by `marked`, and Svelte writes every token as text, so nothing from a web page or a model is parsed as HTML. |
 | `knowledge_storm` is vendored and modified. | Upstream is dormant, and most of the changes fix behaviour that produced a bad article rather than an error. See [`fork-notes.md`](fork-notes.md). |

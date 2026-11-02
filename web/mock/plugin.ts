@@ -27,7 +27,7 @@ const TICK_MS = 500;
 // As many calls as the service puts in a `status` event.
 const STATUS_CALLS = 50;
 
-const MODELS = { model_fast: "openai/gpt-oss:20b", model_strong: "openai/gpt-oss:20b" };
+const MODELS = { model_fast: "local/gpt-oss:20b", model_strong: "local/gpt-oss:20b" };
 // As `GET /v1/methods` answers, with only the defaults of each option's schema.
 const method = (name: string, clarifies: boolean, stages: string[], defaults: Record<string, unknown>) => ({
   name,
@@ -38,7 +38,6 @@ const method = (name: string, clarifies: boolean, stages: string[], defaults: Re
 const METHODS = [
   method("ledger", true, ["brief", "background", "research", "assess", "write", "verify"], {
     ...MODELS,
-    model_writer: "openai/gpt-oss:20b",
     max_searches: 24,
     results_per_query: 5,
     max_attempts: 3,
@@ -53,7 +52,6 @@ const METHODS = [
   }),
   method("graph", true, ["brief", "research", "write", "verify"], {
     ...MODELS,
-    model_writer: "openai/gpt-oss:20b",
     research_minutes: 20,
     results_per_query: 5,
     max_attempts: 3,

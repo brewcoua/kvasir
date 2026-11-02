@@ -14,11 +14,12 @@ from kvasir.config import Settings
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
 MINIMAL = {
-    "OPENAI_API_KEY": "key",
-    "OPENAI_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "openai/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "openai/ollama/strong:cloud",
-    "KVASIR_SEARXNG_URL": "http://searxng.example",
+    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
+    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
+    "KVASIR_MODEL_EMBEDDING": "gateway/embed",
+    "KVASIR_SEARCH_URL": "http://searxng.example",
 }
 
 
@@ -28,7 +29,8 @@ def emit(capsys):
     before = logging.getLogger().handlers[:]
 
     def configure(log_format="json"):
-        logs.configure(replace(Settings.from_env(MINIMAL), log_format=log_format))
+        settings = Settings.from_env(MINIMAL)
+        logs.configure(replace(settings, log=replace(settings.log, format=log_format)))
 
         def lines():
             return [line for line in capsys.readouterr().err.splitlines() if line]

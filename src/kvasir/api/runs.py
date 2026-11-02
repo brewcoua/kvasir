@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from kvasir.api.sse import HEADERS, MEDIA_TYPE, frame
 from kvasir.api.streaming import streamed
-from kvasir.config import Settings
+from kvasir.config import ConfigError, Settings
 from kvasir.methods import METHODS
+from kvasir.runners import check_model_overrides
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import Run
 from kvasir.schemas.requests import RunRequest
@@ -27,6 +28,10 @@ router = APIRouter()
 async def start_run(http: Request, request: RunRequest) -> Response:
     """Run a method and stream progress until its result is ready."""
     settings: Settings = http.app.state.settings
+    try:
+        check_model_overrides(settings, request.options.model_fast, request.options.model_strong)
+    except ConfigError as exc:
+        return JSONResponse({"message": str(exc)}, status_code=400)
     method = METHODS[request.method]
     question = request.input.question
     return streamed(
@@ -54,14 +59,14 @@ async def run_detail(http: Request, run_id: str) -> RunDetail:
 
 @router.get("/v1/runs/{run_id}/calls/{call_id}")
 async def call_content(http: Request, run_id: str, call_id: int) -> LmCallContent:
-    """What one model call was sent and answered. Kept only with KVASIR_KEEP_CALL_CONTENT."""
+    """What one model call was sent and answered. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT."""
     registry: RunRegistry = http.app.state.runs
     return registry.content(run_id, call_id)
 
 
 @router.get("/v1/runs/{run_id}/searches/{search_id}")
 async def search_content(http: Request, run_id: str, search_id: int) -> SearchContent:
-    """What one search returned. Kept only with KVASIR_KEEP_CALL_CONTENT."""
+    """What one search returned. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT."""
     registry: RunRegistry = http.app.state.runs
     return registry.search_content(run_id, search_id)
 

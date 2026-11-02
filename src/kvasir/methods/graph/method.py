@@ -55,9 +55,7 @@ def run_graph(
 ) -> ResearchResult:
     """Research a question to a cited report, blocking for minutes. Never call this on the loop."""
     started = time.monotonic()
-    models = build_research_models(
-        settings, options.model_fast, options.model_strong, options.model_writer
-    )
+    models = build_research_models(settings, options.model_fast, options.model_strong)
     checker = build_checker(settings)
     if checker is not None and (options.ground is None or options.ground):
         models["ground"] = checker
@@ -93,8 +91,8 @@ def run_graph(
         Frontier(encoder, brief, claims),
         started + options.research_minutes * 60,
         options.max_searches,
-        options.results_per_query or settings.research_results_per_query,
-        options.max_attempts or settings.research_max_attempts,
+        options.results_per_query or settings.research.results_per_query,
+        options.max_attempts or settings.research.max_attempts,
         options.max_depth or MAX_DEPTH,
         stream,
     )
@@ -206,13 +204,12 @@ def open_questions(questions: list[Question]) -> str:
 
 def _defaults(settings: Settings) -> dict[str, Any]:
     return {
-        "results_per_query": settings.research_results_per_query,
-        "max_attempts": settings.research_max_attempts,
+        "results_per_query": settings.research.results_per_query,
+        "max_attempts": settings.research.max_attempts,
         "max_depth": MAX_DEPTH,
-        "ground": settings.model_checker is not None,
-        "model_fast": settings.model_fast,
-        "model_strong": settings.model_strong,
-        "model_writer": settings.model_writer or settings.model_strong,
+        "ground": settings.model.checker is not None,
+        "model_fast": settings.model.fast,
+        "model_strong": settings.model.strong,
     }
 
 

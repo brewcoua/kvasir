@@ -44,29 +44,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings.from_env()
     apply_environment()
     configure_concurrency(settings.max_threads)
-    configure_context(settings.context_tokens)
+    configure_context(settings.model.context_tokens)
     logs.configure(settings)
 
     app.state.settings = settings
     # A run holds a thread for minutes, so saturation is rejected rather than queued. Acquiring
     # without blocking keeps this usable from the event loop.
-    app.state.run_slots = threading.BoundedSemaphore(settings.max_concurrent_runs)
-    app.state.sessions = SessionStore(settings.sessions_dir, settings.session_ttl_hours)
+    app.state.run_slots = threading.BoundedSemaphore(settings.runs.max_concurrent)
+    app.state.sessions = SessionStore(settings.sessions_dir, settings.sessions.ttl_hours)
     store = (
-        RunStore(settings.runs_db, settings.run_ttl_days, settings.max_runs)
-        if settings.run_store == "sqlite"
+        RunStore(settings.runs_db, settings.runs.ttl_days, settings.runs.max)
+        if settings.runs.store == "sqlite"
         else None
     )
-    app.state.runs = RunRegistry(settings.max_runs, store, settings.keep_call_content)
+    app.state.runs = RunRegistry(settings.runs.max, store, settings.runs.keep_call_content)
     # Once, here. Expiry needs no scheduler and no background task.
     app.state.sessions.sweep()
     if store is not None:
         store.sweep()
     logger.info(
-        "kvasir ready, gateway %s, searxng %s, %d concurrent run(s)",
-        settings.openai_api_base,
-        settings.searxng_url,
-        settings.max_concurrent_runs,
+        "kvasir ready, providers %s, searxng %s, %d concurrent run(s)",
+        ", ".join(f"{name}={provider.api_base}" for name, provider in settings.providers.items()),
+        settings.search.url,
+        settings.runs.max_concurrent,
     )
     yield
 
@@ -90,29 +90,40 @@ app.mount("/assets", StaticFiles(directory=STATIC / "assets", check_dir=False), 
 
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
-    """Liveness. Deliberately checks no dependency: a gateway outage must not restart the pod."""
+    """Liveness. Deliberately checks no dependency: a provider outage must not restart the pod."""
     return {"status": "ok"}
 
 
 @app.get("/readyz")
 async def readyz(response: Response) -> dict[str, object]:
-    """Readiness. Fails when either dependency is unreachable, since a run needs both.
+    """Readiness. Fails when SearXNG or any provider a model uses is unreachable.
 
-    Neither check spends tokens. Listing models is free, and SearXNG is only asked for its root.
+    No check spends tokens. Listing models is free, and SearXNG is only asked for its root. A
+    provider no model refers to is not probed, since no run needs it.
     """
     settings: Settings = app.state.settings
-    checks = await asyncio.gather(
-        _reachable(
-            f"{settings.openai_api_base}/models",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-        ),
-        _reachable(settings.searxng_url),
+    refs = (
+        settings.model.fast,
+        settings.model.strong,
+        settings.model.checker,
+        settings.model.embedding,
     )
-    gateway, searxng = checks
+    names = sorted({ref.partition("/")[0] for ref in refs if ref is not None})
+    *probed, searxng = await asyncio.gather(
+        *(
+            _reachable(
+                f"{settings.providers[name].api_base}/models",
+                headers={"Authorization": f"Bearer {settings.providers[name].api_key}"},
+            )
+            for name in names
+        ),
+        _reachable(settings.search.url),
+    )
+    providers = dict(zip(names, probed, strict=True))
 
-    if not (gateway and searxng):
+    if not (all(providers.values()) and searxng):
         response.status_code = 503
-    return {"gateway": gateway, "searxng": searxng}
+    return {"providers": providers, "searxng": searxng}
 
 
 async def _reachable(url: str, headers: dict[str, str] | None = None) -> bool:

@@ -7,7 +7,8 @@ from fastapi.responses import JSONResponse
 
 from kvasir import conversation
 from kvasir.api.streaming import streamed
-from kvasir.config import Settings
+from kvasir.config import ConfigError, Settings
+from kvasir.runners import check_model_overrides
 from kvasir.schemas.requests import SessionRequest, StepRequest
 from kvasir.schemas.results import SessionInfo
 from kvasir.sessions import SessionStore
@@ -20,6 +21,10 @@ async def create_session(http: Request, request: SessionRequest) -> Response:
     """Create a session and warm start it. Streams, because warm start is a miniature STORM run."""
     settings: Settings = http.app.state.settings
     store: SessionStore = http.app.state.sessions
+    try:
+        check_model_overrides(settings, request.model_fast, request.model_strong)
+    except ConfigError as exc:
+        return JSONResponse({"message": str(exc)}, status_code=400)
     if store.exists(request.session_id):
         return JSONResponse({"message": "session already exists"}, status_code=409)
 

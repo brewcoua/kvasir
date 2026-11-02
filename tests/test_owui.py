@@ -90,11 +90,12 @@ def service(monkeypatch, tmp_path):
     # Startup creates the sessions directory, and the default /data is not writable here.
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
     for name, value in {
-        "OPENAI_API_KEY": "key",
-        "OPENAI_API_BASE": "https://gateway.example/v1",
-        "KVASIR_MODEL_FAST": "openai/ollama/fast:cloud",
-        "KVASIR_MODEL_STRONG": "openai/ollama/strong:cloud",
-        "KVASIR_SEARXNG_URL": "http://searxng.example",
+        "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+        "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+        "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
+        "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
+        "KVASIR_MODEL_EMBEDDING": "gateway/embed",
+        "KVASIR_SEARCH_URL": "http://searxng.example",
     }.items():
         monkeypatch.setenv(name, value)
 

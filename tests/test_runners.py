@@ -1,24 +1,26 @@
 """No network. Building a runner makes no request; only running one does."""
 
 import json
+from dataclasses import replace
 
 import pytest
 
-from kvasir.config import Settings
+from kvasir.config import ConfigError, Provider, Settings
 from kvasir.runners import (
     build_costorm_runner,
     build_research_models,
     build_storm_runner,
+    check_model_overrides,
     load_costorm_runner,
 )
 
 MINIMAL = {
-    "OPENAI_API_KEY": "key",
-    "OPENAI_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "openai/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "openai/ollama/strong:cloud",
-    "KVASIR_SEARXNG_URL": "http://searxng.example",
-    "KVASIR_EMBEDDING_MODEL": "openai/ollama/embed:cloud",
+    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
+    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
+    "KVASIR_SEARCH_URL": "http://searxng.example",
+    "KVASIR_MODEL_EMBEDDING": "gateway/ollama/embed:cloud",
 }
 
 STORM_ROLES = (
@@ -115,7 +117,7 @@ def test_storm_per_request_overrides_apply(settings, tmp_path):
         search_top_k=7,
         max_conv_turn=1,
         max_perspective=2,
-        model_strong="openai/ollama/other:cloud",
+        model_strong="gateway/ollama/other:cloud",
     )
 
     assert runner.args.search_top_k == 7
@@ -127,16 +129,59 @@ def test_storm_per_request_overrides_apply(settings, tmp_path):
 
 
 def test_overrides_do_not_mutate_the_shared_settings(settings, tmp_path):
-    build_storm_runner(settings, tmp_path, model_fast="openai/ollama/other:cloud")
+    build_storm_runner(settings, tmp_path, model_fast="gateway/ollama/other:cloud")
 
-    assert settings.model_fast == "openai/ollama/fast:cloud"
+    assert settings.model.fast == "gateway/ollama/fast:cloud"
 
 
-def test_the_report_is_written_by_the_strong_model_unless_a_writer_is_given(settings):
-    assert build_research_models(settings)["write"].model == "openai/ollama/strong:cloud"
-    models = build_research_models(settings, model_writer="openai/writer")
-    assert models["outline"].model == models["write"].model == "openai/writer"
+def test_the_outline_and_the_prose_are_written_by_the_strong_model(settings):
+    models = build_research_models(settings)
+
+    for role in ("outline", "write", "tldr"):
+        assert models[role].model == "openai/ollama/strong:cloud", role
     assert models["intake"].model == "openai/ollama/fast:cloud"
+
+
+def test_a_model_on_another_provider_gets_that_providers_endpoint_and_key():
+    settings = Settings.from_env(
+        MINIMAL
+        | {
+            "KVASIR_PROVIDER_OTHER_API_BASE": "https://other.example/v1",
+            "KVASIR_PROVIDER_OTHER_API_KEY": "other-key",
+            "KVASIR_MODEL_STRONG": "other/big",
+        }
+    )
+
+    models = build_research_models(settings)
+
+    assert models["write"].model == "openai/big"
+    assert models["write"].kwargs["api_base"] == "https://other.example/v1"
+    assert models["write"].kwargs["api_key"] == "other-key"
+    assert models["plan"].kwargs["api_base"] == "https://gateway.example/v1"
+    assert models["plan"].kwargs["api_key"] == "key"
+
+
+def test_an_override_on_another_provider_switches_provider(settings):
+    settings = replace(
+        settings,
+        providers=settings.providers
+        | {"other": Provider(api_base="https://other.example/v1", api_key="other-key")},
+    )
+
+    models = build_research_models(settings, model_strong="other/x")
+
+    assert models["brief"].model == "openai/x"
+    assert models["brief"].kwargs["api_base"] == "https://other.example/v1"
+    assert models["brief"].kwargs["api_key"] == "other-key"
+    assert models["plan"].kwargs["api_base"] == "https://gateway.example/v1"
+
+
+def test_an_override_naming_an_unknown_provider_is_refused(settings):
+    with pytest.raises(ConfigError, match="unknown provider 'nope'"):
+        check_model_overrides(settings, None, "nope/x")
+    with pytest.raises(ConfigError, match="must name a provider"):
+        check_model_overrides(settings, "fast", None)
+    check_model_overrides(settings, "gateway/x", None)
 
 
 def test_a_restored_session_still_reaches_the_gateway(settings):
@@ -177,7 +222,7 @@ def test_a_session_file_carries_no_credential(settings):
     """Sessions persist under the data directory for their TTL, so a key there outlives the run."""
     state = build_costorm_runner(settings, "a narrow topic").to_dict()
 
-    assert MINIMAL["OPENAI_API_KEY"] not in json.dumps(state)
+    assert MINIMAL["KVASIR_PROVIDER_GATEWAY_API_KEY"] not in json.dumps(state)
     for role in COSTORM_ROLES:
         assert not [key for key in state["lm_config"][role] if key.startswith("api_")]
 
@@ -188,7 +233,7 @@ def test_reasoning_effort_is_not_sent_unless_set(storm):
 
 
 def test_reasoning_effort_reaches_every_role_in_the_body(tmp_path):
-    settings = Settings.from_env(MINIMAL | {"KVASIR_REASONING_EFFORT": "none"})
+    settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_REASONING_EFFORT": "none"})
     storm = build_storm_runner(settings, tmp_path)
     costorm = build_costorm_runner(settings, "a narrow topic")
 

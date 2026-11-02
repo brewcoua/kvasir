@@ -7,7 +7,8 @@ credentials, spend tokens and take minutes. Run them with:
 
 Required environment, the same names the service itself reads:
 
-    OPENAI_API_KEY, OPENAI_API_BASE, KVASIR_MODEL_FAST, KVASIR_MODEL_STRONG, KVASIR_SEARXNG_URL
+    KVASIR_PROVIDER_<NAME>_API_BASE (and _API_KEY) for the provider the models name,
+    KVASIR_MODEL_FAST, KVASIR_MODEL_STRONG, KVASIR_MODEL_EMBEDDING, KVASIR_SEARCH_URL
 
 The SearXNG instance must have the JSON output format enabled. One serving HTML only produces an
 empty result set rather than an error, which surfaces here as an article with no citations.
@@ -28,11 +29,10 @@ from kvasir.sessions import SessionStore
 pytestmark = pytest.mark.integration
 
 REQUIRED = (
-    "OPENAI_API_KEY",
-    "OPENAI_API_BASE",
     "KVASIR_MODEL_FAST",
     "KVASIR_MODEL_STRONG",
-    "KVASIR_SEARXNG_URL",
+    "KVASIR_MODEL_EMBEDDING",
+    "KVASIR_SEARCH_URL",
 )
 
 TOPIC = "The Antikythera mechanism"
@@ -45,7 +45,7 @@ def settings():
         pytest.skip(f"not configured: {', '.join(missing)}")
 
     resolved = Settings.from_env()
-    apply_environment(resolved)
+    apply_environment()
     return resolved
 
 

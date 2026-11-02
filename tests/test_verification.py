@@ -42,13 +42,14 @@ def test_no_checker_is_built_unless_configured():
 
 def test_a_configured_checker_answers_at_temperature_zero():
     env = {
-        "OPENAI_API_KEY": "key",
-        "OPENAI_API_BASE": "https://gateway.example/v1",
-        "KVASIR_MODEL_FAST": "openai/fast",
-        "KVASIR_MODEL_STRONG": "openai/strong",
-        "KVASIR_SEARXNG_URL": "http://searxng.example",
+        "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+        "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+        "KVASIR_MODEL_FAST": "gateway/fast",
+        "KVASIR_MODEL_STRONG": "gateway/strong",
+        "KVASIR_MODEL_EMBEDDING": "gateway/embed",
+        "KVASIR_SEARCH_URL": "http://searxng.example",
     }
-    checker = build_checker(Settings.from_env(env | {"KVASIR_MODEL_CHECKER": "openai/minicheck"}))
+    checker = build_checker(Settings.from_env(env | {"KVASIR_MODEL_CHECKER": "gateway/minicheck"}))
 
     assert checker is not None
     assert checker.kwargs["temperature"] == 0.0

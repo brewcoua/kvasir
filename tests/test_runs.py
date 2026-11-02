@@ -28,11 +28,12 @@ from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
 ENVIRONMENT = {
-    "OPENAI_API_KEY": "key",
-    "OPENAI_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "openai/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "openai/ollama/strong:cloud",
-    "KVASIR_SEARXNG_URL": "http://searxng.example",
+    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
+    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
+    "KVASIR_MODEL_EMBEDDING": "gateway/embed",
+    "KVASIR_SEARCH_URL": "http://searxng.example",
 }
 
 RESULT = ArticleResult(article="a", outline="o", citations=[], duration_seconds=1.0)
@@ -53,7 +54,7 @@ def sqlite(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("KVASIR_RUN_STORE", "sqlite")
+    monkeypatch.setenv("KVASIR_RUNS_STORE", "sqlite")
     return lambda: TestClient(app)
 
 
@@ -425,7 +426,7 @@ def _article_with_a_call(*args):
 
 
 def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
-    monkeypatch.setenv("KVASIR_KEEP_CALL_CONTENT", "true")
+    monkeypatch.setenv("KVASIR_RUNS_KEEP_CALL_CONTENT", "true")
     stub_method(monkeypatch, "storm", _article_with_a_call)
     with sqlite() as client:
         events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
@@ -456,7 +457,7 @@ def _article_with_a_search(*args):
 
 
 def test_search_results_are_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
-    monkeypatch.setenv("KVASIR_KEEP_CALL_CONTENT", "true")
+    monkeypatch.setenv("KVASIR_RUNS_KEEP_CALL_CONTENT", "true")
     monkeypatch.setattr("kvasir.storm.rm.httpx.get", lambda url, **kwargs: _SearxngAnswer())
     stub_method(monkeypatch, "storm", _article_with_a_search)
     with sqlite() as client:
