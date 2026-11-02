@@ -24,6 +24,19 @@ class Progress(BaseModel):
     # Its place in the run, numbered from 0, so a model call can name the event it followed. Null
     # outside a run, and in runs stored before events were numbered.
     seq: int | None = None
+    # These place the event in the run's step tree: an attempt is one search for a question, a part
+    # is one piece of a page read during it, a result is the claims it added, and a section is one
+    # report section written. All are null for an event that is not a step, and in runs recorded
+    # before steps were named.
+    kind: str | None = None
+    # The `seq` of the event this one sits under.
+    parent: int | None = None
+    # A ResearchQuestion id.
+    question: int | None = None
+    # A SearchCall id.
+    search: int | None = None
+    # The 1-based index of the page within its attempt.
+    page: int | None = None
 
 
 class Error(BaseModel):

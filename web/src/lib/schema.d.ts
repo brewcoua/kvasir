@@ -631,6 +631,16 @@ export interface components {
             total?: number | null;
             /** Seq */
             seq?: number | null;
+            /** Kind */
+            kind?: string | null;
+            /** Parent */
+            parent?: number | null;
+            /** Question */
+            question?: number | null;
+            /** Search */
+            search?: number | null;
+            /** Page */
+            page?: number | null;
         };
         /**
          * RemovedSentence

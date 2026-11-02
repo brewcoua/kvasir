@@ -120,6 +120,11 @@ def test_frame_payload_is_json():
         "done": 1,
         "total": 4,
         "seq": None,
+        "kind": None,
+        "parent": None,
+        "question": None,
+        "search": None,
+        "page": None,
     }
 
 
