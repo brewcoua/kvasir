@@ -194,8 +194,10 @@ def test_an_ellipsis_over_a_negator_is_misleading():
         ("the drug ... works", "The drug often really works."),
         # A "t" that is not a contraction.
         ("cells grow", "T cells grow."),
+        ("cells divide", "Seen in T cells divide."),
         # The negation is after the quote, or in another sentence's end.
         ("the drug works", "The drug works, not always."),
+        ("cats grow", "It is not. Cats grow."),
     ],
 )
 def test_an_ordinary_quote_is_not_misleading(quote, page):

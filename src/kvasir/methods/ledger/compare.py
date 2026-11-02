@@ -202,7 +202,11 @@ def rank(
                 2 * index + turn - 1,
                 2 * len(criteria),
             )
-            options = "\n".join(f"{row.entity}: {row.cells[index].finding}" for row in order)
+            # The mark is for the reader; the judge would read it as part of the finding.
+            options = "\n".join(
+                f"{row.entity}: {row.cells[index].finding.removesuffix(f' {UNVERIFIED}')}"
+                for row in order
+            )
             try:
                 ranking = predict(
                     model, RankCriterion, brief=brief, criterion=criterion.name, options=options

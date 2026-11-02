@@ -208,6 +208,18 @@ def test_a_rewrite_citing_a_new_claim_is_removed_unchecked():
     assert log == ["checker", "fast", "escalate"]
 
 
+def test_a_rewrite_citing_nothing_is_removed_unchecked():
+    checked, log = run(
+        checker=["No"], fast=[answer("partial")], reason=[answer("partial", rewrite="Fact.")]
+    )
+
+    assert checked.sections == [("S", "")]
+    assert [(r.stage, r.reason) for r in checked.removed] == [
+        ("rewrite", "the rewrite cites no claim")
+    ]
+    assert log == ["checker", "fast", "escalate"]
+
+
 def test_a_partial_verdict_without_a_rewrite_removes_the_sentence():
     checked, _ = run(fast=[answer("partial")], reason=[answer("partial")])
 

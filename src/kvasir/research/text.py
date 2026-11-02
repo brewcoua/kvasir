@@ -24,23 +24,24 @@ def misleading(quote: str, text: str) -> bool:
     """Whether a quote found in `text` can say what the page does not: the words just before it,
     or the ones an ellipsis stands for, include a negator or qualifier.
 
-    "grows" quoted from "it never grows" is on the page, and means the opposite.
+    "grows" quoted from "it never grows" is on the page, and means the opposite. The words before it
+    are taken from its own sentence only: "It is not. Cats grow" does not turn "Cats grow" around.
     """
+    # "isn't" as "isn not", since `words` cuts it into "isn" and "t", like the "T" of "T cells".
+    text = re.sub(r"n['’]t\b", "n not", text)
     found = placed(quote, text)
     if not found:
         return False
     haystack = words(text)
     skipped = [haystack[end : start + 1].split() for (_, end), (start, _) in pairwise(found)]
-    return any(qualifies(part) for part in [haystack[: found[0][0]].split()[-2:], *skipped])
-
-
-def qualifies(tokens: list[str]) -> bool:
-    """Whether `tokens` hold a qualifier, or a negative contraction: "isn't" is the tokens "isn"
-    and "t"."""
-    return any(
-        token in QUALIFIERS or (token == "t" and i > 0 and tokens[i - 1].endswith("n"))
-        for i, token in enumerate(tokens)
-    )
+    # The page's text up to the quote's first word, which `words` would have stripped of the full
+    # stop that ends the sentence before it.
+    lowered = text.lower()
+    tokens = list(re.finditer(r"\w+", lowered))
+    first = len(haystack[: found[0][0]].split())
+    sentence = re.split(r"[.!?;]\s", lowered[: tokens[first].start()])[-1]
+    before = words(sentence).split()[-2:]
+    return any(word in QUALIFIERS for part in [before, *skipped] for word in part)
 
 
 def placed(quote: str, text: str) -> list[tuple[int, int]] | None:

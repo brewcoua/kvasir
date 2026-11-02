@@ -337,7 +337,7 @@ flowchart LR
   left out, and the fragments must appear in order.
 - **Qualifier check.** `misleading` drops a claim whose quote the page turns around: "grows"
   quoted from "it never grows" is on the page and means the opposite. The quote is dropped when
-  either of the 2 words just before it on the page, or any word an ellipsis stands for, is one of
+  either of the 2 words just before it in its sentence on the page, or any word an ellipsis stands for, is one of
   `QUALIFIERS` in `research/text.py` (`not`, `no`, `never`, `unless`, `if`, `except`, `without`,
   `only`, `cannot`) or a negative contraction such as "isn't".
 - **Grounding.** With the `ground_intake` option and a checker configured, `research/ground.py` asks the

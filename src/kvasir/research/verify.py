@@ -235,6 +235,9 @@ def cascade(
         allowed = {claim.id for claim in items[i][1]}
         if not rewrite:
             settle(i, "removed", "rewrite", f"the reason model gave no rewrite ({reason})")
+        elif not cited(rewrite):
+            # Kept, an uncited sentence would be left alone as a transition, never checked.
+            settle(i, "removed", "rewrite", "the rewrite cites no claim")
         elif set(cited(rewrite)) - allowed:
             settle(i, "removed", "rewrite", "the rewrite cites a claim the sentence did not")
         elif holds(i, rewrite.replace("**", "")):

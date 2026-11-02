@@ -28,7 +28,10 @@ const cite: TokenizerExtension = {
 const unverified: TokenizerExtension = {
   name: "unverified",
   level: "inline",
-  start: (source) => source.indexOf("[unverified]") >= 0 ? source.indexOf("[unverified]") : undefined,
+  start: (source) => {
+    const i = source.indexOf("[unverified]");
+    return i < 0 ? undefined : i;
+  },
   tokenizer(source) {
     const match = source.match(/^\[unverified\]/);
     if (match) return { type: "unverified", raw: match[0] };
