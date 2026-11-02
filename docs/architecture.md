@@ -212,10 +212,12 @@ cannot deadlock against the pools above.
 ## Models and accounting
 
 `runners.py` builds one `GatewayModel` per role, from three tables: `_STORM_ROLES`,
-`_COSTORM_ROLES` and `_RESEARCH_ROLES`. Each entry names a tier, fast or strong, and a token
-budget. The rule for tiers: the fast model handles many small calls (simulating conversation,
-asking questions, extracting claims, checking sentences), and the strong model writes what a reader
-sees and makes the judgements that steer a run.
+`_COSTORM_ROLES` and `_RESEARCH_ROLES`. Each entry names a tier, fast, strong or reason, and a
+token budget. The rule for tiers: the fast model handles many small calls (simulating conversation,
+asking questions, extracting claims, a first check of each sentence), the strong model writes what
+a reader sees, and the reason model makes the judgements that steer a run and has the last word on a
+sentence the cheaper checks leave in doubt. Unset, the reason model is the strong one, with its own
+`reason_effort` and larger budgets, since thinking counts against `max_tokens`.
 
 Every model is a chat model on its provider at temperature 1.0 and `top_p` 0.9. STORM's
 multi-perspective research needs its simulated conversations to diverge, which temperature 0 would

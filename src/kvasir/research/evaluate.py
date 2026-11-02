@@ -5,10 +5,10 @@ and its result saved. A result already saved is not researched again, so an inte
 resumes. Every saved result is then scored:
 
 - whether the brief chose the output type the question's wording asks for;
-- a checklist: the strong model answers yes or no to each of the question's checks against the
+- a checklist: the reason model answers yes or no to each of the question's checks against the
   report. A small judge's absolute scores are unreliable; a yes or no to a narrow check is not;
 - citations: each cited sentence of the final report against the quotes of the sources it cites.
-  This repeats the pipeline's own verification on what survived it, with the strong model as judge.
+  This repeats the pipeline's own verification on what survived it, with the reason model as judge.
 
     uv run python -m kvasir.research.evaluate data/eval/baseline
     uv run python -m kvasir.research.evaluate data/eval/shallow --options '{"max_searches": 8}'

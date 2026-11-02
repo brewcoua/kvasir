@@ -34,6 +34,7 @@ flowchart TD
     loop["research<br/>search one question at a time"]
     assess(["assess<br/>one finding per option and criterion"])
     fill(["assess<br/>search for empty cells"])
+    cells(["assess<br/>check each cell"])
     rank(["assess<br/>rank each criterion twice"])
     write["write<br/>outline, then one section at a time"]
     verify["verify<br/>check each cited sentence"]
@@ -43,8 +44,8 @@ flowchart TD
     brief --> background --> decompose
     brief --> decompose
     decompose --> loop
-    loop --> assess --> fill --> rank --> write
-    fill --> write
+    loop --> assess --> fill --> cells --> rank --> write
+    cells --> write
     loop --> write
     write --> verify --> repair --> render
 ```
@@ -303,7 +304,8 @@ flowchart LR
   styles, navigation, headers, footers, asides and forms. A PDF's text layer is read with `pypdf`,
   which is BSD-licensed and pure Python; PyMuPDF was ruled out as AGPL. A page that cannot be read
   (another format, a scanned or truncated PDF, an HTTP error) falls back to its search snippet.
-  There is no OCR.
+  There is no OCR. A claim read from the snippet has `from_snippet` set: the snippet is the search
+  engine's summary of the page, not the page.
 - **Split.** Pieces of at most 6,000 characters (`PIECE_CHARACTERS`), about 1,500 tokens, cut
   between lines. This is sized for the embedding filter, not the reading model: `nomic-embed-text`
   was trained on 2,048 tokens, and a longer piece would be ranked on less than all of it.
@@ -333,6 +335,11 @@ flowchart LR
   The comparison is on words alone, lower-cased, so a non-breaking hyphen or a line break where the
   page had an inline tag does not count as a difference. An ellipsis in the quote stands for words
   left out, and the fragments must appear in order.
+- **Qualifier check.** `misleading` drops a claim whose quote the page turns around: "grows"
+  quoted from "it never grows" is on the page and means the opposite. The quote is dropped when
+  either of the 2 words just before it on the page, or any word an ellipsis stands for, is one of
+  `QUALIFIERS` in `research/text.py` (`not`, `no`, `never`, `unless`, `if`, `except`, `without`,
+  `only`, `cannot`) or a negative contraction such as "isn't".
 - **Grounding.** With the `ground_intake` option and a checker configured, `research/ground.py` asks the
   checker whether the piece its quote is in supports the claim, and drops the claim if not. The
   piece is the document rather than the quote, since a claim names what its quote leaves to the page, such as
@@ -405,37 +412,79 @@ as a dash.
 
 ## Verifying, and repairing
 
-```mermaid
-sequenceDiagram
-    participant S as Sections
-    participant V as Verify
-    participant L as Question loop
-    participant W as WriteSection
+A small model cites claims that do not say what its sentence says. That is why every cited
+sentence is checked, rather than trusting the strong model. The check is a cascade: cheaper steps
+go first, and only the sentences they leave in doubt reach a dearer model. A sentence ends at
+`kept`, `rewritten`, `removed` or `kept, marked [unverified]`.
 
-    S->>V: each sentence that cites a claim
-    V-->>S: kept, or removed with a reason
-    S->>L: up to 4 removed sentences, as questions
-    Note over L: 4 searches between them
-    L-->>S: questions now answered, with their claims
-    S->>W: each section with an answered question
-    W-->>V: the section written again
-    V-->>S: kept, with its own removals final
+```mermaid
+flowchart TD
+    sentence["each cited sentence"]
+    cites{"cites a claim<br/>the run gathered?"}
+    checker{"checker:<br/>supported?"}
+    fast{"fast model:<br/>verdict"}
+    reason{"reason model:<br/>verdict"}
+    rewrite{"rewrite passes<br/>the checker?"}
+    kept["kept"]
+    revised["rewritten"]
+    removed["removed"]
+    unverified["kept, marked [unverified]"]
+
+    sentence --> cites
+    cites -- no --> removed
+    cites -- yes --> checker
+    checker -- yes --> kept
+    checker -- no --> fast
+    fast -- unsupported --> removed
+    fast -- "supported, no checker" --> kept
+    fast -- "partial, unreadable,<br/>or disagrees with the checker" --> reason
+    reason -- supported --> kept
+    reason -- unsupported --> removed
+    reason -- unreadable --> unverified
+    reason -- partial --> rewrite
+    rewrite -- yes --> revised
+    rewrite -- no --> removed
 ```
 
-**Verify.** `research/verify.py` cuts each section into sentences and checks every sentence that cites
-a claim. `Verify` reads the sentence and the cited claims with their quotes, and decides whether
-every fact in the sentence is stated in the quotes or follows directly from them. An added number,
-name or comparison makes it unsupported. An unsupported sentence is removed and recorded in
-`removed`, with its section and the reason. Bold is taken out of the sentence before it is checked.
-A callout keeps its supported sentences, and goes when none is left. Headings, tables and code are
-left alone, since a table
-row is not a sentence and cutting one would break the table. A sentence citing nothing is left
-alone too: it is a transition, or a statement that the evidence does not settle something. A
-verdict that cannot be parsed keeps the sentence, since it says nothing about it.
+`research/verify.py` cuts each section into sentences and runs every sentence that cites a claim
+through the cascade. Each step runs over all the sentences before the next begins, since the
+checker and the fast model share one local server and alternating between them would load a model
+for each sentence.
 
-With the `ground` option and a checker configured, every cited sentence goes to the checker
-instead of `Verify`, with the claims it cites and their quotes joined as the document. The checker
-runs only once the report is written, so it is loaded once per run.
+1. **Citation.** A sentence citing no claim the research gathered is removed.
+2. **Checker.** With the `ground` option and a checker configured, the checker is shown the claims
+   the sentence cites with their quotes, joined as the document. A sentence it supports is kept.
+   Without a checker, this step is skipped.
+3. **Fast model.** `Verify` reads the sentence and the cited claims with their quotes, and returns
+   `supported`, `partial` or `unsupported`, with a reason. Every fact stated in the quotes, or
+   following directly from them, is supported. A sentence that adds a number, name or comparison
+   beside facts the quotes state is partial. `unsupported` removes the sentence. `supported` keeps
+   it when there is no checker; with one, the fast model disagrees with the checker, and the
+   sentence goes on. `partial`, and a verdict that cannot be parsed, go on too.
+4. **Reason model.** `Escalate`, on the `escalate` role, returns the same verdict and, for a
+   partial sentence, a rewrite that states only what the quotes say and cites only the claims the
+   sentence already cited. It keeps a supported sentence and removes an unsupported one. A verdict
+   it cannot give leaves the sentence in, marked `[unverified]`.
+5. **Rewrite.** A rewrite must pass the checker, or `Verify` without one, or the sentence is removed
+   instead. A rewrite that is empty or cites another claim also removes it.
+
+Each removed sentence is recorded in `removed` with its section, the reason and the `stage` that
+removed it: `citation`, `verify`, `escalate` or `rewrite`. A rewritten sentence goes in
+`revised`, with its section, the sentence before and after, and the reason. A sentence left
+`[unverified]` goes in `unverified`, with its section and the reason. Bold is taken out of the
+sentence before it is checked. A callout keeps its surviving sentences, and goes when none is
+left. Headings, tables and code are left alone, since a table row is not a sentence and cutting
+one would break the table. A sentence citing nothing is left alone too: it is a transition, or a
+statement that the evidence does not settle something. The checker runs only once the report is
+written, so it is loaded once per run.
+
+**Cells.** In a ranking or a table, the ledger's cells go through the same cascade, in the
+`assess` stage, after the empty cells are searched for and before ranking. Each cell with a finding
+is checked against the claims it cites, all cells together so each model loads once. A cell the
+cascade removes, or finds partly supported, is emptied: a cell is at most six words, so it is not
+rewritten. It ties for last when ranked, like any cell no claim spoke to. An unverified cell keeps
+its finding, marked `[unverified]`. Both are recorded under the table's title in `removed` and
+`unverified`.
 
 **Corroborate and contradict.** With `corroborate` or `contradict`, `research/corroborate.py` runs
 after repair. Each claim is paired with up to 3 claims from other sites (`NEIGHBOURS`) at a cosine
@@ -445,14 +494,12 @@ one; if so it goes in `corroborated_by`. Otherwise, with `contradict`, `Contradi
 the two cannot both be true, and each goes in the other's `contradicted_by`. Both lists are data
 for a reader and for the methods that weigh evidence; the ledger's report does not use them.
 
-A small model cites claims that do not say what its sentence says. That is why every cited sentence
-is checked, rather than trusting the strong model.
-
 **Repair.** A removed sentence is often true, cited to the wrong claim. Up to 4 removed sentences
 (`REPAIR_SENTENCES`) become questions, judged by `CheckAnswer`, and the loop searches for them with
 4 searches in all (`REPAIR_SEARCHES`). Each section with a question the search answered is written
-again, with the claims that answer it added to its evidence, and verified again. This is one pass:
-the rewritten section's own removals stand.
+again, with the claims that answer it added to its evidence, and verified again through the same
+cascade. This is one pass: what that check did to the rewritten section's sentences replaces what
+the first check did, and its own removals stand.
 
 ## Rendering
 
@@ -468,7 +515,8 @@ made it up. Each citation carries the quote of the claim that first cited that p
 page shows on hover.
 
 The `done` frame carries the report and everything needed to audit it: every claim with its quote
-and URL, every question with its status and queries, and every removed sentence with its reason.
+and URL, every question with its status and queries, every removed sentence with its reason and the stage that removed it, every sentence rewritten
+to its quotes, and every sentence left unverified.
 The full field list is in the README.
 
 ## Model roles
@@ -479,22 +527,34 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | --- | --- | --- | --- |
 | `clarify` | `Clarify` | fast | 500 |
 | `brief` | `Brief` | strong | 1000 |
-| `decompose` | `Decompose` | strong | 600 |
+| `decompose` | `Decompose` | reason | 2000 |
 | `plan` | `PlanQueries`, `SearchFor` | fast | 500 |
 | `intake` | `Intake` | fast | 2000 |
-| `check` | `CheckAnswer` | strong | 800 |
-| `criteria` | `Criteria` | strong | 1000 |
-| `entities` | `Entities` | strong | 600 |
+| `check` | `CheckAnswer` | reason | 2500 |
+| `criteria` | `Criteria` | reason | 3000 |
+| `entities` | `Entities` | reason | 2000 |
 | `assess` | `Assess` | fast | 600 |
-| `judge` | `RankCriterion` | strong | 800 |
+| `judge` | `RankCriterion` | reason | 2500 |
 | `outline` | `Outline` | strong | 2500 |
 | `write` | `WriteSection` | strong | 4000 |
 | `tldr` | `Summarize` | strong | 2000 |
 | `verify` | `Verify` | fast | 600 |
 | `contradict` | `Contradicts` | fast | 400 |
+| `escalate` | `Escalate` | reason | 2500 |
 
 The outline, the sections and the summary use the strong model. They run only after the research,
 so a strong model too large to share memory with the fast model is loaded once.
+
+The reason tier serves the roles that judge rather than extract or write. `KVASIR_MODEL_REASON`
+sets its model, and unset it falls back to the strong model. It has its own
+`KVASIR_MODEL_REASON_EFFORT`, `medium` by default, which replaces `KVASIR_MODEL_REASONING_EFFORT`
+for this tier: these roles are meant to think. Thinking counts against `max_tokens`, so their
+budgets are about three times what the answer needs. Without `reason` set, these roles therefore
+run on the strong model, at effort `medium` and with the larger budgets. A `ledger` or `graph`
+request can override the model with `model_reason`.
+
+With the reason model on a cloud provider, each escalated sentence and its quotes are sent to that
+provider. `KVASIR_RUNS_KEEP_CALL_CONTENT` governs only what kvasir stores, not this.
 
 The grounding checker is its own model, `KVASIR_MODEL_CHECKER`, with the role `ground`, 10 tokens
 and temperature 0.

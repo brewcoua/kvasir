@@ -170,7 +170,10 @@ searches for one at a time: a question the search leaves open is searched for ag
 query, and one it answers can add harder follow-ups. It reads as much of each page in one call as
 `KVASIR_MODEL_CONTEXT_TOKENS` holds, keeps only claims whose quote appears word for word on the page, and writes the
 report one section at a time from those claims. Each sentence that cites a claim is then checked
-against the claim's quote, and taken out if the quote does not support it. Up to 4 removed
+against the claim's quote by a cascade of cheaper models first: it is taken out if the quote does
+not support it, rewritten to what the quote says if it supports it in part, and marked
+`[unverified]` if no model could judge it. In a ranking or a table, each cell is checked the same
+way. Up to 4 removed
 sentences are searched for again, and a section whose search finds support is written and checked
 once more. See [`docs/research.md`](docs/research.md) for how each step works and why.
 
@@ -201,12 +204,15 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
    sections, a contents callout), `assumptions` (what the brief decided on
    your behalf), `citations`, `claims` (every claim gathered, each with its quote and source),
    `questions` (each question searched for, with its status, queries and supporting claims),
-   `removed` (each sentence verification took out, with its section and the reason), `output`,
-   `criteria`, `matrix` and `duration_seconds`.
+   `removed` (each sentence verification took out, with its section, the reason and the `stage`
+   that removed it), `revised` (each sentence rewritten to what its quotes say, with the sentence
+   before and after), `unverified` (each sentence left in the report marked `[unverified]`, with its
+   section and the reason), `output`, `criteria`, `matrix` and `duration_seconds`. A claim read from
+   a search snippet, because its page could not be fetched, has `from_snippet` set.
 
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
 `follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `ground_intake`,
-`corroborate`, `contradict`, `model_fast`, `model_strong`. Each budget left out takes its `[research]` default from
+`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_reason`. Each budget left out takes its `[research]` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
 shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
@@ -239,7 +245,7 @@ curl -N -X POST localhost:8080/v1/runs \
 Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has the same fields as a
 `ledger` run. Options: `research_minutes`, `max_searches` (an optional cap on top of the time),
 `results_per_query`, `max_attempts`, `max_depth` (4 by default), `ground`, `ground_intake`,
-`corroborate`, `contradict`, `model_fast`, `model_strong`. See
+`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_reason`. See
 [`docs/research.md`](docs/research.md#the-graph-method).
 
 ### Check claims more strictly
@@ -248,7 +254,7 @@ Four options add checks past the quote check, each at a cost in calls.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker decides each cited sentence, shown the claims it cites and their quotes together, in place of the fast model. Without a checker it does nothing. |
+| `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker checks each cited sentence first, shown the claims it cites and their quotes together, and keeps one it supports. The fast model sees only the rest. Without a checker it does nothing. |
 | `ground_intake` | `false` | The checker also drops each claim the page piece it was read from does not support. Off by default: unless the checker stays loaded beside the fast model, every page then swaps the two. |
 | `corroborate` | `false` | Each claim is compared with up to 3 close claims from other sites. Those that support it go in its `corroborated_by`. |
 | `contradict` | `false` | Close claims from other sites that disagree with it go in its `contradicted_by`, both ways. |
@@ -480,8 +486,8 @@ Ollama also serves `:cloud` models through `localhost` with no key. A second pro
 
 A model is written `<provider>/<name>`. Only the first `/` splits, so the name may hold more:
 `cloud/org/model:tag`. kvasir calls the provider's endpoint with the name. A provider that is not
-configured stops startup, and a request that overrides `model_fast` or `model_strong` with one gets
-400. An override may name a different provider.
+configured stops startup, and a request that overrides `model_fast`, `model_strong` or `model_reason`
+with one gets 400. An override may name a different provider.
 
 The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.url` and the
 `api_base` of every provider you declare.
@@ -493,8 +499,10 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 | `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing, and research intake. |
 | `KVASIR_MODEL_STRONG` | required | Outline and article generation, and the research outline, report and summary. |
 | `KVASIR_MODEL_EMBEDDING` | required | Embedding model. Used by both modes. |
+| `KVASIR_MODEL_REASON` | unset | Research: the judgements, such as whether the claims gathered answer a question, and the last word on a sentence the cheaper checks leave in doubt. Unset uses the strong model. |
 | `KVASIR_MODEL_CHECKER` | unset | Research: a grounding checker such as MiniCheck, which answers Yes or No. Unset leaves every check to the fast model. |
-| `KVASIR_MODEL_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body. Unset sends nothing. |
+| `KVASIR_MODEL_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body, except the reason model's. Unset sends nothing. |
+| `KVASIR_MODEL_REASON_EFFORT` | `medium` | Sent as `reasoning_effort` to the reason model instead of `KVASIR_MODEL_REASONING_EFFORT`. |
 | `KVASIR_MODEL_CONTEXT_TOKENS` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
 | `KVASIR_SEARCH_URL` | required | SearXNG base URL. |
 | `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
@@ -522,7 +530,11 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,
 so the answer is cut off before it starts. It goes in the request body rather than through litellm's
-own parameter, which litellm refuses for a model it does not know.
+own parameter, which litellm refuses for a model it does not know. The reason model is meant to
+think, so its roles have budgets of 2000 to 3000 tokens and their own effort,
+`KVASIR_MODEL_REASON_EFFORT`. Without `KVASIR_MODEL_REASON`, those roles run on the strong model at
+that effort. With the reason model on a cloud provider, each sentence it is asked about and its
+quotes go to that provider, and `KVASIR_RUNS_KEEP_CALL_CONTENT` does not govern that.
 
 Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
@@ -658,7 +670,7 @@ Save each method or set of options to its own directory to compare them. Scoring
 again, so an interrupted evaluation resumes; `--only <id>...` limits it to some questions. A run
 takes minutes, so the full set takes hours on a local model.
 
-Every saved result is then scored, with the strong model as judge:
+Every saved result is then scored, with the reason model, the `judge` role, as judge:
 
 - **Output.** Whether the brief chose the expected output type.
 - **Checks.** A yes or no for each of the question's checks, against the report.
