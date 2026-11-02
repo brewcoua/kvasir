@@ -140,24 +140,32 @@ def cascade(
     models: dict[str, GatewayModel],
     items: list[tuple[str, list[Claim]]],
     stream: ProgressStream,
+    stage: str = VERIFY,
 ) -> list[Verdict]:
     """A verdict on each sentence against the claims it cites, in order.
 
     A sentence with no claims to check against cites nothing the research gathered. Without a
-    grounding checker in `models`, the fast model is the first to judge.
+    grounding checker in `models`, the fast model is the first to judge. Progress is published under
+    `stage`, for a caller that runs the cascade outside verification.
     """
     total = len(items)
     verdicts: dict[int, Verdict] = {}
     checker = models.get("ground")
 
-    def settle(i: int, status: Literal["kept", "removed"], stage: Stage, reason: str = "") -> None:
-        verdicts[i] = Verdict(status, items[i][0], stage, reason)
+    def settle(
+        i: int,
+        status: Literal["kept", "rewritten", "removed", "unverified"],
+        decider: Stage,
+        reason: str = "",
+        text: str | None = None,
+    ) -> None:
+        verdicts[i] = Verdict(status, items[i][0] if text is None else text, decider, reason)
         stream.publish(
-            VERIFY, f"checked {len(verdicts)} of {total} cited sentences", len(verdicts), total
+            stage, f"checked {len(verdicts)} of {total} cited sentences", len(verdicts), total
         )
 
     def begin(step: str, pending: list[int]) -> None:
-        stream.publish(VERIFY, f"{step}: checking {len(pending)} of {total} sentences")
+        stream.publish(stage, f"{step}: checking {len(pending)} of {total} sentences")
 
     def claim_of(i: int) -> str:
         # Bold marks a key term for the reader, and is no part of what is checked.
@@ -171,7 +179,7 @@ def cascade(
         answer = _ask(models["verify"], Verify, sentence=sentence, evidence=quoted_claims(evidence))
         return answer is not None and answer.verdict == "supported"
 
-    stream.publish(VERIFY, f"checking {total} cited sentences against their quotes", 0, total)
+    stream.publish(stage, f"checking {total} cited sentences against their quotes", 0, total)
     pending = []
     for i, (_, evidence) in enumerate(items):
         if evidence:
@@ -213,12 +221,7 @@ def cascade(
             models["escalate"], Escalate, sentence=claim_of(i), evidence=quoted_claims(items[i][1])
         )
         if answer is None:
-            verdicts[i] = Verdict(
-                "unverified",
-                items[i][0],
-                "escalate",
-                "the reason model's verdict could not be read",
-            )
+            settle(i, "unverified", "escalate", "the reason model's verdict could not be read")
         elif answer.verdict == "supported":
             settle(i, "kept", "escalate")
         elif answer.verdict == "unsupported":
@@ -235,10 +238,7 @@ def cascade(
         elif set(cited(rewrite)) - allowed:
             settle(i, "removed", "rewrite", "the rewrite cites a claim the sentence did not")
         elif holds(i, rewrite.replace("**", "")):
-            verdicts[i] = Verdict("rewritten", rewrite, "rewrite", reason)
-            stream.publish(
-                VERIFY, f"checked {len(verdicts)} of {total} cited sentences", len(verdicts), total
-            )
+            settle(i, "rewritten", "rewrite", reason, rewrite)
         else:
             settle(i, "removed", "rewrite", f"the rewrite is not supported either ({reason})")
     return [verdicts[i] for i in range(total)]

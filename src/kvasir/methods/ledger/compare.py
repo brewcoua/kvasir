@@ -15,8 +15,9 @@ from kvasir.methods.ledger.signatures import Assess, RankCriterion
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, listed, nearest
 from kvasir.research.text import names
+from kvasir.research.verify import UNVERIFIED, cascade
 from kvasir.runs.progress import ASSESS, ProgressStream
-from kvasir.schemas.results import Cell, Criterion, Row
+from kvasir.schemas.results import Cell, Criterion, RemovedSentence, Row, UnverifiedSentence
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 
@@ -126,6 +127,52 @@ def _cell(
     if not (ids and finding):
         return Cell(criterion=criterion, finding="", claims=[])
     return Cell(criterion=criterion, finding=finding, claims=ids)
+
+
+def verify_cells(
+    models: dict[str, GatewayModel],
+    rows: list[Row],
+    by_id: dict[int, Claim],
+    stream: ProgressStream,
+    title: str,
+) -> tuple[list[RemovedSentence], list[UnverifiedSentence]]:
+    """Check each cell with a finding against the claims it cites, and empty or mark the doubtful.
+
+    A table is not a sentence to cut, so verifying the report leaves it alone; its cells go through
+    the same cascade here, all together so each model loads once. A cell is at most six words, so a
+    partly supported one is emptied rather than rewritten. An emptied cell ties for last when
+    ranked, like any cell no claim spoke to.
+    """
+    cells = [(row, cell) for row in rows for cell in row.cells if cell.claims]
+    if not cells:
+        return [], []
+    items = [
+        (
+            f"{row.entity}, {cell.criterion}: {cell.finding} "
+            + "".join(f"[{i}]" for i in cell.claims),
+            [by_id[i] for i in cell.claims],
+        )
+        for row, cell in cells
+    ]
+    stream.publish(ASSESS, f"checking {len(cells)} cells against their quotes")
+    verdicts = cascade(models, items, stream, ASSESS)
+    removed: list[RemovedSentence] = []
+    unverified: list[UnverifiedSentence] = []
+    for (text, _), (_, cell), verdict in zip(items, cells, verdicts, strict=True):
+        if verdict.status in ("removed", "rewritten"):
+            reason = verdict.reason
+            if verdict.status == "rewritten":
+                reason = f"a partly supported cell is removed rather than rewritten ({reason})"
+            removed.append(
+                RemovedSentence(section=title, sentence=text, reason=reason, stage=verdict.stage)
+            )
+            cell.finding, cell.claims = "", []
+        elif verdict.status == "unverified":
+            unverified.append(
+                UnverifiedSentence(section=title, sentence=text, reason=verdict.reason)
+            )
+            cell.finding += f" {UNVERIFIED}"
+    return removed, unverified
 
 
 def rank(

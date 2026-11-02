@@ -6,9 +6,9 @@ import pytest
 from dspy.utils.dummies import DummyLM
 
 import kvasir.methods.ledger.loop as research_loop
-from fakes import PAGE, Encoder, Search, Stream, claim, research_settings
+from fakes import PAGE, Encoder, Logged, Search, Stream, claim, research_settings
 from kvasir.methods.ledger.brief import clarifications
-from kvasir.methods.ledger.compare import ordered
+from kvasir.methods.ledger.compare import ordered, rank, verify_cells
 from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.method import NO_EVIDENCE, run_research
 from kvasir.methods.ledger.questions import Question, add_questions, open_questions
@@ -19,7 +19,14 @@ from kvasir.research.fetch import FetchError, extract
 from kvasir.research.search import SearchUnavailable
 from kvasir.research.verify import Verified
 from kvasir.schemas.requests import Clarification, Input, LedgerOptions
-from kvasir.schemas.results import RemovedSentence, RevisedSentence, UnverifiedSentence
+from kvasir.schemas.results import (
+    Cell,
+    Criterion,
+    RemovedSentence,
+    RevisedSentence,
+    Row,
+    UnverifiedSentence,
+)
 
 
 def ask(question, **options):
@@ -219,14 +226,20 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
                 {"finding": "20 tok/s", "claims": [1, 2, 9]},
                 {"finding": "cheap", "claims": [2]},
             ],
-            # Speed twice, the second pass reading the options in reverse. Only Beta has a cost
-            # finding, so cost needs no judge: Beta is first and Alpha, with none, last.
+            # Speed twice, the second pass reading the options in reverse. Beta's cost finding is
+            # removed by verification, so no option has one and cost needs no judge.
             "judge": [{"ranking": ["Alpha", "Beta"]}, {"ranking": ["1. alpha"]}],
             "outline": [{"sections": ["Alpha"]}],
             "write": [{"text": "Alpha is the fastest [1]."}],
             # No summary, so the report is the sections alone.
             "tldr": [{"points": []}],
-            "verify": [{"verdict": "supported", "reason": "the quote gives the speed"}],
+            # The three cells, then the sentence. Beta's cost is not in its quote.
+            "verify": [
+                {"verdict": "supported", "reason": "the quote gives the speed"},
+                {"verdict": "supported", "reason": "the quote gives the speed"},
+                {"verdict": "unsupported", "reason": "the quote says nothing of cost"},
+                {"verdict": "supported", "reason": "the quote gives the speed"},
+            ],
         },
     )
     hits = [{"url": "https://a", "title": "A", "description": "speeds", "snippets": []}]
@@ -248,23 +261,114 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
 
     assert result.output == "ranking"
     assert [(c.name, c.weight) for c in result.criteria] == [("speed", 3), ("cost", 1)]
-    # Alpha: (3 x 1 + 1 x 2) / 4 = 1.25. Beta: (3 x 2 + 1 x 1) / 4 = 1.75.
+    # Every cost ties at 1.5. Alpha: (3 x 1 + 1.5) / 4. Beta: (3 x 2 + 1.5) / 4.
     assert [(row.entity, row.rank) for row in result.matrix] == [("Alpha", 1), ("Beta", 2)]
     assert [(c.finding, c.claims, c.rank) for c in result.matrix[1].cells] == [
         ("20 tok/s", [2], 2.0),
-        ("cheap", [2], 1),
+        ("", [], 1.5),
     ]
-    assert result.matrix[0].cells[1].rank == 2
+    assert result.matrix[0].cells[1].rank == 1.5
+    assert [(r.section, r.sentence, r.stage) for r in result.removed] == [
+        ("Ranking", "Beta, cost: cheap [2]", "verify")
+    ]
     # Both claims come from one page, so both cite source 1.
     assert result.report.startswith(
         "## Ranking\n\n| Rank | Option | speed | cost |\n| --- | --- | --- | --- |\n"
         "| 1 | Alpha | 50 tok/s [1] | – |\n"
-        "| 2 | Beta | 20 tok/s [1] | cheap [1] |\n"
+        "| 2 | Beta | 20 tok/s [1] | – |\n"
     )
     assert result.report.endswith("## Alpha\n\nAlpha is the fastest [1].")
     # The page was read for the first question, so the search for the empty cell finds nothing.
     assert ("assess", "filled 0 of 1 empty cells") in stream.events
     assert ("assess", "ranked: Alpha, Beta") in stream.events
+
+
+class Checker:
+    """A grounding checker answering from a list, and logging each call."""
+
+    def __init__(self, answers, log):
+        self.answers, self.log = list(answers), log
+
+    def __call__(self, prompt):
+        self.log.append("checker")
+        return [self.answers.pop(0)]
+
+
+def check_cells(checker, fast=(), reason=()):
+    """Two options with one cell each, `verify_cells` run over them, and what it left behind."""
+    log = []
+    models = {
+        "ground": Checker(checker, log),
+        "verify": Logged("fast", log, fast),
+        "escalate": Logged("escalate", log, reason),
+    }
+    rows = [
+        Row(entity=name, cells=[Cell(criterion="speed", finding="50 tok/s", claims=[1])])
+        for name in ("Alpha", "Beta")
+    ]
+    stream = Stream()
+    by_id = {1: claim(1, "https://a")}
+    removed, unverified = verify_cells(models, rows, by_id, stream, "Ranking")
+    return rows, removed, unverified, log, stream
+
+
+def test_a_cell_the_checker_supports_is_unchanged():
+    rows, removed, unverified, log, _ = check_cells(["Yes", "Yes"])
+
+    assert [row.cells[0].finding for row in rows] == ["50 tok/s", "50 tok/s"]
+    assert removed == unverified == []
+    assert log == ["checker", "checker"]
+
+
+def test_a_cell_the_cascade_removes_is_emptied_and_ranks_last():
+    rows, removed, _, _, _ = check_cells(
+        ["Yes", "No"], fast=[{"verdict": "unsupported", "reason": "no speed"}]
+    )
+    ranked = rank(DummyLM([]), "brief", [Criterion(name="speed")], rows, Stream())
+
+    assert (rows[1].cells[0].finding, rows[1].cells[0].claims) == ("", [])
+    assert [(r.section, r.sentence, r.stage) for r in removed] == [
+        ("Ranking", "Beta, speed: 50 tok/s [1]", "verify")
+    ]
+    assert [row.entity for row in ranked] == ["Alpha", "Beta"]
+    assert ranked[1].cells[0].rank == 2
+
+
+def test_a_partly_supported_cell_is_emptied_not_rewritten():
+    rows, removed, _, _, _ = check_cells(
+        ["No", "Yes", "Yes"],
+        fast=[{"verdict": "partial", "reason": "r"}],
+        reason=[{"verdict": "partial", "reason": "the speed is rounded", "rewrite": "50 [1]"}],
+    )
+
+    assert rows[0].cells[0].finding == ""
+    assert rows[1].cells[0].finding == "50 tok/s"
+    assert [(r.stage, r.reason) for r in removed] == [
+        (
+            "rewrite",
+            "a partly supported cell is removed rather than rewritten (the speed is rounded)",
+        )
+    ]
+
+
+def test_a_cell_no_step_can_judge_keeps_its_finding_marked():
+    rows, _, unverified, _, _ = check_cells(
+        ["No", "Yes"], fast=[{"verdict": "partial", "reason": "r"}], reason=[{"verdict": "x"}]
+    )
+
+    assert rows[0].cells[0].finding == "50 tok/s [unverified]"
+    assert [(u.section, u.sentence) for u in unverified] == [
+        ("Ranking", "Alpha, speed: 50 tok/s [1]")
+    ]
+
+
+def test_every_cell_is_checked_before_the_fast_model_and_stays_on_the_assess_stage():
+    _, _, _, log, stream = check_cells(
+        ["No", "No"], fast=[{"verdict": "unsupported", "reason": "r"}] * 2
+    )
+
+    assert log == ["checker", "checker", "fast", "fast"]
+    assert {stage for stage, _ in stream.events} == {"assess"}
 
 
 def test_a_ranked_name_matches_without_its_number_or_case():

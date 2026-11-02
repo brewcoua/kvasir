@@ -15,7 +15,7 @@ from kvasir.config import Settings
 from kvasir.methods.base import Method
 from kvasir.methods.ledger import loop
 from kvasir.methods.ledger.brief import candidates, clarifications
-from kvasir.methods.ledger.compare import assess, fill, rank
+from kvasir.methods.ledger.compare import assess, fill, rank, verify_cells
 from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.loop import Judge
 from kvasir.methods.ledger.questions import (
@@ -36,7 +36,14 @@ from kvasir.research.text import names
 from kvasir.runners import build_checker, build_research_models, build_research_tools
 from kvasir.runs.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.schemas.requests import Input, LedgerOptions
-from kvasir.schemas.results import Criterion, ResearchClaim, ResearchResult, Row
+from kvasir.schemas.results import (
+    Criterion,
+    RemovedSentence,
+    ResearchClaim,
+    ResearchResult,
+    Row,
+    UnverifiedSentence,
+)
 
 # Questions the first split of the brief adds at most.
 FIRST_QUESTIONS = 6
@@ -185,9 +192,15 @@ def run_research(
         )
 
     rows: list[Row] = []
+    cells_removed: list[RemovedSentence] = []
+    cells_unverified: list[UnverifiedSentence] = []
     if output != "report":
         rows = assess(models, encoder, brief, claims, entities, criteria, stream)
         fill(models["assess"], encoder, brief, claims, ledger, rows, research, stream)
+        # Filling the cells searched, so this is built after it.
+        cells_removed, cells_unverified = verify_cells(
+            models, rows, {claim.id: claim for claim in claims}, stream, TABLE_TITLES[output]
+        )
         if output == "ranking":
             rows = rank(models["judge"], brief, criteria, rows, stream)
             brief += f"\nOverall ranking, best first: {', '.join(row.entity for row in rows)}"
@@ -215,6 +228,8 @@ def run_research(
     checked = verify.report(models, [(SUMMARY, summary), *sections], by_id, stream)
     (_, summary), *sections = checked.sections
     checked.sections = sections
+    checked.removed += cells_removed
+    checked.unverified += cells_unverified
 
     def judge(question: Question) -> None:
         loop.check(models["check"], encoder, brief, claims, question)
