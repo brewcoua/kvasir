@@ -66,11 +66,12 @@ test("a ranking cell shows its quotes", async ({ page }) => {
   await expect(page.locator(".popover")).toBeHidden();
 });
 
-test("a citation badge names its source", async ({ page }) => {
+test("a citation badge shows its number, and names its source on hover", async ({ page }) => {
   await page.goto("/#/runs/report/result");
   const badge = page.locator(".cite").first();
+  await expect(badge).toHaveText(/^\d+$/);
   await badge.hover();
-  await expect(page.locator(".popover")).toContainText(await badge.locator(".host").innerText());
+  await expect(page.locator(".popover")).toContainText("http");
 });
 
 test("a research run asks its questions first, and sends the settings changed", async ({ page }) => {

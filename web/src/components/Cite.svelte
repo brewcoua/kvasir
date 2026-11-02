@@ -19,10 +19,10 @@
   >
     {#snippet child({ props })}
       <a {...props} class="cite" href={`#cite-${number}`}>
-        <span class="n">{number}</span><span class="host">{host(citation.url)}</span>
+        {number}
       </a>
     {/snippet}
   </Tooltip.Trigger>
 {:else}
-  <a class="cite" href={`#cite-${number}`}><span class="n">{number}</span></a>
+  <a class="cite" href={`#cite-${number}`}>{number}</a>
 {/if}

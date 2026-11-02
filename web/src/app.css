@@ -535,24 +535,20 @@ td.track-cell {
 }
 .cite {
   display: inline-flex;
-  gap: 0.3em;
   align-items: baseline;
+  justify-content: center;
+  min-width: 1.4em;
   margin: 0 0.1em;
-  padding: 0 0.4em;
+  padding: 0 0.3em;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   font-size: 0.75em;
+  font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
   text-decoration: none;
   vertical-align: 0.1em;
-}
-.cite .n {
-  font-weight: 600;
-}
-.cite .host {
-  color: var(--dim);
 }
 .popover {
   z-index: 2;
