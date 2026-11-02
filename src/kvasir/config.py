@@ -72,6 +72,8 @@ class ModelSettings:
 
     fast: str
     strong: str
+    # The model for judgements, which are worth thinking about. Unset falls back to `strong`.
+    reason: str | None = None
     # No default fits every provider, and an embedding model cannot be swapped for another's.
     embedding: str
     # A grounding checker such as MiniCheck, or none. See `kvasir.research.ground`.
@@ -79,6 +81,9 @@ class ModelSettings:
     # Sent only when set. Unset leaves the gateway's default, which for a thinking model
     # served by Ollama spends each role's token budget on reasoning before any answer.
     reasoning_effort: str | None = None
+    # Sent to the reason tier instead of `reasoning_effort`: that tier is meant to think, and its
+    # token budgets leave room for it.
+    reason_effort: str | None = "medium"
     # The context window the models are served with, such as Ollama's `num_ctx`. It sizes
     # how much of a page one intake call reads, and the room left for its answer.
     context_tokens: int = DEFAULT_CONTEXT_TOKENS
@@ -248,6 +253,7 @@ class Settings:
         refs = {
             "KVASIR_MODEL_FAST": settings.model.fast,
             "KVASIR_MODEL_STRONG": settings.model.strong,
+            "KVASIR_MODEL_REASON": settings.model.reason,
             "KVASIR_MODEL_CHECKER": settings.model.checker,
             "KVASIR_MODEL_EMBEDDING": settings.model.embedding,
         }

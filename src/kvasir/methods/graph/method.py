@@ -55,7 +55,9 @@ def run_graph(
 ) -> ResearchResult:
     """Research a question to a cited report, blocking for minutes. Never call this on the loop."""
     started = time.monotonic()
-    models = build_research_models(settings, options.model_fast, options.model_strong)
+    models = build_research_models(
+        settings, options.model_fast, options.model_strong, options.model_reason
+    )
     checker = build_checker(settings)
     if checker is not None and (options.ground is None or options.ground):
         models["ground"] = checker
@@ -210,6 +212,7 @@ def _defaults(settings: Settings) -> dict[str, Any]:
         "ground": settings.model.checker is not None,
         "model_fast": settings.model.fast,
         "model_strong": settings.model.strong,
+        "model_reason": settings.model.reason or settings.model.strong,
     }
 
 

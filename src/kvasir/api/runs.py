@@ -29,7 +29,13 @@ async def start_run(http: Request, request: RunRequest) -> Response:
     """Run a method and stream progress until its result is ready."""
     settings: Settings = http.app.state.settings
     try:
-        check_model_overrides(settings, request.options.model_fast, request.options.model_strong)
+        options = request.options
+        check_model_overrides(
+            settings,
+            options.model_fast,
+            options.model_strong,
+            getattr(options, "model_reason", None),
+        )
     except ConfigError as exc:
         return JSONResponse({"message": str(exc)}, status_code=400)
     method = METHODS[request.method]

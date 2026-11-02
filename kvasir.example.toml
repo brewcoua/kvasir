@@ -22,10 +22,13 @@ api_base = "http://localhost:11434/v1"
 fast = "local/gpt-oss:20b"
 strong = "local/deepseek-v4.1-flash:cloud"
 embedding = "local/nomic-embed-text:latest"
+# The model for judgements, such as whether a source supports a sentence. Leave out to use strong.
+reason = "local/gpt-oss:120b-cloud"
 # A grounding checker, after `ollama pull bespoke-minicheck`. Leave out to check with the fast model.
 # checker = "local/bespoke-minicheck"
 # Thinking tokens count against each role's token budget, which leaves no room for the answer.
 reasoning_effort = "none"
+# The reason model is the exception: it is meant to think. reason_effort defaults to "medium".
 # The models' num_ctx. Sizes how much of a page one intake call reads.
 context_tokens = 16384
 

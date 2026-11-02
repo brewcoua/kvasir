@@ -422,6 +422,8 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
+            /** Model Reason */
+            model_reason?: string | null;
         };
         /** GraphRun */
         GraphRun: {
@@ -511,6 +513,8 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
+            /** Model Reason */
+            model_reason?: string | null;
         };
         /** LedgerRun */
         LedgerRun: {

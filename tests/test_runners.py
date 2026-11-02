@@ -142,6 +142,45 @@ def test_the_outline_and_the_prose_are_written_by_the_strong_model(settings):
     assert models["intake"].model == "openai/ollama/fast:cloud"
 
 
+REASON_ROLES = ("decompose", "check", "criteria", "entities", "judge", "escalate")
+
+
+def test_the_judgements_are_made_by_the_reason_model():
+    settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_REASON": "gateway/ollama/reason:cloud"})
+
+    models = build_research_models(settings)
+
+    for role in REASON_ROLES:
+        assert models[role].model == "openai/ollama/reason:cloud", role
+    assert models["write"].model == "openai/ollama/strong:cloud"
+    assert models["assess"].model == "openai/ollama/fast:cloud"
+
+
+def test_the_reason_model_falls_back_to_the_strong_one(settings):
+    models = build_research_models(settings)
+
+    for role in REASON_ROLES:
+        assert models[role].model == "openai/ollama/strong:cloud", role
+
+
+def test_a_request_may_override_the_reason_model(settings):
+    models = build_research_models(settings, model_reason="gateway/ollama/other:cloud")
+
+    assert models["judge"].model == "openai/ollama/other:cloud"
+    assert models["write"].model == "openai/ollama/strong:cloud"
+
+
+def test_the_reason_tier_gets_its_own_effort():
+    settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_REASONING_EFFORT": "none"})
+
+    models = build_research_models(settings)
+
+    for role in REASON_ROLES:
+        assert models[role].kwargs["extra_body"] == {"reasoning_effort": "medium"}, role
+    for role in ("plan", "write", "intake"):
+        assert models[role].kwargs["extra_body"] == {"reasoning_effort": "none"}, role
+
+
 def test_a_model_on_another_provider_gets_that_providers_endpoint_and_key():
     settings = Settings.from_env(
         MINIMAL
@@ -181,7 +220,9 @@ def test_an_override_naming_an_unknown_provider_is_refused(settings):
         check_model_overrides(settings, None, "nope/x")
     with pytest.raises(ConfigError, match="must name a provider"):
         check_model_overrides(settings, "fast", None)
-    check_model_overrides(settings, "gateway/x", None)
+    with pytest.raises(ConfigError, match="unknown provider 'nope'"):
+        check_model_overrides(settings, None, None, "nope/x")
+    check_model_overrides(settings, "gateway/x", None, "gateway/y")
 
 
 def test_a_restored_session_still_reaches_the_gateway(settings):

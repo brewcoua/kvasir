@@ -64,26 +64,30 @@ _COSTORM_ROLES = {
 }
 
 
-# The deep research pipeline's steps. Extraction and planning are many small calls and go to the
-# fast model; the brief, the judgements, the outline and the prose a reader sees go to the strong
-# one. Intake and notes return lists of claims, which need more room than a plan's handful of
-# queries.
+# The deep research pipeline's steps, on three tiers. Extraction and planning are many small calls
+# and go to the fast model; the brief, the outline and the prose a reader sees go to the strong
+# one; the judgements go to the reason model, which thinks before it answers. Its budgets are about
+# three times what the answer needs, because thinking counts against max_tokens. Intake and notes
+# return lists of claims, which need more room than a plan's handful of queries.
 _RESEARCH_ROLES = {
     "clarify": ("fast", 500),
     "brief": ("strong", 1000),
-    "decompose": ("strong", 600),
+    "decompose": ("reason", 2000),
     "plan": ("fast", 500),
-    "check": ("strong", 800),
-    "criteria": ("strong", 1000),
-    "entities": ("strong", 600),
+    "check": ("reason", 2500),
+    "criteria": ("reason", 3000),
+    "entities": ("reason", 2000),
     "assess": ("fast", 600),
-    "judge": ("strong", 800),
+    "judge": ("reason", 2500),
     # A thinking strong model spends some 700 tokens reasoning before it answers, within these.
     "outline": ("strong", 2500),
     "write": ("strong", 4000),
     "tldr": ("strong", 2000),
     "verify": ("fast", 600),
     "contradict": ("fast", 400),
+    # The reason model's final say on a sentence the checker and the fast model reject or
+    # disagree on.
+    "escalate": ("reason", 2500),
 }
 
 
@@ -94,8 +98,13 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
     `Settings.resolve`.
     """
     resolved = settings.resolve(
-        {"fast": settings.model.fast, "strong": settings.model.strong}[tier]
+        {
+            "fast": settings.model.fast,
+            "strong": settings.model.strong,
+            "reason": settings.model.reason or settings.model.strong,
+        }[tier]
     )
+    effort = settings.model.reason_effort if tier == "reason" else settings.model.reasoning_effort
     return GatewayModel(
         model=resolved.model,
         # Reported with the model's usage, so a run can be read as which stage spent what.
@@ -109,11 +118,7 @@ def _language_model(settings: Settings, role: str, tier: str, max_tokens: int) -
         top_p=0.9,
         # In the body rather than as litellm's own `reasoning_effort`, which litellm refuses for a
         # model it has no entry for, such as anything served by Ollama.
-        **(
-            {"extra_body": {"reasoning_effort": settings.model.reasoning_effort}}
-            if settings.model.reasoning_effort
-            else {}
-        ),
+        **({"extra_body": {"reasoning_effort": effort}} if effort else {}),
     )
 
 
@@ -130,9 +135,10 @@ def build_research_models(
     settings: Settings,
     model_fast: str | None = None,
     model_strong: str | None = None,
+    model_reason: str | None = None,
 ) -> dict[str, GatewayModel]:
     """One model per deep research step, keyed by step."""
-    settings = _with_model_overrides(settings, model_fast, model_strong)
+    settings = _with_model_overrides(settings, model_fast, model_strong, model_reason)
     models = {
         role: _language_model(settings, role, tier, max_tokens)
         for role, (tier, max_tokens) in _RESEARCH_ROLES.items()
@@ -271,9 +277,12 @@ def load_costorm_runner(settings: Settings, state: dict[str, Any]) -> CoStormRun
 
 
 def _with_model_overrides(
-    settings: Settings, model_fast: str | None, model_strong: str | None
+    settings: Settings,
+    model_fast: str | None,
+    model_strong: str | None,
+    model_reason: str | None = None,
 ) -> Settings:
-    if model_fast is None and model_strong is None:
+    if model_fast is None and model_strong is None and model_reason is None:
         return settings
     return replace(
         settings,
@@ -281,18 +290,22 @@ def _with_model_overrides(
             settings.model,
             fast=model_fast or settings.model.fast,
             strong=model_strong or settings.model.strong,
+            reason=model_reason or settings.model.reason,
         ),
     )
 
 
 def check_model_overrides(
-    settings: Settings, model_fast: str | None, model_strong: str | None
+    settings: Settings,
+    model_fast: str | None,
+    model_strong: str | None,
+    model_reason: str | None = None,
 ) -> None:
     """Raise `ConfigError` if a per-request model names no configured provider.
 
     Called by the routes before a run starts, so a bad override is refused rather than failing
     minutes in, at the first model call.
     """
-    for ref in (model_fast, model_strong):
+    for ref in (model_fast, model_strong, model_reason):
         if ref is not None:
             settings.resolve(ref)

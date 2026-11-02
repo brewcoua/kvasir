@@ -85,6 +85,7 @@ class LedgerOptions(BaseModel):
     # list of known models.
     model_fast: str | None = None
     model_strong: str | None = None
+    model_reason: str | None = None
 
 
 class GraphOptions(BaseModel):
@@ -106,6 +107,7 @@ class GraphOptions(BaseModel):
     contradict: bool = False
     model_fast: str | None = None
     model_strong: str | None = None
+    model_reason: str | None = None
 
 
 class StormOptions(BaseModel):

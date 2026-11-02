@@ -35,6 +35,8 @@ def test_defaults():
     assert settings.runs.keep_call_content is False
     assert settings.model.checker is None
     assert settings.model.reasoning_effort is None
+    assert settings.model.reason is None
+    assert settings.model.reason_effort == "medium"
     assert settings.research.max_searches == 16
     assert settings.research.results_per_query == 3
     assert settings.research.max_attempts == 4
@@ -107,7 +109,13 @@ def test_resolve_rejects_a_reference_without_provider_and_name(ref):
 
 @pytest.mark.parametrize(
     "name",
-    ["KVASIR_MODEL_FAST", "KVASIR_MODEL_STRONG", "KVASIR_MODEL_CHECKER", "KVASIR_MODEL_EMBEDDING"],
+    [
+        "KVASIR_MODEL_FAST",
+        "KVASIR_MODEL_STRONG",
+        "KVASIR_MODEL_REASON",
+        "KVASIR_MODEL_CHECKER",
+        "KVASIR_MODEL_EMBEDDING",
+    ],
 )
 def test_a_model_naming_an_unknown_provider_fails_at_startup(name):
     with pytest.raises(ConfigError, match=f"{name}: .*unknown provider 'typo'"):
