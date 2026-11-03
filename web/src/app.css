@@ -124,14 +124,14 @@ main {
   padding: 1rem 1.25rem;
 }
 /* The run page: the runs beside the one shown, so another is a click away. */
-.split {
+.run-split {
   display: grid;
   grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
 @media (max-width: 60rem) {
-  .split {
+  .run-split {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1321,84 +1321,523 @@ table.runs a.topic:hover {
 .steps-view {
   height: 600px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 12px;
+  overflow: hidden;
   --xy-background-color: var(--bg);
-  --xy-edge-stroke: var(--dim);
+  --xy-background-pattern-dots-color: color-mix(in srgb, var(--dim) 45%, transparent);
+  --xy-edge-stroke: color-mix(in srgb, var(--dim) 70%, transparent);
+  --xy-edge-stroke-width: 1.5;
+  --xy-handle-background-color: var(--dim);
+  --xy-handle-border-color: var(--panel);
+  --xy-controls-button-background-color: var(--panel);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--line);
+  --xy-controls-button-background-color-hover: var(--bg);
+  /* Fixed hue per kind; lightness and chroma follow the theme's accent. */
+  --k-stage: var(--text);
+  --k-question: oklch(from var(--accent) l max(c, 0.12) 300);
+  --k-attempt: oklch(from var(--accent) l max(c, 0.12) 250);
+  --k-page: oklch(from var(--accent) l max(c, 0.1) 195);
+  --k-section: oklch(from var(--accent) l max(c, 0.12) 340);
+  --k-event: var(--dim);
+}
+[data-theme="amber"] .steps-view {
+  --k-question: var(--accent);
+  --k-attempt: var(--accent);
+  --k-page: var(--accent);
+  --k-section: var(--accent);
+}
+.steps-view .svelte-flow__handle {
+  top: 18px; /* centre of the header band, HEADER / 2 in layout.ts */
+  width: 7px;
+  height: 7px;
+  min-width: 0;
+  min-height: 0;
+  border-width: 1px;
+  pointer-events: none;
+}
+.steps-view .svelte-flow__edge.done .svelte-flow__edge-path {
+  stroke: color-mix(in srgb, var(--dim) 80%, transparent);
+}
+.steps-view .svelte-flow__edge.pending .svelte-flow__edge-path {
+  stroke-dasharray: 4 5;
+  stroke-opacity: 0.45;
+}
+.steps-view .svelte-flow__edge.animated .svelte-flow__edge-path {
+  stroke: var(--busy);
+  stroke-dasharray: 6 5;
+  stroke-opacity: 1;
+}
+.steps-view .svelte-flow__node {
+  transition:
+    transform 250ms ease,
+    width 250ms ease,
+    height 250ms ease,
+    opacity 150ms ease;
+}
+.steps-view .svelte-flow__edge,
+.arc-badge {
+  transition: opacity 150ms ease;
+}
+/* Hovering a card: leaf cards and links that do not touch it fall back. */
+.steps-view .svelte-flow__node.dim {
+  opacity: 0.3;
+}
+.steps-view .svelte-flow__edge.dim {
+  opacity: 0.08;
+}
+.arc-badge.dim {
+  opacity: 0.15;
+}
+.steps-view .svelte-flow__edge.raised .svelte-flow__edge-path,
+.link-key.raised path {
+  stroke: var(--k-question);
+  stroke-opacity: 0.7;
+}
+.steps-view .svelte-flow__edge.drew .svelte-flow__edge-path,
+.link-key.drew path {
+  stroke: var(--k-section);
+  stroke-opacity: 0.5;
+  stroke-dasharray: 2 3;
+}
+.steps-view .svelte-flow__edge.removed .svelte-flow__edge-path,
+.link-key.removed path {
+  stroke: var(--bad);
+  stroke-opacity: 0.4;
+}
+.steps-view .svelte-flow__edge.corroborates .svelte-flow__edge-path,
+.link-key.corroborates path {
+  stroke: var(--ok);
+}
+.steps-view .svelte-flow__edge.contradicts .svelte-flow__edge-path,
+.link-key.contradicts path {
+  stroke: var(--bad);
+  stroke-dasharray: 5 3;
+}
+/* Under an arc, in the research box's colour, so the trunk stubs it crosses seem to pass beneath. */
+.steps-view .svelte-flow__edge-path.halo {
+  stroke: color-mix(in srgb, var(--text) 5%, var(--bg));
+  stroke-width: 6;
+}
+.steps-view .svelte-flow__edge-label {
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 0.65rem;
+}
+.steps-view .arc-badge {
+  box-sizing: border-box;
+  height: 16px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 14px;
+}
+.steps-view .arc-badge.corroborates {
+  color: var(--ok);
+}
+.steps-view .arc-badge.contradicts {
+  color: var(--bad);
+}
+.steps-view .svelte-flow__node {
+  outline: none;
+}
+.steps-view .svelte-flow__node-group,
+.steps-view .svelte-flow__node-group.selectable:hover,
+.steps-view .svelte-flow__node-group.selectable.selected {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.step-card,
+.step-group {
+  animation: step-in 250ms ease both;
+}
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .steps-view .svelte-flow__node,
+  .steps-view .svelte-flow__edge,
+  .arc-badge {
+    transition: none;
+  }
+  .step-card,
+  .step-group {
+    animation: none;
+  }
 }
 .step-card {
   box-sizing: border-box;
   width: 220px;
-  height: 64px;
-  padding: 0.3rem 0.5rem;
+  height: 100px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
+  box-shadow: inset 3px 0 0 var(--k), 0 2px 8px color-mix(in srgb, var(--text) 8%, transparent);
   color: var(--text);
   font-size: 0.8rem;
   cursor: default;
 }
+.step-card,
+.step-group,
+.step-panel {
+  --k: var(--k-event);
+}
+.step-card.stage,
+.step-group.stage,
+.step-panel.stage {
+  --k: var(--k-stage);
+}
+.step-card.question,
+.step-group.question,
+.step-panel.question {
+  --k: var(--k-question);
+}
+.step-card.attempt,
+.step-panel.attempt {
+  --k: var(--k-attempt);
+}
+.step-card.page,
+.step-panel.page {
+  --k: var(--k-page);
+}
+.step-card.section,
+.step-panel.section {
+  --k: var(--k-section);
+}
+.step-card.removed {
+  --k: var(--bad);
+}
+.step-card.rewritten {
+  --k: var(--busy);
+}
+.step-card.unverified {
+  --k: var(--dim);
+}
 .step-card.stage {
   width: 240px;
-  height: 76px;
-  font-weight: 600;
+  height: 116px;
 }
 .step-card.pending {
-  opacity: 0.55;
-}
-.step-card.done {
-  border-color: var(--ok);
-}
-.step-card.question.open.done {
-  border-color: var(--line);
-}
-.step-card.question.answered {
-  border-color: var(--ok);
-}
-.step-card.question.weak {
-  border-color: var(--busy);
-}
-.step-card.question.contradicted {
-  border-color: var(--bad);
+  opacity: 0.6;
+  border-style: dashed;
 }
 .step-card.current {
   border-color: var(--busy);
-  animation: step-pulse 1.4s ease-in-out infinite;
+  animation: step-in 250ms ease both, step-pulse 1.8s ease-in-out infinite;
 }
 @keyframes step-pulse {
   50% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--busy) 35%, transparent);
+    box-shadow: inset 3px 0 0 var(--k), 0 0 0 4px color-mix(in srgb, var(--busy) 30%, transparent), 0 2px 12px color-mix(in srgb, var(--busy) 35%, transparent);
   }
 }
+@keyframes pip-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--busy) 30%, transparent);
+  }
+}
+.selected .step-card,
+.selected .step-group {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 .selected .step-card {
-  outline: 2px solid var(--accent);
+  box-shadow: inset 3px 0 0 var(--k), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .step-head {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  flex: none;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 0.65rem;
+  background: color-mix(in srgb, var(--k) 9%, transparent);
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.step-head svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--k);
 }
 .step-kind {
-  color: var(--dim);
-  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--k) 70%, var(--dim));
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.step-count {
+.chip {
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  font-size: 0.66rem;
+  color: var(--dim);
   background: var(--line);
-  border-radius: 8px;
-  padding: 0 0.4rem;
-  font-size: 0.7rem;
+}
+.chip.done {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.chip.current {
+  color: var(--busy);
+  background: color-mix(in srgb, var(--busy) 16%, transparent);
 }
 .step-toggle {
   margin-left: auto;
   color: var(--accent);
   font-weight: 600;
+  font-size: 0.75rem;
 }
-.step-label {
+.step-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0.65rem;
+}
+.step-title {
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.step-chosen {
-  margin-top: 0.75rem;
+.step-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.step-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+.step-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.6rem;
+  color: var(--dim);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.step-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.step-stats svg {
+  width: 11px;
+  height: 11px;
+}
+.step-body progress {
+  width: 100%;
+  height: 4px;
+  margin-top: auto;
+}
+.pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.pip.done {
+  background: var(--k);
+}
+.pip.current {
+  background: var(--busy);
+  animation: pip-pulse 1.8s ease-in-out infinite;
+}
+.step-group {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--k) 5%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--k) 40%, var(--line));
+  border-radius: 16px;
+  cursor: pointer;
+}
+.step-group .step-head {
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--k) 30%, var(--line));
+  padding: 0 0.85rem;
+}
+.step-group .step-label,
+.step-panel .step-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--k);
+}
+.step-group .step-head > :not(.step-label) {
+  flex: none;
+  white-space: nowrap;
+}
+.step-group .step-stats {
+  flex-wrap: nowrap;
+}
+.step-group.current {
+  border-color: var(--busy);
+}
+.step-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+  max-width: 460px;
+  margin: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--dim);
+  font-size: 0.68rem;
+}
+.step-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.step-legend svg {
+  width: 12px;
+  height: 12px;
+  color: var(--k);
+}
+.link-key {
+  width: 26px;
+  height: 8px;
+  color: inherit;
+}
+.link-key path {
+  fill: none;
+  stroke-width: 1.5;
+}
+.link-key.removed path {
+  stroke-width: 3;
+}
+.step-panel {
+  box-sizing: border-box;
+  width: 300px;
+  max-height: 440px;
+  margin: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+.step-panel .step-head {
+  border-radius: 12px 12px 0 0;
+}
+.step-close {
+  margin-left: auto;
+  display: inline-flex;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+}
+.step-panel-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+.step-panel-body {
+  padding: 0.5rem 0.65rem;
+}
+.step-panel p {
+  margin: 0 0 0.3rem;
+}
+.claim-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.claim-list li {
+  padding: 0.5rem 0.65rem;
+  border-top: 1px solid var(--line);
+}
+.claim-list li.picked {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.claim-list .rel {
+  margin-top: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.claim-list .rel.corroborates {
+  color: var(--ok);
+}
+.claim-list .rel.contradicts {
+  color: var(--bad);
+}
+.claim-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: auto;
+}
+.claim-strip {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  height: 24px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.6rem;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.68rem;
+}
+.claim-strip .claim-dots {
+  margin-top: 0;
+}
+.claim-dots .dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--k-question);
+  cursor: pointer;
+}
+.claim-dots .dot.medium {
+  opacity: 0.55;
+}
+.claim-dots .dot.low {
+  opacity: 0.25;
+}
+.claim-dots .dot.corroborates {
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 2.5px var(--ok);
+}
+.claim-dots .dot.contradicts {
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 2.5px var(--bad);
 }

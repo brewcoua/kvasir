@@ -1,6 +1,7 @@
+import type { IconName } from "../components/Icon.svelte";
 import { isResearch, type Progress, type ResearchQuestion, type RunDetail } from "./api";
 
-export type StepKind = "stage" | "question" | "attempt" | "page" | "part" | "section" | "verdict" | "event";
+export type StepKind = "stage" | "question" | "attempt" | "page" | "part" | "section" | "verdict" | "split" | "event";
 export interface Step {
   id: string;
   kind: StepKind;
@@ -19,6 +20,12 @@ export interface Step {
   status: string | null;
   // A number for the card badge: claims added, results, parts, counter progress.
   count: number | null;
+  // A question's depth; null for any other step.
+  depth: number | null;
+  // The question a question or section step belongs to.
+  question: number | null;
+  // A question's claims, in its own order; empty for any other step.
+  claims: { id: number; confidence: "high" | "medium" | "low" }[];
   children: Step[];
 }
 
@@ -34,6 +41,9 @@ const step = (id: string, kind: StepKind, label: string, detail = label, state: 
   search: null,
   status: null,
   count: null,
+  depth: null,
+  question: null,
+  claims: [],
   children: [],
 });
 
@@ -47,6 +57,9 @@ function span(parent: Step) {
     parent.ended_at = Math.max(...ends, parent.ended_at ?? -Infinity);
   }
 }
+
+// Time order, steps with no time last; sort is stable, so ties keep their given order.
+const byTime = (a: Step, b: Step) => (a.started_at === b.started_at ? 0 : a.started_at === null ? 1 : b.started_at === null ? -1 : a.started_at - b.started_at);
 
 interface Attempt {
   step: Step;
@@ -111,9 +124,13 @@ export function steps(run: RunDetail): Step[] {
     } else if (kind === "result" && parent) {
       parent.resulted = true;
       parent.step.children.push(own(step(`e:${seq}`, "event", ev.detail, ev.detail, state)));
+    } else if (kind === "split") {
+      add(ev.stage, own(step(`e:${seq}`, "split", ev.detail, ev.detail, state)));
     } else if (kind === "section") {
       const q = ev.question == null ? undefined : questionById.get(ev.question);
-      add(ev.stage, own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail, ev.detail, state)));
+      const s = own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail, ev.detail, state));
+      s.question = ev.question ?? null;
+      add(ev.stage, s);
     } else if (kind === null && ev.done != null) {
       // Progress counters of one stage fold into the first, which shows the latest.
       if (counter && counterStage === ev.stage) {
@@ -147,18 +164,16 @@ export function steps(run: RunDetail): Step[] {
     span(a);
   }
 
-  const kids = new Map<number, ResearchQuestion[]>();
-  const roots: ResearchQuestion[] = [];
-  for (const q of questions) {
-    if (q.parent !== null && questionById.has(q.parent)) kids.set(q.parent, [...(kids.get(q.parent) ?? []), q]);
-    else roots.push(q);
-  }
+  const confidence = new Map((research?.claims ?? []).map((c) => [c.id, c.confidence]));
   const question = (q: ResearchQuestion): Step => {
     const s = step(`q:${q.id}`, "question", q.title || q.text, q.text);
     s.count = q.claims.length;
     s.status = q.status;
-    s.children = [...(attemptsOf.get(q.id) ?? []), ...(kids.get(q.id) ?? []).map(question)];
-    // Answered is done; otherwise done once the run ended, current while an attempt or sub-question is, else pending.
+    s.depth = q.depth;
+    s.question = q.id;
+    s.claims = q.claims.flatMap((id) => (confidence.has(id) ? [{ id, confidence: confidence.get(id)! }] : []));
+    s.children = (attemptsOf.get(q.id) ?? []).sort(byTime);
+    // Answered is done; otherwise done once the run ended, current while an attempt is, else pending.
     s.state = q.status === "answered" || !live ? "done" : s.children.some((child) => child.state === "current") ? "current" : "pending";
     span(s);
     return s;
@@ -186,7 +201,96 @@ export function steps(run: RunDetail): Step[] {
     const s = step(`stage:${name}`, "stage", name, name, name === run.stage && live ? "current" : t ? "done" : "pending");
     s.started_at = t?.started_at ?? null;
     s.ended_at = t?.ended_at ?? null;
-    s.children = [...(loose.get(name) ?? []), ...(name === "research" ? roots.map(question) : []), ...(name === "verify" ? verdicts() : [])];
+    s.children = [...(loose.get(name) ?? []), ...(name === "verify" ? verdicts() : [])].sort(byTime);
+    // The view lays questions out in columns by depth.
+    if (name === "research") s.children.push(...questions.map(question).sort((a, b) => a.depth! - b.depth! || a.question! - b.question!));
     return s;
   });
+}
+
+// A verdict's id is `v:<tier>`; any tier other than the two below removed sentences.
+export const outcome = (step: Step): "removed" | "rewritten" | "unverified" => {
+  const tier = step.id.slice(2);
+  return tier === "rewritten" || tier === "unverified" ? tier : "removed";
+};
+
+// Any stage not named here gets the generic glyph.
+const STAGE_ICONS: Record<string, IconName> = {
+  brief: "brief",
+  background: "background",
+  research: "search",
+  assess: "assess",
+  write: "write",
+  verify: "verify",
+  outline: "outline",
+  article: "page",
+  polish: "polish",
+  warm_start: "warm_start",
+  turn: "turn",
+  mind_map: "mind_map",
+};
+const OUTCOME_ICONS = { removed: "close", rewritten: "brief", unverified: "question" } as const;
+const KIND_ICONS: Partial<Record<StepKind, IconName>> = { question: "question", attempt: "search", page: "page", section: "write", split: "split" };
+
+export function icon(step: Step): IconName {
+  if (step.kind === "stage") return STAGE_ICONS[step.label] ?? "stage";
+  if (step.kind === "verdict") return OUTCOME_ICONS[outcome(step)];
+  return KIND_ICONS[step.kind] ?? "event";
+}
+
+export interface Link {
+  from: string;
+  to: string;
+  kind: "raised" | "drew" | "removed" | "corroborates" | "contradicts";
+  count: number;
+}
+
+export function links(run: RunDetail, roots: Step[]): Link[] {
+  const all: Step[] = [];
+  const collect = (list: Step[]) => list.forEach((s) => (all.push(s), collect(s.children)));
+  collect(roots);
+  const ids = new Set(all.map((s) => s.id));
+  const out: Link[] = [];
+  const link = (from: string, to: string, kind: Link["kind"], count = 1) => {
+    if (count > 0 && ids.has(from) && ids.has(to)) out.push({ from, to, kind, count });
+  };
+
+  const research = run.result && isResearch(run.result) ? run.result : null;
+  const questions = run.questions.length > 0 ? run.questions : (research?.questions ?? []);
+  const split = all.find((s) => s.kind === "split");
+  for (const q of questions) {
+    if (q.parent !== null) link(`q:${q.parent}`, `q:${q.id}`, "raised");
+    else if (split) link(split.id, `q:${q.id}`, "raised");
+  }
+
+  const textOf = new Map(questions.map((q) => [q.id, q.text]));
+  for (const s of all) {
+    if (s.kind !== "section" || s.question === null) continue;
+    link(`q:${s.question}`, s.id, "drew");
+    const tiers = new Map<string, number>();
+    for (const r of research?.removed ?? []) if (r.section === textOf.get(s.question)) tiers.set(r.stage, (tiers.get(r.stage) ?? 0) + 1);
+    for (const [tier, n] of tiers) link(s.id, `v:${tier}`, "removed", n);
+  }
+
+  const questionOf = new Map<number, number>();
+  for (const q of questions) for (const id of q.claims) if (!questionOf.has(id)) questionOf.set(id, q.id);
+  const between = new Map<string, Link>();
+  const seen = new Set<string>();
+  for (const [kind, key] of [["corroborates", "corroborated_by"], ["contradicts", "contradicted_by"]] as const) {
+    for (const c of research?.claims ?? []) {
+      for (const other of c[key] ?? []) {
+        const [a, b] = [questionOf.get(c.id), questionOf.get(other)];
+        const pair = `${kind}:${Math.min(c.id, other)}:${Math.max(c.id, other)}`;
+        if (a === undefined || b === undefined || a === b || seen.has(pair)) continue;
+        seen.add(pair);
+        const from = Math.min(a, b);
+        const to = Math.max(a, b);
+        const l = between.get(`${kind}:${from}:${to}`) ?? { from: `q:${from}`, to: `q:${to}`, kind, count: 0 };
+        l.count++;
+        between.set(`${kind}:${from}:${to}`, l);
+      }
+    }
+  }
+  for (const l of between.values()) link(l.from, l.to, l.kind, l.count);
+  return out;
 }

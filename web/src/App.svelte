@@ -66,7 +66,7 @@
 
 <main>
   {#if route.current.page === "run"}
-    <div class="split">
+    <div class="run-split">
       <section class="panel">
         <h2>Runs</h2>
         <RunList {runs} selected={route.current.id} />

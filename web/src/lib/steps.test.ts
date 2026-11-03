@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isResearch, type Progress, type RunDetail } from "./api";
-import { steps, type Step } from "./steps";
+import { links, steps, type Step } from "./steps";
 
 const graph: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "graph.json"), "utf8"));
 
@@ -17,9 +17,32 @@ describe("steps", () => {
     expect(roots.map((s) => s.label)).toEqual(["brief", "research", "write", "verify"]);
   });
 
-  it("holds the root questions under research", () => {
-    const rootQuestions = graph.questions.filter((q) => q.parent === null).map((q) => `q:${q.id}`);
-    expect(stage("research").children.filter((s) => s.kind === "question").map((s) => s.id)).toEqual(rootQuestions);
+  it("holds every question under research, ordered by depth then id", () => {
+    const qs = stage("research").children.filter((s) => s.kind === "question");
+    expect(qs.map((s) => s.id).sort()).toEqual(graph.questions.map((q) => `q:${q.id}`).sort());
+    expect(qs.some((s) => s.depth! > 0)).toBe(true);
+    expect(qs.map((s) => [s.depth, s.question])).toEqual(graph.questions.map((q) => [q.depth, q.id]).sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    expect(walk(qs).filter((s) => s.kind === "question")).toHaveLength(qs.length);
+    expect(qs.every((s) => s.children.every((c) => c.kind !== "question"))).toBe(true);
+  });
+
+  it("makes the split event a split step", () => {
+    const split = stage("research").children.filter((s) => s.kind === "split");
+    expect(split.map((s) => s.detail)).toEqual(["splitting the brief into questions"]);
+  });
+
+  it("lists a question's claims with their confidence", () => {
+    const q = graph.questions.find((q) => q.claims.length > 0)!;
+    const claims = find(roots, `q:${q.id}`).claims;
+    expect(claims.map((c) => c.id)).toEqual(q.claims);
+    expect(claims.every((c) => ["high", "medium", "low"].includes(c.confidence))).toBe(true);
+  });
+
+  it("orders a column by start time, steps with no time last", () => {
+    const sorted = (list: Step[]) => list.map((s) => s.started_at ?? Infinity).every((t, i, all) => i === 0 || all[i - 1] <= t);
+    for (const s of walk(roots)) expect(sorted(s.children.filter((c) => c.kind !== "question"))).toBe(true);
+    const first = stage("research").children[0];
+    expect(first.kind).not.toBe("question");
   });
 
   it("splits an attempt into pages and parts", () => {
@@ -66,6 +89,52 @@ describe("steps", () => {
   it("keeps step ids unique", () => {
     const ids = walk(roots).map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("links", () => {
+  const roots = steps(graph);
+  const result = graph.result as Extract<typeof graph.result, { claims: unknown }> & { removed: { section: string }[] };
+  const of = (kind: string) => links(graph, roots).filter((l) => l.kind === kind);
+
+  it("raises each question from the split step or its parent", () => {
+    const raised = of("raised");
+    expect(raised).toHaveLength(graph.questions.length);
+    const split = find(roots, "stage:research").children.find((s) => s.kind === "split")!;
+    const rootIds = graph.questions.filter((q) => q.parent === null).map((q) => `q:${q.id}`);
+    expect(raised.filter((l) => l.from === split.id).map((l) => l.to).sort()).toEqual(rootIds.sort());
+    for (const q of graph.questions.filter((q) => q.parent !== null)) expect(raised).toContainEqual({ from: `q:${q.parent}`, to: `q:${q.id}`, kind: "raised", count: 1 });
+  });
+
+  it("draws one section per section step and counts removals", () => {
+    expect(of("drew")).toHaveLength(walk(roots).filter((s) => s.kind === "section").length);
+    const texts = new Set(graph.questions.map((q) => q.text));
+    expect(of("removed").reduce((n, l) => n + l.count, 0)).toBe(result.removed.filter((r) => texts.has(r.section)).length);
+  });
+
+  it("references only steps in the tree", () => {
+    const ids = new Set(walk(roots).map((s) => s.id));
+    for (const l of links(graph, roots)) expect([ids.has(l.from), ids.has(l.to)]).toEqual([true, true]);
+  });
+
+  it("links questions by corroborating and contradicting claims, once per claim pair", () => {
+    const run: RunDetail = structuredClone(graph);
+    const [q1, q2] = run.questions.filter((q) => q.claims.length >= 2);
+    const claims = (run.result as typeof result).claims as { id: number; corroborated_by: number[]; contradicted_by: number[] }[];
+    const c = (id: number) => claims.find((x) => x.id === id)!;
+    for (const x of claims) Object.assign(x, { corroborated_by: [], contradicted_by: [] });
+    const [a1, a2] = q1.claims;
+    const [b1, b2] = q2.claims;
+    c(a1).corroborated_by = [b1];
+    c(b1).corroborated_by = [a1];
+    c(a2).contradicted_by = [b2];
+    c(a1).corroborated_by.push(a2);
+    const found = links(run, steps(run)).filter((l) => l.kind === "corroborates" || l.kind === "contradicts");
+    const [from, to] = [Math.min(q1.id, q2.id), Math.max(q1.id, q2.id)];
+    expect(found).toEqual([
+      { from: `q:${from}`, to: `q:${to}`, kind: "corroborates", count: 1 },
+      { from: `q:${from}`, to: `q:${to}`, kind: "contradicts", count: 1 },
+    ]);
   });
 });
 

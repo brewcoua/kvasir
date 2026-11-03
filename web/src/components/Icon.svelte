@@ -11,6 +11,24 @@
     close: "M4.5 4.5l7 7M11.5 4.5l-7 7",
     ranking: "M2 4h12M2 8h8.5M2 12h5",
     table: "M2 3h12v10H2zM2 6.5h12M2 9.8h12M6.5 3v10",
+    brief: "M10.5 2.5l3 3L6 13H3v-3z",
+    write: "M3 4h10M3 7h10M3 10h10M3 13h6",
+    verify: "M8 1.5l5 2v4c0 3.2-2.2 5.6-5 7-2.8-1.4-5-3.8-5-7v-4zM5.8 8l1.6 1.6 3-3",
+    question: "M6.3 6.3a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.5M8 11.4v.1",
+    event: "",
+    split: "M2 8h4M6 8l4-4h4M6 8l4 4h4M10 8h4",
+    check: "M3 8.5l3.2 3L13 4.5",
+    clock: "M8 4.5V8l2.5 1.5",
+    coin: "M9.8 5.8H7.2a1.1 1.1 0 0 0 0 2.2h1.6a1.1 1.1 0 0 1 0 2.2H6.2M8 4.5v1.3M8 10.2v1.3",
+    tokens: "M6 2.5l-1 11M11 2.5l-1 11M3 6h10.5M2.5 10h10.5",
+    stage: "M2.5 4h11v8h-11zM2.5 7h11",
+    background: "M8 2l6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3",
+    assess: "M2 12a6 6 0 1 1 12 0M8 12l2.5-3.5",
+    outline: "M3 4h10M5.5 7h7.5M5.5 10h7.5M3 13h10",
+    polish: "M8 2c.5 3 1.5 4.5 5 6-3.5 1.5-4.5 3-5 6-.5-3-1.5-4.5-5-6 3.5-1.5 4.5-3 5-6z",
+    warm_start: "M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z",
+    turn: "M2.5 3.5h11v7h-6l-3 3v-3h-2z",
+    mind_map: "M6.7 7.2L4.7 5.5M9.3 7.2l2-1.7M6.7 8.8l-2 1.7M9.3 8.8l2 1.7",
   };
 
   export type IconName = keyof typeof PATHS;
@@ -29,6 +47,12 @@
       <circle cx="7" cy="7" r="4.5" />
     {:else if name === "chip"}
       <rect x="4" y="4" width="8" height="8" rx="1" />
+    {:else if name === "question" || name === "clock" || name === "coin"}
+      <circle cx="8" cy="8" r="6" />
+    {:else if name === "event"}
+      <circle cx="8" cy="8" r="2.2" />
+    {:else if name === "mind_map"}
+      <circle cx="8" cy="8" r="1.7" /><circle cx="3.5" cy="4.5" r="1.3" /><circle cx="12.5" cy="4.5" r="1.3" /><circle cx="3.5" cy="11.5" r="1.3" /><circle cx="12.5" cy="11.5" r="1.3" />
     {/if}
   </g>
 </svg>

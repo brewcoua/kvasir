@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { ResearchResult, RunDetail } from "../src/lib/api";
 
 const run = (page: Page) => page.locator("section.panel", { has: page.locator("h2", { hasText: /^Run$/ }) });
 
@@ -208,47 +209,152 @@ test("the theme is kept", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "amber");
 });
 
+// The run is fetched, and then the snapshot its event stream opens with replaces it, so both carry the edit.
+async function edited(page: Page, id: string, edit: (run: RunDetail) => void) {
+  await page.route(`**/v1/runs/${id}`, async (route) => {
+    const response = await route.fetch();
+    const detail = await response.json();
+    edit(detail);
+    await route.fulfill({ response, json: detail });
+  });
+  await page.route(`**/v1/runs/${id}/events`, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace(/^data: (.*)$/m, (_, data) => {
+      const detail = JSON.parse(data);
+      edit(detail);
+      return `data: ${JSON.stringify(detail)}`;
+    });
+    await route.fulfill({ response, body });
+  });
+}
+
 test("steps lay a run out as stages that open into questions and attempts", async ({ page }) => {
   await page.goto("/#/runs/graph/steps");
   const cards = run(page).locator(".step-card");
   for (const stage of ["brief", "research", "write", "verify"]) {
     await expect(run(page).getByTestId(`step-stage:${stage}`)).toBeVisible();
   }
+  // Stages and questions are open at first; a search's pages are not.
+  await expect(cards.filter({ hasText: /^question/ }).first()).toBeVisible();
+  await expect(cards.filter({ hasText: /^attempt/ }).first()).toBeVisible();
+  await expect(cards.filter({ hasText: /^page/ })).toHaveCount(0);
+
+  const before = await cards.filter({ hasText: /^attempt/ }).count();
+  await run(page).getByTestId("step-q:1").locator(".step-head").click();
+  await expect(cards.filter({ hasText: /^attempt/ })).toHaveCount(before - 1);
+  await run(page).locator(".step-panel").getByRole("button", { name: "Close" }).click();
+  await run(page).getByTestId("step-stage:research").locator(".step-head").click();
   await expect(cards.filter({ hasText: /^question/ })).toHaveCount(0);
 
   await run(page).getByTestId("step-stage:research").click();
   await expect(cards.filter({ hasText: /^question/ }).first()).toBeVisible();
-  await expect(cards.filter({ hasText: /^attempt/ })).toHaveCount(0);
+  // Opening a step grows the research box around it; its cards stay inside. The box and the pan are animated, so it is polled.
+  await expect
+    .poll(async () => {
+      const box = (await run(page).getByTestId("step-stage:research").boundingBox())!;
+      for (const card of await run(page).locator(".step-card.question, .step-card.attempt").all()) {
+        const at = (await card.boundingBox())!;
+        if (at.x < box.x || at.y < box.y || at.x + at.width > box.x + box.width + 1 || at.y + at.height > box.y + box.height + 1) return false;
+      }
+      return true;
+    })
+    .toBe(true);
+});
 
-  await run(page).getByTestId("step-q:1").click();
-  await expect(cards.filter({ hasText: /^attempt/ }).first()).toBeVisible();
-  // The pan brings the newly shown cards into the frame.
-  await expect(cards.filter({ hasText: /^attempt/ }).first()).toBeInViewport({ ratio: 1 });
+test("steps colour a card by its kind, mark it with an icon, and explain the kinds in a legend", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  await expect(run(page).locator(".step-group.stage .step-head svg").first()).toBeVisible();
+  await expect(run(page).locator(".step-card.question .step-head svg").first()).toBeVisible();
+  const legend = run(page).locator(".step-legend");
+  for (const kind of ["stage", "question", "attempt", "page", "section", "verdict", "event"]) {
+    await expect(legend.locator(`li[data-kind="${kind}"] svg`)).toBeVisible();
+  }
+  for (const kind of ["raised", "drew", "removed", "corroborates", "contradicts"]) {
+    await expect(legend.locator(`li[data-link="${kind}"] svg`)).toBeVisible();
+  }
 });
 
 test("steps show question cards for a run whose questions only its result holds", async ({ page }) => {
   await page.goto("/#/runs/wal/steps");
-  await run(page).getByTestId("step-stage:research").click();
-  await expect(run(page).locator(".step-card").filter({ hasText: /^question/ }).first()).toBeVisible();
+  await expect(run(page).locator(".step-card, .step-group").filter({ hasText: /^question/ }).first()).toBeVisible();
 });
 
 test("question cards show their status", async ({ page }) => {
   await page.goto("/#/runs/graph/steps");
-  await run(page).getByTestId("step-stage:research").click();
   await expect(run(page).locator(".step-card.question .question-status").first()).toBeVisible();
 });
 
 test("a step with calls opens them in the calls tab", async ({ page }) => {
   await page.goto("/#/runs/graph/steps");
-  await run(page).getByTestId("step-stage:research").click();
-  await run(page).getByTestId("step-q:1").click();
   await run(page).locator(".step-card.attempt").first().click();
-  await run(page).locator(".step-chosen").getByRole("button", { name: /calls?$/ }).click();
+  await run(page).locator(".step-panel").getByRole("button", { name: /calls?$/ }).click();
   await expect(page).toHaveURL(/#\/runs\/graph\/calls$/);
   await expect(run(page).locator(".filter", { hasText: "Calls after" })).toBeVisible();
 });
 
+test("the split card raises each first question along one trunk", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  await expect(run(page).locator(".step-card.split")).toBeVisible();
+  for (const id of [1, 2, 3, 4, 5, 6]) await expect(run(page).locator(`.svelte-flow__edge[data-id="raised:e:1>q:${id}"]`)).toBeAttached();
+  await expect(run(page).locator('.svelte-flow__edge[data-id^="raised:e:1>"]')).toHaveCount(6);
+});
+
+test("a question lists its claims in the panel", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  await run(page).getByTestId("step-q:2").locator(".step-head").click();
+  const panel = run(page).locator(".step-panel");
+  await expect(panel.locator(".question-status")).toBeVisible();
+  await expect(panel.locator(".claim-list li")).toHaveCount(5);
+  await expect(panel.locator(".claim-list li").first()).toContainText("confidence");
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toHaveCount(0);
+});
+
+test("hovering a card dims the leaf cards it is not linked to", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  const node = (selector: string) => run(page).locator(".svelte-flow__node", { has: page.locator(selector) }).first();
+  const attempt = run(page).locator(".step-card.attempt").first();
+  // The first view is set once the pane has a size, which under load can move the card from under the pointer; hover again until it holds.
+  await expect(async () => {
+    await attempt.hover();
+    await expect(node(".step-card.section")).toHaveClass(/dim/, { timeout: 500 });
+  }).toPass();
+  await expect(node(".step-card.attempt")).not.toHaveClass(/dim/);
+  await expect(node('[data-testid="step-stage:research"]')).not.toHaveClass(/dim/);
+  await page.mouse.move(0, 0);
+  await expect(run(page).locator(".svelte-flow__node.dim")).toHaveCount(0);
+});
+
+test("claims that corroborate or contradict across questions are drawn as arcs and ringed on their cards", async ({ page }) => {
+  await edited(page, "graph", (detail) => {
+    const result = detail.result as ResearchResult;
+    const questions = detail.questions.length > 0 ? detail.questions : result.questions;
+    const claim = (question: number, i: number) => result.claims.find((c) => c.id === questions.find((q) => q.id === question)!.claims[i])!;
+    claim(1, 0).corroborated_by.push(claim(3, 0).id);
+    claim(1, 1).corroborated_by.push(claim(3, 1).id);
+    claim(2, 0).contradicted_by.push(claim(4, 0).id);
+  });
+  await page.goto("/#/runs/graph/steps");
+  const arcs = run(page).locator(".svelte-flow__edge.corroborates, .svelte-flow__edge.contradicts");
+  await expect(arcs).toHaveCount(2);
+  await expect(run(page).locator(".svelte-flow__edge.corroborates")).toHaveCount(1);
+  await expect(run(page).locator(".arc-badge.corroborates")).toHaveText("2");
+  await expect(run(page).locator(".arc-badge.contradicts")).toHaveText("1");
+  await expect(run(page).locator(".dot.corroborates")).toHaveCount(4);
+
+  await run(page).locator(".dot.contradicts").first().dispatchEvent("click");
+  const picked = run(page).locator(".step-panel .claim-list li.picked");
+  await expect(picked).toBeVisible();
+  await expect(picked.locator(".rel.contradicts")).toHaveText("contradicted by");
+});
+
 test("a live run's current stage is marked as current", async ({ page }) => {
   await page.goto("/#/runs/graph-live/steps");
-  await expect(run(page).locator(".step-card.stage.current")).toHaveCount(1);
+  await expect(run(page).locator(".step-card.stage.current, .step-group.stage.current")).toHaveCount(1);
+});
+
+test("a live run's edge into its current step is animated", async ({ page }) => {
+  await page.goto("/#/runs/graph-live/steps");
+  // The replay restarts as it ends, and its first stage has no edge into it.
+  await expect(run(page).locator(".svelte-flow__edge.animated").first()).toBeAttached({ timeout: 20_000 });
 });
