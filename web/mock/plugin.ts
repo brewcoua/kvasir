@@ -96,7 +96,9 @@ function frozen(run: RunDetail, id: string): Entry {
   return { run: { ...run, id }, timing: () => ({ at, toReal: (t) => t + offset, speed: 1 }) };
 }
 
-// `loop` starts the replay again after a pause, for a run that is always in progress.
+// `loop` starts the replay again after a pause, for a run that is always in progress. It holds just
+// short of its end through the pause: an ended snapshot makes the page close its stream, and it
+// would never see the restart.
 function replay(run: RunDetail, id: string, loop: boolean, patch: Partial<RunDetail> = {}): Entry {
   const start = run.started_at ?? run.created_at;
   const length = ((run.ended_at ?? start) - start) / SPEED;
@@ -107,7 +109,7 @@ function replay(run: RunDetail, id: string, loop: boolean, patch: Partial<RunDet
       const cycle = length + PAUSE_SECONDS;
       const elapsed = now() - began;
       const offset = loop ? Math.floor(elapsed / cycle) * cycle : 0;
-      const at = start + (elapsed - offset) * SPEED;
+      const at = start + (loop ? Math.min(elapsed - offset, length - 0.001) : elapsed - offset) * SPEED;
       return { at, toReal: (t) => began + offset + (t - start) / SPEED, speed: SPEED };
     },
   };
