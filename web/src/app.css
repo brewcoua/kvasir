@@ -494,6 +494,10 @@ td.track-cell {
 .searches tr.open {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
+.calls tr.failed,
+.searches tr.failed {
+  color: var(--bad);
+}
 .calls tr.content > td,
 .searches tr.content > td {
   padding: 0.25rem 0 0.75rem;
@@ -1769,6 +1773,28 @@ table.runs a.topic:hover {
 }
 .step-panel p {
   margin: 0 0 0.3rem;
+}
+.step-log {
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.step-log li {
+  padding: 0.3rem 0.65rem;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.step-panel progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+}
+.step-line progress {
+  flex: 1;
+  width: auto;
+  margin: 0;
 }
 .claim-list {
   margin: 0;

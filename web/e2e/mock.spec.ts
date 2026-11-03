@@ -310,6 +310,16 @@ test("a question lists its claims in the panel", async ({ page }) => {
   await expect(panel).toHaveCount(0);
 });
 
+test("selecting a stage shows its log and progress in the panel", async ({ page }) => {
+  await page.goto("/#/runs/graph/steps");
+  await run(page).getByTestId("step-stage:brief").click();
+  const panel = run(page).locator(".step-panel");
+  await expect(panel.locator(".step-log li")).toHaveText([/writing the research brief/]);
+  await run(page).getByTestId("step-stage:verify").locator(".step-head").click();
+  await expect(panel.getByTestId("step-progress")).toBeVisible();
+  await expect(run(page).locator(".step-card.event")).toHaveCount(0);
+});
+
 test("hovering a card dims the leaf cards it is not linked to", async ({ page }) => {
   await page.goto("/#/runs/graph/steps");
   const node = (selector: string) => run(page).locator(".svelte-flow__node", { has: page.locator(selector) }).first();

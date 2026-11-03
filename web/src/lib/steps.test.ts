@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isResearch, type Progress, type RunDetail } from "./api";
+import { layout } from "./layout";
 import { links, steps, type Step } from "./steps";
 
 const graph: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "graph.json"), "utf8"));
@@ -52,7 +53,9 @@ describe("steps", () => {
     const pages = attempt.children.filter((s) => s.kind === "page");
     expect(pages.flatMap((p) => p.children)).toHaveLength(parts.length);
     expect(pages.map((p) => p.id)).toEqual([1, 2, 3].map((n) => `p:${attempt.id.slice(2)}:${n}`));
-    expect(attempt.children.at(-1)!.kind).toBe("event");
+    expect(attempt.children.every((c) => c.kind === "page")).toBe(true);
+    const result = graph.events.find((e) => e.kind === "result" && e.parent === Number(attempt.id.slice(2)))!;
+    expect(attempt.added).toBe(result.done ?? null);
   });
 
   it("puts every call on exactly one step", () => {
@@ -61,10 +64,15 @@ describe("steps", () => {
     expect(sorted(ids)).toEqual(sorted(graph.calls.map((c) => c.id)));
   });
 
-  it("folds verify progress counters into one step", () => {
-    const events = stage("verify").children.filter((s) => s.kind === "event");
-    expect(events).toHaveLength(1);
-    expect(events[0].detail).toBe(graph.events.at(-1)!.detail);
+  it("keeps verify progress counters on the stage, not as cards", () => {
+    expect(stage("verify").children.filter((s) => s.kind === "event")).toHaveLength(0);
+    const last = graph.events.filter((e) => e.stage === "verify" && !e.kind && e.done != null).at(-1)!;
+    expect(stage("verify").progress).toEqual({ done: last.done, total: last.total ?? null, detail: last.detail });
+  });
+
+  it("keeps a plain event in the stage's log, with no card", () => {
+    expect(stage("brief").children).toEqual([]);
+    expect(stage("brief").log.map((l) => l.detail)).toEqual(["writing the research brief"]);
   });
 
   it("makes a section step per section", () => {
@@ -161,11 +169,84 @@ describe("steps, synthetic", () => {
     expect(find(steps(synthetic(run.events, 5)), "e:0").state).toBe("done");
   });
 
-  it("falls back to events under stages for a run with no kinds", () => {
-    const run = synthetic([ev(0, "research"), ev(1, "research")], 5);
+  it("finds an attempt's search by the event the search names, when the attempt names none", () => {
+    const run = synthetic([ev(0, "research", { kind: "attempt", question: 1 })], 5);
+    run.searches = [{ id: 7, event: 0, results: 12 }] as unknown as RunDetail["searches"];
+    const attempt = find(steps(run), "e:0");
+    expect(attempt.search).toBe(7);
+    expect(attempt.count).toBe(12);
+  });
+
+  it("logs the events of a run with no kinds under their stage, without cards", () => {
+    const run = synthetic([ev(0, "research"), ev(1, "research"), ev(2, "research", { done: 1, total: 4 })], 5);
     run.questions = [];
     const [research] = steps(run);
-    expect(walk(steps(run)).map((s) => s.kind)).toEqual(["stage", "event", "event"]);
-    expect(research.children.map((s) => s.id)).toEqual(["e:0", "e:1"]);
+    expect(walk(steps(run)).map((s) => s.kind)).toEqual(["stage"]);
+    expect(research.log.map((l) => l.seq)).toEqual([0, 1]);
+    expect(research.progress).toEqual({ done: 1, total: 4, detail: "event 2" });
+  });
+
+  it("puts a page event under its attempt, and a result on the attempt", () => {
+    const run = synthetic(
+      [
+        ev(0, "research", { kind: "attempt", question: 1, search: 0 }),
+        ev(1, "research", { kind: "page", parent: 0, page: 1, detail: "read page 1/2: First title" }),
+        ev(2, "research", { kind: "page", parent: 0, page: 2, detail: "read page 2/2: Other: title" }),
+        ev(3, "research", { kind: "part", parent: 0, page: 2, detail: "read part 1/2 of page 2: Other: title" }),
+        ev(4, "research", { kind: "result", parent: 0, done: 3, total: 9, detail: "3 new claims, 9 in all" }),
+      ],
+      5,
+    );
+    const attempt = find(steps(run), "e:0");
+    expect(attempt.children.map((c) => [c.id, c.kind, c.label, c.children.length])).toEqual([
+      ["p:0:1", "page", "First title", 0],
+      ["p:0:2", "page", "title", 1],
+    ]);
+    expect(attempt.added).toBe(3);
+    expect(attempt.state).toBe("done");
+    expect(walk(steps(run)).some((s) => s.id === "e:4")).toBe(false);
+  });
+
+  it("makes no card for a counter or a log line, and keeps the latest counter and every line in order", () => {
+    const run = synthetic(
+      [
+        ev(0, "research", { done: 1, total: 3 }),
+        ev(1, "research", { detail: "first" }),
+        ev(2, "research", { done: 2, total: 3 }),
+        ev(3, "research", { detail: "second" }),
+      ],
+      5,
+    );
+    run.questions = [];
+    const [research] = steps(run);
+    expect(research.children).toEqual([]);
+    expect(research.progress).toEqual({ done: 2, total: 3, detail: "event 2" });
+    expect(research.log).toEqual([
+      { seq: 1, at: 1, detail: "first" },
+      { seq: 3, at: 3, detail: "second" },
+    ]);
+  });
+
+  it("keeps a real-sized run to a handful of cards", () => {
+    const questions = [1, 2, 3].map((id) => ({ id, text: `q${id}`, title: "", parent: null, depth: 0, status: "answered", claims: [], queries: [], missing: "" }));
+    const events: Progress[] = [ev(0, "research", { kind: "split" })];
+    for (let a = 0; a < 6; a++) {
+      const at = events.length;
+      events.push(ev(at, "research", { kind: "attempt", question: (a % 3) + 1, search: a }));
+      for (const page of [1, 2]) events.push(ev(events.length, "research", { kind: "page", parent: at, page, detail: `read page ${page}/2: title ${page}` }));
+      events.push(ev(events.length, "research", { kind: "result", parent: at, done: 2, total: 2 * (a + 1) }));
+    }
+    for (let i = 0; i < 30; i++) events.push(ev(events.length, "research", { done: i, total: 30 }));
+    for (let i = 0; i < 10; i++) events.push(ev(events.length, "research", { detail: `line ${i}` }));
+    const run = synthetic(events, 100);
+    run.questions = questions as unknown as RunDetail["questions"];
+    const roots = steps(run);
+    const [stage] = roots;
+    expect(stage.children.map((c) => c.kind)).toEqual(["split", "question", "question", "question"]);
+    for (const q of stage.children.filter((c) => c.kind === "question")) expect(q.children.map((c) => c.kind)).toEqual(["attempt", "attempt"]);
+    expect(stage.log).toHaveLength(10);
+    expect(stage.progress).toMatchObject({ done: 29, total: 30 });
+    const { nodes } = layout(roots, new Set(walk(roots).map((s) => s.id)), links(run, roots));
+    expect(nodes.length).toBeLessThan(40);
   });
 });

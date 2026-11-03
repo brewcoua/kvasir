@@ -37,12 +37,12 @@
   <div class="scroll">
     <table class="searches">
       <thead>
-        <tr><th class="n">#</th><th class="n">event</th><th>query</th><th>engine</th><th class="n">at</th><th class="n">time</th><th class="n">results</th><th></th></tr>
+        <tr><th class="n">#</th><th class="n">event</th><th>query</th><th>engine</th><th class="n">at</th><th class="n">time</th><th class="n">results</th></tr>
       </thead>
       <tbody>
         {#each searches as search (search.id)}
           {@const open = expanded === search.id}
-          <tr class="call" class:open onclick={() => toggle(search)}>
+          <tr class="call" class:open class:failed={search.failures.length > 0} title={search.failures.length > 0 ? "failed" : undefined} onclick={() => toggle(search)}>
             <td class="n"><button type="button" class="link" aria-expanded={open}>{search.id}</button></td>
             <td class="n">
               {#if search.event != null}
@@ -53,12 +53,11 @@
             <td>{search.engine}</td>
             <td class="n">{offset(search.started_at)}</td>
             <td class="n"><Clock from={search.started_at} to={search.ended_at} /></td>
-            <td class="n">{search.results ?? ""}</td>
-            <td>{search.ended_at === null ? "running" : search.failures.length > 0 ? "failed" : ""}</td>
+            <td class="n">{search.results ?? "n/a"}</td>
           </tr>
           {#if open}
             <tr class="content">
-              <td colspan="8">
+              <td colspan="7">
                 {#each search.failures as failure, f (f)}<p class="error">{failure}</p>{/each}
                 {#if !search.has_content}
                   <p class="meta">Results not kept. Set KVASIR_KEEP_CALL_CONTENT=true to keep what searches return.</p>

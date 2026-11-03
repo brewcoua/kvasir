@@ -2,7 +2,7 @@
   import { Handle, Position, type NodeProps } from "@xyflow/svelte";
   import { count, duration } from "../lib/format";
   import type { StepData } from "../lib/layout";
-  import { icon, outcome } from "../lib/steps";
+  import { icon, outcome, progressText } from "../lib/steps";
   import Bar from "./Bar.svelte";
   import ClaimDots from "./ClaimDots.svelte";
   import Icon from "./Icon.svelte";
@@ -29,7 +29,12 @@
       {#if usage}
         <div class="step-stats"><StepStats {usage} /></div>
       {/if}
-      {#if data.latest}<Bar event={data.latest} />{/if}
+      {#if step.progress}
+        <div class="step-line" title={step.progress.detail}>
+          {#if step.progress.total}<progress max={step.progress.total} value={Math.min(step.progress.done, step.progress.total)}></progress>{/if}
+          <span class="meta">{progressText(step.progress)}</span>
+        </div>
+      {:else if data.latest}<Bar event={data.latest} />{/if}
     {:else if step.kind === "question"}
       <div class="step-text">{step.label}</div>
       <div class="step-line">
@@ -41,6 +46,7 @@
       <div class="step-text">{step.detail}</div>
       <div class="step-line step-stats">
         {#if step.count !== null}<span title="results"><Icon name="search" />{count(step.count)}</span>{/if}
+        {#if step.added !== null}<span title="claims added">+{count(step.added)} {step.added === 1 ? "claim" : "claims"}</span>{/if}
         {#if took !== null}<span title="duration"><Icon name="clock" />{duration(took)}</span>{/if}
       </div>
     {:else if step.kind === "page"}

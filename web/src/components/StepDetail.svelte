@@ -9,7 +9,7 @@
   import { Panel } from "@xyflow/svelte";
   import type { ResearchClaim } from "../lib/api";
   import { duration } from "../lib/format";
-  import { icon, type Step } from "../lib/steps";
+  import { icon, progressText, type Step } from "../lib/steps";
   import Icon from "./Icon.svelte";
 
   let {
@@ -61,6 +61,12 @@
           {#if chosen.calls.length > 0 && seq !== null}
             <button type="button" class="action" onclick={() => oncalls(seq)}>{chosen.calls.length} {chosen.calls.length === 1 ? "call" : "calls"}</button>
           {/if}
+          {#if chosen.progress}
+            <p class="meta" data-testid="step-progress">
+              {#if chosen.progress.total}<progress max={chosen.progress.total} value={Math.min(chosen.progress.done, chosen.progress.total)}></progress>{/if}
+              {progressText(chosen.progress)} · {chosen.progress.detail}
+            </p>
+          {/if}
           {#if chosen.kind === "question"}
             <p>
               {#if chosen.status}<span class="question-status {chosen.status}">{chosen.status}</span>{/if}
@@ -68,6 +74,13 @@
             </p>
           {/if}
         </div>
+        {#if chosen.log.length > 0}
+          <ol class="step-log" aria-label="Log">
+            {#each chosen.log as line (line.seq)}
+              <li><span class="meta">{line.at === null ? "" : time(line.at)}</span> {line.detail}</li>
+            {/each}
+          </ol>
+        {/if}
         {#if chosen.kind === "question"}
           <ul class="claim-list">
             {#each chosen.claims as c (c.id)}

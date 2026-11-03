@@ -20,6 +20,12 @@ export interface Step {
   status: string | null;
   // A number for the card badge: claims added, results, parts, counter progress.
   count: number | null;
+  // An attempt's claims added, from its result event; null for any other step.
+  added: number | null;
+  // A stage's latest progress counter; null for any other step or a stage with none.
+  progress: { done: number; total: number | null; detail: string } | null;
+  // A stage's other plain events, in order; they get no card.
+  log: { seq: number; at: number | null; detail: string }[];
   // A question's depth; null for any other step.
   depth: number | null;
   // The question a question or section step belongs to.
@@ -41,6 +47,9 @@ const step = (id: string, kind: StepKind, label: string, detail = label, state: 
   search: null,
   status: null,
   count: null,
+  added: null,
+  progress: null,
+  log: [],
   depth: null,
   question: null,
   claims: [],
@@ -61,6 +70,9 @@ function span(parent: Step) {
 // Time order, steps with no time last; sort is stable, so ties keep their given order.
 const byTime = (a: Step, b: Step) => (a.started_at === b.started_at ? 0 : a.started_at === null ? 1 : b.started_at === null ? -1 : a.started_at - b.started_at);
 
+// The page title is the text after the last ": " of a page's or part's detail.
+const pageTitle = (detail: string) => (detail.includes(": ") ? detail.slice(detail.lastIndexOf(": ") + 2) : detail);
+
 interface Attempt {
   step: Step;
   pages: Map<number, Step>;
@@ -75,6 +87,8 @@ export function steps(run: RunDetail): Step[] {
   const callsBy = new Map<number, number[]>();
   for (const call of run.calls) if (call.event != null && call.id != null) callsBy.set(call.event, [...(callsBy.get(call.event) ?? []), call.id]);
   const searchResults = new Map(run.searches.map((search) => [search.id, search.results]));
+  // The service starts a search after publishing its attempt, so the attempt cannot name it; the search names the event before it.
+  const searchAfter = new Map(run.searches.flatMap((search) => (search.event == null ? [] : [[search.event, search.id] as const])));
 
   const research = run.result && isResearch(run.result) ? run.result : null;
   // A run stored before questions were followed live still has them in its result.
@@ -86,8 +100,11 @@ export function steps(run: RunDetail): Step[] {
   const attemptsOf = new Map<number, Step[]>();
   const add = (stage: string, child: Step) => loose.set(stage, [...(loose.get(stage) ?? []), child]);
 
-  let counter: Step | null = null;
-  let counterStage = "";
+  // What the stages keep of the events that get no card.
+  const progressOf = new Map<string, Step["progress"]>();
+  const logOf = new Map<string, Step["log"]>();
+  const callsOf = new Map<string, number[]>();
+  const keepCalls = (stage: string, calls: number[]) => callsOf.set(stage, [...(callsOf.get(stage) ?? []), ...calls]);
   events.forEach((ev: Progress, i) => {
     const seq = ev.seq ?? i;
     const at = ev.at ?? null;
@@ -99,31 +116,40 @@ export function steps(run: RunDetail): Step[] {
     const parent = ev.parent == null ? undefined : attempts.get(ev.parent);
     const own = (s: Step) => Object.assign(s, { started_at: at, ended_at: end, calls });
 
-    if (kind !== null || ev.done == null) counter = null;
-
     if (kind === "attempt") {
       const s = own(step(`e:${seq}`, "attempt", `Search ${attempts.size + 1}`, ev.detail, state));
-      s.search = ev.search ?? null;
-      s.count = ev.search == null ? null : (searchResults.get(ev.search) ?? null);
+      s.search = ev.search ?? searchAfter.get(seq) ?? null;
+      s.count = s.search == null ? null : (searchResults.get(s.search) ?? null);
       attempts.set(seq, { step: s, pages: new Map(), resulted: false });
       const list = ev.question == null ? undefined : attemptsOf.get(ev.question);
       if (ev.question != null && questionById.has(ev.question)) attemptsOf.set(ev.question, [...(list ?? []), s]);
       else add(ev.stage, s);
+    } else if (kind === "page" && parent) {
+      const page = ev.page ?? 0;
+      if (!parent.pages.has(page)) {
+        const p = own(step(`p:${ev.parent}:${page}`, "page", pageTitle(ev.detail), ev.detail));
+        parent.pages.set(page, p);
+        parent.step.children.push(p);
+      }
     } else if (kind === "part" && parent) {
-      // The page title is the text after the last ": " of a part's detail, which the service gives no other way.
       const page = ev.page ?? 0;
       let p = parent.pages.get(page);
       if (!p) {
-        const title = ev.detail.includes(": ") ? ev.detail.slice(ev.detail.lastIndexOf(": ") + 2) : ev.detail;
-        p = step(`p:${ev.parent}:${page}`, "page", title, ev.detail);
+        p = step(`p:${ev.parent}:${page}`, "page", pageTitle(ev.detail), ev.detail);
         parent.pages.set(page, p);
         parent.step.children.push(p);
       }
       p.children.push(own(step(`e:${seq}`, "part", `Part ${p.children.length + 1}`, ev.detail, state)));
       p.count = p.children.length;
-    } else if (kind === "result" && parent) {
-      parent.resulted = true;
-      parent.step.children.push(own(step(`e:${seq}`, "event", ev.detail, ev.detail, state)));
+    } else if (kind === "result") {
+      if (parent) {
+        parent.resulted = true;
+        parent.step.added = ev.done ?? null;
+        parent.step.calls.push(...calls);
+      } else {
+        logOf.set(ev.stage, [...(logOf.get(ev.stage) ?? []), { seq, at, detail: ev.detail }]);
+        keepCalls(ev.stage, calls);
+      }
     } else if (kind === "split") {
       add(ev.stage, own(step(`e:${seq}`, "split", ev.detail, ev.detail, state)));
     } else if (kind === "section") {
@@ -131,17 +157,10 @@ export function steps(run: RunDetail): Step[] {
       const s = own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail, ev.detail, state));
       s.question = ev.question ?? null;
       add(ev.stage, s);
-    } else if (kind === null && ev.done != null) {
-      // Progress counters of one stage fold into the first, which shows the latest.
-      if (counter && counterStage === ev.stage) {
-        Object.assign(counter, { label: ev.detail, detail: ev.detail, state, ended_at: end, count: ev.done });
-        counter.calls.push(...calls);
-      } else {
-        counter = own(step(`e:${seq}`, "event", ev.detail, ev.detail, state));
-        counter.count = ev.done;
-        counterStage = ev.stage;
-        add(ev.stage, counter);
-      }
+    } else if (kind === null) {
+      if (ev.done != null) progressOf.set(ev.stage, { done: ev.done, total: ev.total ?? null, detail: ev.detail });
+      else logOf.set(ev.stage, [...(logOf.get(ev.stage) ?? []), { seq, at, detail: ev.detail }]);
+      keepCalls(ev.stage, calls);
     } else {
       const s = own(step(`e:${seq}`, "event", ev.detail, ev.detail, state));
       s.search = ev.search ?? null;
@@ -201,6 +220,9 @@ export function steps(run: RunDetail): Step[] {
     const s = step(`stage:${name}`, "stage", name, name, name === run.stage && live ? "current" : t ? "done" : "pending");
     s.started_at = t?.started_at ?? null;
     s.ended_at = t?.ended_at ?? null;
+    s.progress = progressOf.get(name) ?? null;
+    s.log = logOf.get(name) ?? [];
+    s.calls = callsOf.get(name) ?? [];
     s.children = [...(loose.get(name) ?? []), ...(name === "verify" ? verdicts() : [])].sort(byTime);
     // The view lays questions out in columns by depth.
     if (name === "research") s.children.push(...questions.map(question).sort((a, b) => a.depth! - b.depth! || a.question! - b.question!));
@@ -237,6 +259,8 @@ export function icon(step: Step): IconName {
   if (step.kind === "verdict") return OUTCOME_ICONS[outcome(step)];
   return KIND_ICONS[step.kind] ?? "event";
 }
+
+export const progressText = (p: NonNullable<Step["progress"]>) => (p.total ? `${p.done}/${p.total}` : String(p.done));
 
 export interface Link {
   from: string;

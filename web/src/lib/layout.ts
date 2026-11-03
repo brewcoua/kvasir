@@ -8,6 +8,8 @@ export const STAGE = { width: 240, height: 116 };
 export const HEADER = 36;
 export const PAD = 12;
 export const GAP = 16;
+// Where a container's children start, so they do not touch its header.
+const TOP = HEADER + PAD;
 // Column children wrap into a new column after this many, so an open stage grows sideways into the free width.
 // By count, not height: opening a card then only grows its own column, and no card changes column.
 export const PER_COLUMN = 4;
@@ -105,7 +107,7 @@ function research(step: Step, boxes: Box[], links: Link[]): Box {
   const columns = depths.map((depth) => questions.filter((box) => (box.step.depth ?? 0) === depth));
   const at = new Map<string, { x: number; y: number }>();
 
-  let y = HEADER;
+  let y = TOP;
   for (const box of loose) {
     at.set(box.step.id, { x: PAD, y });
     y += box.height + GAP;
@@ -113,7 +115,7 @@ function research(step: Step, boxes: Box[], links: Link[]): Box {
   // A question sits level with its parent when that is free, else below the one above it; so deeper columns go in the order of their parents.
   const level = (box: Box) => at.get(parentOf.get(box.step.id) ?? "")?.y ?? 0;
   for (const [i, column] of columns.entries()) {
-    y = HEADER;
+    y = TOP;
     if (i > 0) column.sort((a, b) => level(a) - level(b));
     for (const box of column) {
       const top = Math.max(y, level(box));
@@ -190,7 +192,7 @@ function measure(step: Step, open: Set<string>, links: Link[]): Box {
   const content = Math.max(step.kind === "question" ? QUESTION_WIDTH : step.kind === "stage" ? STAGE_WIDTH : CARD.width - 2 * PAD, rowWidth, columnsWidth);
   const strip = step.kind === "question" && step.claims.length > 0 ? STRIP + GAP : 0;
   const stacked = rowHeight + (row.length > 0 && columns.length > 0 ? GAP : 0) + columnsHeight + strip;
-  return { step, width: content + 2 * PAD, height: HEADER + stacked + PAD, container: true, row, columns };
+  return { step, width: content + 2 * PAD, height: TOP + stacked + PAD, container: true, row, columns };
 }
 
 // Roots always, then the children of every step in `open`, nested inside it. Opening a step moves only what follows it.
@@ -232,11 +234,11 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
     }
     let cx = PAD;
     box.row.forEach((child, i) => {
-      place(child, cx, HEADER, step.id, here);
+      place(child, cx, TOP, step.id, here);
       if (i > 0) chain(box.row[i - 1].step, child.step);
       cx += child.width + GAP;
     });
-    const top = HEADER + Math.max(0, ...box.row.map((child) => child.height)) + (box.row.length > 0 ? GAP : 0);
+    const top = TOP + Math.max(0, ...box.row.map((child) => child.height)) + (box.row.length > 0 ? GAP : 0);
     cx = PAD;
     for (const column of box.columns) {
       let cy = top;

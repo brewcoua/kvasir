@@ -44,13 +44,13 @@
       <thead>
         <tr>
           <th class="n">#</th><th class="n">event</th><th>role</th><th>model</th><th class="n">at</th><th class="n">time</th>
-          <th class="n">in</th><th class="n">out</th><th class="n">tok/s</th><th></th>
+          <th class="n">in</th><th class="n">out</th><th class="n">tok/s</th>
         </tr>
       </thead>
       <tbody>
         {#each calls as call (call.id)}
           {@const open = call.id != null && expanded === call.id}
-          <tr class="call" class:open onclick={() => toggle(call)}>
+          <tr class="call" class:open class:failed={call.failed} title={call.failed ? "failed" : undefined} onclick={() => toggle(call)}>
             <td class="n"><button type="button" class="link" aria-expanded={open}>{call.id}</button></td>
             <td class="n">
               {#if call.event != null}
@@ -61,14 +61,13 @@
             <td>{call.model}</td>
             <td class="n">{offset(call.started_at)}</td>
             <td class="n"><Clock from={call.started_at} to={call.ended_at} /></td>
-            <td class="n">{call.prompt_tokens === null ? "" : count(call.prompt_tokens)}</td>
-            <td class="n">{call.completion_tokens === null ? "" : count(call.completion_tokens)}</td>
-            <td class="n">{rate(call.completion_tokens, seconds(call))}</td>
-            <td>{call.ended_at === null ? "running" : call.failed ? "failed" : ""}</td>
+            <td class="n">{call.prompt_tokens === null ? "n/a" : count(call.prompt_tokens)}</td>
+            <td class="n">{call.completion_tokens === null ? "n/a" : count(call.completion_tokens)}</td>
+            <td class="n">{rate(call.completion_tokens, seconds(call)) || "n/a"}</td>
           </tr>
           {#if open}
             <tr class="content">
-              <td colspan="10">
+              <td colspan="9">
                 {#if !call.has_content || call.id == null}
                   <p class="meta">Content not kept. Set KVASIR_KEEP_CALL_CONTENT=true to keep what calls send and answer.</p>
                 {:else if call.ended_at === null}

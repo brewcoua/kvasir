@@ -64,10 +64,15 @@ describe("layout", () => {
       const parent = nodes.find((m) => m.id === n.parentId)!;
       const c = box(n);
       expect(c.x).toBeGreaterThanOrEqual(0);
-      expect(c.y).toBeGreaterThanOrEqual(HEADER);
+      expect(c.y).toBeGreaterThanOrEqual(HEADER + PAD);
       expect(c.x + c.w).toBeLessThanOrEqual(parent.width!);
       expect(c.y + c.h).toBeLessThanOrEqual(parent.height!);
     }
+  });
+
+  it("starts the children of an open step a PAD below its header", () => {
+    const { nodes } = layout(roots, new Set([research.id]), linked);
+    expect(Math.min(...nodes.filter((n) => n.parentId === research.id).map((n) => n.position.y))).toBe(HEADER + PAD);
   });
 
   it("does not move a stage or anything before a step when it opens", () => {
