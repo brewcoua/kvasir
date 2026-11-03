@@ -102,6 +102,36 @@ async def test_section_progress_counts_completions_not_arrival_order():
     assert details[-3:] == ["finished c (1/3)", "finished a (2/3)", "finished b (3/3)"]
 
 
+@pytest.mark.asyncio
+async def test_publish_passes_step_fields_and_returns_the_seq(monkeypatch):
+    seen = []
+    monkeypatch.setattr("kvasir.runs.progress.record_progress", lambda e: setattr(e, "seq", 7))
+    stream = ProgressStream()
+
+    seq = stream.publish(
+        RESEARCH, "read", 1, 2, kind="page", parent=3, question=4, search=5, page=6
+    )
+    stream.close()
+    seen = await drain(stream)
+
+    assert seq == 7
+    [event] = seen
+    assert (event.kind, event.parent, event.question, event.search, event.page) == (
+        "page",
+        3,
+        4,
+        5,
+        6,
+    )
+
+
+@pytest.mark.asyncio
+async def test_publish_returns_none_outside_a_run():
+    stream = ProgressStream()
+
+    assert stream.publish(RESEARCH, "first") is None
+
+
 def test_frame_is_terminated_by_a_blank_line():
     text = frame("progress", Progress(stage=RESEARCH, detail="asking"))
 

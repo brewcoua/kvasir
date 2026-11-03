@@ -15,6 +15,7 @@ import time
 from typing import Any
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.config import Settings
 from kvasir.methods.base import Method
@@ -79,7 +80,7 @@ def run_graph(
     )
     brief: str = framed.brief
 
-    stream.publish(RESEARCH, "splitting the brief into questions")
+    stream.publish(RESEARCH, "splitting the brief into questions", kind="split")
     questions: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
     add_questions(encoder, questions, first or [NamedQuestion(title="", question=input.question)])
@@ -121,7 +122,7 @@ def run_graph(
     titles = [title for title, _, _ in found]
     sections: list[tuple[str, str]] = []
     for done, (title, subsections, ids) in enumerate(found):
-        stream.publish(WRITE, f"writing {title}", done, len(found))
+        stream.publish(WRITE, f"writing {title}", done, len(found), kind="section")
         text = write.section(
             models["write"], encoder, brief, titles, title, sections, claims, ids, subsections
         )
@@ -164,7 +165,7 @@ def outline(
     by_id = {q.id: q for q in held}
     try:
         drafted = predict(model, Outline, brief=brief, questions="\n".join(lines)).sections
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the outline: %s", exc)
         drafted = []
     by_branch: list[tuple[str, list[str], list[int]]] = [

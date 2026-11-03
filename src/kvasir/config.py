@@ -85,7 +85,7 @@ class ModelSettings:
     # token budgets leave room for it.
     reason_effort: str | None = "medium"
     # The context window the models are served with, such as Ollama's `num_ctx`. It sizes
-    # how much of a page one intake call reads, and the room left for its answer.
+    # how much of a page one intake call reads, the room left for its answer, and a section's.
     context_tokens: int = DEFAULT_CONTEXT_TOKENS
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 import dspy  # type: ignore[import-untyped]
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from kvasir.research.claims import Confidence
 
@@ -16,6 +16,12 @@ class Finding(BaseModel):
     claim: str
     quote: str
     confidence: Confidence
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _moderate(cls, value: object) -> object:
+        # Models reach for "moderate" often enough that it fails whole replies.
+        return "medium" if value == "moderate" else value
 
 
 class Intake(dspy.Signature):

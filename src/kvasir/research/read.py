@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, closest
@@ -75,11 +76,13 @@ def read(
     label: str,
     stream: ProgressStream,
     checker: GatewayModel | None = None,
+    attempt: int | None = None,
 ) -> list[Claim]:
     """The claims in the pieces of each page closest to `question`, the one it was found for.
 
     Kept by the question rather than the brief: a page found for one narrow fact holds it in one
-    piece, which the brief would not rank first.
+    piece, which the brief would not rank first. Each read is published under the event `attempt`,
+    the one that began the search.
     """
     pages = [
         (hit, relevant_pieces(encoder, question, text), from_snippet)
@@ -108,6 +111,9 @@ def read(
                 f"{label}: read page {page}/{len(pages)}: {hit['title'] or hit['url']}",
                 done,
                 len(texts),
+                kind="part" if sum(p == page for p, *_ in texts) > 1 else "page",
+                parent=attempt,
+                page=page,
             )
             # Numbered in page order once read, however the calls finished.
             for claim in found:
@@ -157,7 +163,7 @@ def intake(
         findings = predict(
             model, Intake, brief=brief, question=question, title=hit["title"], text=piece
         ).findings
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the claims from %s: %s", hit["url"], exc)
         return []
     claims: list[Claim] = []

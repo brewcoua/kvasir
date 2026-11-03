@@ -135,7 +135,7 @@ def run_research(
             )
 
     claims: list[Claim] = []
-    stream.publish(RESEARCH, "splitting the brief into questions")
+    stream.publish(RESEARCH, "splitting the brief into questions", kind="split")
     ledger: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
     add_questions(encoder, ledger, first or [NamedQuestion(title="", question=input.question)])
@@ -211,7 +211,7 @@ def run_research(
     ).sections
     sections: list[tuple[str, str]] = []
     for done, title in enumerate(titles):
-        stream.publish(WRITE, f"writing {title}", done, len(titles))
+        stream.publish(WRITE, f"writing {title}", done, len(titles), kind="section")
         sections.append(
             (title, write.section(models["write"], encoder, brief, titles, title, sections, claims))
         )

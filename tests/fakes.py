@@ -33,9 +33,13 @@ class Search:
 class Stream:
     def __init__(self) -> None:
         self.events: list[tuple[str, str]] = []
+        # Every event's step fields and counts, in step with `events`, whose index is its seq.
+        self.fields: list[dict] = []
 
-    def publish(self, stage, detail, done=None, total=None):
+    def publish(self, stage, detail, done=None, total=None, **fields):
         self.events.append((stage, detail))
+        self.fields.append({"done": done, "total": total, **fields})
+        return len(self.events) - 1
 
 
 class Encoder:

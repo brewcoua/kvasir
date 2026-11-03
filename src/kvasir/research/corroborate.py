@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import numpy as np
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
@@ -103,7 +104,7 @@ def _supports(models: dict[str, GatewayModel], other: Claim, claim: Claim) -> bo
         verdict = predict(
             models["verify"], Verify, sentence=claim.text, evidence=quoted_claims([other])
         )
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read whether [%d] supports [%d]: %s", other.id, claim.id, exc)
         return False
     return bool(verdict.verdict == "supported")
@@ -114,7 +115,7 @@ def _contradicts(model: GatewayModel, claim: Claim, other: Claim) -> bool:
         verdict = predict(
             model, Contradicts, first=quoted_claims([claim]), second=quoted_claims([other])
         )
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read whether [%d] and [%d] disagree: %s", claim.id, other.id, exc)
         return False
     return bool(verdict.disagree)

@@ -29,7 +29,7 @@ reason = "local/gpt-oss:120b-cloud"
 # Thinking tokens count against each role's token budget, which leaves no room for the answer.
 reasoning_effort = "none"
 # The reason model is the exception: it is meant to think. reason_effort defaults to "medium".
-# The models' num_ctx. Sizes how much of a page one intake call reads.
+# The models' num_ctx. Sizes how much of a page one intake call reads, and how long a section may run.
 context_tokens = 16384
 
 [search]

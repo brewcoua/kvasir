@@ -31,6 +31,7 @@ from typing import Any
 import dspy  # type: ignore[import-untyped]
 import httpx
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.config import Settings
 from kvasir.research import verify
@@ -183,7 +184,7 @@ def _ask(model: GatewayModel, signature: type[dspy.Signature], field: str, **inp
     try:
         with dspy.context(lm=model):
             verdict = dspy.Predict(signature)(**inputs)
-    except AdapterParseError:
+    except (AdapterParseError, ValidationError):
         return False, "the judge's verdict could not be read"
     return getattr(verdict, field), str(verdict.reason)
 

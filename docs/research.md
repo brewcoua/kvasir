@@ -567,7 +567,7 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | `assess` | `Assess` | fast | 600 |
 | `judge` | `RankCriterion` | reason | 2500 |
 | `outline` | `Outline` | strong | 2500 |
-| `write` | `WriteSection` | strong | 4000 |
+| `write` | `WriteSection` | strong | `context_tokens` - 4000 |
 | `tldr` | `Summarize` | strong | 2000 |
 | `verify` | `Verify` | fast | 600 |
 | `contradict` | `Contradicts` | fast | 400 |

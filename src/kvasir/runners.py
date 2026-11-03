@@ -51,6 +51,10 @@ TASK_MAX_TOKENS = 1000
 # default budget runs out, so retrying past this only leaves a thread spinning on a dead gateway.
 TASK_RETRY_SECONDS = 30.0
 
+# A bound on a section's prompt: one run's came to 2,200 to 2,700 tokens, with 15 claims and the
+# start of each earlier section.
+WRITE_PROMPT_TOKENS = 4000
+
 # A checker answers Yes or No.
 CHECKER_MAX_TOKENS = 10
 
@@ -81,7 +85,6 @@ _RESEARCH_ROLES = {
     "judge": ("reason", 2500),
     # A thinking strong model spends some 700 tokens reasoning before it answers, within these.
     "outline": ("strong", 2500),
-    "write": ("strong", 4000),
     "tldr": ("strong", 2000),
     "verify": ("fast", 600),
     "contradict": ("fast", 400),
@@ -146,6 +149,11 @@ def build_research_models(
     # An intake call reads as much of a page as the context holds, so its answer grows with it.
     models["intake"] = _language_model(
         settings, "intake", "fast", answer_tokens(settings.model.context_tokens)
+    )
+    # The report is what a reader sees, so a section gets all the context its prompt leaves. A
+    # thinking model's reasoning shares this with the answer; no provider here caps it apart.
+    models["write"] = _language_model(
+        settings, "write", "strong", settings.model.context_tokens - WRITE_PROMPT_TOKENS
     )
     return models
 

@@ -45,19 +45,43 @@ class ProgressStream:
         self._queue: asyncio.Queue[Progress | None] = asyncio.Queue()
 
     def publish(
-        self, stage: str, detail: str, done: int | None = None, total: int | None = None
-    ) -> None:
+        self,
+        stage: str,
+        detail: str,
+        done: int | None = None,
+        total: int | None = None,
+        *,
+        kind: str | None = None,
+        parent: int | None = None,
+        question: int | None = None,
+        search: int | None = None,
+        page: int | None = None,
+    ) -> int | None:
         """Queue an event, and log it. Safe to call from any thread.
+
+        Returns the event's `seq`, which a later event names as its `parent`; None when no run is
+        recording it.
 
         Setting the stage here rather than at each call site keeps the two in step: a progress
         event is exactly the moment the stage is known to have changed. Threads the pipeline
         spawns afterwards inherit it.
         """
         logs.set_stage(stage)
-        event = Progress(stage=stage, detail=detail, done=done, total=total)
+        event = Progress(
+            stage=stage,
+            detail=detail,
+            done=done,
+            total=total,
+            kind=kind,
+            parent=parent,
+            question=question,
+            search=search,
+            page=page,
+        )
         record_progress(event)
         logger.info("%s", detail)
         self._loop.call_soon_threadsafe(self._queue.put_nowait, event)
+        return event.seq
 
     def close(self) -> None:
         """Signal that no further events will arrive, ending iteration."""

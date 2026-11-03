@@ -128,6 +128,13 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
         "research",
         "search 1: 1 new claims, 1 in all; When was the stone found?: answered",
     ) in stream.events
+    kinds = [(f.get("kind"), f.get("parent"), f.get("page")) for f in stream.fields]
+    attempt = kinds.index(("attempt", None, None))
+    assert stream.fields[attempt]["question"] == result.questions[0].id
+    assert ("page", attempt, 1) in kinds and ("page", attempt, 2) in kinds
+    assert ("result", attempt, None) in kinds
+    assert kinds.count(("split", None, None)) == 1
+    assert [f["kind"] for f in stream.fields if f.get("kind") == "section"] == ["section"]
     assert ("verify", "removed 1 of 2 cited sentences") in stream.events
     assert stream.events[-1] == ("verify", "found support for 0 of the sections they came from")
 
@@ -512,7 +519,9 @@ def loop(
         shapes.append(inputs["shape"])
         return type("Prediction", (), {"query": f"query {len(shapes)}"})
 
-    def read(model, encoder, brief, question, hits, first_id, step, label, stream, checker):
+    def read(
+        model, encoder, brief, question, hits, first_id, step, label, stream, checker, attempt=None
+    ):
         texts = found.get(len(shapes), []) if hits else []
         return [claim(first_id + i, hits[0]["url"]) for i, _ in enumerate(texts)]
 

@@ -14,6 +14,7 @@ import math
 import time
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.methods.graph.graph import path
 from kvasir.methods.graph.proof import children, pick
@@ -108,7 +109,12 @@ def explore(
             continue
         searches += 1
         left = math.ceil((deadline - time.monotonic()) / 60)
-        stream.publish(RESEARCH, f"search {searches}, {left} min left, for: {question.text}")
+        attempt = stream.publish(
+            RESEARCH,
+            f"search {searches}, {left} min left, for: {question.text}",
+            kind="attempt",
+            question=question.id,
+        )
         query = str(
             predict(
                 models["plan"],
@@ -145,6 +151,7 @@ def explore(
             f"search {searches}",
             stream,
             models.get("ground_intake"),
+            attempt,
         )
         claims.extend(new)
         if frontier.searched(questions, question, new):
@@ -167,10 +174,15 @@ def explore(
             question.status = "unresolved"
         # Before the event, so the status that follows it carries the graph as it now stands.
         record_questions(as_results(questions))
+        # done and total carry the claim counts here, not progress through the stage.
         stream.publish(
             RESEARCH,
             f"search {searches}: {len(new)} new claims, {len(claims)} in all; "
             f"{question.text}: {question.status}",
+            len(new),
+            len(claims),
+            kind="result",
+            parent=attempt,
         )
     return searches
 
@@ -180,7 +192,7 @@ def gaps(model: GatewayModel, brief: str, questions: list[Question]) -> list[Nam
     listed = "\n".join(f"{q.title or q.text}: {q.text} ({q.status})" for q in questions)
     try:
         return list(predict(model, Gaps, brief=brief, questions=listed).raised)[:GAP_QUESTIONS]
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read what the report still lacks: %s", exc)
         return []
 
@@ -229,7 +241,7 @@ def expand(
             question=question.text,
             evidence=quoted_claims(shown),
         )
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the judgement on %r: %s", question.text, exc)
         return []
     question.judged_at = len(claims)

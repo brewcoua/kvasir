@@ -8,6 +8,7 @@ from statistics import mean
 from typing import Any
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.methods.ledger.loop import Research
 from kvasir.methods.ledger.questions import Question
@@ -113,7 +114,7 @@ def _cell(
         assessed = predict(
             model, Assess, brief=brief, entity=entity, criterion=criterion, evidence=listed(shown)
         )
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the finding on %s, %s: %s", entity, criterion, exc)
         return Cell(criterion=criterion, finding="", claims=[])
     # Only ids it was shown, of claims that name the entity: a small model otherwise cites another
@@ -211,7 +212,7 @@ def rank(
                 ranking = predict(
                     model, RankCriterion, brief=brief, criterion=criterion.name, options=options
                 ).ranking
-            except AdapterParseError as exc:
+            except (AdapterParseError, ValidationError) as exc:
                 # The input order stands in; the other pass, reversed, cancels it into a tie.
                 logger.warning("could not read the ranking on %s: %s", criterion.name, exc)
                 ranking = []

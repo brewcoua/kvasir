@@ -7,6 +7,7 @@ import pytest
 
 from kvasir.config import ConfigError, Provider, Settings
 from kvasir.runners import (
+    WRITE_PROMPT_TOKENS,
     build_costorm_runner,
     build_research_models,
     build_storm_runner,
@@ -140,6 +141,13 @@ def test_the_outline_and_the_prose_are_written_by_the_strong_model(settings):
     for role in ("outline", "write", "tldr"):
         assert models[role].model == "openai/ollama/strong:cloud", role
     assert models["intake"].model == "openai/ollama/fast:cloud"
+
+
+def test_a_section_gets_all_the_context_its_prompt_leaves(settings):
+    models = build_research_models(settings)
+
+    budget = settings.model.context_tokens - WRITE_PROMPT_TOKENS
+    assert models["write"].kwargs["max_tokens"] == budget
 
 
 REASON_ROLES = ("decompose", "check", "criteria", "entities", "judge", "escalate")

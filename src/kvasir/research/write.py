@@ -6,6 +6,7 @@ import logging
 from collections.abc import Iterable, Sequence
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, closest, listed
@@ -36,11 +37,15 @@ def section(
     extra: Iterable[int] = (),
     subsections: Sequence[str] = (),
 ) -> str:
-    """One section, from the claims closest to its title and the `extra` claim ids."""
+    """One section, from the claims closest to its title and the `extra` claim ids.
+
+    Empty when the answer cannot be read, such as a thinking model spending its whole budget on
+    reasoning, so one section does not end the run.
+    """
     shown = closest(encoder, f"{title}\n{brief}", [c.text for c in claims], CLAIMS_PER_SECTION)
     ids = {claims[i].id for i in shown} | set(extra)
-    return clean(
-        predict(
+    try:
+        text = predict(
             model,
             WriteSection,
             brief=brief,
@@ -52,7 +57,10 @@ def section(
             ),
             evidence=listed([c for c in claims if c.id in ids]),
         ).text
-    )
+    except (AdapterParseError, ValidationError) as exc:
+        logger.warning("could not read section %s: %s", title, exc)
+        return ""
+    return clean(text)
 
 
 def summary(model: GatewayModel, brief: str, sections: list[tuple[str, str]]) -> str:
@@ -65,7 +73,7 @@ def summary(model: GatewayModel, brief: str, sections: list[tuple[str, str]]) ->
     report = "\n\n".join(f"## {title}\n{text[:each]}" for title, text in sections)
     try:
         points = predict(model, Summarize, brief=brief, report=report).points
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the summary: %s", exc)
         return ""
     return "\n".join(f"- {clean(' '.join(point.split()))}" for point in points if point.strip())

@@ -8,8 +8,8 @@ import httpx
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import PAGE, Stream, claim, research_settings
-from kvasir.research import fetch, verify
+from fakes import PAGE, Encoder, Stream, claim, research_settings
+from kvasir.research import fetch, verify, write
 from kvasir.research.clarify import clarify
 from kvasir.research.fetch import FetchError, extract, split
 from kvasir.research.read import GAP, fetch_all, intake, pack, page_characters
@@ -260,6 +260,32 @@ def test_unreadable_claims_cost_the_piece_not_the_run(monkeypatch):
     hit = {"url": "https://a", "title": "A"}
 
     assert intake(model, "brief", "question", hit, "text", 1, 1) == []
+
+
+def test_an_unreadable_section_is_empty_rather_than_the_end_of_the_run():
+    model = DummyLM([{"nonsense": "x"}] * 4)
+
+    assert write.section(model, Encoder(), "brief", ["A"], "A", [], [claim(1, "https://a")]) == ""
+
+
+def test_a_confidence_of_moderate_is_medium():
+    model = DummyLM(
+        [{"findings": [{"claim": "Found", "quote": "found in 1904", "confidence": "moderate"}]}]
+    )
+    hit = {"url": "https://a", "title": "A"}
+
+    claims = intake(model, "b", "q", hit, "It was found in 1904.", 1, 1)
+
+    assert [c.confidence for c in claims] == ["medium"]
+
+
+def test_a_finding_that_fails_validation_costs_the_piece_not_the_run():
+    model = DummyLM(
+        [{"findings": [{"claim": "Found", "quote": "found in 1904", "confidence": "certain"}]}] * 4
+    )
+    hit = {"url": "https://a", "title": "A"}
+
+    assert intake(model, "b", "q", hit, "It was found in 1904.", 1, 1) == []
 
 
 def test_clarify_asks_at_most_three_questions(settings, monkeypatch):

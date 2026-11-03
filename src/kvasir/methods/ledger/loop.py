@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.questions import Question
@@ -85,7 +86,12 @@ def research(
             judge(question)
             continue
         searches += 1
-        stream.publish(RESEARCH, f"search {searches} of at most {budget}, for: {question.text}")
+        attempt = stream.publish(
+            RESEARCH,
+            f"search {searches} of at most {budget}, for: {question.text}",
+            kind="attempt",
+            question=question.id,
+        )
         query = str(
             predict(
                 models["plan"],
@@ -129,6 +135,7 @@ def research(
             f"search {searches}",
             stream,
             models.get("ground_intake"),
+            attempt,
         )
         claims.extend(new)
         if frontier is not None and frontier.searched(questions, question, new):
@@ -142,10 +149,15 @@ def research(
             judge(question)
         if question.status == "open" and question.attempts >= max_attempts:
             question.status = "unresolved"
+        # done and total carry the claim counts here, not progress through the stage.
         stream.publish(
             RESEARCH,
             f"search {searches}: {len(new)} new claims, {len(claims)} in all; "
             f"{question.text}: {question.status}",
+            len(new),
+            len(claims),
+            kind="result",
+            parent=attempt,
         )
     return searches
 
@@ -184,7 +196,7 @@ def check(
         judged = predict(
             model, CheckAnswer, brief=brief, question=question.text, evidence=quoted_claims(shown)
         )
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the judgement on %r: %s", question.text, exc)
         return []
     # Only ids it was shown: a small model otherwise cites claims from its own numbering.

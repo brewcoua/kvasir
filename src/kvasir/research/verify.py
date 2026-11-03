@@ -28,6 +28,7 @@ from functools import partial
 from typing import Any, Literal
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
@@ -251,7 +252,7 @@ def _ask(model: GatewayModel, signature: Any, **inputs: Any) -> Any:
     """The model's answer, or None when its verdict cannot be read."""
     try:
         return predict(model, signature, **inputs)
-    except AdapterParseError as exc:
+    except (AdapterParseError, ValidationError) as exc:
         logger.warning("could not read the verdict on %r: %s", inputs["sentence"], exc)
         return None
 

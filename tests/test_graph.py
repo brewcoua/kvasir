@@ -84,7 +84,9 @@ def explored(
             },
         )
 
-    def read(model, encoder, brief, question, hits, first_id, step, label, stream, checker):
+    def read(
+        model, encoder, brief, question, hits, first_id, step, label, stream, checker, attempt=None
+    ):
         return [
             claim(i, f"https://site{i}.org") for i in range(first_id, first_id + found(question))
         ]
@@ -187,6 +189,18 @@ def test_a_parent_is_judged_again_once_its_children_are_answered(monkeypatch):
     assert judged[-1] == ("none", "a")
     assert questions[0].status == "answered"
     assert questions[0].attempts == 1
+
+
+def test_an_attempt_is_followed_by_its_result(monkeypatch):
+    _, _, stream = explored(
+        monkeypatch, [Question(id=1, text="a")], budget=1, max_depth=0, found=lambda q: 2
+    )
+
+    [(attempt, _)] = [(i, f) for i, f in enumerate(stream.fields) if f.get("kind") == "attempt"]
+    [result] = [f for f in stream.fields if f.get("kind") == "result"]
+    assert stream.fields[attempt]["question"] == 1
+    assert result["parent"] == attempt
+    assert (result["done"], result["total"]) == (2, 2)
 
 
 def test_a_branch_closes_once_two_searches_in_a_row_add_nothing(monkeypatch):
