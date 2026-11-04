@@ -17,6 +17,7 @@ import { snapshot, type Timing } from "./replay.ts";
 type RunDetail = components["schemas"]["RunDetail"];
 type LmCallContent = components["schemas"]["LmCallContent"];
 type SearchContent = components["schemas"]["SearchContent"];
+type PageDetail = components["schemas"]["PageDetail"];
 
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 const SPEED = Number(process.env.MOCK_SPEED ?? 20);
@@ -189,8 +190,48 @@ function follow(entry: Entry, request: IncomingMessage, response: ServerResponse
   request.on("close", () => clearInterval(timer));
 }
 
+// The page cache, as `/v1/sites` and `/v1/pages` answer: two pages of one site.
+const PAGES: PageDetail[] = [
+  {
+    id: "3f2a9c1d0b7e4a56",
+    url: "https://en.wikipedia.org/wiki/Roman_Empire",
+    final_url: "https://en.wikipedia.org/wiki/Roman_Empire",
+    title: "Roman Empire",
+    engine: "static",
+    fetched_at: 1793790000,
+    text: "# Roman Empire\n\nThe Roman Empire ruled the Mediterranean from 27 BC.\n\n## Government\n\nThe emperor held supreme power.",
+    leads: {
+      related: [{ url: "https://en.wikipedia.org/wiki/Byzantine_Empire", anchor: "Byzantine Empire", context: "See also: Byzantine Empire" }],
+      main: [{ url: "https://en.wikipedia.org/wiki/Augustus", anchor: "Augustus", context: "founded by Augustus in 27 BC" }],
+    },
+    runs: [{ id: "report", topic: "What led to the recent backlash on Proton?" }],
+  },
+  {
+    id: "8b1e0c4d92aa7f13",
+    url: "https://en.wikipedia.org/wiki/Augustus",
+    final_url: "https://en.wikipedia.org/wiki/Augustus",
+    title: "Augustus",
+    engine: "render",
+    fetched_at: 1793780000,
+    text: "# Augustus\n\nAugustus was the first Roman emperor.",
+    leads: {},
+    runs: [],
+  },
+];
+
 export function mock(): Plugin {
   const runs = load();
+  const pages = [...PAGES];
+  const site = (url: string) => new URL(url).hostname.replace(/^www\./, "");
+  const listed = (page: PageDetail) => ({
+    id: page.id,
+    url: page.url,
+    title: page.title,
+    engine: page.engine,
+    fetched_at: page.fetched_at,
+    pieces: page.text.split("\n\n").length,
+    length: page.text.length,
+  });
   return {
     name: "kvasir-mock",
     configureServer(server) {
@@ -204,6 +245,41 @@ export function mock(): Plugin {
           return send(response, 200, all.sort((a, b) => b.created_at - a.created_at));
         }
         if (request.method === "GET" && path === "/v1/methods") return send(response, 200, METHODS);
+
+        if (request.method === "GET" && path === "/v1/sites") {
+          const sites = [...new Set(pages.map((page) => site(page.url)))].map((domain) => {
+            const held = pages.filter((page) => site(page.url) === domain);
+            return {
+              domain,
+              pages: held.length,
+              pieces: held.reduce((n, page) => n + listed(page).pieces, 0),
+              fetched_at: Math.max(...held.map((page) => page.fetched_at)),
+              engines: [...new Set(held.map((page) => page.engine))],
+            };
+          });
+          return send(response, 200, sites);
+        }
+        if (request.method === "GET" && path === "/v1/pages") {
+          const wanted = url.searchParams.get("site");
+          return send(response, 200, pages.filter((page) => !wanted || site(page.url) === wanted).map(listed));
+        }
+        if (request.method === "GET" && path === "/v1/pages/recall") {
+          const [page] = pages;
+          const pieces = page ? [{ page: page.id, url: page.url, title: page.title, site: site(page.url), text: page.text, similarity: 0.71, clears: true }] : [];
+          return send(response, 200, { minimum: 0.6, pieces });
+        }
+        const cached = path.match(/^\/v1\/(pages|sites)\/([^/]+)$/);
+        if (cached) {
+          const [, kind, key] = cached;
+          const matches = (page: PageDetail) => (kind === "pages" ? page.id === key : site(page.url) === key);
+          if (!pages.some(matches)) return send(response, 404, { message: `no ${kind === "pages" ? "page" : "pages of"} ${key}` });
+          if (request.method === "GET" && kind === "pages") return send(response, 200, pages.find(matches));
+          if (request.method === "DELETE") {
+            pages.splice(0, pages.length, ...pages.filter((page) => !matches(page)));
+            response.statusCode = 204;
+            return response.end();
+          }
+        }
 
         const call = path.match(/^\/v1\/runs\/([^/]+)\/calls\/(\d+)$/);
         if (request.method === "GET" && call) {

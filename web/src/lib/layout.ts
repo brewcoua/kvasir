@@ -200,7 +200,7 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
   const nodes: Node<StepData>[] = [];
   const edges: Edge[] = [];
   const chain = (from: Step, to: Step) =>
-    edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, animated: to.state === "current", class: to.state === "pending" ? "pending" : "done" });
+    edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? to.state : "done" });
   // Per research container, where its arcs and trunk are in flow coordinates.
   const lanes: { id: string; x: number; y: number; research: Research }[] = [];
 

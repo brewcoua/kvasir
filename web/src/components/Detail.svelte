@@ -3,6 +3,7 @@
   import type { RunDetail } from "../lib/api";
   import { clock } from "../lib/clock.svelte";
   import { count, duration } from "../lib/format";
+  import { skipped } from "../lib/steps";
   import Bar from "./Bar.svelte";
   import Calls from "./Calls.svelte";
   import Clock from "./Clock.svelte";
@@ -32,7 +33,7 @@
       const stage = run.stages.find((s) => s.name === name);
       return {
         name,
-        state: name === run.stage && live ? "current" : stage ? "" : "pending",
+        state: name === run.stage && live ? "current" : stage ? "" : skipped(run, name) ? "skipped" : "pending",
         seconds: stage?.seconds ?? null,
         spans: (stage?.spans ?? []).map((span) => {
           const left = ((span.started_at - start) / width) * 100;

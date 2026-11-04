@@ -10,6 +10,8 @@ export interface Setting {
   label: string;
   hint: string;
   type: "number" | "checkbox" | "text";
+  // The least a number may be. 1 when left out.
+  min?: number;
   // The kinds of run it is sent with.
   for: Kind[];
 }
@@ -26,6 +28,8 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
       { name: "max_attempts", label: "Attempts per question", type: "number", for: ["research", "graph"], hint: "Differently shaped queries tried before a question is given up." },
       { name: "follow_ups", label: "Follow-up questions", type: "checkbox", for: ["research"], hint: "Whether an answered question can add harder ones." },
       { name: "max_depth", label: "Follow-up depth", type: "number", for: ["research", "graph"], hint: "Levels of follow-ups below the first questions." },
+      { name: "recall_past_runs", label: "Use knowledge from past runs", type: "checkbox", for: ["research", "graph"], hint: "Answer from pages earlier runs read, before searching. Off: only this run's own pages are reused; what it reads is still kept for later runs." },
+      { name: "max_age_hours", label: "Page cache age (hours)", type: "number", min: 0, for: ["research", "graph"], hint: "How long a saved page is used without asking its site again. 0 downloads every page again and replaces the saved copy." },
     ],
   },
   {

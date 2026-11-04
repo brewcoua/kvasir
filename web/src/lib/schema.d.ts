@@ -129,6 +129,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sites
+         * @description Each domain with pages cached, the one fetched from last first.
+         */
+        get: operations["list_sites_v1_sites_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pages
+         * @description The pages of `site`, or the latest `PAGE_LIMIT` of all, newest first.
+         */
+        get: operations["list_pages_v1_pages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pages/recall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recall
+         * @description The cached pieces recall would take for `q`, scored, without marking any read. For tuning
+         *     `RECALL_MIN`: it lists `RECALL_PIECES` times 4, and those under the minimum are flagged.
+         */
+        get: operations["recall_v1_pages_recall_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page Detail */
+        get: operations["page_detail_v1_pages__id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Page */
+        delete: operations["delete_page_v1_pages__id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sites/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Site */
+        delete: operations["delete_site_v1_sites__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pages/{id}/refetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refetch
+         * @description Reads the page again whatever its age. The page it answers with is the one now cached at the
+         *     final URL, which is another when the site has moved the page since it was first read. Its
+         *     pieces go with the old text; the next run to read it makes them.
+         */
+        post: operations["refetch_v1_pages__id__refetch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/clarify": {
         parameters: {
             query?: never;
@@ -418,6 +536,13 @@ export interface components {
              * @default false
              */
             contradict: boolean;
+            /**
+             * Recall Past Runs
+             * @default true
+             */
+            recall_past_runs: boolean;
+            /** Max Age Hours */
+            max_age_hours?: number | null;
             /** Model Fast */
             model_fast?: string | null;
             /** Model Strong */
@@ -438,7 +563,8 @@ export interface components {
              *       "research_minutes": 20,
              *       "ground_intake": false,
              *       "corroborate": false,
-             *       "contradict": false
+             *       "contradict": false,
+             *       "recall_past_runs": true
              *     }
              */
             options: components["schemas"]["GraphOptions"];
@@ -509,6 +635,13 @@ export interface components {
              * @default false
              */
             contradict: boolean;
+            /**
+             * Recall Past Runs
+             * @default true
+             */
+            recall_past_runs: boolean;
+            /** Max Age Hours */
+            max_age_hours?: number | null;
             /** Model Fast */
             model_fast?: string | null;
             /** Model Strong */
@@ -529,7 +662,8 @@ export interface components {
              *       "frontier": "breadth",
              *       "ground_intake": false,
              *       "corroborate": false,
-             *       "contradict": false
+             *       "contradict": false,
+             *       "recall_past_runs": true
              *     }
              */
             options: components["schemas"]["LedgerOptions"];
@@ -615,6 +749,74 @@ export interface components {
             seconds: number;
         };
         /**
+         * PageDetail
+         * @description One cached page with the text intake reads.
+         */
+        PageDetail: {
+            /** Id */
+            id: string;
+            /** Url */
+            url: string;
+            /** Final Url */
+            final_url: string;
+            /** Title */
+            title: string;
+            /** Engine */
+            engine: string;
+            /** Fetched At */
+            fetched_at: number;
+            /** Text */
+            text: string;
+            /** Leads */
+            leads: {
+                [key: string]: components["schemas"]["PageLead"][];
+            };
+            /** Runs */
+            runs: components["schemas"]["PageRun"][];
+        };
+        /**
+         * PageLead
+         * @description A link of a page, as kept for a run to follow.
+         */
+        PageLead: {
+            /** Url */
+            url: string;
+            /** Anchor */
+            anchor: string;
+            /** Context */
+            context: string;
+        };
+        /**
+         * PageRun
+         * @description A stored run whose result cites the page.
+         */
+        PageRun: {
+            /** Id */
+            id: string;
+            /** Topic */
+            topic: string;
+        };
+        /**
+         * PageSummary
+         * @description One cached page, without its text.
+         */
+        PageSummary: {
+            /** Id */
+            id: string;
+            /** Url */
+            url: string;
+            /** Title */
+            title: string;
+            /** Engine */
+            engine: string;
+            /** Fetched At */
+            fetched_at: number;
+            /** Pieces */
+            pieces: number;
+            /** Length */
+            length: number;
+        };
+        /**
          * Progress
          * @description Payload of a `progress` event.
          */
@@ -641,6 +843,36 @@ export interface components {
             search?: number | null;
             /** Page */
             page?: number | null;
+        };
+        /**
+         * Recall
+         * @description The pieces recall would take for a question, best first, with the threshold it applies.
+         */
+        Recall: {
+            /** Minimum */
+            minimum: number;
+            /** Pieces */
+            pieces: components["schemas"]["RecallPiece"][];
+        };
+        /**
+         * RecallPiece
+         * @description A cached piece scored against a question.
+         */
+        RecallPiece: {
+            /** Page */
+            page: string;
+            /** Url */
+            url: string;
+            /** Title */
+            title: string;
+            /** Site */
+            site: string;
+            /** Text */
+            text: string;
+            /** Similarity */
+            similarity: number;
+            /** Clears */
+            clears: boolean;
         };
         /**
          * RemovedSentence
@@ -1028,6 +1260,22 @@ export interface components {
             model_strong?: string | null;
         };
         /**
+         * Site
+         * @description One domain with pages cached.
+         */
+        Site: {
+            /** Domain */
+            domain: string;
+            /** Pages */
+            pages: number;
+            /** Pieces */
+            pieces: number;
+            /** Fetched At */
+            fetched_at: number;
+            /** Engines */
+            engines: string[];
+        };
+        /**
          * StageUsage
          * @description What one stage spent, including what is not a completion.
          */
@@ -1364,6 +1612,208 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MethodInfo"][];
+                };
+            };
+        };
+    };
+    list_sites_v1_sites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"][];
+                };
+            };
+        };
+    };
+    list_pages_v1_pages_get: {
+        parameters: {
+            query?: {
+                site?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recall_v1_pages_recall_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recall"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_detail_v1_pages__id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_page_v1_pages__id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_site_v1_sites__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refetch_v1_pages__id__refetch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

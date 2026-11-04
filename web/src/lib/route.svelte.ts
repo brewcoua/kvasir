@@ -1,6 +1,11 @@
-// `#/` starts a run, `#/runs` lists them, `#/runs/<id>/<tab>` shows one. In the hash, so the
+// `#/` starts a run, `#/runs` lists them, `#/runs/<id>/<tab>` shows one, `#/knowledge` shows the page
+// cache and `#/knowledge/<id>` one page of it. In the hash, so the
 // service serves the one page for every route.
-export type Route = { page: "new" } | { page: "runs" } | { page: "run"; id: string; tab: string | null };
+export type Route =
+  | { page: "new" }
+  | { page: "runs" }
+  | { page: "run"; id: string; tab: string | null }
+  | { page: "knowledge"; id: string | null };
 
 function parse(hash: string): Route {
   const run = hash.match(/^#\/runs\/([^/]+)(?:\/([a-z]+))?$/);
@@ -8,11 +13,19 @@ function parse(hash: string): Route {
   // Links from before the pages were split.
   const old = hash.match(/^#run\/([^/]+)(\/result)?$/);
   if (old) return { page: "run", id: old[1], tab: old[2] ? "result" : null };
+  const knowledge = hash.match(/^#\/knowledge(?:\/([0-9a-f]+))?$/);
+  if (knowledge) return { page: "knowledge", id: knowledge[1] ?? null };
   return hash === "#/runs" ? { page: "runs" } : { page: "new" };
 }
 
 export const href = (to: Route) =>
-  to.page === "new" ? "#/" : to.page === "runs" ? "#/runs" : `#/runs/${to.id}${to.tab ? `/${to.tab}` : ""}`;
+  to.page === "new"
+    ? "#/"
+    : to.page === "runs"
+      ? "#/runs"
+      : to.page === "knowledge"
+        ? `#/knowledge${to.id ? `/${to.id}` : ""}`
+        : `#/runs/${to.id}${to.tab ? `/${to.tab}` : ""}`;
 
 export const route = $state({ current: parse(location.hash) });
 addEventListener("hashchange", () => {

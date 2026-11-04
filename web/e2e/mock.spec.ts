@@ -73,6 +73,13 @@ test("a citation badge shows its number, and names its source on hover", async (
   await expect(badge).toHaveText(/^\d+$/);
   await badge.hover();
   await expect(page.locator(".popover")).toContainText("http");
+  await expect(badge).toHaveAttribute("href", /^https?:\/\//);
+  await expect(badge).toHaveAttribute("target", "_blank");
+
+  const opened = page.waitForEvent("popup");
+  await badge.click();
+  expect((await opened).url()).toMatch(/^https?:\/\//);
+  await expect(page).toHaveURL(/#\/runs\/report\/result$/);
 });
 
 test("a result marks unverified sentences, and lists what verification changed", async ({ page }) => {
@@ -367,4 +374,17 @@ test("a live run's edge into its current step is animated", async ({ page }) => 
   await page.goto("/#/runs/graph-live/steps");
   // The replay restarts as it ends, and its first stage has no edge into it.
   await expect(run(page).locator(".svelte-flow__edge.animated").first()).toBeAttached({ timeout: 20_000 });
+});
+
+test("the knowledge page lists a site's pages and opens one on its text", async ({ page }) => {
+  await page.goto("/#/");
+  await page.getByRole("navigation").getByRole("link", { name: "Knowledge" }).click();
+  await expect(page).toHaveURL(/#\/knowledge$/);
+
+  await page.getByRole("button", { name: "en.wikipedia.org" }).click();
+  await page.getByRole("link", { name: "Roman Empire" }).click();
+
+  await expect(page).toHaveURL(/#\/knowledge\/3f2a9c1d0b7e4a56$/);
+  await expect(page.getByText("The emperor held supreme power.")).toBeVisible();
+  await expect(page.getByText("related (1)")).toBeVisible();
 });

@@ -27,7 +27,7 @@
     <input
       {id}
       type={setting.type}
-      min={setting.type === "number" ? 1 : undefined}
+      min={setting.type === "number" ? (setting.min ?? 1) : undefined}
       value={shown ?? ""}
       placeholder={String(defaults[setting.name] ?? "")}
       onchange={(e) => change(e.currentTarget)}

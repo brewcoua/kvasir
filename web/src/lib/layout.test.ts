@@ -136,7 +136,7 @@ describe("layout", () => {
     expect(edges.some((e) => state.get(e.target) === "current")).toBe(true);
     for (const e of edges) {
       expect(!!e.animated).toBe(state.get(e.target) === "current");
-      expect(e.class).toBe(state.get(e.target) === "pending" ? "pending" : "done");
+      expect(e.class).toBe(["pending", "skipped"].includes(state.get(e.target)!) ? state.get(e.target) : "done");
     }
   });
 

@@ -18,6 +18,10 @@ export type ResearchClaim = Schemas["ResearchClaim"];
 export type Citation = Schemas["Citation"];
 export type ResearchResult = Schemas["ResearchResult"];
 export type MethodInfo = Schemas["MethodInfo"];
+export type Site = Schemas["Site"];
+export type PageSummary = Schemas["PageSummary"];
+export type PageDetail = Schemas["PageDetail"];
+export type Recall = Schemas["Recall"];
 // The options with a configured default, every method's together. Their names do not collide, but
 // for the models, which mean the same in every method.
 type Configured = Omit<Schemas["LedgerOptions"] & Schemas["GraphOptions"] & Schemas["StormOptions"], "output" | "criteria" | "entities">;
@@ -36,6 +40,16 @@ export async function json<T>(path: string): Promise<T> {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`${path}: ${response.status}`);
   return response.json();
+}
+
+// Like `json`, with the reason the service gives for a refusal, and for requests that change something.
+export async function request<T>(method: "GET" | "POST" | "DELETE", path: string): Promise<T> {
+  const response = await fetch(path, { method });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message ?? `${path}: ${response.status}`);
+  }
+  return response.status === 204 ? (undefined as T) : response.json();
 }
 
 // One field holds the main text, whichever kind of run produced it.

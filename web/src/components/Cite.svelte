@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Tooltip } from "bits-ui";
-  import { host } from "../lib/format";
+  import { host, isWeb } from "../lib/format";
   import { useNotes } from "../lib/notes";
 
   let { number }: { number: number } = $props();
@@ -8,7 +8,8 @@
   const citation = $derived(notes?.sources().get(number));
 </script>
 
-{#if citation && notes}
+<!-- Opens the source itself: an in-page `#cite-<n>` would be read as a route of the dashboard. -->
+{#if citation && notes && isWeb(citation.url)}
   <Tooltip.Trigger
     tether={notes.tether}
     payload={{
@@ -18,11 +19,11 @@
     }}
   >
     {#snippet child({ props })}
-      <a {...props} class="cite" href={`#cite-${number}`}>
+      <a {...props} class="cite" href={citation.url} target="_blank" rel="noreferrer noopener">
         {number}
       </a>
     {/snippet}
   </Tooltip.Trigger>
 {:else}
-  <a class="cite" href={`#cite-${number}`}>{number}</a>
+  <span class="cite">{number}</span>
 {/if}

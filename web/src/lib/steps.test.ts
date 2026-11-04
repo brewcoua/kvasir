@@ -250,3 +250,22 @@ describe("steps, synthetic", () => {
     expect(nodes.length).toBeLessThan(40);
   });
 });
+
+describe("stages a run never ran", () => {
+  const fixture = (name: string): RunDetail => JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", `${name}.json`), "utf8"));
+  const states = (run: RunDetail) => Object.fromEntries(steps(run).map((s) => [s.label, s.state]));
+
+  it("marks a planned stage the run went past as skipped", () => {
+    expect(states(fixture("report"))).toMatchObject({ background: "skipped", assess: "skipped", research: "done", write: "done" });
+  });
+
+  it("leaves the stages after a failure pending", () => {
+    expect(states(fixture("failed"))).toMatchObject({ research: "done", assess: "pending", write: "pending", verify: "pending" });
+  });
+
+  it("marks a stage skipped while live once a later stage has started", () => {
+    const report = fixture("report");
+    const live = { ...report, state: "running", ended_at: null, stage: "research", stages: report.stages.filter((s) => s.name !== "write" && s.name !== "verify") } as RunDetail;
+    expect(states(live)).toMatchObject({ background: "skipped", research: "current", assess: "pending", write: "pending" });
+  });
+});

@@ -24,8 +24,8 @@ describe("Markdown", () => {
 
   it("turns source numbers into badges, but not link text", () => {
     const root = show("Cited [3][12], linked [4](https://example.org).");
-    const badges = [...root.querySelectorAll(".cite")].map((badge) => badge.getAttribute("href"));
-    expect(badges).toEqual(["#cite-3", "#cite-12"]);
+    const badges = [...root.querySelectorAll(".cite")].map((badge) => badge.textContent);
+    expect(badges).toEqual(["3", "12"]);
     expect(root.querySelector('a[href="https://example.org"]')!.textContent).toBe("4");
   });
 

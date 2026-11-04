@@ -9,7 +9,7 @@ export interface Step {
   label: string;
   // Full text, for hover or a panel.
   detail: string;
-  state: "done" | "current" | "pending";
+  state: "done" | "current" | "pending" | "skipped";
   started_at: number | null;
   ended_at: number | null;
   // LmCall ids whose `event` is one of this step's own events, not a descendant's.
@@ -69,6 +69,15 @@ function span(parent: Step) {
 
 // Time order, steps with no time last; sort is stable, so ties keep their given order.
 const byTime = (a: Step, b: Step) => (a.started_at === b.started_at ? 0 : a.started_at === null ? 1 : b.started_at === null ? -1 : a.started_at - b.started_at);
+
+// A planned stage that never ran though the run went past it: one the options or the question left out, such as
+// ranking for a report. A failed run's stages after the failure were not reached, and stay pending.
+export function skipped(run: RunDetail, name: string): boolean {
+  if (run.stages.some((stage) => stage.name === name)) return false;
+  const names = [...run.planned_stages, ...run.stages.map((stage) => stage.name).filter((n) => !run.planned_stages.includes(n))];
+  const later = names.slice(names.indexOf(name) + 1);
+  return run.state === "done" || run.stages.some((stage) => later.includes(stage.name));
+}
 
 // The page title is the text after the last ": " of a page's or part's detail.
 const pageTitle = (detail: string) => (detail.includes(": ") ? detail.slice(detail.lastIndexOf(": ") + 2) : detail);
@@ -217,7 +226,7 @@ export function steps(run: RunDetail): Step[] {
 
   return names.map((name) => {
     const t = timing.get(name);
-    const s = step(`stage:${name}`, "stage", name, name, name === run.stage && live ? "current" : t ? "done" : "pending");
+    const s = step(`stage:${name}`, "stage", name, name, name === run.stage && live ? "current" : t ? "done" : skipped(run, name) ? "skipped" : "pending");
     s.started_at = t?.started_at ?? null;
     s.ended_at = t?.ended_at ?? null;
     s.progress = progressOf.get(name) ?? null;

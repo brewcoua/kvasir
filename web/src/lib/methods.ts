@@ -84,7 +84,7 @@ export const METHODS: Method[] = [
         does: (v) =>
           `Up to ${v.max_searches} searches, reading ${v.results_per_query} pages each, ${v.max_attempts} attempts per question` +
           (v.follow_ups ? `, follow-ups ${v.max_depth} level${v.max_depth === 1 ? "" : "s"} deep.` : ", no follow-ups."),
-        settings: ["max_searches", "results_per_query", "max_attempts", "follow_ups", "max_depth"],
+        settings: ["max_searches", "results_per_query", "max_attempts", "follow_ups", "max_depth", "recall_past_runs", "max_age_hours"],
       },
       {
         name: "assess",
@@ -118,7 +118,7 @@ export const METHODS: Method[] = [
           `Searches for ${v.research_minutes} minutes${v.max_searches ? `, ${v.max_searches} searches at most` : ""}, ` +
           `reading ${v.results_per_query} pages each, ${v.max_attempts} attempts per question, ` +
           `raised questions ${v.max_depth} level${v.max_depth === 1 ? "" : "s"} deep, more where a question is hard.`,
-        settings: ["research_minutes", "max_searches", "results_per_query", "max_attempts", "max_depth"],
+        settings: ["research_minutes", "max_searches", "results_per_query", "max_attempts", "max_depth", "recall_past_runs", "max_age_hours"],
       },
       { name: "write", does: () => "Writes one section per branch that found something, each claim citing its source.", settings: [] },
       { name: "verify", does: () => "Checks each cited sentence against its quote, and removes what is unsupported.", settings: [] },
