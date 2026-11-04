@@ -2,6 +2,7 @@
   import { json, type RunDetail, type SearchCall, type SearchContent } from "../lib/api";
   import { isWeb } from "../lib/format";
   import Clock from "./Clock.svelte";
+  import Favicon from "./Favicon.svelte";
 
   // `event` filters the list to the searches made after that event, as on the calls tab.
   let { run, event = $bindable(null) }: { run: RunDetail; event: number | null } = $props();
@@ -71,7 +72,7 @@
                     <ol>
                       {#each kept.results as result, r (r)}
                         <li>
-                          {#if isWeb(result.url)}<a href={result.url} target="_blank" rel="noreferrer noopener">{result.title || result.url}</a>{:else}{result.title || result.url}{/if}
+                          {#if isWeb(result.url)}<Favicon url={result.url} /><a href={result.url} target="_blank" rel="noreferrer noopener">{result.title || result.url}</a>{:else}{result.title || result.url}{/if}
                           <div class="meta">{result.url}</div>
                           {#if result.snippet}<div>{result.snippet}</div>{/if}
                         </li>

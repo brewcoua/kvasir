@@ -586,6 +586,13 @@ td.track-cell {
 .popover strong {
   display: block;
 }
+img.favicon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 0.35em;
+  vertical-align: -0.2em;
+}
 .popover .quote {
   margin-top: 0.35rem;
   font-style: italic;
@@ -1329,6 +1336,16 @@ table.runs a.topic:hover {
   stroke: color-mix(in srgb, var(--accent) 60%, var(--text));
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+}
+/* Clipped round; the pointer events stay on the node, so drag, click and hover still work. The ring redraws
+   the outline over the icon, which would otherwise cover its inner half. */
+.site-graph .node .favicon {
+  clip-path: circle(50%) fill-box;
+  pointer-events: none;
+}
+.site-graph .node .ring {
+  fill: none;
+  pointer-events: none;
 }
 .site-graph .node:hover circle {
   stroke: var(--text);

@@ -6,6 +6,8 @@ import type { Citation } from "./api";
 export interface Note {
   title: string;
   meta?: string;
+  // A page URL, for the icon beside the title.
+  icon?: string;
   // Each quote, with where it was read.
   quotes?: { quote: string; meta?: string }[];
 }

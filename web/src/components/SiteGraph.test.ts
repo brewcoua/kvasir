@@ -20,7 +20,7 @@ const edges = [
   { source: "b.org", target: "gone.org", count: 9 },
 ];
 const props = { sites, edges, size: "pages" as const, selected: null, onpick: () => {} };
-const radii = (container: HTMLElement) => [...container.querySelectorAll(".node circle")].map((circle) => Number(circle.getAttribute("r")));
+const radii = (container: HTMLElement) => [...container.querySelectorAll(".node circle:not(.ring)")].map((circle) => Number(circle.getAttribute("r")));
 
 describe("SiteGraph", () => {
   it("draws a circle per site and a line per edge between known sites", () => {
@@ -104,5 +104,40 @@ describe("SiteGraph", () => {
     const { container } = render(SiteGraph, props);
     const shade = [...container.querySelectorAll<SVGGElement>(".node")].map((node) => node.style.getPropertyValue("--t"));
     expect(shade).toEqual(["1", "0.2", "0"]);
+  });
+
+  describe("favicons", () => {
+    const icons = (container: HTMLElement) => [...container.querySelectorAll(".node image.favicon")];
+    const many = (count: number) => Array.from({ length: count }, (_, i) => ({ domain: `s${i}.org`, pages: count - i, links: 0 }));
+
+    it("draws an icon on a big site only, at the encoded address", () => {
+      const { container } = render(SiteGraph, { ...props, sites: [{ domain: "a.org:8080", pages: 100, links: 0 }, { domain: "tiny.org", pages: 0, links: 0 }], edges: [] });
+      const [icon, ...rest] = icons(container);
+      expect(rest).toHaveLength(0);
+      expect(icon.getAttribute("href")).toBe("/v1/favicons/a.org%3A8080");
+      expect(icon.closest(".node")!.textContent).toContain("a.org:8080");
+      expect(container.querySelectorAll(".node circle:not(.ring)")).toHaveLength(2);
+    });
+
+    it("draws at most 60", () => {
+      const { container } = render(SiteGraph, { ...props, sites: many(100), edges: [] });
+      expect(icons(container)).toHaveLength(60);
+    });
+
+    it("drops an icon that fails to load and keeps the circle", async () => {
+      const { container } = render(SiteGraph, { ...props, sites: many(3), edges: [] });
+      const before = icons(container).length;
+      expect(before).toBeGreaterThan(0);
+      await fireEvent.error(icons(container)[0]);
+      expect(icons(container)).toHaveLength(before - 1);
+      expect(container.querySelectorAll(".node circle:not(.ring)")).toHaveLength(3);
+    });
+
+    it("still picks a site when its icon is clicked", async () => {
+      const onpick = vi.fn();
+      const { container } = render(SiteGraph, { ...props, onpick });
+      await fireEvent.click(icons(container)[0]);
+      expect(onpick).toHaveBeenCalledWith("a.org");
+    });
   });
 });

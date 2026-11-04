@@ -15,6 +15,7 @@
     payload={{
       title: citation.title || host(citation.url),
       meta: citation.url,
+      icon: citation.url,
       quotes: citation.snippet ? [{ quote: citation.snippet }] : [],
     }}
   >

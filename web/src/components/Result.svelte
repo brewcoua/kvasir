@@ -3,6 +3,7 @@
   import { isResearch, resultText, type RunResult } from "../lib/api";
   import { isWeb } from "../lib/format";
   import { provideNotes, type Note } from "../lib/notes";
+  import Favicon from "./Favicon.svelte";
   import Markdown from "./Markdown.svelte";
   import Ranking from "./Ranking.svelte";
 
@@ -186,7 +187,7 @@
       {#snippet children({ payload })}
         {#if payload}
           <Tooltip.Content class="popover" sideOffset={6} collisionPadding={8}>
-            <strong>{payload.title}</strong>
+            <strong>{#if payload.icon}<Favicon url={payload.icon} />{/if}{payload.title}</strong>
             {#if payload.meta}<div class="meta">{payload.meta}</div>{/if}
             {#each payload.quotes ?? [] as quote, i (i)}
               <div class="quote">{quote.quote}</div>
@@ -200,5 +201,5 @@
 </div>
 
 {#snippet link(label: string, url: string)}
-  {#if isWeb(url)}<a href={url} target="_blank" rel="noreferrer noopener">{label}</a>{:else}{label}{/if}
+  {#if isWeb(url)}<Favicon {url} /><a href={url} target="_blank" rel="noreferrer noopener">{label}</a>{:else}{label}{/if}
 {/snippet}

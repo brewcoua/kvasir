@@ -82,6 +82,13 @@ test("a citation badge shows its number, and names its source on hover", async (
   await expect(page).toHaveURL(/#\/runs\/report\/result$/);
 });
 
+test("sources and the citation tooltip show the site's favicon", async ({ page }) => {
+  await page.goto("/#/runs/report/result");
+  await expect(page.locator(".citations img.favicon").first()).toHaveAttribute("src", /^\/v1\/favicons\/[^/]+$/);
+  await page.locator(".cite").first().hover();
+  await expect(page.locator(".popover img.favicon")).toBeVisible();
+});
+
 test("a result marks unverified sentences, and lists what verification changed", async ({ page }) => {
   await page.goto("/#/runs/report/result");
   const badge = page.locator(".markdown .unverified").first();
@@ -430,9 +437,9 @@ test("the knowledge page lists a site's pages and opens one on its text", async 
 test("the knowledge graph sizes its nodes by pages or by links", async ({ page }) => {
   await page.goto("/#/knowledge");
   const radius = async () =>
-    Number(await page.getByRole("button", { name: /^en\.wikipedia\.org/ }).locator("circle").getAttribute("r"));
+    Number(await page.getByRole("button", { name: /^en\.wikipedia\.org/ }).locator("circle:not(.ring)").getAttribute("r"));
   const other = async () =>
-    Number(await page.getByRole("button", { name: /^britannica\.com/ }).locator("circle").getAttribute("r"));
+    Number(await page.getByRole("button", { name: /^britannica\.com/ }).locator("circle:not(.ring)").getAttribute("r"));
   const toggle = page.getByRole("switch", { name: "Size by links" });
   await expect(toggle).not.toBeChecked();
   await expect.poll(radius).toBeGreaterThan(0);
@@ -443,6 +450,20 @@ test("the knowledge graph sizes its nodes by pages or by links", async ({ page }
   await expect.poll(other).toBe(6);
   expect(byPages[1]).toBeGreaterThan(6);
   expect(await radius()).toBeGreaterThan(byPages[0] - 1);
+});
+
+test("the knowledge graph draws a favicon on its big sites", async ({ page }) => {
+  await page.goto("/#/knowledge");
+  const icon = page.locator(".site-graph .node image.favicon").first();
+  await expect(icon).toHaveAttribute("href", /^\/v1\/favicons\/[^/]+$/);
+  // Measured in a real browser: a stray CSS width on the image would shrink it into a corner of its node.
+  const boxes = await icon.evaluate((image) =>
+    [image, image.parentElement!.querySelector("circle.ring")!].map((shape) => {
+      const { x, y, width, height } = shape.getBoundingClientRect();
+      return [x, y, width, height];
+    }),
+  );
+  boxes[0].forEach((value, i) => expect(value).toBeCloseTo(boxes[1][i], 0));
 });
 
 test("the knowledge page shows what the cache takes", async ({ page }) => {

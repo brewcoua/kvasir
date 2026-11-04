@@ -3,6 +3,7 @@
   import { count, duration, isWeb, size } from "../lib/format";
   import { go, href } from "../lib/route.svelte";
   import { Switch } from "bits-ui";
+  import Favicon from "../components/Favicon.svelte";
   import Markdown from "../components/Markdown.svelte";
   import SiteGraph from "../components/SiteGraph.svelte";
 
@@ -123,7 +124,7 @@
     <div class="body">
       {#if detail}
         <p class="heading">{detail.title || detail.url}</p>
-        <p class="meta">{@render web(detail.url)}</p>
+        <p class="meta"><Favicon url={detail.url} />{@render web(detail.url)}</p>
         <p class="meta">
           {when(detail.fetched_at)} · {ago(detail.fetched_at)} · {detail.engine}
           {#if detail.final_url !== detail.url}· served from {@render web(detail.final_url)}{/if}
@@ -213,7 +214,7 @@
       {#if site}
         <section class="panel site-panel">
           <h2>
-            <span class="topic">Pages of {site}</span>
+            <span class="topic"><Favicon url={`https://${site}`} />Pages of {site}</span>
             <button type="button" class="action danger" disabled={busy} onclick={() => removeSite(site!)}>Delete site</button>
             <button type="button" class="action" onclick={() => pick(null)}>Close</button>
           </h2>
@@ -261,6 +262,7 @@
                         <tr class:below={!piece.clears}>
                           <td class="n">{piece.similarity.toFixed(3)}</td>
                           <td class="piece">
+                            <Favicon url={piece.url} />
                             <a href={href({ page: "knowledge", id: piece.page })} class="topic">{piece.title || piece.url}</a>
                             <span class="meta">{piece.site}</span>
                             {piece.text}

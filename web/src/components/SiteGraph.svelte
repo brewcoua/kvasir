@@ -21,6 +21,7 @@
   import { select } from "d3-selection";
   import { zoom, type ZoomBehavior } from "d3-zoom";
   import { onDestroy, untrack } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
 
   let {
     sites,
@@ -33,6 +34,10 @@
   const LABEL = 24;
   const MIN_R = 6;
   const MAX_R = 34;
+  // Icons load over the same few HTTP/1.1 connections as the API (about 6 per host), an uncached one can take
+  // up to 10s, and an SVG <image> cannot load lazily, so only the biggest sites get one.
+  const ICON_MIN_R = 10;
+  const ICON_MAX = 60;
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -48,6 +53,8 @@
     count: number;
   }
 
+  const radiusOf = (t: number) => MIN_R + (MAX_R - MIN_R) * t;
+  const shade = (value: number, biggest: number) => (biggest > 0 ? Math.sqrt(value / biggest) : 0);
   const short = (text: string) => (text.length > LABEL ? `${text.slice(0, LABEL - 1)}…` : text);
 
   // Plain, not state: the simulation moves them, and `tick` tells the template when it has.
@@ -76,8 +83,8 @@
   $effect(() => {
     const biggest = Math.max(0, ...sites.map((site) => site[size]));
     const next: Node[] = sites.map((site) => {
-      const t = biggest > 0 ? Math.sqrt(site[size] / biggest) : 0;
-      return { id: site.domain, label: short(site.domain), pages: site.pages, links: site.links, r: MIN_R + (MAX_R - MIN_R) * t, t };
+      const t = shade(site[size], biggest);
+      return { id: site.domain, label: short(site.domain), pages: site.pages, links: site.links, r: radiusOf(t), t };
     });
     const known = new Set(next.map((node) => node.id));
     const nextLinks: Link[] = edges
@@ -98,6 +105,21 @@
     simulation.alpha(grew ? 0.6 : 0.2).restart();
     untrack(() => tick++);
   });
+
+  // Depends on the sites and the size only, not on `tick`, so the set does not change while the layout moves.
+  const iconIds = $derived.by(() => {
+    const biggest = Math.max(0, ...sites.map((site) => site[size]));
+    return new Set(
+      sites
+        .map((site) => ({ id: site.domain, r: radiusOf(shade(site[size], biggest)) }))
+        .filter((site) => site.r >= ICON_MIN_R)
+        .sort((a, b) => b.r - a.r)
+        .slice(0, ICON_MAX)
+        .map((site) => site.id),
+    );
+  });
+  // Ids whose icon failed to load; the circle alone stays.
+  const brokenIcons = new SvelteSet<string>();
 
   // Copies, so the template sees new positions on every tick.
   const shown = $derived.by(() => {
@@ -238,6 +260,18 @@
           }}
         >
           <circle r={node.r} />
+          {#if iconIds.has(node.id) && !brokenIcons.has(node.id)}
+            <image
+              class="favicon"
+              href={`/v1/favicons/${encodeURIComponent(node.id)}`}
+              x={-node.r}
+              y={-node.r}
+              width={2 * node.r}
+              height={2 * node.r}
+              onerror={() => brokenIcons.add(node.id)}
+            />
+            <circle class="ring" r={node.r} />
+          {/if}
           <text dy="0.35em">{node.label}</text>
         </g>
       {/each}
