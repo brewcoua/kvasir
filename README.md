@@ -574,6 +574,14 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 | `KVASIR_FAVICONS_CUSTOM_URL` | empty | URL template for the `custom` provider, with `{domain}` where the site's host goes. Required to be an `http(s)` URL containing `{domain}` when `custom` is listed, or startup fails. |
 | `KVASIR_FAVICONS_TTL_DAYS` | `30` | Days a found icon is served before it is looked up again. |
 | `KVASIR_FAVICONS_MISS_TTL_DAYS` | `3` | Days a site found to have no icon is remembered before it is asked again. |
+| `KVASIR_SOURCES_ENABLED` | `false` | Classify the sites of search results by kind and trust tier. Off, nothing is classified, downloaded or sent to Wikidata. See [Source trust](#source-trust). |
+| `KVASIR_SOURCES_WIKIDATA` | `true` | Ask Wikidata about hosts that no rule, mark or list decides. `false` sends no domain anywhere. |
+| `KVASIR_SOURCES_ENDPOINT` | `https://query.wikidata.org/sparql` | SPARQL endpoint asked. |
+| `KVASIR_SOURCES_TTL_DAYS` | `30` | Days a Wikidata answer is kept, and a downloaded list is served before it is fetched again. |
+| `KVASIR_SOURCES_MISS_TTL_DAYS` | `7` | Days a host Wikidata does not know is remembered. |
+| `KVASIR_SOURCES_ALLOW` | empty | Comma-separated hosts, with their subdomains, always trusted (`high`). Beats any mark. |
+| `KVASIR_SOURCES_DENY` | empty | Comma-separated hosts, with their subdomains, never read (`avoid`). Beats `ALLOW` and any mark. |
+| `KVASIR_SOURCES_LISTS` | CISA `.gov` list | Comma-separated `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, uBlacklist files and CSVs with the host first are read. Empty uses none. |
 | `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
 | `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 | `KVASIR_CONFIG` | `kvasir.toml` | Config file. Environment only. |
@@ -590,6 +598,19 @@ An icon must be PNG, ICO, GIF, JPEG or WebP, judged by its first bytes, and at m
 refused. Do not use as `custom` a service that answers 200 with a placeholder for a missing icon,
 such as allesedv, Yandex, icon.horse or Bitwarden (as probed): kvasir caches the placeholder as the
 site's real icon. A provider that answers 404 for a missing icon is fine.
+
+### Source trust
+
+With `KVASIR_SOURCES_ENABLED=true`, each host resolves to a kind (government, academic, news and so
+on), tags such as `community` or `ai_generated`, and a tier: `high`, `normal`, `unknown`, `low` or
+`avoid`. A host resolves in this order: the config's `ALLOW` and `DENY`, a mark, the bundled list
+(`src/kvasir/research/sources.toml`) and downloaded lists, suffix rules (`.gov`, `.edu`, `.int`,
+`europa.eu` and the like), the cache in `sources.db`, then Wikidata. Wikidata is asked for the
+domains of search results in one query per 50 hosts, so its operators see those domains; set
+`KVASIR_SOURCES_WIKIDATA=false` to avoid that. A host still unanswered after 5 seconds counts as
+`unknown` for that search and is known by the next. The default list is CISA's `.gov` list. The
+HUGE AI blocklist is not default: its last commit is from October 2025 and it targets AI-generated
+imagery. Add it to `KVASIR_SOURCES_LISTS` as `ai_generated=<url>` if you want it.
 
 Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,

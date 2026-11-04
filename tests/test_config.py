@@ -519,3 +519,91 @@ def test_the_custom_provider_needs_a_url_template_with_a_domain(url):
 
 def test_the_custom_url_is_not_checked_when_the_provider_is_unused():
     Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_CUSTOM_URL": "nonsense"})
+
+
+def test_source_settings_default_to_off_with_the_cisa_list():
+    settings = Settings.from_env(MINIMAL)
+
+    assert settings.sources.enabled is False
+    assert settings.sources.wikidata is True
+    assert (settings.sources.ttl_days, settings.sources.miss_ttl_days) == (30, 7)
+    assert settings.sources.allow == settings.sources.deny == ()
+    assert [entry.partition("=")[0] for entry in settings.sources.lists] == ["government"]
+    assert settings.sources_db == Path("/data/sources.db")
+
+
+def test_source_lists_read_from_the_environment_keep_their_case():
+    settings = Settings.from_env(
+        MINIMAL
+        | {
+            "KVASIR_SOURCES_ENABLED": "true",
+            "KVASIR_SOURCES_ALLOW": "example.org, Example.com",
+            "KVASIR_SOURCES_DENY": "farm.example",
+            "KVASIR_SOURCES_LISTS": "ai_generated=https://lists.example/Ai.txt",
+        }
+    )
+
+    assert settings.sources.enabled is True
+    assert settings.sources.allow == ("example.org", "Example.com")
+    assert settings.sources.deny == ("farm.example",)
+    assert settings.sources.lists == ("ai_generated=https://lists.example/Ai.txt",)
+
+
+def test_an_empty_source_list_setting_turns_the_default_lists_off():
+    assert Settings.from_env(MINIMAL | {"KVASIR_SOURCES_LISTS": ""}).sources.lists == ()
+
+
+def test_sources_read_from_the_config_file(tmp_path):
+    path = _write(
+        tmp_path,
+        """
+[provider.local]
+api_base = "http://localhost:11434/v1"
+
+[model]
+fast = "local/a"
+strong = "local/a"
+embedding = "local/a"
+
+[search]
+url = "http://localhost:8888"
+
+[sources]
+wikidata = false
+deny = ["farm.example"]
+""",
+    )
+
+    settings = Settings.from_env({"KVASIR_CONFIG": path})
+
+    assert settings.sources.wikidata is False
+    assert settings.sources.deny == ("farm.example",)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("KVASIR_SOURCES_ENDPOINT", "nonsense"),
+        ("KVASIR_SOURCES_LISTS", "https://lists.example/a.txt"),
+        ("KVASIR_SOURCES_LISTS", "government=ftp://lists.example/a.txt"),
+        ("KVASIR_SOURCES_LISTS", "shiny=https://lists.example/a.txt"),
+        ("KVASIR_SOURCES_ALLOW", "10.0.0.1"),
+        ("KVASIR_SOURCES_DENY", "nonsense"),
+    ],
+)
+def test_a_bad_source_setting_is_rejected(name, value):
+    with pytest.raises(ConfigError, match=name):
+        Settings.from_env(MINIMAL | {"KVASIR_SOURCES_ENABLED": "true", name: value})
+
+
+def test_source_settings_are_not_checked_while_sources_are_off():
+    assert (
+        Settings.from_env(MINIMAL | {"KVASIR_SOURCES_ENDPOINT": "nonsense"}).sources.enabled
+        is False
+    )
+
+
+def test_a_source_host_may_end_in_a_dot():
+    env = MINIMAL | {"KVASIR_SOURCES_ENABLED": "true", "KVASIR_SOURCES_DENY": "farm.example."}
+
+    assert Settings.from_env(env).sources.deny == ("farm.example.",)

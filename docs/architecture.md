@@ -262,6 +262,13 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
 | Pages read | `$KVASIR_DATA_DIR/pages.db`: each page's text and links, and its pieces with their vectors | Served for `fetch.max_age_hours`, then revalidated; kept until deleted from the Knowledge page | A page read once is not downloaded again, and a later run can answer from it with no search. Public page content only: no brief, question or claim. One cache serves every user of the service. |
 | Site icons | `$KVASIR_DATA_DIR/favicons.db`: one row per host, with the image and the provider that gave it | `KVASIR_FAVICONS_TTL_DAYS` for an icon, `KVASIR_FAVICONS_MISS_TTL_DAYS` for a site with none; emptied by `DELETE /v1/favicons`. File not created when `KVASIR_FAVICONS_PROVIDERS` is empty | An icon is public and cheap to refetch, but a site should be asked once a month, not per page view. A separate file so flushing the page cache keeps them. |
+| Source trust | `$KVASIR_DATA_DIR/sources.db`: `sources`, Wikidata's answer per host, and `marks`, the kinds and `allow`/`deny` a user set; downloaded lists beside it as `sources-<hash>.txt`. Not created unless `KVASIR_SOURCES_ENABLED` | `KVASIR_SOURCES_TTL_DAYS` for an answer and a list, `KVASIR_SOURCES_MISS_TTL_DAYS` for a host Wikidata does not know; marks never expire | A host is classified once a month, not per search. Marks are the user's, so they sit apart from the cache that may be dropped. |
+
+With `KVASIR_SOURCES_ENABLED=true`, the server also contacts, from `research/sources.py`: the Wikidata
+Query Service (`KVASIR_SOURCES_ENDPOINT`), which learns the domains of the search results a run
+considers, at most 50 a query, with a user agent naming this service; and the URLs in
+`KVASIR_SOURCES_LISTS`, fetched at most once per `KVASIR_SOURCES_TTL_DAYS`.
+`KVASIR_SOURCES_WIKIDATA=false` stops the first. Off, none of it runs.
 
 The SQLite store writes a run twice: when it starts, so a restart mid-run leaves a trace, and when
 it ends. A run in progress is always read from memory. At startup, `RunStore.sweep` marks any run

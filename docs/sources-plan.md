@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Nothing is built.
+Status: written 2026-11-04. Phases 1 and 2 built 2026-11-04.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
@@ -51,7 +51,7 @@ or a fragment.
 | Batch queries, with a descriptive User-Agent, and stay within limits. | WDQS: 60 s timeout per query, 60 s of processing a minute per client, 5 parallel queries per IP, 429 with `Retry-After`. [User manual](https://www.mediawiki.org/wiki/Wikidata_Query_Service/User_Manual) | medium |
 | Use the main WDQS graph; QLever is an alternative endpoint. | Since 9 May 2025 scholarly articles live in a separate graph; organisations stay in the main one. [Graph split](https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service/WDQS_graph_split). QLever serves the full graph: [QLever wiki](https://github.com/ad-freiburg/qlever/wiki/Differences-between-QLever's-Wikidata-SPARQL-endpoint-and-the-Wikidata-Query-Service-(WDQS)) | medium |
 | Use CISA's `.gov` list for US government domains below the suffix rules' reach. | [cisagov/dotgov-data](https://github.com/cisagov/dotgov-data), CC0, `current-full.csv`, updated daily. | medium |
-| Use a community AI blocklist for AI and SEO spam, refreshed at runtime. | [laylavish/uBlockOrigin-HUGE-AI-Blocklist](https://github.com/laylavish/uBlockOrigin-HUGE-AI-Blocklist), about 1,000 domains, uBlacklist and hosts formats. License and last commit not verified. | low |
+| A community AI blocklist can be added, refreshed at runtime. | [laylavish/uBlockOrigin-HUGE-AI-Blocklist](https://github.com/laylavish/uBlockOrigin-HUGE-AI-Blocklist), about 1,000 domains, uBlacklist and hosts formats. CC0-1.0, but last commit 2025-10-02, and it lists sites with AI imagery, not content farms: left out of the default `lists`. Checked 2026-11-04. | medium |
 | Wikipedia's perennial sources list is a reliability overlay, not a classifier. | Statuses: generally reliable, no consensus, generally unreliable, deprecated, blacklisted. No official machine-readable export; the page's wikitext is parsed. [WP:RSP](https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources) | medium |
 | Govdirectory adds no domain index. | It builds a directory of agencies from `P31`, `P17` and social-account properties, not `P856`. [WikiProject Govdirectory](https://www.wikidata.org/wiki/Wikidata:WikiProject_Govdirectory) | medium |
 
@@ -67,14 +67,15 @@ Each host resolves to one `Source`:
 ```python
 @dataclass(frozen=True)
 class Source:
-    host: str              # registrable domain, or the host when a rule matched it
-    kind: str              # see the table below
-    tags: frozenset[str]   # official, community, ai_generated, content_farm, predatory,
-                           # rsp_reliable, rsp_mixed, rsp_unreliable, rsp_deprecated
-    tier: str              # high, normal, unknown, low, avoid: derived, never stored
-    label: str             # "French Ministry of education", or ""
-    qid: str               # "Q2572330", or ""
-    origin: str            # config, mark, list, rule, wikidata
+    host: str  # the host asked about, normalized
+    kind: str  # see the table below
+    tags: frozenset[str]  # see the list below, plus allow or deny from the config or a mark
+    label: str  # "French Ministry of education", or ""
+    qid: str  # "Q2572330", or ""
+    origin: str  # config, mark, list, rule, wikidata
+
+    @property
+    def tier(self) -> str: ...  # high, normal, unknown, low, avoid: derived, never stored
 ```
 
 Kinds, the Wikidata roots that give them (QIDs checked 2026-11-04), and their priority:
@@ -235,9 +236,10 @@ No classification needed. It fixes the run above on its own.
   `miss_ttl_days` 7, `allow` and `deny` lists, `lists` the download URLs), registered in
   `_SECTIONS`; `Settings.sources_db`. With `enabled` false nothing is built: no store, no
   download, no worker. `kvasir.example.toml`: a commented `[sources]` block.
-- Downloaded lists (CISA `current-full.csv`, the AI blocklist) are fetched into `data_dir`,
-  refreshed after `ttl_days`, and parsed from hosts or uBlacklist lines. Check the blocklist's
-  license and last commit first; if either fails, leave it out of the defaults and say so.
+- Downloaded lists are fetched into `data_dir`, refreshed after `ttl_days`, and parsed from
+  hosts, uBlacklist or CSV lines. Each entry of `lists` is `<label>=<url>`, the label a kind or a
+  tag (`ai_generated`, `content_farm`, `predatory`). The default is CISA `current-full.csv` as
+  `government`; the AI blocklist is left out, as the design rules say.
 - Tests: new `tests/test_sources.py` with a fake WDQS (an `httpx.MockTransport`, as
   `tests/test_favicons.py` fakes providers): the tier table row by row, the `europa.eu` case,
   ISO as `standards` and WHO as `intergovernmental`, a host matching several items,

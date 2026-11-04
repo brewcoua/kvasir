@@ -177,6 +177,28 @@ class FaviconSettings:
     miss_ttl_days: int = 3
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SourceSettings:
+    # Off by default: classifying a site asks Wikidata about the domains of search results.
+    enabled: bool = False
+    # Whether Wikidata is asked about hosts no rule, mark or list decides.
+    wikidata: bool = True
+    endpoint: str = "https://query.wikidata.org/sparql"
+    # How long a Wikidata answer is kept, and how long a host it does not know is remembered. Also
+    # the age at which a downloaded list is fetched again.
+    ttl_days: int = 30
+    miss_ttl_days: int = 7
+    # Hosts, and their subdomains, that are always trusted or never read. They beat any mark.
+    allow: tuple[str, ...] = ()
+    deny: tuple[str, ...] = ()
+    # Lists fetched into data_dir, each as `<label>=<url>`. The label is a kind (`government`) or a
+    # tag (`ai_generated`) given to every host on the list. Hosts files, uBlacklist and CSV with
+    # the host first are read.
+    lists: tuple[str, ...] = (
+        "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv",
+    )
+
+
 # Keyed by the Settings field and the table name in the file.
 _SECTIONS: dict[str, Any] = {
     "model": ModelSettings,
@@ -187,6 +209,7 @@ _SECTIONS: dict[str, Any] = {
     "storm": StormSettings,
     "fetch": FetchSettings,
     "favicons": FaviconSettings,
+    "sources": SourceSettings,
     "log": LogSettings,
 }
 
@@ -208,6 +231,7 @@ class Settings:
     storm: StormSettings
     fetch: FetchSettings
     favicons: FaviconSettings
+    sources: SourceSettings
     log: LogSettings
 
     @property
@@ -225,6 +249,10 @@ class Settings:
     @property
     def favicons_db(self) -> Path:
         return self.data_dir / "favicons.db"
+
+    @property
+    def sources_db(self) -> Path:
+        return self.data_dir / "sources.db"
 
     def resolve(self, ref: str) -> Model:
         """A `<provider>/<name>` reference as the model to call. Only the first `/` splits, since
@@ -316,6 +344,7 @@ class Settings:
                 except ConfigError as exc:
                     raise ConfigError(f"{name}: {exc}") from None
         _check_favicons(settings.favicons)
+        _check_sources(settings.sources)
         return settings
 
 
@@ -349,6 +378,33 @@ def _check_favicons(favicons: FaviconSettings) -> None:
             "KVASIR_FAVICONS_CUSTOM_URL must be an http(s) URL containing {domain} "
             f"when the custom provider is used, got {favicons.custom_url!r}"
         )
+
+
+def _check_sources(sources: SourceSettings) -> None:
+    if not sources.enabled:
+        return
+    # Imported here because the research package imports this module.
+    from kvasir.research.favicons import normalize_host
+    from kvasir.research.sources import LIST_LABELS
+
+    def check_url(name: str, url: str) -> None:
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            raise ConfigError(f"KVASIR_SOURCES_{name} must be an http(s) URL, got {url!r}")
+
+    check_url("ENDPOINT", sources.endpoint)
+    for entry in sources.lists:
+        label, _, url = entry.partition("=")
+        if label not in LIST_LABELS:
+            raise ConfigError(
+                f"KVASIR_SOURCES_LISTS entry {entry!r} must be <label>=<url> with a label of "
+                f"{', '.join(sorted(LIST_LABELS))}"
+            )
+        check_url("LISTS", url)
+    for name, hosts in (("ALLOW", sources.allow), ("DENY", sources.deny)):
+        for host in hosts:
+            if normalize_host(host.removesuffix(".")) is None:
+                raise ConfigError(f"KVASIR_SOURCES_{name} holds {host!r}, which is not a DNS name")
 
 
 def _raw_providers(env: Mapping[str, str]) -> dict[str, dict[str, str]]:
@@ -453,7 +509,9 @@ def _read(f: Field[Any], name: str, env: Mapping[str, str]) -> Any:
 
 
 def _names(f: Field[Any], name: str, raw: str) -> tuple[str, ...]:
-    """A comma-separated list, each item checked against the field's choices."""
+    """A comma-separated list, each item checked against the field's choices when it has any."""
+    if "choices" not in f.metadata:
+        return tuple(item.strip() for item in raw.split(",") if item.strip())
     items = tuple(item.strip().lower() for item in raw.split(",") if item.strip())
     unknown = [item for item in items if item not in f.metadata["choices"]]
     if unknown:

@@ -61,5 +61,23 @@ max_age_hours = 48
 # ttl_days = 30
 # miss_ttl_days = 3
 
+# [sources]
+# Kinds and trust tiers for the sites of search results. A site found AI-generated is never read.
+# Off by default; on, Wikidata is asked for the domains of results a run considers.
+# enabled = true
+# Set false to use only rules, marks, allow, deny and lists, and ask no one.
+# wikidata = true
+# endpoint = "https://query.wikidata.org/sparql"
+# Days a Wikidata answer is kept, a host it does not know is remembered, and a list is served.
+# ttl_days = 30
+# miss_ttl_days = 7
+# Hosts, with their subdomains, always trusted or never read. They beat a mark set in the UI.
+# allow = ["example.org"]
+# deny = ["content-farm.example"]
+# Lists fetched into data_dir as <label>=<url>; the label is a kind or a tag. The default is the
+# CISA .gov list. laylavish's HUGE AI blocklist (CC0) is left out: no commit since 2025-10-02.
+# A URL cannot contain a comma, since the environment variable is split on commas.
+# lists = ["government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"]
+
 [log]
 format = "text"
