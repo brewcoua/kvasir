@@ -38,7 +38,11 @@
     });
     source.addEventListener("progress", (message) => {
       const event: Progress = JSON.parse(message.data);
-      if (detail?.id === run) detail.events.push(event);
+      if (detail?.id !== run) return;
+      // A counter in a live series comes again under its `seq`, and replaces the earlier one.
+      const at = event.seq == null ? -1 : detail.events.findIndex((e) => e.seq === event.seq);
+      if (at < 0) detail.events.push(event);
+      else detail.events[at] = event;
     });
     return () => source.close();
   });

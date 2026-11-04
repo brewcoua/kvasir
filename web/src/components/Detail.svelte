@@ -3,8 +3,7 @@
   import type { RunDetail } from "../lib/api";
   import { clock } from "../lib/clock.svelte";
   import { count, duration } from "../lib/format";
-  import { skipped } from "../lib/steps";
-  import Bar from "./Bar.svelte";
+  import { meter, overall, skipped, stageCounter } from "../lib/steps";
   import Calls from "./Calls.svelte";
   import Clock from "./Clock.svelte";
   import Graph from "./Graph.svelte";
@@ -61,6 +60,13 @@
     if (events) events.scrollTop = events.scrollHeight;
   });
 
+  // The whole run on the top half of the bar, the current stage's count on the bottom half.
+  const whole = $derived(overall(run));
+  const part = $derived.by(() => {
+    const counter = stageCounter(run);
+    return counter ? meter(counter, clock.now, live) : null;
+  });
+
   const offset = (at: number, digits: number) =>
     run.started_at ? `+${(at - run.started_at).toFixed(digits)}s` : "";
 </script>
@@ -87,7 +93,15 @@
   <Tabs.Content value="overview">
     {#if run.latest && live}
       <p class="now"><span class="stage">{run.latest.stage}</span> {run.latest.detail}</p>
-      <Bar event={run.latest} />
+      <div class="split-bar" data-testid="split-bar">
+        <div class="halves">
+          {#if whole}<progress class="whole" max={whole.total} value={whole.done}></progress>{/if}
+          <progress class="part" max="1" value={part?.share ?? 0}></progress>
+        </div>
+        <span class="meta">
+          {#if whole}stages {whole.done}/{whole.total}{#if part}{" · "}{/if}{/if}{#if part}{run.stage} {part.text}{/if}
+        </span>
+      </div>
     {/if}
 
     {#if rows.length > 0}

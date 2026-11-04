@@ -26,6 +26,30 @@ function scaled<T>(value: T, share: number): T {
   return value;
 }
 
+type Event = RunDetail["events"][number];
+
+// The service sends a verify counter as one series: every update reuses the first one's `seq` and
+// `at`, with its own time in `updated_at`. The fixtures were recorded before that, one event per
+// update, so the series is made here. Returns each event as sent, in order, and the calls moved
+// onto the series' `seq`.
+function sent(run: RunDetail): { sends: Event[]; head: Map<number, number> } {
+  const open = new Map<string, Event>();
+  const head = new Map<number, number>();
+  const sends = run.events.map((event) => {
+    if (event.stage !== "verify" || event.kind != null || event.done == null || event.seq == null) return event;
+    const first = open.get(event.stage);
+    // As the service does, a finished series takes no more updates: the next counter is an event of its own.
+    if (!first || (first.total != null && first.done! >= first.total)) {
+      open.set(event.stage, event);
+      return { ...event, series: event.stage, updated_at: event.at ?? null };
+    }
+    head.set(event.seq, first.seq!);
+    open.set(event.stage, { ...first, done: event.done, total: event.total });
+    return { ...event, seq: first.seq, at: first.at, series: event.stage, updated_at: event.at ?? null };
+  });
+  return { sends, head };
+}
+
 export function snapshot(run: RunDetail, { at, toReal, speed }: Timing): RunDetail {
   const start = run.started_at ?? run.created_at;
   const end = run.ended_at ?? at;
@@ -34,10 +58,17 @@ export function snapshot(run: RunDetail, { at, toReal, speed }: Timing): RunDeta
   const shift = (t: number | null) => (t === null ? null : toReal(t));
   const open = (t: number | null) => (t === null || t > at ? null : toReal(t));
 
+  const { sends, head } = sent(run);
   // `at` is optional in the schema only because the service defaults it.
-  const events = run.events
-    .filter((event) => (event.at ?? 0) <= at)
-    .map((event) => ({ ...event, at: toReal(event.at ?? 0) }));
+  const real = sends
+    .filter((event) => (event.updated_at ?? event.at ?? 0) <= at)
+    .map((event) => ({
+      ...event,
+      at: toReal(event.at ?? 0),
+      ...(event.updated_at == null ? {} : { updated_at: toReal(event.updated_at) }),
+    }));
+  // A snapshot holds a series once, at its first place, as of its latest update.
+  const events = [...new Map(real.map((event) => [event.seq ?? Symbol(), event] as const)).values()];
   const stages = run.stages
     .filter((stage) => stage.started_at <= at)
     .map((stage) => {
@@ -54,6 +85,7 @@ export function snapshot(run: RunDetail, { at, toReal, speed }: Timing): RunDeta
     });
   const calls = run.calls
     .filter((call) => call.started_at <= at)
+    .map((call) => ({ ...call, event: call.event == null ? call.event : (head.get(call.event) ?? call.event) }))
     .map((call) =>
       call.ended_at !== null && call.ended_at <= at
         ? { ...call, started_at: toReal(call.started_at), ended_at: toReal(call.ended_at) }
@@ -75,7 +107,8 @@ export function snapshot(run: RunDetail, { at, toReal, speed }: Timing): RunDeta
   usage.by_stage = Object.fromEntries(
     Object.entries(usage.by_stage).filter(([name]) => seen.has(name) || name === "unstaged"),
   );
-  const latest = events.at(-1) ?? null;
+  // The one sent last, which is not always the last in order: a series update is sent late.
+  const latest = real.at(-1) ?? null;
 
   return {
     ...run,

@@ -400,6 +400,38 @@ progress {
   height: 0.4rem;
   accent-color: var(--accent);
 }
+.bar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.bar progress {
+  flex: 1;
+  width: auto;
+  margin: 0;
+}
+.bar .meta {
+  white-space: nowrap;
+}
+.split-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+.split-bar .halves {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+}
+.split-bar progress {
+  height: 0.3rem;
+}
+.split-bar .meta {
+  white-space: nowrap;
+}
 .track {
   position: relative;
   min-width: 8rem;
@@ -1561,7 +1593,7 @@ table.runs a.topic:hover {
 .step-card {
   box-sizing: border-box;
   width: 220px;
-  height: 100px;
+  height: 80px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1618,7 +1650,7 @@ table.runs a.topic:hover {
 }
 .step-card.stage {
   width: 240px;
-  height: 116px;
+  height: 92px;
 }
 .step-card.pending {
   opacity: 0.6;
@@ -1630,7 +1662,7 @@ table.runs a.topic:hover {
   opacity: 0.4;
   border-style: dotted;
 }
-.step-card.skipped .step-title {
+.step-card.skipped .step-label {
   text-decoration: line-through;
 }
 .step-card.current {
@@ -1673,12 +1705,6 @@ table.runs a.topic:hover {
   flex: none;
   color: var(--k);
 }
-.step-kind {
-  color: color-mix(in srgb, var(--k) 70%, var(--dim));
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
 .chip {
   border-radius: 999px;
   padding: 0 0.45rem;
@@ -1707,20 +1733,6 @@ table.runs a.topic:hover {
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.4rem 0.65rem;
-}
-.step-title {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.step-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  line-height: 1.25;
 }
 .step-line {
   display: flex;
@@ -1811,6 +1823,7 @@ table.runs a.topic:hover {
   border-bottom: 1px dashed color-mix(in srgb, var(--k) 30%, var(--line));
   padding: 0 0.85rem;
 }
+.step-card .step-label,
 .step-group .step-label,
 .step-panel .step-label {
   min-width: 0;
@@ -1821,6 +1834,7 @@ table.runs a.topic:hover {
   font-size: 0.8rem;
   color: var(--k);
 }
+.step-card .step-head > :not(.step-label),
 .step-group .step-head > :not(.step-label) {
   flex: none;
   white-space: nowrap;

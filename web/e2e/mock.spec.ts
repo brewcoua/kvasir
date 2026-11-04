@@ -249,7 +249,7 @@ test("steps lay a run out as stages that open into questions and attempts", asyn
     await expect(run(page).getByTestId(`step-stage:${stage}`)).toBeVisible();
   }
   // Stages and questions are open at first; a search's pages are not.
-  await expect(cards.filter({ hasText: /^question/ }).first()).toBeVisible();
+  await expect(run(page).locator(".step-card.question").first()).toBeVisible();
   await expect(run(page).locator(".step-card.attempt").first()).toBeVisible();
   await expect(run(page).locator(".step-card.page")).toHaveCount(0);
 
@@ -258,10 +258,10 @@ test("steps lay a run out as stages that open into questions and attempts", asyn
   await expect(run(page).locator(".step-card.attempt")).toHaveCount(before - 1);
   await run(page).locator(".step-panel").getByRole("button", { name: "Close" }).click();
   await run(page).getByTestId("step-stage:research").locator(".step-head").click();
-  await expect(cards.filter({ hasText: /^question/ })).toHaveCount(0);
+  await expect(run(page).locator(".step-card.question")).toHaveCount(0);
 
   await run(page).getByTestId("step-stage:research").click();
-  await expect(cards.filter({ hasText: /^question/ }).first()).toBeVisible();
+  await expect(run(page).locator(".step-card.question").first()).toBeVisible();
   // Opening a step grows the research box around it; its cards stay inside. The box and the pan are animated, so it is polled.
   await expect
     .poll(async () => {
@@ -327,7 +327,7 @@ test("steps colour a card by its kind, mark it with an icon, and explain the kin
 
 test("steps show question cards for a run whose questions only its result holds", async ({ page }) => {
   await page.goto("/#/runs/wal/steps");
-  await expect(run(page).locator(".step-card, .step-group").filter({ hasText: /^question/ }).first()).toBeVisible();
+  await expect(run(page).locator(".step-card.question, .step-group.question").first()).toBeVisible();
 });
 
 test("question cards show their status", async ({ page }) => {
@@ -407,6 +407,33 @@ test("claims that corroborate or contradict across questions are drawn as arcs a
   const picked = run(page).locator(".step-panel .claim-list li.picked");
   await expect(picked).toBeVisible();
   await expect(picked.locator(".rel.contradicts")).toHaveText("contradicted by");
+});
+
+test("a live run's verify counter is one event row that advances in place", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/#/runs/graph-live/overview");
+  const rows = run(page).locator("ul.events li");
+  const counter = rows.filter({ hasText: /checked \d+ of 47 cited sentences/ });
+  // The replay reaches verify about 14s into each cycle.
+  await expect(counter).toHaveCount(1, { timeout: 30_000 });
+  const first = await counter.textContent();
+  const before = await rows.count();
+  // It may join at the end of verify, so it can wait out the pause and a new cycle.
+  await expect.poll(async () => counter.textContent({ timeout: 1_000 }).catch(() => first), { timeout: 40_000 }).not.toBe(first);
+  await expect(counter).toHaveCount(1);
+  expect(await rows.count()).toBeLessThanOrEqual(before + 1);
+  await page.goto("/#/runs/graph-live/steps");
+  await expect(run(page).locator(".step-card.event")).toHaveCount(0);
+});
+
+test("a live run's overview shows the whole run and its current stage on one bar", async ({ page }) => {
+  await page.goto("/#/runs/graph-live/overview");
+  const bar = run(page).getByTestId("split-bar");
+  await expect(bar.locator("progress.whole")).toBeAttached();
+  await expect(bar.locator("progress.part")).toBeAttached();
+  await expect(bar).toContainText(/stages \d\/4/);
+  // Research counts its searches against the budget once it is reached.
+  await expect(bar).toContainText(/research \d+% · \d+\/\d+|write \d+%|verify \d+%/, { timeout: 20_000 });
 });
 
 test("a live run's current stage is marked as current", async ({ page }) => {

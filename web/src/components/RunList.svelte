@@ -17,7 +17,7 @@
         <span class="state {run.state}">{run.state}</span>{#if run.state === "running" && run.stage}{" · "}{run.stage}{/if}
         {" · "}{run.kind}{" · "}<Clock from={run.started_at} to={run.ended_at} />{#if tokens > 0}{" · "}{count(tokens)} tok{/if}
       </span>
-      {#if run.state === "running"}<Bar event={run.latest} />{/if}
+      {#if run.state === "running"}<Bar event={run.latest} bare />{/if}
     </a>
   {/each}
 </nav>

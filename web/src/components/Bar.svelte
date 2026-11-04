@@ -1,9 +1,13 @@
 <script lang="ts">
-  import type { Progress } from "../lib/api";
+  import { clock } from "../lib/clock.svelte";
+  import { isCounter, meter, type Counter } from "../lib/steps";
 
-  let { event }: { event: Progress | null } = $props();
+  // `bare` leaves out the text, for a list too narrow for it.
+  let { event, live = true, bare = false }: { event: Counter | null | undefined; live?: boolean; bare?: boolean } = $props();
+
+  const shown = $derived(event && isCounter(event) ? meter(event, clock.now, live) : null);
 </script>
 
-{#if event && event.total && event.done !== null && event.done !== undefined}
-  <progress max={event.total} value={Math.min(event.done, event.total)} title={`${event.done}/${event.total}`}></progress>
+{#if shown}
+  <span class="bar"><progress max="1" value={shown.share} title={shown.text}></progress>{#if !bare}<span class="meta">{shown.text}</span>{/if}</span>
 {/if}

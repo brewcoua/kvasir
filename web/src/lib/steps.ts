@@ -1,5 +1,6 @@
 import type { IconName } from "../components/Icon.svelte";
 import { isResearch, type Progress, type ResearchQuestion, type RunDetail } from "./api";
+import { duration } from "./format";
 
 export type StepKind = "stage" | "question" | "attempt" | "recall" | "repair" | "page" | "part" | "section" | "verdict" | "split" | "event";
 export interface Step {
@@ -29,7 +30,7 @@ export interface Step {
   // The pages an attempt has read, or a recall's pages; null for any other step.
   read: number | null;
   // A stage's latest progress counter; null for any other step or a stage with none.
-  progress: { done: number; total: number | null; detail: string } | null;
+  progress: { done: number; total: number | null; detail: string; at: number | null; updated_at: number | null; kind: string | null } | null;
   // A stage's other plain events, in order; they get no card.
   log: { seq: number; at: number | null; detail: string }[];
   // A question's depth; null for any other step.
@@ -130,6 +131,14 @@ export function steps(run: RunDetail): Step[] {
   const logOf = new Map<string, Step["log"]>();
   const callsOf = new Map<string, number[]>();
   const keepCalls = (stage: string, calls: number[]) => callsOf.set(stage, [...(callsOf.get(stage) ?? []), ...calls]);
+  const counter = (ev: Progress): NonNullable<Step["progress"]> => ({
+    done: ev.done!,
+    total: ev.total ?? null,
+    detail: ev.detail,
+    at: ev.at ?? null,
+    updated_at: ev.updated_at ?? null,
+    kind: ev.kind ?? null,
+  });
   events.forEach((ev: Progress, i) => {
     const seq = ev.seq ?? i;
     const at = ev.at ?? null;
@@ -155,6 +164,9 @@ export function steps(run: RunDetail): Step[] {
         s.read = ev.total ?? null;
       }
       attempts.set(seq, { step: s, pages: new Map(), resulted: false });
+      // Only a top-level search feeds the stage's bar: one under a repair has its own count, which
+      // would take the place of the verify counter.
+      if (kind === "attempt" && ev.parent == null && ev.done != null && ev.total != null) progressOf.set(ev.stage, counter(ev));
       const repair = ev.parent == null ? undefined : repairs.get(ev.parent);
       const list = ev.question == null ? undefined : attemptsOf.get(ev.question);
       if (repair && ev.question != null) {
@@ -167,6 +179,8 @@ export function steps(run: RunDetail): Step[] {
       const s = own(step(`e:${seq}`, "repair", "Repair", ev.detail, state));
       repairs.set(seq, { step: s, rows: [], texts: new Map() });
       add(ev.stage, s);
+    } else if ((kind === "page" || kind === "part") && ev.parent != null && !parent) {
+      // Its attempt was evicted, so there is nothing to put it under.
     } else if (kind === "page" && parent) {
       const page = ev.page ?? 0;
       if (!parent.pages.has(page)) {
@@ -200,8 +214,9 @@ export function steps(run: RunDetail): Step[] {
       const s = own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail, ev.detail, state));
       s.question = ev.question ?? null;
       add(ev.stage, s);
+      if (ev.done != null) progressOf.set(ev.stage, counter(ev));
     } else if (kind === null) {
-      if (ev.done != null) progressOf.set(ev.stage, { done: ev.done, total: ev.total ?? null, detail: ev.detail });
+      if (ev.done != null) progressOf.set(ev.stage, counter(ev));
       else logOf.set(ev.stage, [...(logOf.get(ev.stage) ?? []), { seq, at, detail: ev.detail }]);
       keepCalls(ev.stage, calls);
     } else {
@@ -323,6 +338,42 @@ export function icon(step: Step): IconName {
 }
 
 export const progressText = (p: NonNullable<Step["progress"]>) => (p.total ? `${p.done}/${p.total}` : String(p.done));
+
+// A step's progress or an event: the first holds `at` as null, the schema leaves it out.
+export type Counter = Pick<Progress, "done" | "total" | "updated_at" | "kind" | "parent"> & { at?: number | null };
+
+// A count through a stage, with a total to measure it against. A recall's and a result's done and total count
+// other things, and an attempt under a repair counts the repair's searches, not the stage's.
+export const isCounter = (ev: Counter) => ev.done != null && !!ev.total && (ev.kind == null || ev.kind === "section" || (ev.kind === "attempt" && ev.parent == null));
+
+// Seconds left at the pace so far: from the series' first event to its latest update, less the time since that
+// update. None while too few are done to know the pace, for a single event, and once the count is finished.
+export function remaining(ev: Counter, now: number): number | null {
+  const [done, total] = [ev.done!, ev.total!];
+  if (ev.updated_at == null || ev.at == null || done < 3 || done >= total) return null;
+  const left = ((ev.updated_at - ev.at) / done) * (total - done) - (now - ev.updated_at);
+  return left > 0 ? left : null;
+}
+
+// Stages finished of those the run goes through, whole stages only: a stage's counters restart, as verify's do, and
+// counting them in would let the share go back. Null for a run with no plan.
+export function overall(run: RunDetail): { done: number; total: number } | null {
+  if (run.planned_stages.length === 0) return null;
+  const live = run.ended_at === null;
+  const names = [...run.planned_stages, ...run.stages.map((s) => s.name).filter((n) => !run.planned_stages.includes(n))].filter((n) => !skipped(run, n));
+  const done = names.filter((n) => run.stages.some((s) => s.name === n) && !(live && n === run.stage)).length;
+  return { done, total: names.length };
+}
+
+// The current stage's latest count, as the Steps view takes it.
+export const stageCounter = (run: RunDetail): Progress | null => [...run.events].reverse().find((ev) => ev.stage === run.stage && isCounter(ev)) ?? null;
+
+// Floored, so 100% means finished. The estimate only while the run is live.
+export function meter(ev: Counter, now: number, live: boolean): { share: number; text: string } {
+  const share = Math.min(ev.done! / ev.total!, 1);
+  const left = live ? remaining(ev, now) : null;
+  return { share, text: `${Math.floor(share * 100)}% · ${ev.done}/${ev.total}${left === null ? "" : ` · ~${duration(Math.round(left))}`}` };
+}
 
 export interface Link {
   from: string;

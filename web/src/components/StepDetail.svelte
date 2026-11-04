@@ -9,7 +9,8 @@
   import { Panel } from "@xyflow/svelte";
   import type { ResearchClaim } from "../lib/api";
   import { duration } from "../lib/format";
-  import { icon, progressText, type Step } from "../lib/steps";
+  import { icon, isCounter, progressText, type Step } from "../lib/steps";
+  import Bar from "./Bar.svelte";
   import Icon from "./Icon.svelte";
 
   let {
@@ -64,8 +65,8 @@
           {/if}
           {#if chosen.progress}
             <p class="meta" data-testid="step-progress">
-              {#if chosen.progress.total}<progress max={chosen.progress.total} value={Math.min(chosen.progress.done, chosen.progress.total)}></progress>{/if}
-              {progressText(chosen.progress)} · {chosen.progress.detail}
+              {#if isCounter(chosen.progress)}<Bar event={chosen.progress} live={chosen.state === "current"} />{:else}{progressText(chosen.progress)}{/if}
+              {chosen.progress.detail}
             </p>
           {/if}
           {#if chosen.kind === "question"}

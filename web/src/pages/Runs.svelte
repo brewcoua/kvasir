@@ -29,7 +29,7 @@
             <tr>
               <td class="topic-cell">
                 <a href={href({ page: "run", id: run.id, tab: null })} class="topic">{run.topic}</a>
-                {#if run.state === "running"}<Bar event={run.latest} />{/if}
+                {#if run.state === "running"}<Bar event={run.latest} bare />{/if}
               </td>
               <td><span class="state {run.state}">{run.state}</span>{#if run.state === "running" && run.stage}<span class="meta">{" · "}{run.stage}</span>{/if}</td>
               <td>{run.kind}</td>

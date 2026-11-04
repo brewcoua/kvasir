@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isResearch, type Progress, type RunDetail } from "./api";
 import { layout } from "./layout";
-import { links, steps, type Step } from "./steps";
+import { isCounter, links, meter, overall, remaining, stageCounter, steps, type Step } from "./steps";
 
 const graph: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "graph.json"), "utf8"));
 
@@ -67,7 +67,7 @@ describe("steps", () => {
   it("keeps verify progress counters on the stage, not as cards", () => {
     expect(stage("verify").children.filter((s) => s.kind === "event")).toHaveLength(0);
     const last = graph.events.filter((e) => e.stage === "verify" && !e.kind && e.done != null).at(-1)!;
-    expect(stage("verify").progress).toEqual({ done: last.done, total: last.total ?? null, detail: last.detail });
+    expect(stage("verify").progress).toMatchObject({ done: last.done, total: last.total ?? null, detail: last.detail });
   });
 
   it("keeps a plain event in the stage's log, with no card", () => {
@@ -183,7 +183,7 @@ describe("steps, synthetic", () => {
     const [research] = steps(run);
     expect(walk(steps(run)).map((s) => s.kind)).toEqual(["stage"]);
     expect(research.log.map((l) => l.seq)).toEqual([0, 1]);
-    expect(research.progress).toEqual({ done: 1, total: 4, detail: "event 2" });
+    expect(research.progress).toMatchObject({ done: 1, total: 4, detail: "event 2" });
   });
 
   it("puts a page event under its attempt, and a result on the attempt", () => {
@@ -220,11 +220,38 @@ describe("steps, synthetic", () => {
     run.questions = [];
     const [research] = steps(run);
     expect(research.children).toEqual([]);
-    expect(research.progress).toEqual({ done: 2, total: 3, detail: "event 2" });
+    expect(research.progress).toEqual({ done: 2, total: 3, detail: "event 2", at: 2, updated_at: null, kind: null });
     expect(research.log).toEqual([
       { seq: 1, at: 1, detail: "first" },
       { seq: 3, at: 3, detail: "second" },
     ]);
+  });
+
+  it("drops a page or part whose attempt was evicted", () => {
+    const run = synthetic([ev(5, "research", { kind: "page", parent: 1, page: 1 }), ev(6, "research", { kind: "part", parent: 1, page: 2 })], 7);
+    run.questions = [];
+    expect(walk(steps(run)).filter((s) => s.kind !== "stage")).toEqual([]);
+  });
+
+  it("feeds the stage's bar from a top-level attempt's search budget, but not from a recall, result or repair attempt", () => {
+    const run = synthetic(
+      [
+        ev(0, "research", { kind: "attempt", done: 1, total: 4 }),
+        ev(1, "research", { kind: "result", parent: 0, done: 3, total: 3 }),
+        ev(2, "research", { kind: "recall", done: 9, total: 2 }),
+        ev(3, "research", { kind: "repair" }),
+        ev(4, "research", { kind: "attempt", parent: 3, question: 1, done: 7, total: 8 }),
+      ],
+      5,
+    );
+    run.questions = [];
+    expect(steps(run)[0].progress).toMatchObject({ done: 1, total: 4, kind: "attempt" });
+  });
+
+  it("feeds the stage's bar from a section", () => {
+    const run = synthetic([ev(0, "research", { kind: "section", done: 2, total: 5 })], 1);
+    run.questions = [];
+    expect(steps(run)[0].progress).toMatchObject({ done: 2, total: 5, kind: "section" });
   });
 
   it("keeps a real-sized run to a handful of cards", () => {
@@ -267,6 +294,62 @@ describe("stages a run never ran", () => {
     const report = fixture("report");
     const live = { ...report, state: "running", ended_at: null, stage: "research", stages: report.stages.filter((s) => s.name !== "write" && s.name !== "verify") } as RunDetail;
     expect(states(live)).toMatchObject({ background: "skipped", research: "current", assess: "pending", write: "pending" });
+  });
+});
+
+describe("progress", () => {
+  const fixture = (name: string): RunDetail => JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", `${name}.json`), "utf8"));
+  const counter = (done: number, total: number | null, extra: Partial<Progress> = {}) => ({ done, total, at: 100, updated_at: 110, kind: null, ...extra });
+
+  it("counts plain counters, sections and top-level attempts, and no recall, result or repair attempt", () => {
+    expect(isCounter(counter(1, 4))).toBe(true);
+    expect(isCounter(counter(1, 4, { kind: "section" }))).toBe(true);
+    expect(isCounter(counter(1, 4, { kind: "attempt" }))).toBe(true);
+    expect(isCounter(counter(1, 4, { kind: "attempt", parent: 3 }))).toBe(false);
+    expect(isCounter(counter(3, 9, { kind: "result" }))).toBe(false);
+    expect(isCounter(counter(3, 9, { kind: "recall" }))).toBe(false);
+    expect(isCounter(counter(1, null))).toBe(false);
+  });
+
+  it("estimates the time left from the pace so far, less the time since the last update", () => {
+    // 10s for 5 of 20: 2s each, 30s left, 4 of them gone since.
+    expect(remaining(counter(5, 20), 114)).toBe(26);
+    expect(remaining(counter(2, 20), 114)).toBeNull();
+    expect(remaining(counter(20, 20), 114)).toBeNull();
+    expect(remaining(counter(25, 20), 114)).toBeNull();
+    expect(remaining(counter(5, 20, { updated_at: null }), 114)).toBeNull();
+    expect(remaining(counter(5, 20), 200)).toBeNull();
+  });
+
+  it("floors the share, caps it, and estimates only while live", () => {
+    expect(meter(counter(199, 200), 110, false)).toEqual({ share: 0.995, text: "99% · 199/200" });
+    expect(meter(counter(25, 20), 110, true)).toEqual({ share: 1, text: "100% · 25/20" });
+    expect(meter(counter(5, 20), 110, true).text).toBe("25% · 5/20 · ~30.0s");
+  });
+
+  it("counts whole stages, leaving out the skipped and the current one", () => {
+    const report = fixture("report");
+    expect(overall(report)).toEqual({ done: 4, total: 4 });
+    const live = { ...report, state: "running", ended_at: null, stage: "research", stages: report.stages.filter((s) => s.name !== "write" && s.name !== "verify") } as RunDetail;
+    // Background is skipped once research starts; assess is not known to be skipped yet.
+    expect(overall(live)).toEqual({ done: 1, total: 5 });
+    expect(overall({ ...report, planned_stages: [] })).toBeNull();
+  });
+
+  it("never goes back as a live run moves through its stages", () => {
+    const graph = fixture("graph");
+    const shares = graph.stages.map((_, i) => {
+      const live = { ...graph, state: "running", ended_at: null, stage: graph.stages[i].name, stages: graph.stages.slice(0, i + 1) } as RunDetail;
+      const { done, total } = overall(live)!;
+      return done / total;
+    });
+    expect(shares).toEqual([...shares].sort((a, b) => a - b));
+  });
+
+  it("takes the current stage's latest counter", () => {
+    const graph = { ...fixture("graph"), stage: "verify" };
+    expect(stageCounter(graph)?.detail).toMatch(/of 47 cited sentences/);
+    expect(stageCounter({ ...graph, stage: "brief" })).toBeNull();
   });
 });
 

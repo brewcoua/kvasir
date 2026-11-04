@@ -2,8 +2,8 @@ import type { Edge, Node, Rect } from "@xyflow/svelte";
 import type { ModelUsage, Progress } from "./api";
 import type { Link, Step } from "./steps";
 
-export const CARD = { width: 220, height: 100 };
-export const STAGE = { width: 240, height: 116 };
+export const CARD = { width: 220, height: 80 };
+export const STAGE = { width: 240, height: 92 };
 // The header band of a card or container; handles sit at its centre (see .svelte-flow__handle in app.css).
 export const HEADER = 36;
 export const PAD = 12;

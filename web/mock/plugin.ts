@@ -185,7 +185,10 @@ function follow(entry: Entry, request: IncomingMessage, response: ServerResponse
     if (next.events.length < last.events.length) {
       frame("snapshot", next);
     } else {
-      for (const event of next.events.slice(last.events.length)) frame("progress", event);
+      // A series update arrives again under its first `seq`, with a new `updated_at`.
+      const known = new Map(last.events.map((event) => [event.seq, event.updated_at]));
+      const fresh = next.events.filter((event) => !known.has(event.seq) || known.get(event.seq) !== event.updated_at);
+      for (const event of fresh.sort((a, b) => (a.updated_at ?? a.at ?? 0) - (b.updated_at ?? b.at ?? 0))) frame("progress", event);
       frame("status", status(next));
       if (next.ended_at !== null) {
         frame("snapshot", next);
