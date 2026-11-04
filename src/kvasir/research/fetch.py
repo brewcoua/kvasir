@@ -418,6 +418,7 @@ def _download(url: str, validators: dict[str, str]) -> tuple[Page, str | None, s
     # The host asked is the one in the URL; a redirect to another is not counted against that one.
     host = urlsplit(url).hostname or ""
     retried = False
+    blocked: UnusablePage | None = None
     while True:
         try:
             with (
@@ -441,8 +442,10 @@ def _download(url: str, validators: dict[str, str]) -> tuple[Page, str | None, s
                 if response.status_code == 304 and validators:
                     return None
                 if response.status_code in _BLOCKED and runtime.fetch_render() != "off":
+                    # Rendered once this slot is released: the render takes a fetch permit of its
+                    # own, and holding this one meanwhile can exhaust them.
                     blocked = UnusablePage(f"{url}: {response.status_code}", "blocked")
-                    return _rendered(url, blocked), None, None
+                    break
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "")
                 # Many servers send a PDF as a generic download, so those are read and sniffed.
@@ -453,6 +456,8 @@ def _download(url: str, validators: dict[str, str]) -> tuple[Page, str | None, s
             break
         except httpx.HTTPError as exc:
             raise FetchError(f"{url}: {exc}") from exc
+    if blocked:
+        return _rendered(url, blocked), None, None
     if "html" in content_type:
         html = body.decode(response.encoding or "utf-8", errors="replace")[:MAX_CHARACTERS]
         try:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import threading
 import tomllib
 from pathlib import Path
 
@@ -282,6 +283,30 @@ def test_a_shell_or_a_blocked_page_is_rendered(monkeypatch, body, status):
     assert asked == ["https://example.org/app"]
     assert page.engine == "render"
     assert page.text
+
+
+def test_a_blocked_page_is_rendered_after_its_fetch_permit_is_released(monkeypatch):
+    # The render takes a permit of its own; taken while the static fetch still held one, two
+    # blocked pages in flight held both of two permits and waited on each other for good.
+    serve(monkeypatch, b"<html></html>", 403)
+    fake_render(monkeypatch)
+    render = browser.render
+
+    def render_in_a_slot(url):
+        with runtime.host_slot("example.org"):
+            return render(url)
+
+    monkeypatch.setattr(browser, "render", render_in_a_slot)
+    monkeypatch.setattr(runtime, "_fetch_slots", threading.BoundedSemaphore(1))
+    fetched = []
+    worker = threading.Thread(
+        target=lambda: fetched.append(fetch.fetch_page("https://example.org/app")), daemon=True
+    )
+
+    worker.start()
+    worker.join(5)
+
+    assert fetched and fetched[0].engine == "render"
 
 
 def test_a_stealth_render_is_named_so(monkeypatch):
