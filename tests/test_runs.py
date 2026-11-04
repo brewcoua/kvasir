@@ -546,7 +546,14 @@ def test_search_results_are_served_from_memory_and_after_a_restart(sqlite, monke
         assert search["has_content"] is True
         live = client.get(f"/v1/runs/{run_id}/searches/{search['id']}").json()
         assert live == {
-            "results": [{"title": "A", "url": "https://example.invalid/a", "snippet": "about a"}]
+            "results": [
+                {
+                    "title": "A",
+                    "url": "https://example.invalid/a",
+                    "snippet": "about a",
+                    "source": None,
+                }
+            ]
         }
 
     with sqlite() as client:

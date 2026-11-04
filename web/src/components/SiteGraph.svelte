@@ -1,8 +1,11 @@
 <script module lang="ts">
+  import type { SourceInfo } from "../lib/api";
+
   export interface Site {
     domain: string;
     pages: number;
     links: number;
+    source?: SourceInfo | null;
   }
   export interface SiteEdge {
     source: string;
@@ -22,6 +25,7 @@
   import { zoom, type ZoomBehavior } from "d3-zoom";
   import { onDestroy, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
+  import SourceBadge from "./SourceBadge.svelte";
 
   let {
     sites,
@@ -44,6 +48,7 @@
     label: string;
     pages: number;
     links: number;
+    source: SourceInfo | null;
     r: number;
     // 0..1, the same value that sets the radius; it also sets the shade.
     t: number;
@@ -84,7 +89,7 @@
     const biggest = Math.max(0, ...sites.map((site) => site[size]));
     const next: Node[] = sites.map((site) => {
       const t = shade(site[size], biggest);
-      return { id: site.domain, label: short(site.domain), pages: site.pages, links: site.links, r: radiusOf(t), t };
+      return { id: site.domain, label: short(site.domain), pages: site.pages, links: site.links, source: site.source ?? null, r: radiusOf(t), t };
     });
     const known = new Set(next.map((node) => node.id));
     const nextLinks: Link[] = edges
@@ -236,7 +241,7 @@
       {/each}
       {#each shown.nodes as node (node.id)}
         <g
-          class="node"
+          class={["node", node.source && `tier-${node.source.tier}`]}
           class:selected={node.id === selected}
           transform={`translate(${node.x},${node.y})`}
           style:--t={node.t}
@@ -259,6 +264,7 @@
             }
           }}
         >
+          {#if node.source}<title>{node.id}: {node.source.kind}, {node.source.tier}</title>{/if}
           <circle r={node.r} />
           {#if iconIds.has(node.id) && !brokenIcons.has(node.id)}
             <image
@@ -283,6 +289,7 @@
       <span>{card.node.pages} pages</span>
       <span>{card.node.links} links</span>
       <span>{card.connected} connected sites</span>
+      <SourceBadge source={card.node.source} />
     </div>
   {/if}
 </div>

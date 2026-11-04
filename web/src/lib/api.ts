@@ -16,6 +16,7 @@ export type SearchContent = Schemas["SearchContent"];
 export type ResearchQuestion = Schemas["ResearchQuestion"];
 export type ResearchClaim = Schemas["ResearchClaim"];
 export type Citation = Schemas["Citation"];
+export type SourceInfo = Schemas["SourceInfo"];
 export type ResearchResult = Schemas["ResearchResult"];
 export type MethodInfo = Schemas["MethodInfo"];
 export type Site = Schemas["Site"];
@@ -45,11 +46,14 @@ export async function json<T>(path: string): Promise<T> {
 }
 
 // Like `json`, with the reason the service gives for a refusal, and for requests that change something.
-export async function request<T>(method: "GET" | "POST" | "DELETE", path: string): Promise<T> {
-  const response = await fetch(path, { method });
+export async function request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+  const response = await fetch(
+    path,
+    body === undefined ? { method } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+  );
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message ?? `${path}: ${response.status}`);
+    const failure = await response.json().catch(() => ({}));
+    throw new Error(failure.message ?? `${path}: ${response.status}`);
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

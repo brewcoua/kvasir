@@ -100,6 +100,22 @@ describe("SiteGraph", () => {
     expect(container.querySelector(".site-card")).not.toBeNull();
   });
 
+  it("outlines a site by its trust tier, and says its kind on hover", async () => {
+    const source = (kind: string, tier: "high" | "low" | "avoid" | "normal") => ({ kind, tags: [], tier, label: "", qid: "", origin: "rule" });
+    const sourced = [
+      { ...sites[0], source: source("government", "high") },
+      { ...sites[1], source: source("unknown", "avoid") },
+      { ...sites[2], source: null },
+    ];
+    const { container } = render(SiteGraph, { ...props, sites: sourced });
+    const nodes = [...container.querySelectorAll(".node")];
+    expect(nodes.map((node) => [...node.classList].filter((name) => name.startsWith("tier-")))).toEqual([["tier-high"], ["tier-avoid"], []]);
+    expect(nodes[1].querySelector("title")!.textContent).toBe("b.org: unknown, avoid");
+    expect(nodes[2].querySelector("title")).toBeNull();
+    await fireEvent.pointerEnter(nodes[1]);
+    expect(container.querySelector(".site-card .source")!.textContent).toBe("unknown · avoid");
+  });
+
   it("shades the biggest site apart from the smallest", () => {
     const { container } = render(SiteGraph, props);
     const shade = [...container.querySelectorAll<SVGGElement>(".node")].map((node) => node.style.getPropertyValue("--t"));

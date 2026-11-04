@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Phases 1 to 3 built 2026-11-04.
+Status: written 2026-11-04. Phases 1 to 4 built 2026-11-04; Co-STORM citations (`conversation.py`) carry no source.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
@@ -280,12 +280,13 @@ No classification needed. It fixes the run above on its own.
 - `GET /v1/sources/{host}` and `DELETE /v1/sources` (clear the cache, not the marks), as
   `api/favicons.py`. `PUT /v1/sources/{host}/mark` with `allow`, `deny` or a kind, and
   `DELETE /v1/sources/{host}/mark`. A host set in the config answers 409. With `enabled` false
-  the routes are not registered, as favicons are not without providers.
+  the routes answer 404, as favicons do without providers; they stay registered, so the OpenAPI
+  schema, and `lib/schema.d.ts` from it, always carry them.
 - Web: regenerate `lib/schema.d.ts`; a `SourceBadge.svelte` beside `Favicon` in `Cite.svelte`,
   `Result.svelte`, `Searches.svelte`, `pages/Knowledge.svelte` and `SiteGraph.svelte`; the badge
   links to the Wikidata item when there is a `qid`. On `pages/Knowledge.svelte`, each site gets a
   menu to mark it `allow`, `deny` or a kind, or clear the mark; a config entry shows as locked.
-  With the routes absent, no badge and no menu. Update `web/mock/plugin.ts` and the fixtures.
+  With sources off, `source` is null, so no badge and no menu. Update `web/mock/plugin.ts` and the fixtures.
 - Tests: `tests/test_api_pages.py`, a new `tests/test_api_sources.py`, a `SourceBadge.test.ts`.
 - Docs: `README.md` API list and UI views; `docs/architecture.md` routes.
 

@@ -208,8 +208,13 @@ header nav a[aria-current="page"] {
 .option[data-highlighted] {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.option[data-selected] {
+.option[data-selected],
+.menu .option[data-state="checked"] {
   color: var(--accent);
+}
+.option[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
 }
 .panel {
   background: var(--panel);
@@ -624,6 +629,36 @@ img.favicon {
   height: 16px;
   margin-right: 0.35em;
   vertical-align: -0.2em;
+}
+/* A site's kind and trust tier. Plain when ordinary, tinted when notable, struck through when never read. */
+.source {
+  display: inline-block;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-decoration: none;
+  vertical-align: 0.05em;
+}
+a.source:hover {
+  border-color: var(--dim);
+}
+.source.tier-high {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.source.tier-low {
+  color: var(--busy);
+  border-color: color-mix(in srgb, var(--busy) 55%, transparent);
+  background: color-mix(in srgb, var(--busy) 10%, transparent);
+}
+.source.tier-avoid {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  text-decoration: line-through;
 }
 .popover .quote {
   margin-top: 0.35rem;
@@ -1378,6 +1413,18 @@ table.runs a.topic:hover {
 .site-graph .node .ring {
   fill: none;
   pointer-events: none;
+}
+/* The trust tier is the outline: red for a site that is never read, amber for a poor one, green for a good one. */
+.site-graph .node.tier-avoid circle {
+  stroke: var(--bad);
+  stroke-width: 3;
+}
+.site-graph .node.tier-low circle {
+  stroke: var(--busy);
+  stroke-width: 3;
+}
+.site-graph .node.tier-high circle {
+  stroke: var(--ok);
 }
 .site-graph .node:hover circle {
   stroke: var(--text);

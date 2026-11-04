@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from kvasir.schemas.results import SourceInfo
+
 
 class Site(BaseModel):
     """One domain with pages cached."""
@@ -14,6 +16,8 @@ class Site(BaseModel):
     # Unix seconds of the latest fetch among its pages.
     fetched_at: float
     engines: list[str]
+    # Null when `[sources] enabled` is false.
+    source: SourceInfo | None = None
 
 
 class PageSummary(BaseModel):
@@ -104,6 +108,7 @@ class SiteNode(BaseModel):
     pages: int
     # Links stored on its pages, wherever they lead.
     links: int
+    source: SourceInfo | None = None
 
 
 class SiteEdge(BaseModel):

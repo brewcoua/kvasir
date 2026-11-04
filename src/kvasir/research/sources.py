@@ -22,17 +22,22 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypeVar
+from urllib.parse import urlparse
 
 import httpx
+from pydantic import BaseModel
 from tld import get_fld
 
 from kvasir.config import SourceSettings
 from kvasir.research import fetch
 from kvasir.research.favicons import normalize_host
 from kvasir.research.pages import BUSY_TIMEOUT_SECONDS
+from kvasir.schemas.results import SourceInfo, Tier
 
 logger = logging.getLogger(__name__)
+
+R = TypeVar("R", bound=BaseModel)
 
 # Past this a host still unresolved is `unknown` for the pick, and known by the next.
 DEADLINE_SECONDS = 5.0
@@ -116,11 +121,11 @@ class Source:
     origin: str = ""
 
     @property
-    def tier(self) -> str:
+    def tier(self) -> Tier:
         return tier(self.kind, self.tags)
 
 
-def tier(kind: str, tags: Iterable[str] = ()) -> str:
+def tier(kind: str, tags: Iterable[str] = ()) -> Tier:
     """`avoid`, `low`, `high`, `normal` or `unknown`, by the first rule that fits."""
     tags = frozenset(tags)
     if tags & _AVOID_TAGS:
@@ -203,6 +208,11 @@ class SourceStore:
                 (host, *fields, time.time()),
             )
 
+    def clear(self) -> None:
+        """Forgets every cached answer, and keeps the marks."""
+        with self._connect() as db:
+            db.execute("DELETE FROM sources")
+
     def mark(self, host: str, value: str) -> None:
         with self._connect() as db:
             db.execute("INSERT OR REPLACE INTO marks VALUES (?, ?, ?)", (host, value, time.time()))
@@ -248,7 +258,7 @@ class Sources:
         out: dict[str, Source] = {}
         asked: dict[str, str] = {}
         for raw in hosts:
-            key = _normalize(raw)
+            key = normalize(raw)
             if key is None:
                 out[raw] = Source(host=raw, kind="unknown")
             else:
@@ -281,15 +291,28 @@ class Sources:
 
     def mark(self, host: str, value: str) -> None:
         """Sets `allow`, `deny` or a kind on `host`, until `unmark`."""
-        key = _normalize(host)
+        key = normalize(host)
         if key is None or value not in MARKS:
             raise ValueError(f"cannot mark {host!r} as {value!r}")
         self._store.mark(key, value)
 
     def unmark(self, host: str) -> None:
-        key = _normalize(host)
+        key = normalize(host)
         if key is not None:
             self._store.unmark(key)
+
+    def locked(self, host: str) -> bool:
+        """Whether the config's `allow` or `deny` decides `host`, so a mark cannot."""
+        key = normalize(host)
+        return key is not None and any(n in self._allow or n in self._deny for n in _chain(key))
+
+    def marked(self, host: str) -> bool:
+        key = normalize(host)
+        return key is not None and key in self._store.marks([key])
+
+    def flush(self) -> None:
+        """Forgets the cached Wikidata answers; marks and the config stay."""
+        self._store.clear()
 
     def refresh_lists(self) -> None:
         """Downloads each list that is missing or older than `ttl_days`, then rebuilds the index.
@@ -500,6 +523,53 @@ class Sources:
         self._backoff_until = time.monotonic() + seconds
 
 
+def info(source: Source) -> SourceInfo:
+    return SourceInfo(
+        kind=source.kind,
+        tags=sorted(source.tags),
+        tier=source.tier,
+        label=source.label,
+        qid=source.qid,
+        origin=source.origin,
+    )
+
+
+def describe(
+    sources: Sources | None, hosts: Iterable[str], deadline: float = DEADLINE_SECONDS
+) -> dict[str, SourceInfo]:
+    """Each of `hosts` as a SourceInfo, or nothing when `sources` is None (the feature is off)."""
+    if sources is None:
+        return {}
+    return {host: info(source) for host, source in sources.classify(hosts, deadline).items()}
+
+
+def describe_urls(sources: Sources | None, urls: Iterable[str]) -> dict[str, SourceInfo]:
+    """Each of `urls` as the SourceInfo of its site, from what is known at once: nothing waits for
+    Wikidata, and a lookup the cache lacks finishes in the background. Empty when `sources` is
+    None."""
+    urls = list(urls)
+    hosts = {url: urlparse(url).hostname or "" for url in urls}
+    found = describe(sources, set(hosts.values()), deadline=0)
+    return {url: found[host] for url, host in hosts.items() if host in found}
+
+
+def with_sources(sources: Sources | None, result: R) -> R:
+    """`result` with its citations' `source` filled as they are now, so a mark applies to a run
+    already stored. Citations are stored without one."""
+    citations = getattr(result, "citations", None)
+    if sources is None or not citations:
+        return result
+    found = describe_urls(sources, (citation.url for citation in citations))
+    return result.model_copy(
+        update={
+            "citations": [
+                citation.model_copy(update={"source": found.get(citation.url)})
+                for citation in citations
+            ]
+        }
+    )
+
+
 def parse_list(text: str) -> set[str]:
     """The hosts in a hosts file, a uBlacklist (`*://*.example.com/*`) or a CSV whose first column
     is the host. Comments, regexes and rules for part of a site are skipped."""
@@ -514,19 +584,19 @@ def parse_list(text: str) -> set[str]:
         name, slash, path = token.partition("/")
         if slash and path not in ("", "*"):
             continue
-        host = _normalize(name)
+        host = normalize(name)
         if host:
             hosts.add(host)
     return hosts
 
 
-def _normalize(raw: str) -> str | None:
+def normalize(raw: str) -> str | None:
     """`normalize_host` of `raw`, which may end in the dot of a fully qualified name."""
     return normalize_host(raw.strip().removesuffix("."))
 
 
 def _hosts(names: Iterable[str]) -> frozenset[str]:
-    keys = {name: _normalize(name) for name in names}
+    keys = {name: normalize(name) for name in names}
     for name in [name for name, key in keys.items() if key is None]:
         logger.warning("source host %r is not a DNS name, ignored", name)
     return frozenset(key for key in keys.values() if key)

@@ -12,6 +12,7 @@ from kvasir.research.corpus import RECALL_MIN, RECALL_PIECES
 from kvasir.research.corroborate import domain
 from kvasir.research.fetch import FetchError, normalize
 from kvasir.research.pages import PageStore, page_id
+from kvasir.research.sources import describe
 from kvasir.runners import build_research_tools
 from kvasir.runs.registry import RunRegistry
 from kvasir.schemas.pages import (
@@ -83,7 +84,7 @@ def _detail(http: Request, store: PageStore, key: str) -> PageDetail:
 
 
 @router.get("/v1/sites")
-def list_sites() -> list[Site]:
+def list_sites(http: Request) -> list[Site]:
     """Each domain with pages cached, the one fetched from last first."""
     sites: dict[str, Site] = {}
     for row in _store().rows():
@@ -95,11 +96,14 @@ def list_sites() -> list[Site]:
         site.pieces += row.pieces
         if row.engine not in site.engines:
             site.engines.append(row.engine)
+    infos = describe(http.app.state.sources, sites, deadline=0)
+    for name, site in sites.items():
+        site.source = infos.get(name)
     return list(sites.values())
 
 
 @router.get("/v1/sites/graph")
-def site_graph() -> SiteGraph:
+def site_graph(http: Request) -> SiteGraph:
     """The cached sites and, between each two, how many stored links lead from one to the other."""
     store = _store()
     nodes: dict[str, SiteNode] = {}
@@ -112,6 +116,9 @@ def site_graph() -> SiteGraph:
         nodes[source].links += 1
         if destination != source and destination in nodes:
             counts[source, destination] = counts.get((source, destination), 0) + 1
+    infos = describe(http.app.state.sources, nodes, deadline=0)
+    for name, node in nodes.items():
+        node.source = infos.get(name)
     return SiteGraph(
         sites=list(nodes.values()),
         edges=[SiteEdge(source=s, target=t, count=n) for (s, t), n in counts.items()],

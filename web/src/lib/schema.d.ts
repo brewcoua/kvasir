@@ -332,6 +332,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sources/{host}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source
+         * @description The kind, tags and trust tier of a site, asking Wikidata when nothing else decides it.
+         */
+        get: operations["source_v1_sources__host__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Flush
+         * @description Forgets the cached Wikidata answers. Marks and the config stay.
+         */
+        delete: operations["flush_v1_sources_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sources/{host}/mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark
+         * @description Trusts, blocks or classifies a site, until cleared. A host the config sets answers 409.
+         */
+        put: operations["mark_v1_sources__host__mark_put"];
+        post?: never;
+        /** Unmark */
+        delete: operations["unmark_v1_sources__host__mark_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/clarify": {
         parameters: {
             query?: never;
@@ -570,6 +631,7 @@ export interface components {
             title: string;
             /** Snippet */
             snippet: string;
+            source?: components["schemas"]["SourceInfo"] | null;
         };
         /**
          * Clarification
@@ -819,6 +881,21 @@ export interface components {
             response: string | null;
             /** Reasoning */
             reasoning?: string | null;
+        };
+        /**
+         * LowTrustSentence
+         * @description A sentence whose cited claims all come from sites of low trust, left in the report.
+         */
+        LowTrustSentence: {
+            /** Section */
+            section: string;
+            /** Sentence */
+            sentence: string;
+        };
+        /** Mark */
+        Mark: {
+            /** Value */
+            value: string;
         };
         /**
          * MethodInfo
@@ -1120,6 +1197,11 @@ export interface components {
              */
             unverified: components["schemas"]["UnverifiedSentence"][];
             /**
+             * Low Trust
+             * @default []
+             */
+            low_trust: components["schemas"]["LowTrustSentence"][];
+            /**
              * Output
              * @default report
              * @enum {string}
@@ -1341,6 +1423,7 @@ export interface components {
             url: string;
             /** Snippet */
             snippet: string;
+            source?: components["schemas"]["SourceInfo"] | null;
         };
         /**
          * SessionInfo
@@ -1387,6 +1470,7 @@ export interface components {
             fetched_at: number;
             /** Engines */
             engines: string[];
+            source?: components["schemas"]["SourceInfo"] | null;
         };
         /**
          * SiteEdge
@@ -1421,6 +1505,28 @@ export interface components {
             pages: number;
             /** Links */
             links: number;
+            source?: components["schemas"]["SourceInfo"] | null;
+        };
+        /**
+         * SourceInfo
+         * @description What is known of a site: its kind, tags and trust tier. See `kvasir.research.sources`.
+         */
+        SourceInfo: {
+            /** Kind */
+            kind: string;
+            /** Tags */
+            tags: string[];
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "high" | "normal" | "unknown" | "low" | "avoid";
+            /** Label */
+            label: string;
+            /** Qid */
+            qid: string;
+            /** Origin */
+            origin: string;
         };
         /**
          * StageUsage
@@ -2076,6 +2182,119 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    source_v1_sources__host__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    flush_v1_sources_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_v1_sources__host__mark_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Mark"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_v1_sources__host__mark_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

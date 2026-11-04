@@ -290,6 +290,15 @@ The Knowledge page of the dashboard, `#/knowledge`, shows what it holds, through
 `DELETE /v1/sites/{domain}` and `POST /v1/pages/{id}/refetch` change it. Like every route these
 have no authentication, so anyone who can reach the service can empty the cache.
 
+With `KVASIR_SOURCES_ENABLED=true`, `api/sources.py` adds `GET /v1/sources/{host}`,
+`PUT` and `DELETE /v1/sources/{host}/mark`, and `DELETE /v1/sources`, which clears the cache and
+keeps the marks. The routes answer 404 when it is off. They use the `Sources` instance runs use
+(`runners.build_sources`), so a mark reaches a run in flight. A host set in `ALLOW` or `DENY` answers
+409 and shows `origin: "config"`. `Site`, `SiteNode`, `Citation` and a search result carry a
+`source`, null when off. Citations are stored without one: the run routes and the `done` event fill
+it when they answer, so a mark applies to a run already stored. Every one of these reads what is
+known at once and never waits for Wikidata; a lookup the cache lacks finishes in the background.
+
 Expiry, of sessions and of stored runs, happens once at startup and, for runs, after each run ends.
 There is no scheduler and no background task.
 

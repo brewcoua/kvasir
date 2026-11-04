@@ -324,3 +324,26 @@ def test_a_refetch_does_not_leave_the_cache_off_for_the_next_request(
     requests = len(web.requests)
     real(A)
     assert len(web.requests) == requests
+
+
+def test_sites_carry_no_source_when_sources_are_off(client, store):
+    assert all(site["source"] is None for site in client.get("/v1/sites").json())
+    assert all(site["source"] is None for site in client.get("/v1/sites/graph").json()["sites"])
+
+
+def test_sites_and_graph_nodes_carry_their_source_when_sources_are_on(
+    client, store, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("KVASIR_SOURCES_ENABLED", "true")
+    monkeypatch.setenv("KVASIR_SOURCES_WIKIDATA", "false")
+    monkeypatch.setenv("KVASIR_SOURCES_LISTS", "")
+    monkeypatch.setenv("KVASIR_SOURCES_DENY", "other.net")
+    with TestClient(app) as sourced:
+        fetch.cache().put(page("https://stats.gov/a", "Stats", NOW), None, None)
+        listed = {site["domain"]: site["source"] for site in sourced.get("/v1/sites").json()}
+        nodes = {s["domain"]: s["source"] for s in sourced.get("/v1/sites/graph").json()["sites"]}
+
+    for found in (listed, nodes):
+        assert (found["stats.gov"]["kind"], found["stats.gov"]["tier"]) == ("government", "high")
+        assert (found["other.net"]["tier"], found["other.net"]["origin"]) == ("avoid", "config")
+        assert found["example.org"]["tier"] == "unknown"

@@ -493,6 +493,32 @@ test("the knowledge graph draws a favicon on its big sites", async ({ page }) =>
   boxes[0].forEach((value, i) => expect(value).toBeCloseTo(boxes[1][i], 0));
 });
 
+test("a site is marked from the knowledge page, unless the config sets it", async ({ page }) => {
+  await page.goto("/#/knowledge");
+  // The layout keeps settling, which a real click would wait out.
+  await page.getByRole("button", { name: /^cdc\.gov/ }).dispatchEvent("click");
+  const panel = page.locator("section.site-panel");
+  await expect(panel.locator(".source")).toHaveText("gov · high");
+  await panel.getByRole("button", { name: "Mark cdc.gov" }).click();
+  await page.getByRole("menuitemradio", { name: "deny", exact: true }).click();
+  await expect(panel.locator(".source.tier-avoid")).toHaveText("unknown · avoid");
+  await panel.getByRole("button", { name: "Mark cdc.gov" }).click();
+  await page.getByRole("menuitem", { name: "Clear the mark" }).click();
+  await expect(panel.locator(".source")).toHaveText("gov · high");
+
+  await page.getByRole("button", { name: /^explainx\.ai/ }).dispatchEvent("click");
+  await expect(panel.locator(".source.tier-avoid")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Locked" })).toBeDisabled();
+});
+
+test("sources show the kind and tier of their site, linked to Wikidata when known", async ({ page }) => {
+  await page.goto("/#/runs/report/result");
+  await expect(page.locator(".citations .source.tier-avoid")).toHaveCount(1);
+  await expect(page.locator(".citations .source", { hasText: "news" })).toHaveCount(1);
+  await page.goto("/#/runs/graph/result");
+  await expect(page.locator(".citations a.source").first()).toHaveAttribute("href", "https://www.wikidata.org/wiki/Q52");
+});
+
 test("the knowledge page shows what the cache takes", async ({ page }) => {
   await page.goto("/#/knowledge");
   const storage = page.locator("section.panel", { hasText: "Storage" });

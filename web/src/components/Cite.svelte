@@ -16,6 +16,7 @@
       title: citation.title || host(citation.url),
       meta: citation.url,
       icon: citation.url,
+      source: citation.source,
       quotes: citation.snippet ? [{ quote: citation.snippet }] : [],
     }}
   >

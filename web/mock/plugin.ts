@@ -18,6 +18,7 @@ type RunDetail = components["schemas"]["RunDetail"];
 type LmCallContent = components["schemas"]["LmCallContent"];
 type SearchContent = components["schemas"]["SearchContent"];
 type PageDetail = components["schemas"]["PageDetail"];
+type SourceInfo = components["schemas"]["SourceInfo"];
 
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 const SPEED = Number(process.env.MOCK_SPEED ?? 20);
@@ -201,7 +202,18 @@ function follow(entry: Entry, request: IncomingMessage, response: ServerResponse
   request.on("close", () => clearInterval(timer));
 }
 
-// The page cache, as `/v1/sites` and `/v1/pages` answer: two pages of one site.
+const cached = (id: string, url: string, title: string): PageDetail => ({
+  id,
+  url,
+  final_url: url,
+  title,
+  engine: "static",
+  fetched_at: 1793760000,
+  text: `# ${title}\n\nBody of ${title}.`,
+  leads: {},
+  runs: [],
+});
+// The page cache, as `/v1/sites` and `/v1/pages` answer: two pages of one site, and one each of four more.
 const PAGES: PageDetail[] = [
   {
     id: "3f2a9c1d0b7e4a56",
@@ -242,11 +254,41 @@ const PAGES: PageDetail[] = [
     leads: {},
     runs: [],
   },
+  cached("a1c3e5f70912b4d6", "https://www.cdc.gov/flu/", "Influenza"),
+  cached("b2d4f6a81023c5e7", "https://www.bbc.com/news", "BBC News"),
+  cached("d4f6b8c03245e7a9", "https://explainx.ai/blog/post", "An explainer"),
 ];
+
+// What `/v1/sources` answers for the hosts above: a government, a news and an avoid that the config
+// sets, so the Knowledge page has one of each and a locked one. Any other host is unknown.
+const source = (kind: string, tier: SourceInfo["tier"], origin: string, more: Partial<SourceInfo> = {}): SourceInfo => ({
+  kind,
+  tags: [],
+  tier,
+  label: "",
+  qid: "",
+  origin,
+  ...more,
+});
+const SOURCES: Record<string, SourceInfo> = {
+  "en.wikipedia.org": source("reference", "normal", "wikidata", { tags: ["community", "official"], label: "Wikipedia", qid: "Q52" }),
+  "cdc.gov": source("government", "high", "rule", { tags: ["official"] }),
+  "bbc.com": source("news", "normal", "wikidata", { tags: ["official"], label: "BBC" }),
+  "explainx.ai": source("unknown", "avoid", "config", { tags: ["deny"] }),
+};
+// The values a mark takes and the tiers they give repeat research/sources.py (MARKS, tier()); keep them in step.
+const MARKS = ["allow", "deny", "intergovernmental", "government", "academic", "standards", "news", "reference", "organization"];
 
 export function mock(): Plugin {
   const runs = load();
   const pages = [...PAGES];
+  const marks = new Map<string, string>();
+  const describe = (host: string): SourceInfo => {
+    const mark = marks.get(host);
+    if (mark === "allow" || mark === "deny") return source("unknown", mark === "deny" ? "avoid" : "high", "mark", { tags: [mark] });
+    if (mark) return source(mark, ["intergovernmental", "government", "academic", "standards"].includes(mark) ? "high" : "normal", "mark");
+    return SOURCES[host] ?? source("unknown", "unknown", "");
+  };
   const site = (url: string) => new URL(url).hostname.replace(/^www\./, "");
   const leads = (page: PageDetail) => Object.values(page.leads).flat().map((lead) => lead.url);
   const listed = (page: PageDetail) => ({
@@ -286,6 +328,28 @@ export function mock(): Plugin {
           return response.end();
         }
 
+        const sourced = path.match(/^\/v1\/sources\/([^/]+)(\/mark)?$/);
+        if (sourced) {
+          const host = decodeURIComponent(sourced[1]);
+          if (request.method === "GET" && !sourced[2]) return send(response, 200, describe(host));
+          if (sourced[2] && (request.method === "PUT" || request.method === "DELETE")) {
+            if (SOURCES[host]?.origin === "config") return send(response, 409, { message: `${host} is set in the config, so a mark cannot change it` });
+            if (request.method === "DELETE") {
+              marks.delete(host);
+              response.statusCode = 204;
+              return response.end();
+            }
+            const value = String((await read(request)).value);
+            if (!MARKS.includes(value)) return send(response, 422, { message: `cannot mark ${host} as ${value}` });
+            marks.set(host, value);
+            return send(response, 200, describe(host));
+          }
+        }
+        if (request.method === "DELETE" && path === "/v1/sources") {
+          response.statusCode = 204;
+          return response.end();
+        }
+
         if (request.method === "GET" && path === "/v1/sites") {
           const sites = [...new Set(pages.map((page) => site(page.url)))].map((domain) => {
             const held = pages.filter((page) => site(page.url) === domain);
@@ -295,6 +359,7 @@ export function mock(): Plugin {
               pieces: held.reduce((n, page) => n + listed(page).pieces, 0),
               fetched_at: Math.max(...held.map((page) => page.fetched_at)),
               engines: [...new Set(held.map((page) => page.engine))],
+              source: describe(domain),
             };
           });
           return send(response, 200, sites);
@@ -303,7 +368,7 @@ export function mock(): Plugin {
           const domains = [...new Set(pages.map((page) => site(page.url)))];
           const sites = domains.map((domain) => {
             const held = pages.filter((page) => site(page.url) === domain);
-            return { domain, pages: held.length, links: held.reduce((n, page) => n + leads(page).length, 0) };
+            return { domain, pages: held.length, links: held.reduce((n, page) => n + leads(page).length, 0), source: describe(domain) };
           });
           const counts = new Map<string, number>();
           for (const page of pages)

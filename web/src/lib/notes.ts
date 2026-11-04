@@ -1,13 +1,14 @@
 // What the one popover of the result shows, for a citation badge or a ranking cell.
 import { getContext, setContext } from "svelte";
 import { Tooltip } from "bits-ui";
-import type { Citation } from "./api";
+import type { Citation, SourceInfo } from "./api";
 
 export interface Note {
   title: string;
   meta?: string;
   // A page URL, for the icon beside the title.
   icon?: string;
+  source?: SourceInfo | null;
   // Each quote, with where it was read.
   quotes?: { quote: string; meta?: string }[];
 }

@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from kvasir.schemas.results import ResearchQuestion, RunResult
+from kvasir.schemas.results import ResearchQuestion, RunResult, SourceInfo
 
 
 class Progress(BaseModel):
@@ -151,6 +151,8 @@ class SearchResult(BaseModel):
     title: str
     url: str
     snippet: str
+    # Null when `[sources] enabled` is false.
+    source: SourceInfo | None = None
 
 
 class SearchContent(BaseModel):

@@ -6,6 +6,23 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+Tier = Literal["high", "normal", "unknown", "low", "avoid"]
+
+
+class SourceInfo(BaseModel):
+    """What is known of a site: its kind, tags and trust tier. See `kvasir.research.sources`."""
+
+    kind: str
+    tags: list[str]
+    tier: Tier
+    # Empty when Wikidata gave none.
+    label: str
+    # The Wikidata item, or empty.
+    qid: str
+    # What decided it: config, mark, list, rule or wikidata. Empty when nothing is known. A site
+    # set in the config cannot be marked.
+    origin: str
+
 
 class Citation(BaseModel):
     """One source, numbered as the article's `[n]` markers reference it."""
@@ -14,6 +31,8 @@ class Citation(BaseModel):
     url: str
     title: str
     snippet: str
+    # Null when `[sources] enabled` is false, and in runs stored before it existed.
+    source: SourceInfo | None = None
 
 
 class ArticleResult(BaseModel):

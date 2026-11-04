@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Request, Response
@@ -11,6 +12,7 @@ from kvasir.api.sse import HEADERS, MEDIA_TYPE, frame
 from kvasir.api.streaming import streamed
 from kvasir.config import ConfigError, Settings
 from kvasir.methods import METHODS
+from kvasir.research.sources import Sources, describe_urls, with_sources
 from kvasir.runners import check_model_overrides
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import Run
@@ -58,9 +60,9 @@ async def list_runs(http: Request) -> list[RunSummary]:
 
 
 @router.get("/v1/runs/{run_id}")
-async def run_detail(http: Request, run_id: str) -> RunDetail:
+def run_detail(http: Request, run_id: str) -> RunDetail:
     registry: RunRegistry = http.app.state.runs
-    return registry.detail(run_id)
+    return _sourced(registry.detail(run_id), http.app.state.sources)
 
 
 @router.get("/v1/runs/{run_id}/calls/{call_id}")
@@ -71,10 +73,17 @@ async def call_content(http: Request, run_id: str, call_id: int) -> LmCallConten
 
 
 @router.get("/v1/runs/{run_id}/searches/{search_id}")
-async def search_content(http: Request, run_id: str, search_id: int) -> SearchContent:
+def search_content(http: Request, run_id: str, search_id: int) -> SearchContent:
     """What one search returned. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT."""
     registry: RunRegistry = http.app.state.runs
-    return registry.search_content(run_id, search_id)
+    content = registry.search_content(run_id, search_id)
+    infos = describe_urls(http.app.state.sources, (result.url for result in content.results))
+    return SearchContent(
+        results=[
+            result.model_copy(update={"source": infos.get(result.url)})
+            for result in content.results
+        ]
+    )
 
 
 @router.get("/v1/runs/{run_id}/events")
@@ -88,26 +97,36 @@ async def run_events(http: Request, run_id: str) -> Response:
     registry: RunRegistry = http.app.state.runs
     record = registry.get(run_id)
     # A run only the store holds has ended, so its whole stream is the one snapshot.
-    events = _watch(record) if record is not None else _stored(registry.detail(run_id))
+    sources: Sources | None = http.app.state.sources
+    events = (
+        _watch(record, sources) if record is not None else _stored(registry.detail(run_id), sources)
+    )
     return StreamingResponse(events, media_type=MEDIA_TYPE, headers=HEADERS)
 
 
-async def _stored(detail: RunDetail) -> AsyncIterator[str]:
-    yield frame("snapshot", detail)
+def _sourced(detail: RunDetail, sources: Sources | None) -> RunDetail:
+    """The detail with its result's citations marked by what is known of their sites now."""
+    if detail.result is None:
+        return detail
+    return detail.model_copy(update={"result": with_sources(sources, detail.result)})
 
 
-async def _watch(record: Run) -> AsyncIterator[str]:
+async def _stored(detail: RunDetail, sources: Sources | None) -> AsyncIterator[str]:
+    yield frame("snapshot", await asyncio.to_thread(_sourced, detail, sources))
+
+
+async def _watch(record: Run, sources: Sources | None) -> AsyncIterator[str]:
     # Registered before the snapshot is taken, so a run that finishes in between still delivers its
     # terminal event rather than leaving the client waiting on one that already happened.
     watcher = record.watch(heartbeat=STATUS_INTERVAL_SECONDS)
     try:
-        detail = record.detail()
+        detail = await asyncio.to_thread(_sourced, record.detail(), sources)
         yield frame("snapshot", detail)
         if detail.ended_at is None:
             async for event in watcher:
                 if event is not None:
                     yield frame("progress", event)
                 yield frame("status", record.status())
-            yield frame("snapshot", record.detail())
+            yield frame("snapshot", await asyncio.to_thread(_sourced, record.detail(), sources))
     finally:
         record.unwatch(watcher)

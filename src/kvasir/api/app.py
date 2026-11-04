@@ -18,11 +18,12 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
-from kvasir.api import favicons, methods, pages, runs, sessions, tasks
+from kvasir.api import favicons, methods, pages, runs, sessions, sources, tasks
 from kvasir.config import Settings, apply_environment
 from kvasir.research import fetch
 from kvasir.research.favicons import Favicons, FaviconStore
 from kvasir.research.pages import PageStore
+from kvasir.runners import build_sources
 from kvasir.runs.registry import (
     CallContentNotFound,
     RunNotFound,
@@ -64,6 +65,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.favicons.providers
         else None
     )
+    # The runs' own instance, so a mark takes effect for a run in flight. None when off.
+    app.state.sources = build_sources(settings)
     # A run holds a thread for minutes, so saturation is rejected rather than queued. Acquiring
     # without blocking keeps this usable from the event loop.
     app.state.run_slots = threading.BoundedSemaphore(settings.runs.max_concurrent)
@@ -88,7 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
-for module in (runs, methods, pages, favicons, tasks, sessions):
+for module in (runs, methods, pages, favicons, sources, tasks, sessions):
     app.include_router(module.router)
 
 
@@ -169,6 +172,11 @@ async def _search_content_not_found(request: Request, exc: SearchContentNotFound
 
 @app.exception_handler(pages.PagesError)
 async def _pages_error(request: Request, exc: pages.PagesError) -> JSONResponse:
+    return JSONResponse({"message": str(exc)}, status_code=exc.status_code)
+
+
+@app.exception_handler(sources.SourcesError)
+async def _sources_error(request: Request, exc: sources.SourcesError) -> JSONResponse:
     return JSONResponse({"message": str(exc)}, status_code=exc.status_code)
 
 

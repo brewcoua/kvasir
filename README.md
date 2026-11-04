@@ -426,7 +426,12 @@ own address, so a reload or a shared link keeps it.
   (`#/knowledge/<id>`) to see the text a run reads from it, its links by region, and the stored
   runs that cite it. Fetch again reads it whatever its age. Delete, on a page or a site, removes it
   with its pieces, and cannot be undone. Recall takes a question and lists the cached pieces a run
-  would recall for it, with their similarity, and marks where `RECALL_MIN` cuts.
+  would recall for it, with their similarity, and marks where `RECALL_MIN` cuts. With
+  `KVASIR_SOURCES_ENABLED=true`, a site, a citation and a search result show a badge with the kind
+  and tier (`gov · high`), linked to its Wikidata item when it has one; a site of tier `avoid` or
+  `low` is tinted, and in the site graph a site's outline follows its tier. Mark, on a site, sets
+  `allow`, `deny` or a kind, or clears the mark; a site the config sets shows Locked. With sources
+  off, none of this shows.
 
 Figures update live while the run is in progress. The theme selector in the header offers
 `system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in
@@ -440,14 +445,17 @@ The same data is available as JSON.
 | `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
 | `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 searches, its events (the last 1000 steps, 2000 pages and parts, and 500 log lines; a counter is one event), the questions a `graph` run has asked so far, and its result. |
 | `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
-| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
+| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. With sources on, each result has a `source`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls and the last 50 searches after each `progress` and every 2 seconds in between. |
-| `GET /v1/sites` | Each site in the page cache, with its pages, pieces, last fetch and engines, the one fetched from last first. |
+| `GET /v1/sites` | Each site in the page cache, with its pages, pieces, last fetch and engines, the one fetched from last first. With sources on, each has a `source`, as do the nodes of `GET /v1/sites/graph` and the citations of a result. |
 | `GET /v1/pages?site=` | The cached pages of a site, newest first; without `site`, the latest 200 of all. |
 | `GET /v1/pages/{id}` | One cached page: its text, its links by region, and the stored runs that cite it. |
 | `GET /v1/pages/recall?q=` | The cached pieces recall would take for the question `q`, with their similarity. Marks nothing read. 503 without an embedding model. |
 | `DELETE /v1/pages/{id}`, `DELETE /v1/sites/{domain}` | Remove a page, or every page of a site, with links and pieces. Cannot be undone. |
 | `GET /v1/favicons/{host}` | The icon of a site, fetched on first request and kept in `favicons.db`. 404 when the site has none, the host is not a public DNS name, or favicons are off. |
+| `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule` or `wikidata`) of a site; Wikidata is asked when nothing else decides it. 404 unless `KVASIR_SOURCES_ENABLED`. |
+| `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `KVASIR_SOURCES_ALLOW` or `KVASIR_SOURCES_DENY`. A mark takes effect for runs in flight. 404 unless `KVASIR_SOURCES_ENABLED`. |
+| `DELETE /v1/sources` | Forget the cached Wikidata answers. Marks stay. 404 unless `KVASIR_SOURCES_ENABLED`. |
 | `DELETE /v1/favicons` | Forget every icon, including the sites remembered as having none, and free the disk space. Use it to retry misses after changing `KVASIR_FAVICONS_PROVIDERS`. |
 | `POST /v1/pages/{id}/refetch` | Fetch the page again whatever its age. 502 with the reason when it cannot be read. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |

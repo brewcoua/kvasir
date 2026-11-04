@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.datastructures import State
 
 from kvasir.api.sse import HEADERS, MEDIA_TYPE, frame
+from kvasir.research.sources import Sources, with_sources
 from kvasir.runs.progress import ProgressStream
 from kvasir.runs.run import Run
 from kvasir.schemas.results import RunResult
@@ -44,7 +45,7 @@ def streamed(
         return JSONResponse({"message": "all run slots are busy, retry later"}, status_code=429)
 
     return StreamingResponse(
-        events(work, description, run, state.run_slots),
+        events(work, description, run, state.run_slots, state.sources),
         media_type=MEDIA_TYPE,
         headers=HEADERS,
     )
@@ -55,6 +56,7 @@ async def events(
     description: str,
     record: Run,
     run_slots: threading.BoundedSemaphore,
+    sources: Sources | None = None,
 ) -> AsyncIterator[str]:
     stream = ProgressStream()
 
@@ -86,7 +88,8 @@ async def events(
         async for event in stream:
             yield frame("progress", event)
 
-        yield frame("done", await worker)
+        result = await worker
+        yield frame("done", await asyncio.to_thread(with_sources, sources, result))
     except SessionNotFound as exc:
         yield frame("error", Error(message=f"no session {exc}"))
     except Exception as exc:

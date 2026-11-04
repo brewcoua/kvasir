@@ -32,3 +32,15 @@ export const isWeb = (url: string) => /^https?:/i.test(url);
 // Output tokens over the whole call, prompt processing included, since nothing is streamed.
 export const rate = (tokens: number | null, seconds: number) =>
   tokens && seconds > 0 ? (tokens / seconds).toFixed(1) : "";
+
+// The short label of a source kind, for a badge. A mark may be any of these but `unknown`.
+export const KIND_LABELS: Record<string, string> = {
+  intergovernmental: "intergov",
+  government: "gov",
+  academic: "academic",
+  standards: "standards",
+  news: "news",
+  reference: "reference",
+  organization: "org",
+  unknown: "unknown",
+};

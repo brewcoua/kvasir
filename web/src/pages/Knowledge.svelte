@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { request, type CacheStats, type PageDetail, type PageSummary, type Recall, type Site, type SiteGraph as Graph } from "../lib/api";
+  import { request, type CacheStats, type PageDetail, type PageSummary, type Recall, type Site, type SiteGraph as Graph, type SourceInfo } from "../lib/api";
   import { count, duration, isWeb, size } from "../lib/format";
   import { go, href } from "../lib/route.svelte";
   import { Switch } from "bits-ui";
   import Favicon from "../components/Favicon.svelte";
   import Markdown from "../components/Markdown.svelte";
   import SiteGraph from "../components/SiteGraph.svelte";
+  import SourceBadge from "../components/SourceBadge.svelte";
+  import SourceMenu from "../components/SourceMenu.svelte";
 
   let { id }: { id: string | null } = $props();
 
@@ -83,6 +85,19 @@
     attempt(async () => {
       await request("DELETE", `/v1/sites/${encodeURIComponent(domain)}`);
       await load();
+    });
+  }
+
+  // Only the marked site is read again, so the graph does not settle anew. The service answers 404 to
+  // these when sources are off, and then no site has a `source` to mark.
+  function mark(domain: string, value: string | null) {
+    const path = `/v1/sources/${encodeURIComponent(domain)}`;
+    attempt(async () => {
+      await (value === null ? request("DELETE", `${path}/mark`) : request("PUT", `${path}/mark`, { value }));
+      const source = await request<SourceInfo>("GET", path);
+      const patch = <T extends { domain: string }>(list: T[]) => list.map((one) => (one.domain === domain ? { ...one, source } : one));
+      if (sites) sites = patch(sites);
+      if (graph) graph = { ...graph, sites: patch(graph.sites) };
     });
   }
 
@@ -215,6 +230,10 @@
         <section class="panel site-panel">
           <h2>
             <span class="topic"><Favicon url={`https://${site}`} />Pages of {site}</span>
+            {#if chosen?.source}
+              <SourceBadge source={chosen.source} />
+              <SourceMenu domain={site} source={chosen.source} disabled={busy} onpick={(value) => mark(site!, value)} />
+            {/if}
             <button type="button" class="action danger" disabled={busy} onclick={() => removeSite(site!)}>Delete site</button>
             <button type="button" class="action" onclick={() => pick(null)}>Close</button>
           </h2>
