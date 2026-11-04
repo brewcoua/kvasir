@@ -1,7 +1,7 @@
 import type { IconName } from "../components/Icon.svelte";
 import { isResearch, type Progress, type ResearchQuestion, type RunDetail } from "./api";
 
-export type StepKind = "stage" | "question" | "attempt" | "page" | "part" | "section" | "verdict" | "split" | "event";
+export type StepKind = "stage" | "question" | "attempt" | "recall" | "repair" | "page" | "part" | "section" | "verdict" | "split" | "event";
 export interface Step {
   id: string;
   kind: StepKind;
@@ -18,17 +18,23 @@ export interface Step {
   search: number | null;
   // A question's status; null for any other step.
   status: string | null;
-  // A number for the card badge: claims added, results, parts, counter progress.
+  // A number for the card badge: claims added, results, parts, counter progress. A recall's is its pieces.
   count: number | null;
-  // An attempt's claims added, from its result event; null for any other step.
+  // An attempt's or recall's claims added, from its result event; null for any other step.
   added: number | null;
+  // An attempt's number among the run's searches; null for any other step.
+  index: number | null;
+  // An attempt's query, once its search has started; null for any other step.
+  query: string | null;
+  // The pages an attempt has read, or a recall's pages; null for any other step.
+  read: number | null;
   // A stage's latest progress counter; null for any other step or a stage with none.
   progress: { done: number; total: number | null; detail: string } | null;
   // A stage's other plain events, in order; they get no card.
   log: { seq: number; at: number | null; detail: string }[];
   // A question's depth; null for any other step.
   depth: number | null;
-  // The question a question or section step belongs to.
+  // The question a question or section step belongs to; a repair's question has no ResearchQuestion.
   question: number | null;
   // A question's claims, in its own order; empty for any other step.
   claims: { id: number; confidence: "high" | "medium" | "low" }[];
@@ -48,6 +54,9 @@ const step = (id: string, kind: StepKind, label: string, detail = label, state: 
   status: null,
   count: null,
   added: null,
+  index: null,
+  query: null,
+  read: null,
   progress: null,
   log: [],
   depth: null,
@@ -82,6 +91,9 @@ export function skipped(run: RunDetail, name: string): boolean {
 // The page title is the text after the last ": " of a page's or part's detail.
 const pageTitle = (detail: string) => (detail.includes(": ") ? detail.slice(detail.lastIndexOf(": ") + 2) : detail);
 
+// What a repair's question was asked, from the detail of the first attempt or recall under it.
+const repairText = (detail: string) => detail.match(/, for: (.+)$/s)?.[1] ?? detail.match(/^recall for (.+): \d+ pieces from \d+ pages$/s)?.[1] ?? null;
+
 interface Attempt {
   step: Step;
   pages: Map<number, Step>;
@@ -95,7 +107,7 @@ export function steps(run: RunDetail): Step[] {
 
   const callsBy = new Map<number, number[]>();
   for (const call of run.calls) if (call.event != null && call.id != null) callsBy.set(call.event, [...(callsBy.get(call.event) ?? []), call.id]);
-  const searchResults = new Map(run.searches.map((search) => [search.id, search.results]));
+  const searchById = new Map(run.searches.map((search) => [search.id, search]));
   // The service starts a search after publishing its attempt, so the attempt cannot name it; the search names the event before it.
   const searchAfter = new Map(run.searches.flatMap((search) => (search.event == null ? [] : [[search.event, search.id] as const])));
 
@@ -105,7 +117,11 @@ export function steps(run: RunDetail): Step[] {
   const questionById = new Map(questions.map((q) => [q.id, q]));
 
   const loose = new Map<string, Step[]>();
+  // Attempts and recalls both hold pages, and take a result.
   const attempts = new Map<number, Attempt>();
+  let searched = 0;
+  // A repair's own events have no ResearchQuestion, so what it asked is kept from the events under it.
+  const repairs = new Map<number, { step: Step; rows: { question: number; step: Step }[]; texts: Map<number, string> }>();
   const attemptsOf = new Map<number, Step[]>();
   const add = (stage: string, child: Step) => loose.set(stage, [...(loose.get(stage) ?? []), child]);
 
@@ -125,14 +141,32 @@ export function steps(run: RunDetail): Step[] {
     const parent = ev.parent == null ? undefined : attempts.get(ev.parent);
     const own = (s: Step) => Object.assign(s, { started_at: at, ended_at: end, calls });
 
-    if (kind === "attempt") {
-      const s = own(step(`e:${seq}`, "attempt", `Search ${attempts.size + 1}`, ev.detail, state));
-      s.search = ev.search ?? searchAfter.get(seq) ?? null;
-      s.count = s.search == null ? null : (searchResults.get(s.search) ?? null);
+    if (kind === "attempt" || kind === "recall") {
+      const s = own(step(`e:${seq}`, kind, "Recall", ev.detail, state));
+      if (kind === "attempt") {
+        s.label = `Search ${++searched}`;
+        s.index = searched;
+        s.search = ev.search ?? searchAfter.get(seq) ?? null;
+        const search = s.search == null ? undefined : searchById.get(s.search);
+        s.count = search?.results ?? null;
+        s.query = search?.query ?? null;
+      } else {
+        s.count = ev.done ?? null;
+        s.read = ev.total ?? null;
+      }
       attempts.set(seq, { step: s, pages: new Map(), resulted: false });
+      const repair = ev.parent == null ? undefined : repairs.get(ev.parent);
       const list = ev.question == null ? undefined : attemptsOf.get(ev.question);
-      if (ev.question != null && questionById.has(ev.question)) attemptsOf.set(ev.question, [...(list ?? []), s]);
+      if (repair && ev.question != null) {
+        repair.rows.push({ question: ev.question, step: s });
+        const text = repairText(ev.detail);
+        if (text && !repair.texts.has(ev.question)) repair.texts.set(ev.question, text);
+      } else if (ev.question != null && questionById.has(ev.question)) attemptsOf.set(ev.question, [...(list ?? []), s]);
       else add(ev.stage, s);
+    } else if (kind === "repair") {
+      const s = own(step(`e:${seq}`, "repair", "Repair", ev.detail, state));
+      repairs.set(seq, { step: s, rows: [], texts: new Map() });
+      add(ev.stage, s);
     } else if (kind === "page" && parent) {
       const page = ev.page ?? 0;
       if (!parent.pages.has(page)) {
@@ -189,7 +223,26 @@ export function steps(run: RunDetail): Step[] {
       p.state = p === [...pages.values()].at(-1) && a.state === "current" ? "current" : "done";
       span(p);
     }
+    if (a.kind === "attempt") a.read = pages.size;
     span(a);
+  }
+
+  for (const { step: repair, rows, texts } of repairs.values()) {
+    const ids = [...new Set(rows.map((row) => row.question))];
+    repair.children = ids.map((id) => {
+      const q = step(`q:${id}`, "question", texts.get(id) ?? `Question ${id}`);
+      q.question = id;
+      q.depth = 0;
+      q.children = rows.filter((row) => row.question === id).map((row) => row.step).sort(byTime);
+      q.count = q.children.reduce((n, child) => n + (child.added ?? 0), 0);
+      q.state = !live ? "done" : q.children.some((child) => child.state === "current") ? "current" : "done";
+      span(q);
+      return q;
+    });
+    repair.count = ids.length;
+    if (!live) repair.state = "done";
+    else if (repair.children.some((child) => child.state === "current")) repair.state = "current";
+    span(repair);
   }
 
   const confidence = new Map((research?.claims ?? []).map((c) => [c.id, c.confidence]));
@@ -261,7 +314,7 @@ const STAGE_ICONS: Record<string, IconName> = {
   mind_map: "mind_map",
 };
 const OUTCOME_ICONS = { removed: "close", rewritten: "brief", unverified: "question" } as const;
-const KIND_ICONS: Partial<Record<StepKind, IconName>> = { question: "question", attempt: "search", page: "page", section: "write", split: "split" };
+const KIND_ICONS: Partial<Record<StepKind, IconName>> = { question: "question", attempt: "search", recall: "page", repair: "verify", page: "page", section: "write", split: "split" };
 
 export function icon(step: Step): IconName {
   if (step.kind === "stage") return STAGE_ICONS[step.label] ?? "stage";

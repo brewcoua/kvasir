@@ -269,3 +269,43 @@ describe("stages a run never ran", () => {
     expect(states(live)).toMatchObject({ background: "skipped", research: "current", assess: "pending", write: "pending" });
   });
 });
+
+describe("steps of a ledger run", () => {
+  const ledger: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "ledger.json"), "utf8"));
+  const roots = steps(ledger);
+  const stage = (name: string) => roots.find((s) => s.id === `stage:${name}`)!;
+
+  it("groups recalls and attempts under their question, with the fields a row shows", () => {
+    const [recall, attempt] = find(roots, "q:1").children;
+    expect(recall).toMatchObject({ kind: "recall", count: 6, read: 3, added: 2, query: null, index: null });
+    expect(recall.children.map((p) => p.label)).toEqual(["Alpha", "Beta", "Gamma"]);
+    expect(attempt).toMatchObject({ kind: "attempt", index: 1, query: ledger.searches[0].query, count: 24, read: 2, added: 3 });
+    expect(find(roots, "q:2").children[0]).toMatchObject({ index: 2, query: ledger.searches[1].query, count: 18, read: 1, added: 1 });
+  });
+
+  it("keeps repair attempts and recalls in a repair step under verify, grouped by their question", () => {
+    const repair = stage("verify").children.find((s) => s.kind === "repair")!;
+    expect(repair.id).toBe("e:16");
+    expect(repair.children.map((q) => [q.id, q.kind, q.label, q.children.map((c) => c.kind), q.count])).toEqual([
+      ["q:3", "question", "The emperor held office for life.", ["recall", "attempt"], 1],
+      ["q:4", "question", "Taxes were collected in grain.", ["attempt"], 0],
+    ]);
+    expect(repair.children[0].children[1]).toMatchObject({ index: 3, query: ledger.searches[2].query });
+    expect(stage("research").children.some((s) => s.kind === "attempt" || s.kind === "recall")).toBe(false);
+    expect(stage("research").children.filter((s) => s.kind === "question").map((s) => s.id)).toEqual(["q:1", "q:2"]);
+    expect(stage("verify").children.filter((s) => s.kind === "attempt")).toEqual([]);
+    expect(links(ledger, roots).every((l) => !l.to.startsWith("q:3"))).toBe(true);
+  });
+
+  it("shows what a live run knows so far", () => {
+    const live: RunDetail = { ...structuredClone(ledger), state: "running", ended_at: null, stage: "verify" };
+    live.events = live.events.slice(0, 21);
+    live.searches = live.searches.slice(0, 3).map((s) => ({ ...s, results: s.id === 2 ? null : s.results }));
+    const tree = steps(live);
+    const repair = find(tree, "e:16");
+    expect(repair.state).toBe("current");
+    const attempt = find(tree, "e:20");
+    expect(attempt).toMatchObject({ state: "current", count: null, read: 0, added: null });
+    expect(find(tree, "e:17")).toMatchObject({ kind: "recall", added: 0 });
+  });
+});

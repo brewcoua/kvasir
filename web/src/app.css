@@ -1402,6 +1402,9 @@ table.runs a.topic:hover {
 .arc-badge.dim {
   opacity: 0.15;
 }
+.steps-view .svelte-flow__edge.rail .svelte-flow__edge-path {
+  stroke-width: 1;
+}
 .steps-view .svelte-flow__edge.raised .svelte-flow__edge-path,
 .link-key.raised path {
   stroke: var(--k-question);
@@ -1517,7 +1520,11 @@ table.runs a.topic:hover {
   --k: var(--k-question);
 }
 .step-card.attempt,
-.step-panel.attempt {
+.step-group.attempt,
+.step-panel.attempt,
+.step-card.recall,
+.step-group.recall,
+.step-panel.recall {
   --k: var(--k-attempt);
 }
 .step-card.page,
@@ -1525,7 +1532,10 @@ table.runs a.topic:hover {
   --k: var(--k-page);
 }
 .step-card.section,
-.step-panel.section {
+.step-panel.section,
+.step-card.repair,
+.step-group.repair,
+.step-panel.repair {
   --k: var(--k-section);
 }
 .step-card.removed {
@@ -1684,6 +1694,39 @@ table.runs a.topic:hover {
   background: var(--busy);
   animation: pip-pulse 1.8s ease-in-out infinite;
 }
+.step-card.step-row {
+  width: 100%;
+  height: 100%;
+}
+.step-row .step-head {
+  height: 100%;
+  border-bottom: 0;
+}
+.row-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+.row-n {
+  flex: none;
+  font-weight: 600;
+  color: var(--k);
+  font-variant-numeric: tabular-nums;
+}
+.row-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-fields .step-stats {
+  flex: none;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
 .step-group {
   box-sizing: border-box;
   width: 100%;
@@ -1715,6 +1758,9 @@ table.runs a.topic:hover {
 }
 .step-group .step-stats {
   flex-wrap: nowrap;
+}
+.step-group .step-head > .row-fields {
+  flex: 1;
 }
 .step-group.current {
   border-color: var(--busy);

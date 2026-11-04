@@ -243,12 +243,12 @@ test("steps lay a run out as stages that open into questions and attempts", asyn
   }
   // Stages and questions are open at first; a search's pages are not.
   await expect(cards.filter({ hasText: /^question/ }).first()).toBeVisible();
-  await expect(cards.filter({ hasText: /^attempt/ }).first()).toBeVisible();
-  await expect(cards.filter({ hasText: /^page/ })).toHaveCount(0);
+  await expect(run(page).locator(".step-card.attempt").first()).toBeVisible();
+  await expect(run(page).locator(".step-card.page")).toHaveCount(0);
 
-  const before = await cards.filter({ hasText: /^attempt/ }).count();
+  const before = await run(page).locator(".step-card.attempt").count();
   await run(page).getByTestId("step-q:1").locator(".step-head").click();
-  await expect(cards.filter({ hasText: /^attempt/ })).toHaveCount(before - 1);
+  await expect(run(page).locator(".step-card.attempt")).toHaveCount(before - 1);
   await run(page).locator(".step-panel").getByRole("button", { name: "Close" }).click();
   await run(page).getByTestId("step-stage:research").locator(".step-head").click();
   await expect(cards.filter({ hasText: /^question/ })).toHaveCount(0);
@@ -266,6 +266,43 @@ test("steps lay a run out as stages that open into questions and attempts", asyn
       return true;
     })
     .toBe(true);
+});
+
+test("a ledger run stacks its rows, puts repair in verify, and links every step", async ({ page }) => {
+  await page.goto("/#/runs/ledger/steps");
+  const row = (id: string) => run(page).getByTestId(`step-${id}`);
+  // The view is zoomed to fit, so a row's size is checked by its shape: 460 by 36 in flow units.
+  const shape = (await row("e:7").boundingBox())!;
+  expect(shape.width / shape.height).toBeCloseTo(460 / 36, 0);
+  await expect(row("e:7")).toContainText("#1");
+  await expect(row("e:7")).toContainText("Roman dynasties");
+  await expect(row("e:7")).toContainText("24 results");
+  await expect(row("e:7")).toContainText("+3 claims");
+  await expect(row("e:2")).toContainText("6 pieces");
+  await expect(row("e:2")).toContainText("3 pages");
+  await expect(row("e:2")).toContainText("+2 claims");
+
+  // Rows of a question sit one above the other, not side by side.
+  const [recall, attempt] = [(await row("e:2").boundingBox())!, (await row("e:7").boundingBox())!];
+  expect(attempt.y).toBeGreaterThanOrEqual(recall.y + recall.height);
+  expect(Math.abs(attempt.x - recall.x)).toBeLessThan(1);
+
+  // Repair attempts are in the repair step, which is in verify.
+  const [verify, repair, repaired] = await Promise.all(["stage:verify", "e:16", "e:20"].map(async (id) => (await row(id).boundingBox())!));
+  for (const [outer, inner] of [[verify, repair], [repair, repaired]]) {
+    expect(inner.x).toBeGreaterThanOrEqual(outer.x);
+    expect(inner.y).toBeGreaterThanOrEqual(outer.y);
+    expect(inner.x + inner.width).toBeLessThanOrEqual(outer.x + outer.width + 1);
+    expect(inner.y + inner.height).toBeLessThanOrEqual(outer.y + outer.height + 1);
+  }
+
+  // A rail into each row, and none between siblings.
+  for (const id of ["e:2", "e:7", "e:20", "e:16", "q:3"]) await expect(run(page).locator(`.svelte-flow__edge[data-id^="rail:"][data-id$=">${id}"]`)).toHaveCount(1);
+  await expect(run(page).locator('.svelte-flow__edge[data-id="e:2>e:7"]')).toHaveCount(0);
+
+  // The panel keeps the whole sentence.
+  await row("e:7").click();
+  await expect(run(page).locator(".step-panel")).toContainText("search 1 of at most 4, for: Which dynasties ruled the empire?");
 });
 
 test("steps colour a card by its kind, mark it with an icon, and explain the kinds in a legend", async ({ page }) => {

@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RunDetail } from "./api";
-import { HEADER, layout, PAD, PER_COLUMN } from "./layout";
+import { HEADER, layout, PAD, PER_COLUMN, ROW } from "./layout";
 import { links, steps, type Link, type Step } from "./steps";
 
 const graph: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "graph.json"), "utf8"));
@@ -117,16 +117,54 @@ describe("layout", () => {
     expect(nodes.some((n) => n.parentId && pages.some((p) => p.id === n.parentId))).toBe(false);
   });
 
-  it("chains the stages, and the attempts of an open question", () => {
-    const { edges } = layout(roots, new Set([research.id, question.id]), linked);
-    const chain = edges.map((e) => `${e.source}>${e.target}`);
+  it("chains the stages only, and hangs the attempts of an open question from it by rail", () => {
+    const { nodes, edges } = layout(roots, new Set([research.id, question.id]), linked);
+    const chain = edges.filter((e) => !e.type && e.class !== "raised").map((e) => `${e.source}>${e.target}`);
     for (let i = 1; i < roots.length; i++) expect(chain).toContain(`${roots[i - 1].id}>${roots[i].id}`);
     const attempts = question.children.filter((c) => c.kind === "attempt");
     expect(attempts.length).toBeGreaterThan(1);
-    for (let i = 1; i < attempts.length; i++) expect(chain).toContain(`${attempts[i - 1].id}>${attempts[i].id}`);
-    // Containment is not an edge.
-    expect(chain.some((l) => l.endsWith(`>${question.children[0].id}`) && l.startsWith(question.id))).toBe(false);
-    expect(new Set(chain).size).toBe(chain.length);
+    for (const a of attempts) expect(edges.filter((e) => e.target === a.id).map((e) => [e.type, e.source])).toEqual([["rail", question.id]]);
+    expect(edges.some((e) => attempts.some((a) => e.source === a.id && attempts.some((b) => e.target === b.id)))).toBe(false);
+    expect(new Set(edges.map((e) => e.id)).size).toBe(edges.length);
+    // The rail runs down inside the question's left padding, then right to the attempt's header.
+    const { pos } = abs(nodes);
+    const a = attempts[0];
+    const [q, c] = [pos(question.id), pos(a.id)];
+    const rail = edges.find((e) => e.target === a.id)!;
+    expect((rail.data as { path: string }).path).toMatch(new RegExp(`^M${q.x + PAD / 2} ${q.y + HEADER}V.*H${c.x}$`));
+  });
+
+  it("stacks attempts and pages as header-height rows, each below the last", () => {
+    const attempts = all(roots).filter((s) => s.kind === "attempt" && s.children.length > 0);
+    const { nodes } = layout(roots, everything, linked);
+    const rows = nodes.filter((n) => ["attempt", "recall", "page"].includes(n.data.step.kind));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const n of rows.filter((m) => m.type === "step")) expect(n.height).toBe(HEADER);
+    for (const n of nodes.filter((m) => m.parentId && rows.some((r) => r.id === m.id))) {
+      const siblings = rows.filter((m) => m.parentId === n.parentId);
+      expect(new Set(siblings.map((m) => m.position.x)).size).toBe(1);
+      expect(new Set(siblings.map((m) => m.position.y)).size).toBe(siblings.length);
+    }
+    const at = new Map(nodes.map((n) => [n.id, n]));
+    for (const a of attempts) {
+      expect(at.get(a.id)!.type).toBe("group");
+      expect(at.get(a.id)!.width).toBe(ROW.width);
+      const pages = a.children.map((p) => at.get(p.id)!);
+      expect(pages.every((p) => p.parentId === a.id && p.height === HEADER)).toBe(true);
+    }
+  });
+
+  it("gives every non-root node an incoming edge, on every fixture", () => {
+    const dir = join(import.meta.dirname, "..", "..", "fixtures");
+    for (const file of readdirSync(dir).filter((name) => /^[^.]+\.json$/.test(name))) {
+      const run: RunDetail = JSON.parse(readFileSync(join(dir, file), "utf8"));
+      const tree = steps(run);
+      for (const open of [new Set(all(tree).map((s) => s.id)), new Set(tree.map((s) => s.id)), new Set<string>()]) {
+        const { nodes, edges } = layout(tree, open, links(run, tree));
+        const targets = new Set(edges.map((e) => e.target));
+        for (const n of nodes.filter((m) => m.parentId)) expect(targets.has(n.id), `${file}: ${n.id}`).toBe(true);
+      }
+    }
   });
 
   it("animates only edges into the current step and classes the rest", () => {
@@ -216,5 +254,31 @@ describe("layout", () => {
       expect(badges).toHaveLength(6);
       for (const y of badges) for (const stub of stubs) expect(Math.abs(y - stub)).toBeGreaterThanOrEqual(12);
     });
+  });
+});
+
+describe("layout of a ledger run", () => {
+  const ledger: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "ledger.json"), "utf8"));
+  const roots = steps(ledger);
+  const linked = links(ledger, roots);
+  const everything = new Set(all(roots).map((s) => s.id));
+  const { nodes, edges } = layout(roots, everything, linked);
+  const at = new Map(nodes.map((n) => [n.id, n]));
+
+  it("stacks a question's recall and attempts in one column", () => {
+    const kids = all(roots).find((s) => s.id === "q:1")!.children;
+    expect(kids.map((c) => c.kind)).toEqual(["recall", "attempt"]);
+    const [recall, attempt] = kids.map((c) => at.get(c.id)!);
+    expect(recall.position.x).toBe(attempt.position.x);
+    expect(attempt.position.y).toBeGreaterThanOrEqual(recall.position.y + recall.height!);
+  });
+
+  it("rails repair rows from the repair step, and the repair step from verify", () => {
+    const rails = edges.filter((e) => e.type === "rail").map((e) => [e.source, e.target]);
+    expect(rails).toContainEqual(["stage:verify", "e:16"]);
+    expect(rails).toContainEqual(["e:16", "q:3"]);
+    expect(rails).toContainEqual(["q:3", "e:17"]);
+    expect(rails).toContainEqual(["q:3", "e:20"]);
+    expect(at.get("e:16")!.parentId).toBe("stage:verify");
   });
 });

@@ -8,6 +8,9 @@ export const STAGE = { width: 240, height: 116 };
 export const HEADER = 36;
 export const PAD = 12;
 export const GAP = 16;
+// Attempts, recalls and pages are rows of one header's height, stacked this far apart.
+export const ROW = { width: 460, height: HEADER };
+const ROW_GAP = 8;
 // Where a container's children start, so they do not touch its header.
 const TOP = HEADER + PAD;
 // Column children wrap into a new column after this many, so an open stage grows sideways into the free width.
@@ -49,8 +52,8 @@ interface Box {
   width: number;
   height: number;
   container: boolean;
-  // Children in reading order; `row` ones run left to right, the rest stack below them in `columns`.
-  row: Box[];
+  // Children in reading order; the rows stack first, the rest below them in `columns`.
+  stack: Box[];
   columns: Box[][];
   // A container with questions puts its children by depth instead; positions are relative to it.
   research?: Research;
@@ -90,9 +93,11 @@ export interface LinkData extends Record<string, unknown> {
 
 const descendants = (step: Step): number => step.children.reduce((n, child) => n + 1 + descendants(child), 0);
 const expandable = (step: Step) => step.children.length > 0 && step.kind !== "page";
-const inRow = (child: Step, parent: Step) => child.kind === "attempt" || child.kind === "page" || (child.kind === "event" && parent.kind === "attempt");
+const isRow = (step: Step) => step.kind === "attempt" || step.kind === "recall" || step.kind === "page";
+// A page sits inside its attempt's padding, so the two share an edge.
+const closedSize = (step: Step) => (step.kind === "page" ? { width: ROW.width - 2 * PAD, height: HEADER } : isRow(step) ? ROW : step.kind === "stage" ? STAGE : CARD);
 
-const sum = (sizes: number[]) => sizes.reduce((n, size) => n + size, 0) + GAP * Math.max(sizes.length - 1, 0);
+const sum = (sizes: number[], gap = GAP) => sizes.reduce((n, size) => n + size, 0) + gap * Math.max(sizes.length - 1, 0);
 const widest = (boxes: Box[]) => Math.max(...boxes.map((box) => box.width));
 
 const isQuestion = (box: Box) => box.step.kind === "question";
@@ -171,36 +176,36 @@ function research(step: Step, boxes: Box[], links: Link[]): Box {
 
   const kids = [...loose, ...columns.flat()];
   const bottom = Math.max(...kids.map((box) => at.get(box.step.id)!.y + box.height));
-  return { step, width: x - GAP * 4 + PAD, height: bottom + PAD, container: true, row: [], columns: [], research: { at, kids, trunk, lane, arcs } };
+  return { step, width: x - GAP * 4 + PAD, height: bottom + PAD, container: true, stack: [], columns: [], research: { at, kids, trunk, lane, arcs } };
 }
 
 function measure(step: Step, open: Set<string>, links: Link[]): Box {
   if (!(open.has(step.id) && expandable(step))) {
-    const size = step.kind === "stage" ? STAGE : CARD;
-    return { step, ...size, container: false, row: [], columns: [] };
+    return { step, ...closedSize(step), container: false, stack: [], columns: [] };
   }
   const boxes = step.children.map((child) => measure(child, open, links));
-  if (boxes.some(isQuestion)) return research(step, boxes, links);
-  const row = boxes.filter((_, i) => inRow(step.children[i], step));
-  const column = boxes.filter((_, i) => !inRow(step.children[i], step));
+  // A repair's questions have no depths or links to lay out by, so they stack like any other children.
+  if (step.kind === "stage" && boxes.some(isQuestion)) return research(step, boxes, links);
+  const stack = boxes.filter((_, i) => isRow(step.children[i]));
+  const column = boxes.filter((_, i) => !isRow(step.children[i]));
   const columns: Box[][] = [];
   for (let i = 0; i < column.length; i += PER_COLUMN) columns.push(column.slice(i, i + PER_COLUMN));
-  const rowHeight = Math.max(0, ...row.map((box) => box.height));
-  const rowWidth = row.length > 0 ? sum(row.map((box) => box.width)) : 0;
+  const stackHeight = sum(stack.map((box) => box.height), ROW_GAP);
   const columnsWidth = columns.length > 0 ? sum(columns.map(widest)) : 0;
   const columnsHeight = Math.max(0, ...columns.map((boxes) => sum(boxes.map((box) => box.height))));
-  const content = Math.max(step.kind === "question" ? QUESTION_WIDTH : step.kind === "stage" ? STAGE_WIDTH : CARD.width - 2 * PAD, rowWidth, columnsWidth);
+  const own = step.kind === "question" ? QUESTION_WIDTH : step.kind === "stage" ? STAGE_WIDTH : isRow(step) ? ROW.width - 2 * PAD : CARD.width - 2 * PAD;
+  const content = Math.max(own, stack.length > 0 ? widest(stack) : 0, columnsWidth);
   const strip = step.kind === "question" && step.claims.length > 0 ? STRIP + GAP : 0;
-  const stacked = rowHeight + (row.length > 0 && columns.length > 0 ? GAP : 0) + columnsHeight + strip;
-  return { step, width: content + 2 * PAD, height: TOP + stacked + PAD, container: true, row, columns };
+  const stacked = stackHeight + (stack.length > 0 && columns.length > 0 ? GAP : 0) + columnsHeight + strip;
+  return { step, width: content + 2 * PAD, height: TOP + stacked + PAD, container: true, stack, columns };
 }
 
 // Roots always, then the children of every step in `open`, nested inside it. Opening a step moves only what follows it.
 export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes: Node<StepData>[]; edges: Edge[]; band: Rect } {
   const nodes: Node<StepData>[] = [];
   const edges: Edge[] = [];
-  const chain = (from: Step, to: Step) =>
-    edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? to.state : "done" });
+  const progress = (to: Step) => ({ animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? to.state : "done" });
+  const chain = (from: Step, to: Step) => edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, ...progress(to) });
   // Per research container, where its arcs and trunk are in flow coordinates.
   const lanes: { id: string; x: number; y: number; research: Research }[] = [];
 
@@ -232,16 +237,15 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
       }
       return;
     }
+    let cy = TOP;
+    for (const child of box.stack) {
+      place(child, PAD, cy, step.id, here);
+      cy += child.height + ROW_GAP;
+    }
+    const top = box.stack.length > 0 ? cy - ROW_GAP + GAP : TOP;
     let cx = PAD;
-    box.row.forEach((child, i) => {
-      place(child, cx, TOP, step.id, here);
-      if (i > 0) chain(box.row[i - 1].step, child.step);
-      cx += child.width + GAP;
-    });
-    const top = TOP + Math.max(0, ...box.row.map((child) => child.height)) + (box.row.length > 0 ? GAP : 0);
-    cx = PAD;
     for (const column of box.columns) {
-      let cy = top;
+      cy = top;
       for (const child of column) {
         place(child, cx, cy, step.id, here);
         cy += child.height + GAP;
@@ -280,6 +284,16 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
     } else {
       edges.push({ id, source: l.from, target: l.to, class: l.kind });
     }
+  }
+  // What no link reaches hangs from its container: down a rail in the container's left padding, then into the child's header.
+  const reached = new Set(edges.map((e) => e.target));
+  for (const node of nodes) {
+    if (!node.parentId || reached.has(node.id)) continue;
+    const [p, c] = [flow(node.parentId), flow(node.id)];
+    const [x, y0, y1] = [p.x + PAD / 2, p.y + HEADER, c.y + HEADER / 2];
+    const r = Math.min(R, c.x - x, y1 - y0);
+    const path = `M${x} ${y0}V${y1 - r}Q${x} ${y1} ${x + r} ${y1}H${c.x}`;
+    edges.push({ id: `rail:${node.parentId}>${node.id}`, source: node.parentId, target: node.id, type: "rail", ...progress(node.data.step), data: { path } satisfies LinkData });
   }
   for (const { x: ox, y: oy, research } of lanes) {
     for (const arc of research.arcs) {

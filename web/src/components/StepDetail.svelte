@@ -53,6 +53,7 @@
       <div class="step-panel-scroll">
         <div class="step-panel-body">
           <p>{chosen.detail}</p>
+          {#if chosen.query}<p class="meta">query: {chosen.query}</p>{/if}
           <p class="meta">
             {chosen.state}{#if took !== null} · {duration(took)}{/if}
             {#if chosen.started_at !== null} · started {time(chosen.started_at)}{/if}

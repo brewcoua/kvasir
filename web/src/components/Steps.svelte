@@ -17,6 +17,8 @@
     { kind: "stage", label: "stage", icon: "stage", k: "var(--k-stage)" },
     { kind: "question", label: "question", icon: "question", k: "var(--k-question)" },
     { kind: "attempt", label: "search", icon: "search", k: "var(--k-attempt)" },
+    { kind: "recall", label: "recall", icon: "page", k: "var(--k-attempt)" },
+    { kind: "repair", label: "repair", icon: "verify", k: "var(--k-section)" },
     { kind: "page", label: "page", icon: "page", k: "var(--k-page)" },
     { kind: "section", label: "section", icon: "write", k: "var(--k-section)" },
     { kind: "verdict", label: "verdict", icon: "verify", k: "var(--bad)" },
@@ -32,7 +34,7 @@
   ];
 
   const nodeTypes = { step: StepNode, group: StepGroup };
-  const edgeTypes = { trunk: LinkEdge, arc: LinkEdge };
+  const edgeTypes = { trunk: LinkEdge, arc: LinkEdge, rail: LinkEdge };
 
   const roots = $derived(steps(run));
   const linked = $derived(links(run, roots));
@@ -45,7 +47,7 @@
 
   // Stages and questions with something inside start open; the user's changes sit on top, so a run still
   // being followed opens what appears.
-  const defaults = $derived(new Set(everything.filter((s) => (s.kind === "stage" || s.kind === "question") && s.children.length > 0).map((s) => s.id)));
+  const defaults = $derived(new Set(everything.filter((s) => (s.kind === "stage" || s.kind === "question" || s.kind === "repair") && s.children.length > 0).map((s) => s.id)));
   let opened = $state(new Set<string>());
   let closed = $state(new Set<string>());
   const open = $derived(new Set([...defaults, ...opened].filter((id) => !closed.has(id))));
