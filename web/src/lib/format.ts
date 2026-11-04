@@ -1,5 +1,15 @@
 export const count = (value: number) => Number(value).toLocaleString();
 
+export function size(value: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let at = 0;
+  while (value >= 1024 && at < units.length - 1) {
+    value /= 1024;
+    at++;
+  }
+  return `${at === 0 ? value : value.toFixed(1)} ${units[at]}`;
+}
+
 export function duration(total: number): string {
   if (total < 60) return `${total.toFixed(1)}s`;
   const whole = Math.floor(total);

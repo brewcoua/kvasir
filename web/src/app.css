@@ -1314,6 +1314,58 @@ table.runs a.topic:hover {
 .graph .faded {
   opacity: 0.15;
 }
+/* The knowledge page's map of cached websites: radius is set in the component, width by link count. */
+.site-graph .link {
+  stroke: var(--dim);
+  opacity: 0.5;
+}
+.site-graph {
+  position: relative;
+}
+/* Shade follows size (--t, 0..1): the smallest is the accent darkened, the biggest the same lightened. The
+   outline keeps a pale node apart from the panel, and the selected one is outlined in the text colour. */
+.site-graph .node circle {
+  fill: color-mix(in srgb, color-mix(in srgb, var(--accent), black 25%), white calc(var(--t) * 65%));
+  stroke: color-mix(in srgb, var(--accent) 60%, var(--text));
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.site-graph .node:hover circle {
+  stroke: var(--text);
+}
+.site-graph .node.selected circle,
+.site-graph .node:focus-visible circle {
+  stroke: var(--text);
+  stroke-width: 3;
+}
+/* Position and size are counter-scaled by --inverse (1/zoom), so text stays one size on screen. */
+.site-graph .node text {
+  font-size: 0.78rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  transform: translate(calc(var(--r) + 4px * var(--inverse, 1)), 0) scale(var(--inverse, 1));
+}
+.site-graph .node.labelled text,
+.site-graph .node.selected text {
+  opacity: 1;
+}
+.site-card {
+  position: absolute;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 18%, transparent);
+  font-size: 0.78rem;
+  color: var(--text);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.site-card span {
+  color: var(--dim);
+}
 .question-status.answered {
   color: var(--ok);
 }
@@ -1932,10 +1984,185 @@ table.runs a.topic:hover {
   box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 2.5px var(--bad);
 }
 
-/* The knowledge page: panels stacked, a page's text kept to a scrolling box. */
+/* The knowledge page: the graph beside storage, a site's pages and recall, all in one screen; stacked and scrolling when narrow. */
 .knowledge {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 26rem;
   gap: 1rem;
+  height: calc(100vh - 5.8rem);
+}
+.knowledge .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.knowledge h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: none;
+}
+.knowledge h2 .meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.knowledge h2 .topic {
+  flex: 1;
+  min-width: 0;
+}
+.side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+}
+.side-column > .panel {
+  flex: none;
+}
+.side-column > .site-panel {
+  flex: 1 1 0;
+  min-height: 7rem;
+}
+.site-meta {
+  margin: 0;
+  padding: 0.4rem 0.85rem 0;
+}
+.body.fill {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.body.fill td.topic-cell {
+  max-width: 0;
+  width: 100%;
+}
+.body.fill td.topic-cell .meta {
+  display: block;
+}
+.graph-fill {
+  flex: 1;
+  min-height: 0;
+}
+.graph-fill .graph {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+.graph-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.85rem;
+  border-top: 1px solid var(--line);
+}
+.switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.switch {
+  position: relative;
+  width: 2rem;
+  height: 1.1rem;
+  padding: 0;
+  background: var(--line);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.switch[data-state="checked"] {
+  background: var(--accent);
+}
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch-thumb {
+  display: block;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-left: 0.125rem;
+  background: var(--panel);
+  border-radius: 50%;
+  transition: transform 0.12s;
+}
+.switch-thumb[data-state="checked"] {
+  transform: translateX(0.9rem);
+}
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.15rem 1.25rem;
+  margin: 0;
+}
+.stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+.stats dt {
+  color: var(--dim);
+  white-space: nowrap;
+}
+.stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.stats + .actions {
+  margin: 0.75rem 0 0;
+}
+.recall-results {
+  max-height: 8rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.5rem;
+}
+.recall-results td {
+  vertical-align: top;
+}
+.recall-results .meta {
+  display: block;
+}
+.action.danger {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 55%, var(--line));
+}
+.action.danger:hover {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (max-width: 56rem) {
+  .knowledge {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+  .graph-fill {
+    height: 24rem;
+    flex: none;
+  }
+  .side-column > .site-panel {
+    flex: none;
+  }
+  .body.fill {
+    max-height: 20rem;
+  }
 }
 .actions {
   display: flex;
@@ -1947,10 +2174,6 @@ table.runs a.topic:hover {
   padding: 0 0.85rem;
   border: 1px solid var(--line);
   border-radius: 4px;
-}
-.action[aria-pressed="true"] {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 .ask-recall {
   display: flex;

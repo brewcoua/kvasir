@@ -149,6 +149,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sites/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Site Graph
+         * @description The cached sites and, between each two, how many stored links lead from one to the other.
+         */
+        get: operations["site_graph_v1_sites_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pages/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stats
+         * @description What the cache holds and what it takes on disk.
+         */
+        get: operations["stats_v1_pages_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pages": {
         parameters: {
             query?: never;
@@ -163,7 +203,11 @@ export interface paths {
         get: operations["list_pages_v1_pages_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Flush
+         * @description Empties the cache, and frees its disk space.
+         */
+        delete: operations["flush_v1_pages_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -433,6 +477,30 @@ export interface components {
             citations: components["schemas"]["Citation"][];
             /** Duration Seconds */
             duration_seconds: number;
+        };
+        /**
+         * CacheStats
+         * @description What the page cache holds and what it takes on disk.
+         */
+        CacheStats: {
+            /** Pages */
+            pages: number;
+            /** Links */
+            links: number;
+            /** Pieces */
+            pieces: number;
+            /** Text Bytes */
+            text_bytes: number;
+            /** Vector Bytes */
+            vector_bytes: number;
+            /** File Bytes */
+            file_bytes: number;
+            /** Path */
+            path: string;
+            /** Oldest */
+            oldest: number | null;
+            /** Newest */
+            newest: number | null;
         };
         /**
          * Cell
@@ -1276,6 +1344,40 @@ export interface components {
             engines: string[];
         };
         /**
+         * SiteEdge
+         * @description Links from the pages of one cached site to the pages of another.
+         */
+        SiteEdge: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /** Count */
+            count: number;
+        };
+        /**
+         * SiteGraph
+         * @description The cached sites and the links between them.
+         */
+        SiteGraph: {
+            /** Sites */
+            sites: components["schemas"]["SiteNode"][];
+            /** Edges */
+            edges: components["schemas"]["SiteEdge"][];
+        };
+        /**
+         * SiteNode
+         * @description One cached site in the link graph.
+         */
+        SiteNode: {
+            /** Domain */
+            domain: string;
+            /** Pages */
+            pages: number;
+            /** Links */
+            links: number;
+        };
+        /**
          * StageUsage
          * @description What one stage spent, including what is not a completion.
          */
@@ -1636,6 +1738,46 @@ export interface operations {
             };
         };
     };
+    site_graph_v1_sites_graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteGraph"];
+                };
+            };
+        };
+    };
+    stats_v1_pages_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheStats"];
+                };
+            };
+        };
+    };
     list_pages_v1_pages_get: {
         parameters: {
             query?: {
@@ -1664,6 +1806,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    flush_v1_pages_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

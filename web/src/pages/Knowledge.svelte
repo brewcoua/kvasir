@@ -1,12 +1,17 @@
 <script lang="ts">
-  import { request, type PageDetail, type PageSummary, type Recall, type Site } from "../lib/api";
-  import { count, duration, isWeb } from "../lib/format";
+  import { request, type CacheStats, type PageDetail, type PageSummary, type Recall, type Site, type SiteGraph as Graph } from "../lib/api";
+  import { count, duration, isWeb, size } from "../lib/format";
   import { go, href } from "../lib/route.svelte";
+  import { Switch } from "bits-ui";
   import Markdown from "../components/Markdown.svelte";
+  import SiteGraph from "../components/SiteGraph.svelte";
 
   let { id }: { id: string | null } = $props();
 
-  let sites: Site[] | null = $state(null);
+  let sites = $state<Site[] | null>(null);
+  let graph: Graph | null = $state(null);
+  let stats: CacheStats | null = $state(null);
+  let by: "pages" | "links" = $state("pages");
   let site: string | null = $state(null);
   let pages: PageSummary[] = $state([]);
   let detail: PageDetail | null = $state(null);
@@ -39,14 +44,30 @@
   }
 
   async function load() {
-    sites = await request<Site[]>("GET", "/v1/sites");
-    if (site && !sites.some((one) => one.domain === site)) site = null;
+    const [listed, drawn, held] = await Promise.all([
+      request<Site[]>("GET", "/v1/sites"),
+      request<Graph>("GET", "/v1/sites/graph"),
+      request<CacheStats>("GET", "/v1/pages/stats"),
+    ]);
+    [sites, graph, stats] = [listed, drawn, held];
+    if (site && !listed.some((one) => one.domain === site)) site = null;
     pages = site ? await request<PageSummary[]>("GET", `/v1/pages?site=${encodeURIComponent(site)}`) : [];
   }
+
+  const chosen = $derived(sites?.find((one) => one.domain === site));
 
   function pick(domain: string | null) {
     site = domain;
     attempt(load);
+  }
+
+  function flush() {
+    if (!confirm("Delete every cached page, link and piece? This cannot be undone.")) return;
+    attempt(async () => {
+      await request("DELETE", "/v1/pages");
+      site = null;
+      await load();
+    });
   }
 
   async function ask() {
@@ -146,91 +167,116 @@
   </section>
 {:else}
   <div class="knowledge">
-    <section class="panel">
+    <section class="panel graph-panel">
       <h2>Knowledge <span class="meta">what pages.db holds; the text shown is the text a run reads</span></h2>
-      {#if sites && sites.length === 0}
+      {#if graph && graph.sites.length === 0}
         <p class="empty">Nothing is cached yet. A run keeps each page it reads, and they show here.</p>
-      {:else if sites}
-        <div class="body scroll">
-          <table>
-            <thead>
-              <tr><th>site</th><th class="n">pages</th><th class="n">pieces</th><th>last fetch</th><th>engines</th><th></th></tr>
-            </thead>
-            <tbody>
-              {#each sites as one (one.domain)}
-                <tr>
-                  <td><button type="button" class="action" aria-pressed={site === one.domain} onclick={() => pick(one.domain)}>{one.domain}</button></td>
-                  <td class="n">{count(one.pages)}</td>
-                  <td class="n">{count(one.pieces)}</td>
-                  <td class="meta">{when(one.fetched_at)}</td>
-                  <td>{one.engines.join(", ")}</td>
-                  <td class="n"><button type="button" class="action" disabled={busy} onclick={() => removeSite(one.domain)}>Delete</button></td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+      {:else if graph}
+        <div class="graph-fill">
+          <SiteGraph sites={graph.sites} edges={graph.edges} size={by} selected={site} onpick={(domain) => pick(domain === site ? null : domain)} />
+        </div>
+        <div class="graph-bar">
+          <span class="meta">Node size and shade = {by}; line width = links between sites.</span>
+          <label class="switch-label">
+            Size by {by}
+            <Switch.Root class="switch" aria-label="Size by links" checked={by === "links"} onCheckedChange={(on) => (by = on ? "links" : "pages")}>
+              <Switch.Thumb class="switch-thumb" />
+            </Switch.Root>
+          </label>
         </div>
       {/if}
       {#if error}<p class="error body">{error}</p>{/if}
     </section>
 
-    {#if site}
-      <section class="panel">
-        <h2>Pages of {site} <button type="button" class="action" onclick={() => pick(null)}>Close</button></h2>
-        <div class="body scroll">
-          <table>
-            <thead>
-              <tr><th>page</th><th>engine</th><th>fetched</th><th class="n">pieces</th><th class="n">characters</th></tr>
-            </thead>
-            <tbody>
-              {#each pages as page (page.id)}
-                <tr>
-                  <td class="topic-cell"><a href={href({ page: "knowledge", id: page.id })} class="topic">{page.title || page.url}</a></td>
-                  <td>{page.engine}</td>
-                  <td class="meta">{when(page.fetched_at)}</td>
-                  <td class="n">{count(page.pieces)}</td>
-                  <td class="n">{count(page.length)}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+    <div class="side-column">
+      {#if stats}
+        <section class="panel">
+          <h2>Storage <span class="meta" title={stats.path}>{stats.path}</span></h2>
+          <div class="body">
+            <dl class="stats">
+              <div><dt>pages</dt><dd>{count(stats.pages)}</dd></div>
+              <div><dt>links</dt><dd>{count(stats.links)}</dd></div>
+              <div><dt>pieces</dt><dd>{count(stats.pieces)}</dd></div>
+              <div><dt>text</dt><dd>{size(stats.text_bytes)}</dd></div>
+              <div><dt>embeddings</dt><dd>{size(stats.vector_bytes)}</dd></div>
+              <div><dt>file on disk</dt><dd>{size(stats.file_bytes)}</dd></div>
+              {#if stats.oldest !== null}<div><dt>oldest</dt><dd>{when(stats.oldest)}</dd></div>{/if}
+              {#if stats.newest !== null}<div><dt>newest</dt><dd>{when(stats.newest)}</dd></div>{/if}
+            </dl>
+            {#if stats.pages > 0}
+              <p class="actions"><button type="button" class="action danger" disabled={busy} onclick={flush}>Flush cache</button></p>
+            {/if}
+          </div>
+        </section>
+      {/if}
+
+      {#if site}
+        <section class="panel site-panel">
+          <h2>
+            <span class="topic">Pages of {site}</span>
+            <button type="button" class="action danger" disabled={busy} onclick={() => removeSite(site!)}>Delete site</button>
+            <button type="button" class="action" onclick={() => pick(null)}>Close</button>
+          </h2>
+          {#if chosen}
+            <p class="meta site-meta">{count(chosen.pieces)} pieces · last fetch {when(chosen.fetched_at)} · {chosen.engines.join(", ")}</p>
+          {/if}
+          <div class="body fill">
+            <table>
+              <thead>
+                <tr><th>page</th><th class="n">pieces</th><th class="n">characters</th></tr>
+              </thead>
+              <tbody>
+                {#each pages as page (page.id)}
+                  <tr>
+                    <td class="topic-cell">
+                      <a href={href({ page: "knowledge", id: page.id })} class="topic">{page.title || page.url}</a>
+                      <span class="meta">{page.engine} · {when(page.fetched_at)}</span>
+                    </td>
+                    <td class="n">{count(page.pieces)}</td>
+                    <td class="n">{count(page.length)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      {/if}
+
+      <section class="panel recall-panel">
+        <h2>Recall <span class="meta">the pieces a run would recall</span></h2>
+        <div class="body">
+          <form class="ask-recall" onsubmit={(event) => (event.preventDefault(), ask())}>
+            <input type="text" bind:value={question} aria-label="Question" placeholder="A question, as a run would ask it" />
+            <button type="submit" class="action" disabled={busy || question.trim() === ""}>Recall</button>
+          </form>
+          {#if recall}
+            {#if recall.pieces.length === 0}
+              <p class="meta">No cached piece matches the words of this question.</p>
+            {:else}
+              <div class="recall-results">
+                <table>
+                  <tbody>
+                    {#each rows as piece, i (i)}
+                      {#if piece}
+                        <tr class:below={!piece.clears}>
+                          <td class="n">{piece.similarity.toFixed(3)}</td>
+                          <td class="piece">
+                            <a href={href({ page: "knowledge", id: piece.page })} class="topic">{piece.title || piece.url}</a>
+                            <span class="meta">{piece.site}</span>
+                            {piece.text}
+                          </td>
+                        </tr>
+                      {:else}
+                        <tr class="cut"><td colspan="2">recall minimum {recall.minimum}: pieces above it are taken</td></tr>
+                      {/if}
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          {/if}
         </div>
       </section>
-    {/if}
-
-    <section class="panel">
-      <h2>Recall <span class="meta">the pieces a run would recall for a question</span></h2>
-      <div class="body">
-        <form class="ask-recall" onsubmit={(event) => (event.preventDefault(), ask())}>
-          <input type="text" bind:value={question} aria-label="Question" placeholder="A question, as a run would ask it" />
-          <button type="submit" class="action" disabled={busy || question.trim() === ""}>Recall</button>
-        </form>
-        {#if recall}
-          {#if recall.pieces.length === 0}
-            <p class="meta">No cached piece matches the words of this question.</p>
-          {:else}
-            <div class="scroll">
-              <table>
-                <thead><tr><th class="n">similarity</th><th>site</th><th>page</th><th>piece</th></tr></thead>
-                <tbody>
-                  {#each rows as piece, i (i)}
-                    {#if piece}
-                      <tr class:below={!piece.clears}>
-                        <td class="n">{piece.similarity.toFixed(3)}</td>
-                        <td>{piece.site}</td>
-                        <td class="topic-cell"><a href={href({ page: "knowledge", id: piece.page })} class="topic">{piece.title || piece.url}</a></td>
-                        <td class="piece">{piece.text}</td>
-                      </tr>
-                    {:else}
-                      <tr class="cut"><td colspan="4">recall minimum {recall.minimum}: pieces above it are taken</td></tr>
-                    {/if}
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {/if}
-        {/if}
-      </div>
-    </section>
+    </div>
   </div>
 {/if}

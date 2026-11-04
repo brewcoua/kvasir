@@ -418,10 +418,50 @@ test("the knowledge page lists a site's pages and opens one on its text", async 
   await page.getByRole("navigation").getByRole("link", { name: "Knowledge" }).click();
   await expect(page).toHaveURL(/#\/knowledge$/);
 
-  await page.getByRole("button", { name: "en.wikipedia.org" }).click();
-  await page.getByRole("link", { name: "Roman Empire" }).click();
+  // The layout keeps settling, which a real click would wait out.
+  await page.getByRole("button", { name: /^en\.wikipedia\.org/ }).dispatchEvent("click");
+  await page.getByRole("link", { name: "Roman Empire", exact: true }).click();
 
   await expect(page).toHaveURL(/#\/knowledge\/3f2a9c1d0b7e4a56$/);
   await expect(page.getByText("The emperor held supreme power.")).toBeVisible();
   await expect(page.getByText("related (1)")).toBeVisible();
+});
+
+test("the knowledge graph sizes its nodes by pages or by links", async ({ page }) => {
+  await page.goto("/#/knowledge");
+  const radius = async () =>
+    Number(await page.getByRole("button", { name: /^en\.wikipedia\.org/ }).locator("circle").getAttribute("r"));
+  const other = async () =>
+    Number(await page.getByRole("button", { name: /^britannica\.com/ }).locator("circle").getAttribute("r"));
+  const toggle = page.getByRole("switch", { name: "Size by links" });
+  await expect(toggle).not.toBeChecked();
+  await expect.poll(radius).toBeGreaterThan(0);
+  // Two pages against one, then three links against none.
+  const byPages = [await radius(), await other()];
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+  await expect.poll(other).toBe(6);
+  expect(byPages[1]).toBeGreaterThan(6);
+  expect(await radius()).toBeGreaterThan(byPages[0] - 1);
+});
+
+test("the knowledge page shows what the cache takes", async ({ page }) => {
+  await page.goto("/#/knowledge");
+  const storage = page.locator("section.panel", { hasText: "Storage" });
+  await expect(storage.getByText("/data/pages.db")).toBeVisible();
+  await expect(storage.getByText("file on disk").locator("..")).toHaveText(/1\.2 MB/);
+  await expect(storage.getByText("embeddings").locator("..")).toHaveText(/\d+(\.\d)? KB/);
+});
+
+test("flushing the cache empties the knowledge page after a confirm", async ({ page }) => {
+  await page.goto("/#/knowledge");
+  const messages: string[] = [];
+  page.once("dialog", (dialog) => {
+    messages.push(dialog.message());
+    return dialog.accept();
+  });
+  await page.getByRole("button", { name: "Flush cache" }).click();
+  await expect(page.getByText("Nothing is cached yet.")).toBeVisible();
+  expect(messages[0]).toContain("cannot be undone");
+  await expect(page.getByRole("button", { name: "Flush cache" })).toHaveCount(0);
 });

@@ -202,7 +202,10 @@ const PAGES: PageDetail[] = [
     text: "# Roman Empire\n\nThe Roman Empire ruled the Mediterranean from 27 BC.\n\n## Government\n\nThe emperor held supreme power.",
     leads: {
       related: [{ url: "https://en.wikipedia.org/wiki/Byzantine_Empire", anchor: "Byzantine Empire", context: "See also: Byzantine Empire" }],
-      main: [{ url: "https://en.wikipedia.org/wiki/Augustus", anchor: "Augustus", context: "founded by Augustus in 27 BC" }],
+      main: [
+        { url: "https://en.wikipedia.org/wiki/Augustus", anchor: "Augustus", context: "founded by Augustus in 27 BC" },
+        { url: "https://www.britannica.com/place/Roman-Empire", anchor: "Britannica", context: "Britannica on the Roman Empire" },
+      ],
     },
     runs: [{ id: "report", topic: "What led to the recent backlash on Proton?" }],
   },
@@ -217,12 +220,24 @@ const PAGES: PageDetail[] = [
     leads: {},
     runs: [],
   },
+  {
+    id: "c47d5e2f10b93a68",
+    url: "https://www.britannica.com/place/Roman-Empire",
+    final_url: "https://www.britannica.com/place/Roman-Empire",
+    title: "Roman Empire | Britannica",
+    engine: "static",
+    fetched_at: 1793770000,
+    text: "# Roman Empire\n\nThe Roman Empire was the post-republican state of ancient Rome.",
+    leads: {},
+    runs: [],
+  },
 ];
 
 export function mock(): Plugin {
   const runs = load();
   const pages = [...PAGES];
   const site = (url: string) => new URL(url).hostname.replace(/^www\./, "");
+  const leads = (page: PageDetail) => Object.values(page.leads).flat().map((lead) => lead.url);
   const listed = (page: PageDetail) => ({
     id: page.id,
     url: page.url,
@@ -258,6 +273,41 @@ export function mock(): Plugin {
             };
           });
           return send(response, 200, sites);
+        }
+        if (request.method === "GET" && path === "/v1/sites/graph") {
+          const domains = [...new Set(pages.map((page) => site(page.url)))];
+          const sites = domains.map((domain) => {
+            const held = pages.filter((page) => site(page.url) === domain);
+            return { domain, pages: held.length, links: held.reduce((n, page) => n + leads(page).length, 0) };
+          });
+          const counts = new Map<string, number>();
+          for (const page of pages)
+            for (const target of leads(page)) {
+              const to = site(target);
+              if (to !== site(page.url) && domains.includes(to)) counts.set(`${site(page.url)} ${to}`, (counts.get(`${site(page.url)} ${to}`) ?? 0) + 1);
+            }
+          const edges = [...counts].map(([key, n]) => ({ source: key.split(" ")[0], target: key.split(" ")[1], count: n }));
+          return send(response, 200, { sites, edges });
+        }
+        if (request.method === "GET" && path === "/v1/pages/stats") {
+          const stamps = pages.map((page) => page.fetched_at);
+          const text = pages.reduce((n, page) => n + page.text.length, 0);
+          return send(response, 200, {
+            pages: pages.length,
+            links: pages.reduce((n, page) => n + leads(page).length, 0),
+            pieces: pages.reduce((n, page) => n + listed(page).pieces, 0),
+            text_bytes: text,
+            vector_bytes: text * 12,
+            file_bytes: pages.length ? 4096 * 300 : 0,
+            path: "/data/pages.db",
+            oldest: stamps.length ? Math.min(...stamps) : null,
+            newest: stamps.length ? Math.max(...stamps) : null,
+          });
+        }
+        if (request.method === "DELETE" && path === "/v1/pages") {
+          pages.length = 0;
+          response.statusCode = 204;
+          return response.end();
         }
         if (request.method === "GET" && path === "/v1/pages") {
           const wanted = url.searchParams.get("site");
