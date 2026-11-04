@@ -8,6 +8,8 @@ from itertools import pairwise
 # Words that reverse or condition what follows. A quote that starts right after one, or that skips
 # one with an ellipsis, can say the opposite of the page.
 QUALIFIERS = {"not", "no", "never", "unless", "if", "except", "without", "only", "cannot"}
+# The line under a markdown table's header: "|---|:--:|".
+_SEPARATOR = re.compile(r"\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?")
 
 
 def quoted(quote: str, text: str) -> bool:
@@ -62,6 +64,23 @@ def placed(quote: str, text: str) -> list[tuple[int, int]] | None:
         # Back one, so the next fragment can start at the space this one ended on.
         position = found + len(fragment) - 1
     return spans
+
+
+def with_table_header(quote: str, text: str) -> str:
+    """`quote` with the header row of the markdown table it is a row of put before it, after an
+    ellipsis, so "Cold start 1.5ms 3ms 2ms" says which runtime each figure is for. Still on the
+    page word for word. A quote outside a table, or one that has the header, is returned as is."""
+    block: list[str] = []
+    for line in [*text.splitlines(), ""]:
+        if line.lstrip().startswith("|"):
+            block.append(line.strip())
+            continue
+        if len(block) > 2 and _SEPARATOR.fullmatch(block[1]):
+            header, rows = block[0], "\n".join(block[2:])
+            if quoted(quote, rows) and not quoted(quote, header):
+                return f"{header} ... {quote}"
+        block = []
+    return quote
 
 
 def names(entity: str, text: str) -> bool:

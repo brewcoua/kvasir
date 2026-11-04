@@ -27,7 +27,7 @@ from kvasir.research.read import (
 )
 from kvasir.research.render import matrix, render
 from kvasir.research.style import clean
-from kvasir.research.text import misleading, names, quoted
+from kvasir.research.text import misleading, names, quoted, with_table_header
 from kvasir.schemas.results import Cell, Criterion, Row
 
 
@@ -265,6 +265,47 @@ def test_intake_drops_a_quote_a_negation_turns_around():
     piece = "It never grows in the dark. The drug is not known to works. It was found in 1904."
 
     assert [c.text for c in intake(model, "b", "q", hit, piece, 1, 1)] == ["Found"]
+
+
+TABLE = (
+    "Benchmarks\n\n| Metric | WasmEdge | Wasmtime | Wasmer |\n|---|---|---|---|\n"
+    "| Cold start | 1.5ms | 3ms | 2ms |\n| Memory | 9MB | 12MB | 11MB |\n\nAfter the table."
+)
+
+
+def test_a_table_row_quote_gets_its_header():
+    quote = with_table_header("Cold start 1.5ms 3ms 2ms", TABLE)
+
+    assert quote == "| Metric | WasmEdge | Wasmtime | Wasmer | ... Cold start 1.5ms 3ms 2ms"
+    assert quoted(quote, TABLE)
+
+
+def test_a_quote_outside_a_table_or_with_its_header_is_unchanged():
+    with_header = "Metric WasmEdge Wasmtime Wasmer"
+
+    assert with_table_header("After the table", TABLE) == "After the table"
+    assert with_table_header(with_header, TABLE) == with_header
+
+
+def test_intake_stores_a_table_row_with_its_header():
+    model = DummyLM(
+        [
+            {
+                "findings": [
+                    {
+                        "claim": "Cold start",
+                        "quote": "Cold start 1.5ms 3ms 2ms",
+                        "confidence": "high",
+                    }
+                ]
+            }
+        ]
+    )
+    hit = {"url": "https://a", "title": "A"}
+
+    [claim] = intake(model, "b", "q", hit, TABLE, 1, 1)
+
+    assert claim.quote.startswith("| Metric | WasmEdge")
 
 
 def test_unreadable_claims_cost_the_piece_not_the_run(monkeypatch):

@@ -20,7 +20,7 @@ from kvasir.research.corpus import Corpus
 from kvasir.research.fetch import PIECE_CHARACTERS, FetchError, Page, fetch_page, split
 from kvasir.research.ground import grounded
 from kvasir.research.signatures import Intake
-from kvasir.research.text import misleading, quoted
+from kvasir.research.text import misleading, quoted, with_table_header
 from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder, cosine_similarity
@@ -321,7 +321,9 @@ def intake(
             Claim(
                 id=first_id + len(claims),
                 text=finding.claim,
-                quote=finding.quote,
+                # After the checks: the header's ellipsis would make `misleading` read the rows
+                # between.
+                quote=with_table_header(finding.quote, piece),
                 url=hit["url"],
                 title=hit["title"],
                 confidence=finding.confidence,

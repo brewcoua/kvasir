@@ -401,7 +401,9 @@ flowchart LR
 - **Quote check.** `quoted` keeps a claim only if its quote appears in the piece word for word.
   The comparison is on words alone, lower-cased, so a non-breaking hyphen or a line break where the
   page had an inline tag does not count as a difference. An ellipsis in the quote stands for words
-  left out, and the fragments must appear in order.
+  left out, and the fragments must appear in order. A quote that is a row of a markdown table is
+  stored with the table's header row before it (`with_table_header`), so the figures keep their
+  column labels; the stored quote is still on the page word for word.
 - **Qualifier check.** `misleading` drops a claim whose quote the page turns around: "grows"
   quoted from "it never grows" is on the page and means the opposite. The quote is dropped when
   either of the 2 words just before it in its sentence on the page, or any word an ellipsis stands for, is one of
