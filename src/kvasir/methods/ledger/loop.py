@@ -150,6 +150,8 @@ def research(
         attempt = stream.publish(
             stage,
             f"search {searches} of at most {budget}, for: {question.text}",
+            searches,
+            budget,
             kind="attempt",
             parent=parent,
             question=question.id,

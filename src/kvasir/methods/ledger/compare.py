@@ -44,7 +44,9 @@ def assess(
     total = len(entities) * len(criteria)
     vectors = encoder.encode([c.text for c in claims])
     for done, (row, criterion) in enumerate((row, c) for row in rows for c in criteria):
-        stream.publish(ASSESS, f"assessing {row.entity} on {criterion.name}", done, total)
+        stream.publish(
+            ASSESS, f"assessing {row.entity} on {criterion.name}", done, total, series="assess"
+        )
         row.cells.append(
             _cell(models["assess"], encoder, vectors, brief, claims, row.entity, criterion.name)
         )
@@ -202,6 +204,7 @@ def rank(
                 f"ranking on {criterion.name}, pass {turn} of 2",
                 2 * index + turn - 1,
                 2 * len(criteria),
+                series="rank",
             )
             # The mark is for the reader; the judge would read it as part of the finding.
             options = "\n".join(

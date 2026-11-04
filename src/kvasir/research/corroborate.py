@@ -63,13 +63,23 @@ def cross_check(
         asked = [(claim, other) for claim, other in pairs if (claim.id, other.id) not in agree]
         total = len(asked)
         stream.publish(
-            VERIFY, f"checking {total} pairs of claims from different sites for support", 0, total
+            VERIFY,
+            f"checking {total} pairs of claims from different sites for support",
+            0,
+            total,
+            series="support",
         )
         for done, (claim, other) in enumerate(asked, 1):
             if _supports(models, other, claim):
                 claim.corroborated_by.append(other.id)
                 agree.add((claim.id, other.id))
-            stream.publish(VERIFY, f"checked {done} of {total} pairs for support", done, total)
+            stream.publish(
+                VERIFY,
+                f"checked {done} of {total} pairs for support",
+                done,
+                total,
+                series="support",
+            )
     if contradict:
         _contradictions(models["contradict"], pairs, agree, stream)
     stream.publish(
@@ -102,7 +112,13 @@ def _contradictions(
         groups.setdefault(claim.id, (claim, []))[1].append(other)
     asked = list(groups.values())
     total = len(seen)
-    stream.publish(VERIFY, f"comparing {total} pairs of claims for disagreement", 0, total)
+    stream.publish(
+        VERIFY,
+        f"comparing {total} pairs of claims for disagreement",
+        0,
+        total,
+        series="disagreement",
+    )
     done = 0
     with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
         found_all = pool.map(lambda group: _disagreeing(model, *group), asked)
@@ -112,7 +128,11 @@ def _contradictions(
                 other.contradicted_by.append(claim.id)
             done += len(others)
             stream.publish(
-                VERIFY, f"compared {done} of {total} pairs for disagreement", done, total
+                VERIFY,
+                f"compared {done} of {total} pairs for disagreement",
+                done,
+                total,
+                series="disagreement",
             )
 
 

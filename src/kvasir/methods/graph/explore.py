@@ -161,6 +161,8 @@ def explore(
         attempt = stream.publish(
             RESEARCH,
             f"search {searches}, {left} min left, for: {question.text}",
+            searches,
+            budget,
             kind="attempt",
             question=question.id,
         )

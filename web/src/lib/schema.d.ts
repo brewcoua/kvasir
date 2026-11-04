@@ -952,6 +952,10 @@ export interface components {
             search?: number | null;
             /** Page */
             page?: number | null;
+            /** Series */
+            series?: string | null;
+            /** Updated At */
+            updated_at?: number | null;
         };
         /**
          * Recall

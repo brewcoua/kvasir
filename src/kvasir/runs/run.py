@@ -32,8 +32,15 @@ from kvasir.schemas.runs import (
 from kvasir.storm import runtime
 
 # Enough for every event and call of a long research run, and bounded so a long-lived process
-# cannot grow without limit. Neither is configuration worth exposing.
-MAX_EVENTS = 1000
+# cannot grow without limit. None is configuration worth exposing.
+# Events are capped per class, so a flood of one (counters, pages) cannot evict another. Steps are
+# the attempts, recalls, repairs, splits, sections and results; reading is pages and their parts.
+# Log lines are the events that are no step: summaries and the like. A counter is a series, one
+# event updated in place, so it is not capped; finished series are kept, bounded by repair passes.
+MAX_STEPS = 1000
+MAX_READING = 2000
+MAX_LOG = 500
+READING_KINDS = ("page", "part")
 MAX_CALLS = 2000
 MAX_SEARCHES = 1000
 # The calls, and the searches, a `status` carries. It is sent after every event, so it holds only
@@ -102,7 +109,13 @@ class Run:
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _stages: dict[str, _Stage] = field(default_factory=dict, repr=False)
-    _events: deque[Progress] = field(default_factory=lambda: deque(maxlen=MAX_EVENTS), repr=False)
+    _steps: deque[Progress] = field(default_factory=lambda: deque(maxlen=MAX_STEPS), repr=False)
+    _reading: deque[Progress] = field(default_factory=lambda: deque(maxlen=MAX_READING), repr=False)
+    _log: deque[Progress] = field(default_factory=lambda: deque(maxlen=MAX_LOG), repr=False)
+    _series: list[Progress] = field(default_factory=list, repr=False)
+    # The newest event of each (stage, series), finished or not.
+    _series_by_key: dict[tuple[str, str], Progress] = field(default_factory=dict, repr=False)
+    _latest: Progress | None = field(default=None, repr=False)
     _by_model: dict[str, Usage] = field(default_factory=dict, repr=False)
     _by_role: dict[str, Usage] = field(default_factory=dict, repr=False)
     _by_stage: dict[str, Usage] = field(default_factory=dict, repr=False)
@@ -162,17 +175,46 @@ class Run:
 
     def record_progress(self, event: Progress) -> None:
         with self._lock:
-            event.seq = self._next_event
-            self._next_event += 1
+            # When it was published: a series update takes its series' `at` below.
+            now = event.at
+            key = None if event.series is None else (event.stage, event.series)
+            live = self._series_by_key.get(key) if key is not None else None
+            if live is not None and live.total is not None and live.done >= live.total:
+                live = None
+            if live is not None:
+                # An update of a counter: it overwrites the stored event and shares its `seq`, and
+                # keeps its `at`, which is where the series began.
+                event.seq = live.seq
+                event.updated_at = event.at
+                event.at = live.at
+            else:
+                event.seq = self._next_event
+                self._next_event += 1
             if event.stage != self.stage:
                 if self.stage is not None:
-                    self._stages[self.stage].leave(event.at)
+                    self._stages[self.stage].leave(now)
                 # Re-entering a stage adds a span to the one already there: Co-STORM alternates
                 # between two stages for the length of a session.
-                self._stages.setdefault(event.stage, _Stage()).enter(event.at)
+                self._stages.setdefault(event.stage, _Stage()).enter(now)
                 self.stage = event.stage
-            self._events.append(event)
-        self._notify(event)
+            if live is not None:
+                live.done, live.total = event.done, event.total
+                live.detail, live.updated_at = event.detail, event.updated_at
+                self._latest = live
+            else:
+                # A copy: a series event is updated in place, and the caller keeps this one.
+                stored = event.model_copy()
+                if key is not None:
+                    self._series.append(stored)
+                    self._series_by_key[key] = stored
+                elif event.kind is None:
+                    self._log.append(stored)
+                elif event.kind in READING_KINDS:
+                    self._reading.append(stored)
+                else:
+                    self._steps.append(stored)
+                self._latest = stored
+        self._notify(event.model_copy())
 
     def record_lm(
         self,
@@ -343,7 +385,7 @@ class Run:
                 error=self.error,
                 usage=self._usage(),
                 planned_stages=self.planned_stages,
-                latest=self._events[-1] if self._events else None,
+                latest=None if self._latest is None else self._latest.model_copy(),
                 has_result=self.result is not None,
             )
 
@@ -368,7 +410,11 @@ class Run:
     def detail(self) -> RunDetail:
         status = self.status(calls=None)
         with self._lock:
-            return RunDetail(**dict(status), events=list(self._events), result=self.result)
+            return RunDetail(**dict(status), events=self._events(), result=self.result)
+
+    def _events(self) -> list[Progress]:
+        kept = (*self._steps, *self._reading, *self._log, *self._series)
+        return [event.model_copy() for event in sorted(kept, key=lambda event: event.seq or 0)]
 
     def _usage(self) -> RunUsage:
         return RunUsage(

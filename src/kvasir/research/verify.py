@@ -162,7 +162,11 @@ def cascade(
     ) -> None:
         verdicts[i] = Verdict(status, items[i][0] if text is None else text, decider, reason)
         stream.publish(
-            stage, f"checked {len(verdicts)} of {total} cited sentences", len(verdicts), total
+            stage,
+            f"checked {len(verdicts)} of {total} cited sentences",
+            len(verdicts),
+            total,
+            series="sentences",
         )
 
     def begin(step: str, pending: list[int]) -> None:
@@ -180,7 +184,13 @@ def cascade(
         answer = _ask(models["verify"], Verify, sentence=sentence, evidence=quoted_claims(evidence))
         return answer is not None and answer.verdict == "supported"
 
-    stream.publish(stage, f"checking {total} cited sentences against their quotes", 0, total)
+    stream.publish(
+        stage,
+        f"checking {total} cited sentences against their quotes",
+        0,
+        total,
+        series="sentences",
+    )
     pending = []
     for i, (_, evidence) in enumerate(items):
         if evidence:

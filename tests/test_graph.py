@@ -266,6 +266,7 @@ def test_an_attempt_is_followed_by_its_result(monkeypatch):
     [(attempt, _)] = [(i, f) for i, f in enumerate(stream.fields) if f.get("kind") == "attempt"]
     [result] = [f for f in stream.fields if f.get("kind") == "result"]
     assert stream.fields[attempt]["question"] == 1
+    assert (stream.fields[attempt]["done"], stream.fields[attempt]["total"]) == (1, 1)
     assert result["parent"] == attempt
     assert (result["done"], result["total"]) == (2, 2)
 

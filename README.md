@@ -354,7 +354,7 @@ so use a client that streams, and set a generous timeout.
 `at` is the Unix time of the event. `done` and `total` count progress through the stage when it has
 a countable unit, and are null otherwise: sections in `article`, conversation turns in `research`.
 The research `total` is an upper bound, since a conversation can end early. `seq` numbers the run's
-events from 0, and a model call's `event` names the event it followed.
+events from 0, and a model call's `event` names the event it followed. A counter event, such as the sentences checked, is sent again with the same `seq` and its original `at` as it advances; `updated_at` is the time of its latest update.
 
 Every streaming response opens with a `run` frame. Use its `run_id` to follow the run at
 `/v1/runs/{id}` if the client stops reading, and to attribute cost afterwards. A client that does
@@ -438,7 +438,7 @@ The same data is available as JSON.
 | Request | Effect |
 | --- | --- |
 | `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
-| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 searches, its last 1000 events, the questions a `graph` run has asked so far, and its result. |
+| `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 searches, its events (the last 1000 steps, 2000 pages and parts, and 500 log lines; a counter is one event), the questions a `graph` run has asked so far, and its result. |
 | `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
 | `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls and the last 50 searches after each `progress` and every 2 seconds in between. |

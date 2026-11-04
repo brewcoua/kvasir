@@ -15,6 +15,8 @@ from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import (
     DONE,
     MAX_CALLS,
+    MAX_LOG,
+    MAX_READING,
     STATUS_CALLS,
     Run,
     _current_run,
@@ -291,6 +293,82 @@ def test_a_call_is_linked_to_the_event_before_it_in_its_own_work():
         ("intake", 1),
         ("notes", 2),
     ]
+
+
+def counter(done, total=None, series="sentences", stage="verify"):
+    return Progress(stage=stage, detail=f"checked {done}", done=done, total=total, series=series)
+
+
+def test_a_series_is_one_event_and_flooding_it_keeps_the_steps():
+    run = Run(id="r", kind="research", topic="t")
+    for i in range(3):
+        run.record_progress(Progress(stage="research", detail=f"s{i}", kind="attempt"))
+    first = counter(0, 6000)
+    run.record_progress(first)
+    for done in range(1, 5001):
+        run.record_progress(counter(done, 6000))
+
+    events = run.detail().events
+    series = [event for event in events if event.series]
+    assert [event.kind for event in events].count("attempt") == 3
+    assert len(series) == 1
+    assert (series[0].seq, series[0].done, series[0].at) == (3, 5000, first.at)
+    assert series[0].updated_at is not None
+    assert run.detail().events[-1].seq == 3
+
+
+def test_a_finished_series_starts_a_new_event_on_its_next_update():
+    run = Run(id="r", kind="research", topic="t")
+    run.record_progress(counter(0, 2))
+    run.record_progress(counter(2, 2))
+    again = counter(0, 3)
+    run.record_progress(again)
+    run.record_progress(counter(1, 3))
+
+    series = [event for event in run.detail().events if event.series]
+    assert [(event.seq, event.done, event.total) for event in series] == [(0, 2, 2), (1, 1, 3)]
+    assert again.seq == 1
+
+
+def test_a_call_after_a_series_update_is_linked_to_its_shared_seq():
+    run = Run(id="r", kind="research", topic="t")
+    with runtime.record_usage_into(run), _current_run(run):
+        record_progress(counter(0, 5))
+        record_progress(Progress(stage="verify", detail="other"))
+        update = counter(1, 5)
+        record_progress(update)
+        runtime.lm_started("m", "verify")
+
+    assert update.seq == 0
+    assert [call.event for call in run.detail().calls] == [0]
+
+
+def test_each_class_of_event_is_evicted_on_its_own():
+    run = Run(id="r", kind="research", topic="t")
+    run.record_progress(Progress(stage="research", detail="a", kind="attempt"))
+    for i in range(MAX_READING + 5):
+        run.record_progress(Progress(stage="research", detail=f"p{i}", kind="page"))
+    for i in range(MAX_LOG + 5):
+        run.record_progress(Progress(stage="research", detail=f"l{i}"))
+
+    events = run.detail().events
+    kinds = [event.kind for event in events]
+    assert (kinds.count("attempt"), kinds.count("page"), kinds.count(None)) == (
+        1,
+        MAX_READING,
+        MAX_LOG,
+    )
+    assert [event.seq for event in events] == sorted(event.seq for event in events)
+
+
+def test_latest_is_the_updated_counter_even_when_later_events_exist():
+    run = Run(id="r", kind="research", topic="t")
+    run.record_progress(counter(0, 5))
+    run.record_progress(Progress(stage="verify", detail="later", kind="attempt"))
+    run.record_progress(counter(3, 5))
+
+    latest = run.summary().latest
+    assert (latest.seq, latest.done) == (0, 3)
 
 
 def test_call_content_is_kept_only_when_asked():

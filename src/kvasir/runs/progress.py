@@ -56,6 +56,7 @@ class ProgressStream:
         question: int | None = None,
         search: int | None = None,
         page: int | None = None,
+        series: str | None = None,
     ) -> int | None:
         """Queue an event, and log it. Safe to call from any thread.
 
@@ -77,6 +78,7 @@ class ProgressStream:
             question=question,
             search=search,
             page=page,
+            series=series,
         )
         record_progress(event)
         logger.info("%s", detail)
@@ -130,7 +132,11 @@ class StormProgressHandler(BaseCallbackHandler):
             self._turns += 1
             turns = self._turns
         self._stream.publish(
-            RESEARCH, f"completed conversation turn {turns}", turns, self._turns_total
+            RESEARCH,
+            f"completed conversation turn {turns}",
+            turns,
+            self._turns_total,
+            series="turns",
         )
 
     def on_information_gathering_end(self, **kwargs: Any) -> None:
@@ -151,7 +157,11 @@ class StormProgressHandler(BaseCallbackHandler):
     def on_article_generation_start(self, sections: list[str], **kwargs: Any) -> None:
         self._sections = len(sections)
         self._stream.publish(
-            ARTICLE, f"writing {self._sections} sections with citations", 0, self._sections
+            ARTICLE,
+            f"writing {self._sections} sections with citations",
+            0,
+            self._sections,
+            series="sections",
         )
 
     def on_section_generation_start(self, section: str, **kwargs: Any) -> None:
@@ -164,7 +174,11 @@ class StormProgressHandler(BaseCallbackHandler):
             self._sections_done += 1
             done = self._sections_done
         self._stream.publish(
-            ARTICLE, f"finished {section} ({done}/{self._sections})", done, self._sections
+            ARTICLE,
+            f"finished {section} ({done}/{self._sections})",
+            done,
+            self._sections,
+            series="sections",
         )
 
     def on_article_generation_end(self, **kwargs: Any) -> None:

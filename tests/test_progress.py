@@ -155,6 +155,8 @@ def test_frame_payload_is_json():
         "question": None,
         "search": None,
         "page": None,
+        "series": None,
+        "updated_at": None,
     }
 
 

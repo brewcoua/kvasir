@@ -18,7 +18,9 @@ class Progress(BaseModel):
     # Unix time the event was published, so a client can place it on a timeline.
     at: float = Field(default_factory=time.time)
     # How far through the stage the run is, when the stage has a countable unit such as sections.
-    # `total` is an upper bound for research turns, since a conversation may end early.
+    # `total` is an upper bound for research turns, since a conversation may end early. On an
+    # attempt, `done` is the searches made so far and `total` the most the run may make; research
+    # can stop sooner.
     done: int | None = None
     total: int | None = None
     # Its place in the run, numbered from 0, so a model call can name the event it followed. Null
@@ -40,6 +42,13 @@ class Progress(BaseModel):
     search: int | None = None
     # The 1-based index of the page within its attempt.
     page: int | None = None
+    # Names a counter within its stage, such as the sentences checked. Events of one series are one
+    # event: each update overwrites `done`, `total`, `detail` and `updated_at` and keeps `seq` and
+    # `at`, until `done` reaches `total`, after which the next update starts a new event. A client
+    # that follows live sees the same `seq` again with newer values.
+    series: str | None = None
+    # Unix time of the latest update of a series; null for an event that was never updated.
+    updated_at: float | None = None
 
 
 class Error(BaseModel):
