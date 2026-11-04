@@ -14,7 +14,7 @@ import numpy as np
 
 from kvasir.methods.ledger.questions import Question
 from kvasir.research.claims import Claim
-from kvasir.research.corroborate import domain
+from kvasir.research.corroborate import independent
 from kvasir.storm.encoder import Encoder, cosine_similarity
 
 # Above this cosine similarity, a new claim repeats one already held.
@@ -101,7 +101,7 @@ class Frontier:
                 best = int(np.argmax(scores))
                 if scores[best] >= DUPLICATE_CLAIM:
                     kept = self.claims[best]
-                    if domain(kept.url) != domain(claim.url):
+                    if independent(kept, claim):
                         kept.corroborated_by.append(claim.id)
                         added += 1
                     held.append(vector)

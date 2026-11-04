@@ -9,7 +9,7 @@ from fakes import Encoder, Logged, Stream, Vectors, claim, page, research_settin
 from kvasir.config import Settings
 from kvasir.research import verify
 from kvasir.research.corpus import Corpus
-from kvasir.research.corroborate import cross_check, domain, neighbours
+from kvasir.research.corroborate import copies, cross_check, domain, neighbours, registrable
 from kvasir.research.ground import PROMPT, grounded
 from kvasir.research.read import GAP, intake, read, supported
 from kvasir.runners import build_checker
@@ -114,8 +114,8 @@ def test_the_checker_decides_every_cited_sentence_against_all_it_cites():
 
     assert checked.sections == [("S", "One [1]. Both [1][2].")]
     assert checker.asked == [
-        PROMPT.format(document="claim 1\nq", claim="One."),
-        PROMPT.format(document="claim 1\nq\n\nclaim 2\nq", claim="Both."),
+        PROMPT.format(document="claim 1\nquote #1.", claim="One."),
+        PROMPT.format(document="claim 1\nquote #1.\n\nclaim 2\nquote #2.", claim="Both."),
     ]
 
 
@@ -326,6 +326,25 @@ def test_neighbours_are_close_claims_from_other_sites():
     # The same site, once `www.` is dropped, is no corroboration; claim 4 is about another thing.
     assert pairs == [(1, 3), (2, 3), (3, 1), (3, 2)]
     assert domain("https://www.A.org/x") == "a.org"
+
+
+def test_neighbours_are_not_subdomains_of_one_site_nor_a_copied_quote():
+    a, b, c, d = (
+        claim(1, "https://a.org", "The stone was found in the old quarry in 1904."),
+        claim(2, "https://blog.a.org", "Another quote."),
+        claim(3, "https://b.org", "the stone was  FOUND in the old quarry in 1904. Old."),
+        claim(4, "https://c.org"),
+    )
+    encoder = Vectors({f"claim {i}": [1, 0] for i in range(1, 5)})
+
+    pairs = sorted((x.id, y.id) for x, y in neighbours(encoder, [a, b, c, d]))
+
+    assert pairs == [(1, 4), (2, 3), (2, 4), (3, 2), (3, 4), (4, 1), (4, 2), (4, 3)]
+    assert registrable("https://a.org:8080/x") == registrable("https://blog.a.org") == "a.org"
+    assert registrable("http://127.0.0.1/x") == "127.0.0.1"
+    assert registrable("http://localhost/x") == "localhost"
+    assert not copies(claim(5, "https://d.org", "in 1904"), a)
+    assert not copies(claim(6, "https://d.org", ""), a)
 
 
 def test_cross_checking_records_support_and_disagreement():

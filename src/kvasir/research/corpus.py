@@ -34,7 +34,8 @@ RECALL_PER_SITE = 2
 # question, so that a thin search does not get a poor lead read in its place. A lead's worth is its
 # relevance, plus NOVELTY_WEIGHT (search.py's) times its novelty, plus AFFINITY_WEIGHT times its
 # site's affinity, plus RELATED_BONUS for a link in a related block. A site whose affinity reaches
-# SITE_AFFINITY earns a search of its own. No run reads more than PAGES_PER_SITE pages of one site.
+# SITE_AFFINITY earns a search of its own, SITE_SEARCHES of them at most in a run. No run reads
+# more than PAGES_PER_SITE pages of one site.
 LEADS_PER_PAGE = 20
 LEAD_DEPTH = 2
 LEAD_MIN = 0.5
@@ -42,6 +43,7 @@ AFFINITY_WEIGHT = 0.5
 RELATED_BONUS = 0.1
 SITE_AFFINITY = 1.0
 PAGES_PER_SITE = 6
+SITE_SEARCHES = 2
 
 _NON_WORD = re.compile(r"[\W_]+")
 
@@ -89,6 +91,7 @@ class Corpus:
         self.leads: dict[str, Lead] = {}
         self._refused: set[str] = set()
         self._site_searched: set[tuple[int, str]] = set()
+        self._site_searches = 0
 
     def add(self, page: Page, texts: list[str], vectors: np.ndarray) -> list[Piece]:
         """Add the pieces of `page`, none read yet, and return them."""
@@ -194,13 +197,17 @@ class Corpus:
 
     def site_query(self, question_id: int, question: str, claims: list[Claim]) -> str | None:
         """A search of the site with the highest affinity, `SITE_AFFINITY` or more, that this
-        question has not searched and that is under `PAGES_PER_SITE`. None when no site is one."""
+        question has not searched and that is under `PAGES_PER_SITE`. None when no site is one, or
+        after `SITE_SEARCHES` in the run."""
+        if self._site_searches >= SITE_SEARCHES:
+            return None
         affinity = self._affinity(claims)
         for site in sorted(affinity, key=lambda site: -affinity[site]):
             if affinity[site] < SITE_AFFINITY:
                 break
             if self.pages[site] < PAGES_PER_SITE and (question_id, site) not in self._site_searched:
                 self._site_searched.add((question_id, site))
+                self._site_searches += 1
                 return f"site:{site} {question}"
         return None
 

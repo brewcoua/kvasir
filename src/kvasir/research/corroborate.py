@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import numpy as np
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 from pydantic import ValidationError
+from tld import get_fld
 
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
@@ -27,6 +28,9 @@ from kvasir.storm.lm import GatewayModel
 NEIGHBOURS = 3
 # Below this cosine similarity, two claims are taken to be about different things.
 SAME_FACT = 0.8
+# Words a quote needs before another quote holding it counts as a copy: a figure or a name quoted
+# by two sites is two sources.
+COPY_WORDS = 8
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,25 @@ logger = logging.getLogger(__name__)
 def domain(url: str) -> str:
     host = urlparse(url).netloc.lower()
     return host.removeprefix("www.")
+
+
+def registrable(url: str) -> str:
+    """The domain a site is registered under, so `blog.a.org` and `a.org` are one source; the
+    host when it has none, as an IP address or `localhost`."""
+    return get_fld(url, fail_silently=True) or domain(url)
+
+
+def copies(claim: Claim, other: Claim) -> bool:
+    """Whether the quotes of `claim` and `other` are one text, or one of `COPY_WORDS` words or
+    more holds the other."""
+    a, b = sorted((" ".join(c.quote.casefold().split()) for c in (claim, other)), key=len)
+    return bool(a) and (a == b or (len(a.split()) >= COPY_WORDS and a in b))
+
+
+def independent(claim: Claim, other: Claim) -> bool:
+    """Whether `other` is a second source for `claim`: another registrable domain, and not a copy
+    of its quote."""
+    return registrable(claim.url) != registrable(other.url) and not copies(claim, other)
 
 
 def cross_check(
@@ -142,13 +165,12 @@ def neighbours(encoder: Encoder, claims: list[Claim]) -> list[tuple[Claim, Claim
         return []
     vectors = encoder.encode([claim.text for claim in claims])
     similarity = cosine_similarity(vectors, vectors)
-    sites = [domain(claim.url) for claim in claims]
     pairs: list[tuple[Claim, Claim]] = []
     for i, claim in enumerate(claims):
         close = [
             int(j)
             for j in np.argsort(similarity[i])[::-1]
-            if sites[j] != sites[i] and similarity[i][j] >= SAME_FACT
+            if similarity[i][j] >= SAME_FACT and independent(claim, claims[j])
         ]
         pairs.extend((claim, claims[j]) for j in close[:NEIGHBOURS])
     return pairs

@@ -13,6 +13,7 @@ dependencies = [
     "fastapi==0.141.1",
     "httpx==0.28.1",
     "pydantic==2.13.4",
+    "tld==0.13.2",
     "trafilatura==2.3.1",
     "uvicorn==0.52.3",
     # src/kvasir/storm is a fork of knowledge_storm, so its dependencies are declared here rather

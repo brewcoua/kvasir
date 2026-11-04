@@ -14,6 +14,7 @@ from kvasir.research.corpus import (
     LEAD_DEPTH,
     PAGES_PER_SITE,
     SITE_AFFINITY,
+    SITE_SEARCHES,
     Corpus,
 )
 from kvasir.research.fetch import FetchError, Link, Page, allowed
@@ -398,3 +399,15 @@ def test_a_site_search_needs_the_affinity_and_a_site_with_pages_left():
 
     corpus.pages["b.org"] = PAGES_PER_SITE
     assert corpus.site_query(1, "when", confirmed("b.org", PAGES_PER_SITE)) is None
+
+
+def test_a_run_makes_no_more_than_the_site_searches():
+    corpus = Corpus()
+    claims = []
+    for site in ("a.org", "b.org", "c.org"):
+        corpus.pages[site] = 2
+        claims += confirmed(site, 2)
+
+    found = [corpus.site_query(i, "when", claims) for i in range(SITE_SEARCHES + 1)]
+
+    assert all(found[:SITE_SEARCHES]) and found[SITE_SEARCHES] is None

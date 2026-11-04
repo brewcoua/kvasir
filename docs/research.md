@@ -467,7 +467,7 @@ refuses, a lead costing little to skip. A search result is not checked against `
 
 A site whose affinity reaches `SITE_AFFINITY` (1.0) earns a site search: for a question already
 searched once, the query is `site:<domain> <question>` in place of the planner's, once a question
-and site. The weights and thresholds of this section are first guesses, not tuned.
+and site, and no more than `SITE_SEARCHES` (2) in a run. The weights and thresholds of this section are first guesses, not tuned.
 
 ## Ranking and comparing
 
@@ -606,7 +606,9 @@ its finding, marked `[unverified]`. Both are recorded under the table's title in
 
 **Corroborate and contradict.** With `corroborate` or `contradict`, `research/corroborate.py` runs
 after repair. Each claim is paired with up to 3 claims from other sites (`NEIGHBOURS`) at a cosine
-similarity of 0.8 or more (`SAME_FACT`). Pages of one site, with `www.` dropped, are one source.
+similarity of 0.8 or more (`SAME_FACT`). Sites sharing a registrable domain (`blog.a.org`, `a.org`)
+are one source, and a claim whose quote is another's, or holds it when that quote has 8 words or
+more (`COPY_WORDS`), once case and spacing are ignored, is a copy and no second source. The frontier's merge applies the same two rules.
 For each pair, the checker, or `Verify` without one, decides whether the other claim supports this
 one; if so it goes in `corroborated_by`. Then, with `contradict`, each pair in which neither claim
 supports the other is asked once whether the two cannot both be true, and each goes in the other's

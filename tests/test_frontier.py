@@ -34,6 +34,23 @@ def test_a_repeat_from_another_site_adds_a_source_and_from_the_same_site_nothing
     assert held.corroborated_by == [3]
 
 
+def test_a_repeat_from_a_subdomain_or_with_a_copied_quote_adds_no_source():
+    held = claim(1, "https://a.org/1", "The stone was found in the old quarry in 1904.")
+    claims = [held]
+    encoder = Vectors({"brief": [1, 1], "claim 1": [1, 0], "claim 2": [1, 0], "claim 3": [1, 0]})
+    frontier = Frontier(encoder, "brief", claims)
+
+    subdomain = claim(2, "https://blog.a.org/2")
+    copied = claim(
+        3, "https://b.org", "  the STONE was found in the\nold quarry in 1904. It is old. "
+    )
+    claims.extend([subdomain, copied])
+
+    assert frontier.merge([subdomain, copied]) == 0
+    assert held.corroborated_by == []
+    assert len(claims) == 3
+
+
 def test_a_branch_that_adds_nothing_is_closed_and_its_follow_ups_skipped():
     first = Question(id=1, text="first")
     follow_up = Question(id=2, text="follow-up", parent=1, depth=1)

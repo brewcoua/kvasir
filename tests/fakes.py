@@ -82,7 +82,8 @@ class Logged(DummyLM):
         return super().__call__(*args, **kwargs)
 
 
-def claim(id, url, quote="q"):
+def claim(id, url, quote=None):
+    quote = quote or f"quote #{id}."
     return Claim(
         id=id, text=f"claim {id}", quote=quote, url=url, title=url, confidence="high", step=1
     )

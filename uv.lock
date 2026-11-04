@@ -664,6 +664,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
     { name = "pypdf" },
+    { name = "tld" },
     { name = "trafilatura" },
     { name = "uvicorn" },
 ]
@@ -695,6 +696,7 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'browser'", specifier = "==1.64.1" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pypdf", specifier = "==6.21.4" },
+    { name = "tld", specifier = "==0.13.2" },
     { name = "trafilatura", specifier = "==2.3.1" },
     { name = "uvicorn", specifier = "==0.52.3" },
 ]
