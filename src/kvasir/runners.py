@@ -75,7 +75,8 @@ _COSTORM_ROLES = {
 # return lists of claims, which need more room than a plan's handful of queries.
 _RESEARCH_ROLES = {
     "clarify": ("fast", 500),
-    "brief": ("strong", 1000),
+    # The strong model thinks before it answers too; a brief alone once used 876 of 1000.
+    "brief": ("strong", 2500),
     "decompose": ("reason", 2000),
     "plan": ("fast", 500),
     "check": ("reason", 2500),
