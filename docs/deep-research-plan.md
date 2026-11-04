@@ -351,7 +351,8 @@ SearXNG.
 1. **Page text extraction.** `beautifulsoup4` is already a dependency and needs no new code beyond
    dropping scripts, styles and navigation. `trafilatura` extracts main content better but was
    removed from the fork with its dependency tree. Proposed: `beautifulsoup4` first, and switch only
-   if intake shows it reading menus and footers.
+   if intake shows it reading menus and footers. Decided 2026-11-04: intake did, so pages are now
+   read with trafilatura, `beautifulsoup4` kept as the fallback. See [`web-plan.md`](web-plan.md).
 2. **PDFs.** Many company and sector sources are PDFs. Decided: read their text layer with
    `pypdf`, which is BSD-licensed and pure Python. PyMuPDF is AGPL. A PDF that is scanned,
    encrypted or cut off at the 20 MB download cap falls back to its search snippet. There is no

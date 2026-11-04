@@ -7,22 +7,37 @@ then picked greedily, skipping a repeated domain or a near-duplicate snippet, as
 relevance (Carbonell and Goldstein, 1998). Without an encoder only SearXNG's score and the domain
 skip apply.
 
+A run's leads, the links of pages it read, join each query's results as candidates, at most
+LEADS_PER_QUERY of them picked. Their worth stands in for SearXNG's score, which a lead has not. A
+lead is picked only if its site's robots.txt allows it; a result is fetched as it is. No hit is
+picked from a site the run has read its limit of pages from.
+
 The weights are not tuned. They are a first guess, to be kept or changed on evaluation.
 """
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+import re
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from kvasir.research import fetch
 from kvasir.research.corroborate import domain
 from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder, cosine_similarity
 from kvasir.storm.rm import SearXNG
 
+if TYPE_CHECKING:
+    from kvasir.research.claims import Claim
+    from kvasir.research.corpus import Corpus
+
 # Results of one query that are ranked; the rest are dropped.
 POOL = 20
+# Engines read the first few dozen words of a query and ignore the rest, so a longer one only adds
+# noise; a planner that degenerated once wrote thousands of characters of quoted terms.
+MAX_QUERY_CHARACTERS = 300
 # Reciprocal rank fusion's constant, 60 in the paper: how flat the reward for a high rank is.
 RRF_K = 60
 # What each ranking adds to the fused score.
@@ -31,6 +46,31 @@ RELEVANCE_WEIGHT = 1.0
 NOVELTY_WEIGHT = 0.5
 # Above this cosine similarity, a snippet repeats one already picked for the query.
 NEAR_DUPLICATE = 0.9
+# Leads picked for one query, however many are worth reading.
+LEADS_PER_QUERY = 2
+
+logger = logging.getLogger(__name__)
+
+# What a cut query must not end on: a boolean operator, or a prefix operator whose term was cut.
+_DANGLING = re.compile(r"\s*(?:\b(?:OR|AND|NOT)|[-+!|])\s*$")
+
+
+def _cap(query: str) -> str:
+    """`query` cut to `MAX_QUERY_CHARACTERS` at a word boundary, without a half-quoted term or an
+    operator left hanging by the cut."""
+    if len(query) <= MAX_QUERY_CHARACTERS:
+        return query
+    cut = query[:MAX_QUERY_CHARACTERS]
+    space = cut.rfind(" ")
+    if not query[MAX_QUERY_CHARACTERS].isspace() and space > 0:
+        cut = cut[:space]
+    if cut.count('"') % 2:
+        cut = cut[: cut.rindex('"')]
+    cut = cut.rstrip()
+    while match := _DANGLING.search(cut):
+        cut = cut[: match.start()]
+    logger.info("search query cut from %d to %d characters", len(query), len(cut))
+    return cut
 
 
 class SearchUnavailable(RuntimeError):
@@ -49,6 +89,9 @@ def search(
     encoder: Encoder | None = None,
     question: str = "",
     held: np.ndarray | None = None,
+    *,
+    corpus: Corpus | None = None,
+    claims: list[Claim] | None = None,
 ) -> list[dict[str, Any]]:
     """Results not read before, at most `per_query` from each query. Marks them seen.
 
@@ -56,21 +99,35 @@ def search(
     there is an `encoder`, and with their distance from the vectors in `held` when there are any.
     At most one result per domain is taken, and none that repeats another's snippet; the next
     ranked takes a skipped one's place. Skipped results are not marked seen.
+
+    With a `corpus` and an `encoder`, its leads for `question` join the results, as many as
+    `LEADS_PER_QUERY` picked. `claims` are what the leads' site affinity is counted from.
     """
     hits = []
     failures: list[str] = []
     for query in queries:
         runtime.record_search_usage("SearXNG", 1)
-        found = searxng(query, exclude_urls=list(seen))
+        found = searxng(_cap(query), exclude_urls=list(seen))
         failures += searxng.failures
-        pool = sorted(
+        results = sorted(
             (hit for hit in found if hit["url"] not in seen),
             key=lambda hit: hit.get("score", 0.0),
             reverse=True,
         )[:POOL]
+        leads = (
+            corpus.leads_for(encoder, question, held, claims or [], seen, POOL)
+            if corpus is not None and encoder is not None
+            else []
+        )
+        pool = [*results, *leads]
         if not pool:
             continue
-        fused = [SEARXNG_WEIGHT / (RRF_K + rank) for rank in range(1, len(pool) + 1)]
+        # Results by SearXNG's score, leads by their worth.
+        fused = [
+            SEARXNG_WEIGHT / (RRF_K + rank)
+            for ranks in (len(results), len(leads))
+            for rank in range(1, ranks + 1)
+        ]
         vectors = None
         if encoder is not None:
             vectors = np.asarray(
@@ -89,16 +146,26 @@ def search(
                     fused[i] += weight / (RRF_K + rank)
         picked: list[int] = []
         domains: set[str] = set()
+        followed = 0
         for i in sorted(range(len(pool)), key=lambda i: -fused[i]):
             if len(picked) == per_query:
                 break
-            if domain(pool[i]["url"]) in domains:
+            is_lead = i >= len(results)
+            if domain(pool[i]["url"]) in domains or (
+                corpus is not None and corpus.full(pool[i]["url"])
+            ):
+                continue
+            if is_lead and followed == LEADS_PER_QUERY:
                 continue
             if vectors is not None and any(
                 cosine_similarity(vectors[i], vectors[j])[0][0] > NEAR_DUPLICATE for j in picked
             ):
                 continue
+            if corpus is not None and is_lead and not fetch.allowed(pool[i]["url"]):
+                corpus.refuse(pool[i]["url"])
+                continue
             picked.append(i)
+            followed += is_lead
             domains.add(domain(pool[i]["url"]))
             seen.add(pool[i]["url"])
             hits.append(pool[i])

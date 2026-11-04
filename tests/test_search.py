@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
 from fakes import Search, Vectors
-from kvasir.research.search import search
+from kvasir.research.search import MAX_QUERY_CHARACTERS, search
 
 QUESTION = "when was the stone found"
 
@@ -92,3 +94,47 @@ def test_what_the_run_holds_lowers_a_hit_it_repeats():
     picked = search(Search(hits), ["q"], 1, set(), encoder, QUESTION, held)
 
     assert urls(picked) == ["new"]
+
+
+class Recording(Search):
+    def __init__(self):
+        super().__init__([])
+        self.queries = []
+
+    def __call__(self, query, exclude_urls):
+        self.queries.append(query)
+        return super().__call__(query, exclude_urls)
+
+
+def test_a_degenerate_query_reaches_searxng_capped_with_balanced_quotes(caplog):
+    terms = " ".join(f'"Linux 6.{n}"' for n in range(12, 400))
+    query = f'{terms} "Linux 6.4'
+    searxng = Recording()
+
+    with caplog.at_level(logging.INFO, logger="kvasir.research.search"):
+        search(searxng, [query], 3, set())
+
+    (sent,) = searxng.queries
+    assert len(query) > 10 * MAX_QUERY_CHARACTERS
+    assert len(sent) <= MAX_QUERY_CHARACTERS
+    assert sent.count('"') % 2 == 0
+    assert sent.endswith('"')
+    assert query.startswith(sent)
+    assert "cut from" in caplog.text
+
+
+def test_a_cut_leaves_no_dangling_operator():
+    searxng = Recording()
+    query = "word " * 59 + "OR -" + "x" * 50
+
+    search(searxng, [query], 3, set())
+
+    assert searxng.queries == [("word " * 59).rstrip()]
+
+
+def test_a_short_query_is_sent_as_written():
+    searxng = Recording()
+
+    search(searxng, ['"a b" OR c'], 3, set())
+
+    assert searxng.queries == ['"a b" OR c']

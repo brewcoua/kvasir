@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 import dspy  # type: ignore[import-untyped]
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from kvasir.schemas.results import Output
 
@@ -51,11 +51,26 @@ class PlanQueries(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc="search engine queries")
 
 
+# How central a question is to the brief, most central first.
+Priority = Literal["core", "supporting", "peripheral"]
+
+
 class NamedQuestion(BaseModel):
-    """A question, and the short name a graph of the research shows it by."""
+    """A question, the short name a graph of the research shows it by, and how central it is."""
 
     title: str = Field(description="two to five words naming what the question asks about")
     question: str
+    priority: Priority = Field(
+        default="supporting",
+        description="core: the brief cannot be answered without it; supporting: it explains or "
+        "qualifies the answer; peripheral: background a good answer can do without",
+    )
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _unknown(cls, value: object) -> object:
+        # A priority is only an ordering hint, so a word outside the three fails no reply.
+        return value if value in ("core", "supporting", "peripheral") else "supporting"
 
 
 class Decompose(dspy.Signature):

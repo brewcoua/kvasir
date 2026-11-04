@@ -18,8 +18,10 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
-from kvasir.api import methods, runs, sessions, tasks
+from kvasir.api import methods, pages, runs, sessions, tasks
 from kvasir.config import Settings, apply_environment
+from kvasir.research import fetch
+from kvasir.research.pages import PageStore
 from kvasir.runs.registry import (
     CallContentNotFound,
     RunNotFound,
@@ -28,7 +30,7 @@ from kvasir.runs.registry import (
 )
 from kvasir.runs.store import RunStore
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
-from kvasir.storm.runtime import configure_concurrency, configure_context
+from kvasir.storm.runtime import configure_concurrency, configure_context, configure_fetch
 
 READINESS_TIMEOUT_SECONDS = 5.0
 # Built from web/ by `pnpm build`, which the image does and a checkout has to.
@@ -45,6 +47,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     apply_environment()
     configure_concurrency(settings.max_threads)
     configure_context(settings.model.context_tokens)
+    configure_fetch(
+        settings.fetch.contact,
+        settings.fetch.host_interval_seconds,
+        settings.fetch.render,
+        settings.fetch.stealth,
+    )
+    fetch.configure_cache(PageStore(settings.pages_db), settings.fetch.max_age_hours)
     logs.configure(settings)
 
     app.state.settings = settings
@@ -72,7 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
-for module in (runs, methods, tasks, sessions):
+for module in (runs, methods, pages, tasks, sessions):
     app.include_router(module.router)
 
 
@@ -149,6 +158,11 @@ async def _call_content_not_found(request: Request, exc: CallContentNotFound) ->
 @app.exception_handler(SearchContentNotFound)
 async def _search_content_not_found(request: Request, exc: SearchContentNotFound) -> JSONResponse:
     return JSONResponse({"message": f"no results kept for search {exc}"}, status_code=404)
+
+
+@app.exception_handler(pages.PagesError)
+async def _pages_error(request: Request, exc: pages.PagesError) -> JSONResponse:
+    return JSONResponse({"message": str(exc)}, status_code=exc.status_code)
 
 
 @app.exception_handler(SessionNotFound)

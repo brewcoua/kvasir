@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from dspy.utils.dummies import DummyLM
 
 import kvasir.methods.ledger.loop as research_loop
-from fakes import PAGE, Encoder, Logged, Search, Stream, claim, research_settings
+from fakes import PAGE, Encoder, Logged, Search, Stream, claim, page, research_settings
 from kvasir.methods.ledger.brief import clarifications
 from kvasir.methods.ledger.compare import ordered, rank, verify_cells
 from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
@@ -15,6 +16,7 @@ from kvasir.methods.ledger.questions import Question, add_questions, open_questi
 from kvasir.methods.ledger.repair import repair
 from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.claims import Claim
+from kvasir.research.corpus import Corpus, Piece
 from kvasir.research.fetch import FetchError, extract
 from kvasir.research.search import SearchUnavailable
 from kvasir.research.verify import Verified
@@ -99,9 +101,9 @@ def test_a_run_reads_pages_keeps_quoted_claims_and_cites_them(settings, monkeypa
     def fake_fetch(url):
         if url == "https://b":
             raise FetchError("blocked")
-        return extract(PAGE)
+        return page(extract(PAGE))
 
-    monkeypatch.setattr("kvasir.research.read.fetch_text", fake_fetch)
+    monkeypatch.setattr("kvasir.research.read.fetch_page", fake_fetch)
     stream = Stream()
 
     result = run_research(settings, *ask(question="When was the Kvasir stone found?"), stream)
@@ -163,7 +165,7 @@ def test_a_run_with_no_evidence_writes_nothing(settings, monkeypatch):
         "kvasir.methods.ledger.method.build_research_tools",
         lambda settings: (Encoder(), Search(hits)),
     )
-    monkeypatch.setattr("kvasir.research.read.fetch_text", lambda url: "nothing relevant")
+    monkeypatch.setattr("kvasir.research.read.fetch_page", lambda url: page("nothing relevant"))
     stream = Stream()
 
     result = run_research(settings, *ask(question="q", max_searches=1), stream)
@@ -255,8 +257,8 @@ def test_a_ranking_run_ranks_each_criterion_twice_and_tables_the_cells(settings,
         lambda settings: (Encoder(), Search(hits)),
     )
     monkeypatch.setattr(
-        "kvasir.research.read.fetch_text",
-        lambda url: "Alpha runs at 50 tok/s. Beta runs at 20 tok/s.",
+        "kvasir.research.read.fetch_page",
+        lambda url: page("Alpha runs at 50 tok/s. Beta runs at 20 tok/s."),
     )
     stream = Stream()
 
@@ -411,7 +413,7 @@ def test_criteria_and_options_named_in_the_question_are_final(settings, monkeypa
         "kvasir.methods.ledger.method.build_research_tools",
         lambda settings: (Encoder(), Search(hits)),
     )
-    monkeypatch.setattr("kvasir.research.read.fetch_text", lambda url: "nothing relevant")
+    monkeypatch.setattr("kvasir.research.read.fetch_page", lambda url: page("nothing relevant"))
     stream = Stream()
 
     run_research(
@@ -450,7 +452,7 @@ def test_a_chosen_option_the_search_never_mentions_is_dropped(settings, monkeypa
         "kvasir.methods.ledger.method.build_research_tools",
         lambda settings: (Encoder(), Search(hits)),
     )
-    monkeypatch.setattr("kvasir.research.read.fetch_text", lambda url: "nothing relevant")
+    monkeypatch.setattr("kvasir.research.read.fetch_page", lambda url: page("nothing relevant"))
     stream = Stream()
 
     run_research(settings, *ask(question="Rank phones on price", max_searches=1), stream)
@@ -473,6 +475,7 @@ def test_a_run_whose_searches_all_fail_stops_with_the_reason(settings, monkeypat
             ],
             "decompose": [{"questions": [{"title": "t", "question": "q?"}]}],
             "plan": [{"query": "q1"}, {"query": "q2"}, {"query": "q3"}],
+            "intake": [],
         },
     )
     failing = Search([], ["brave: Suspended: too many requests", "duckduckgo: CAPTCHA"])
@@ -505,11 +508,23 @@ class Pages:
 
 
 def loop(
-    monkeypatch, questions, found, judge, budget=16, max_attempts=4, search=None, frontier=None
+    monkeypatch,
+    questions,
+    found,
+    judge,
+    budget=16,
+    max_attempts=4,
+    search=None,
+    frontier=None,
+    recalled=None,
+    stream=None,
+    **options,
 ):
     """Run `_research` over `questions`, the model writing `query N` and reading `found`.
 
-    `found` maps a query number to the claim texts its page yields. Returns the search, the shapes
+    `found` maps a query number to the claim texts its page yields. `recalled` maps the number of
+    searches made so far to the claim texts a recall then yields; each search adds a piece to the
+    corpus, as reading its page does. Returns the search, the shapes
     the model was asked for and the claims gathered.
     """
     shapes = []
@@ -520,14 +535,46 @@ def loop(
         return type("Prediction", (), {"query": f"query {len(shapes)}"})
 
     def read(
-        model, encoder, brief, question, hits, first_id, step, label, stream, checker, attempt=None
+        model,
+        encoder,
+        brief,
+        question,
+        hits,
+        first_id,
+        step,
+        label,
+        stream,
+        corpus,
+        checker,
+        attempt=None,
+        stage="research",
     ):
         texts = found.get(len(shapes), []) if hits else []
+        corpus.pieces.append(Piece(page("p"), "piece", np.zeros(1)))
         return [claim(first_id + i, hits[0]["url"]) for i, _ in enumerate(texts)]
 
     monkeypatch.setattr(research_loop, "predict", predict)
+
+    def recall(
+        model,
+        encoder,
+        brief,
+        question,
+        corpus,
+        first_id,
+        step,
+        label,
+        stream,
+        checker,
+        **fields,
+    ):
+        texts = (recalled or {}).get(len(shapes), [])
+        return [claim(first_id + i, "https://held") for i, _ in enumerate(texts)]
+
     monkeypatch.setattr(research_loop, "read", read)
+    monkeypatch.setattr(research_loop, "recall", recall)
     search = search or Pages()
+    corpus = Corpus()
     claims: list[Claim] = []
     searches = research_loop.research(
         {"plan": None, "intake": None},
@@ -538,13 +585,15 @@ def loop(
         questions,
         claims,
         set(),
+        corpus,
         budget,
         1,
         max_attempts,
         judge,
         0,
-        Stream(),
+        stream or Stream(),
         frontier(claims) if frontier else None,
+        **options,
     )
     return searches, shapes, claims
 
@@ -584,6 +633,75 @@ def test_a_question_another_search_answered_costs_no_search(monkeypatch):
     assert searches == 1
     assert judged == [1, 2]
     assert second.queries == []
+
+
+def test_a_question_recall_answers_costs_no_search(monkeypatch):
+    first, second = Question(id=1, text="a"), Question(id=2, text="b")
+    search = Pages()
+
+    def judge(question):
+        question.judged_at = 1
+        question.status = "answered"
+
+    # The first search leaves a piece that answers the second question.
+    loop(monkeypatch, [first, second], {1: ["a"]}, judge, search=search, recalled={1: ["b"]})
+
+    assert len(search.queries) == 1
+    assert second.queries == []
+    assert second.status == "answered"
+
+
+def test_a_recall_that_finds_nothing_leads_to_a_search(monkeypatch):
+    question = Question(id=1, text="a")
+    search = Pages()
+
+    loop(monkeypatch, [question], {}, judge=lambda q: None, max_attempts=1, search=search)
+
+    assert question.queries == ["query 1"]
+    assert len(search.queries) == 1
+
+
+def settle(question):
+    question.judged_at = 99
+
+
+def test_a_question_recall_leaves_open_is_still_searched(monkeypatch):
+    question = Question(id=1, text="a")
+    search = Pages()
+
+    loop(
+        monkeypatch,
+        [question],
+        {},
+        judge=settle,
+        max_attempts=1,
+        search=search,
+        recalled={0: ["half"]},
+    )
+
+    assert len(search.queries) == 1
+
+
+def test_recall_does_not_consume_the_budget(monkeypatch):
+    questions = [Question(id=1, text="a"), Question(id=2, text="b")]
+    search = Pages()
+
+    def judge(question):
+        question.judged_at = 99
+
+    searches, _, claims = loop(
+        monkeypatch,
+        questions,
+        {},
+        judge=judge,
+        budget=3,
+        search=search,
+        recalled={0: ["x"], 1: ["y"], 2: ["z"]},
+    )
+
+    assert searches == 3
+    assert len(search.queries) == 3
+    assert len(claims) > 0
 
 
 def test_a_failed_search_spends_the_budget_but_not_the_attempt(monkeypatch):
@@ -676,7 +794,7 @@ def test_a_section_whose_removed_sentence_the_search_supports_is_written_again()
     ]
     searched = []
 
-    def research(questions, budget, judge):
+    def research(questions, budget, judge, stage, parent):
         searched.append([(q.text, q.missing) for q in questions])
         claims.append(claim(2, "https://b", quote="solid gold"))
         questions[0].status, questions[0].claims = "answered", [2]
@@ -697,6 +815,7 @@ def test_a_section_whose_removed_sentence_the_search_supports_is_written_again()
         "brief",
         ["Findings"],
         claims,
+        5,
         Verified(
             [("Ranking", "| table |"), ("Findings", "Found in 1904 [1].")],
             removed,
@@ -739,3 +858,105 @@ def test_the_frontier_stops_searching_a_branch_that_adds_nothing(monkeypatch):
     assert spent.attempts == BRANCH_STALL
     assert answering.attempts == 4
     assert searches == BRANCH_STALL + 4
+
+
+def test_a_site_query_stands_in_for_the_planned_query_of_a_later_attempt(monkeypatch):
+    question = Question(id=1, text="a")
+    asked = []
+
+    def site_query(self, question_id, text, claims):
+        asked.append(question_id)
+        return "site:example.org a"
+
+    monkeypatch.setattr(Corpus, "site_query", site_query)
+
+    _, shapes, _ = loop(monkeypatch, [question], {}, judge=lambda q: None, max_attempts=2)
+
+    # The first attempt is planned; the second needs no planner call.
+    assert question.queries == ["query 1", "site:example.org a"]
+    assert len(shapes) == 1
+    assert asked == [1]
+
+
+def test_a_ledger_run_records_its_questions_before_the_research_ends(settings, monkeypatch):
+    fake_models(
+        monkeypatch,
+        {
+            "brief": [
+                {
+                    "brief": "b",
+                    "assumptions": [],
+                    "output": "report",
+                    "criteria": [],
+                    "entities": [],
+                }
+            ],
+            "decompose": [{"questions": [{"title": "t", "question": "q?"}]}],
+            "plan": [{"query": "q"}],
+            "intake": [{"findings": []}],
+        },
+    )
+    hits = [{"url": "https://a", "title": "A", "description": "nothing", "snippets": []}]
+    monkeypatch.setattr(
+        "kvasir.methods.ledger.method.build_research_tools",
+        lambda settings: (Encoder(), Search(hits)),
+    )
+    monkeypatch.setattr("kvasir.research.read.fetch_page", lambda url: page("nothing relevant"))
+    stream = Stream()
+    seen = []
+
+    def record(questions):
+        seen.append((len(stream.events), [(q.id, q.status) for q in questions]))
+
+    monkeypatch.setattr("kvasir.methods.ledger.method.record_questions", record)
+    monkeypatch.setattr(research_loop, "record_questions", record)
+
+    run_research(settings, *ask(question="q", max_searches=1), stream)
+
+    result = next(i for i, f in enumerate(stream.fields) if f.get("kind") == "result")
+    # Once the questions exist, then before the result event, with the status it reports.
+    assert seen[0] == (2, [(1, "open")])
+    assert seen[-1] == (result, [(1, "open")])
+    assert stream.events[result][1].endswith("q?: open")
+
+
+def test_a_repair_searches_under_its_own_event_and_leaves_the_ledger_alone(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(research_loop, "record_questions", recorded.append)
+    stream = Stream()
+    removed = [
+        RemovedSentence(section="Findings", sentence="One [1].", reason="no"),
+        RemovedSentence(section="Findings", sentence="Two [1].", reason="no"),
+    ]
+
+    def research(questions, budget, judge, stage, parent):
+        loop(
+            monkeypatch,
+            questions,
+            {},
+            judge,
+            budget=2,
+            stream=stream,
+            stage=stage,
+            parent=parent,
+        )
+
+    repair(
+        {},
+        Encoder(),
+        "brief",
+        ["Findings"],
+        [claim(1, "https://a")],
+        3,
+        Verified([("Findings", "One [1].")], removed, [], []),
+        research,
+        lambda q: None,
+        stream,
+    )
+
+    marker = next(i for i, f in enumerate(stream.fields) if f.get("kind") == "repair")
+    searching = stream.fields[marker + 1 :]
+    assert {stage for stage, _ in stream.events} == {"verify"}
+    assert [f["parent"] for f in searching if f.get("kind") == "attempt"] == [marker, marker]
+    assert sorted({f["question"] for f in searching if "question" in f}) == [3, 4]
+    assert recorded == []

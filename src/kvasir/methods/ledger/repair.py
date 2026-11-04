@@ -22,6 +22,7 @@ def repair(
     brief: str,
     titles: list[str],
     claims: list[Claim],
+    first_id: int,
     checked: verify.Verified,
     research: Research,
     judge: Judge,
@@ -32,17 +33,19 @@ def repair(
     A removed sentence is often true, cited to a claim that does not say it. Each becomes a
     question; a section whose question the search answers is written again with the claims that
     answer it, and checked again; what that check did to its sentences replaces what the first
-    check did.
+    check did. The questions are numbered from `first_id`, after those of the research.
     """
     picked = [r for r in checked.removed if r.section in titles][:REPAIR_SENTENCES]
     if not picked:
         return checked
     questions = [
         Question(id=n, text=verify.unmarked(r.sentence), missing=r.reason, judged_at=len(claims))
-        for n, r in enumerate(picked, 1)
+        for n, r in enumerate(picked, first_id)
     ]
-    stream.publish(VERIFY, f"searching again for {len(picked)} removed sentences")
-    research(questions, REPAIR_SEARCHES, judge)
+    searching = stream.publish(
+        VERIFY, f"searching again for {len(picked)} removed sentences", kind="repair"
+    )
+    research(questions, REPAIR_SEARCHES, judge, VERIFY, searching)
     found: dict[str, list[int]] = {}
     for sentence, question in zip(picked, questions, strict=True):
         if question.status == "answered":

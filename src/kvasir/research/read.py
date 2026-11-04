@@ -7,25 +7,28 @@ from: tier 2 of verification, after the quote check that is tier 1.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
+import numpy as np
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from kvasir.research.calls import predict
-from kvasir.research.claims import Claim, closest
-from kvasir.research.fetch import FetchError, fetch_text, split
+from kvasir.research.claims import Claim
+from kvasir.research.corpus import Corpus
+from kvasir.research.fetch import PIECE_CHARACTERS, FetchError, Page, fetch_page, split
 from kvasir.research.ground import grounded
 from kvasir.research.signatures import Intake
 from kvasir.research.text import misleading, quoted
 from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.storm import runtime
-from kvasir.storm.encoder import Encoder
+from kvasir.storm.encoder import Encoder, cosine_similarity
 from kvasir.storm.lm import GatewayModel
 
-# Pieces of one page kept by the embedding filter, the only ones a model reads.
-PIECES_PER_PAGE = 3
+# How much of one page the embedding filter keeps, the only part a model reads: the 3 pieces of
+# 6,000 characters it kept before pages were split at their headings, whose pieces are smaller.
+PAGE_CHARACTERS = 3 * PIECE_CHARACTERS
 # What an intake call holds besides the page, and how many characters a token is, from the 47
 # intake calls of one run on gpt-oss: prompt tokens came to 34 + characters / 4.07, with brief,
 # instructions and title about 600. Both are rounded towards a smaller page, as is the margin: a
@@ -75,19 +78,30 @@ def read(
     step: int,
     label: str,
     stream: ProgressStream,
+    corpus: Corpus,
     checker: GatewayModel | None = None,
     attempt: int | None = None,
+    stage: str = RESEARCH,
 ) -> list[Claim]:
     """The claims in the pieces of each page closest to `question`, the one it was found for.
 
     Kept by the question rather than the brief: a page found for one narrow fact holds it in one
     piece, which the brief would not rank first. Each read is published under the event `attempt`,
-    the one that began the search.
+    the one that began the search. Every piece of a page read goes into `corpus`, and those read
+    are marked.
     """
-    pages = [
-        (hit, relevant_pieces(encoder, question, text), from_snippet)
-        for hit, (text, from_snippet) in zip(hits, fetch_all(hits), strict=True)
-    ]
+    pages = []
+    for hit, fetched in zip(hits, fetch_all(hits), strict=True):
+        if isinstance(fetched, str):
+            pages.append((hit, split(fetched), True))
+            continue
+        # A lead's title is the anchor that linked it, which the page's own replaces.
+        if "depth" in hit and fetched.title:
+            hit = {**hit, "title": fetched.title}
+        parts = relevant_pieces(
+            corpus, encoder, question, hit["title"], fetched, hit.get("depth", 0) + 1
+        )
+        pages.append((hit, parts, False))
     size = page_characters(runtime.context_tokens())
     texts = [
         (page, hit, text, from_snippet)
@@ -95,51 +109,181 @@ def read(
         for text in pack(parts, size)
     ]
 
-    def take(call: tuple[int, dict[str, Any], str, bool]) -> list[Claim]:
-        _, hit, text, from_snippet = call
-        return intake(model, brief, question, hit, text, 0, step, checker, from_snippet)
+    def publish(i: int, done: int) -> None:
+        page, hit, *_ = texts[i]
+        stream.publish(
+            stage,
+            f"{label}: read page {page}/{len(pages)}: {hit['title'] or hit['url']}",
+            done,
+            len(texts),
+            kind="part" if sum(p == page for p, *_ in texts) > 1 else "page",
+            parent=attempt,
+            page=page,
+        )
 
-    new: list[Claim] = []
-    # Intake is most of a run's time, so its calls run side by side, as wide as the pools, and each
-    # is its own event: the page read is what a follower wants to see.
-    with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
-        for done, ((page, hit, _, _), found) in enumerate(
-            zip(texts, pool.map(take, texts), strict=True), 1
-        ):
-            stream.publish(
-                RESEARCH,
-                f"{label}: read page {page}/{len(pages)}: {hit['title'] or hit['url']}",
-                done,
-                len(texts),
-                kind="part" if sum(p == page for p, *_ in texts) > 1 else "page",
-                parent=attempt,
-                page=page,
-            )
-            # Numbered in page order once read, however the calls finished.
-            for claim in found:
-                claim.id = first_id + len(new)
-                new.append(claim)
+    return take_all(
+        model,
+        checker,
+        brief,
+        question,
+        [(hit, text, from_snippet) for _, hit, text, from_snippet in texts],
+        first_id,
+        step,
+        publish,
+    )
+
+
+def recall(
+    model: GatewayModel,
+    encoder: Encoder,
+    brief: str,
+    question: str,
+    corpus: Corpus,
+    first_id: int,
+    step: int,
+    label: str,
+    stream: ProgressStream,
+    checker: GatewayModel | None = None,
+    *,
+    question_id: int | None = None,
+    parent: int | None = None,
+    stage: str = RESEARCH,
+) -> list[Claim]:
+    """The claims in the unread pieces of `corpus` closest to `question`, read with no search.
+
+    The pieces of a page are read together, as `read` reads them, and are marked read by the
+    recall that returns them, so a question never reads the same piece twice. When it finds
+    pieces it publishes a `recall` event under `parent`, a `part` event under it for each text
+    read, and a `result` event under it with the claims added; when it finds none, nothing.
+    """
+    pages: dict[str, tuple[Page, list[str]]] = {}
+    for found, text in corpus.recall(encoder, question):
+        pages.setdefault(found.url, (found, []))[1].append(text)
+    if not pages:
+        return []
+    size = page_characters(runtime.context_tokens())
+    texts = [
+        # The URL the page answered at: a page from the cache has its normalized one as `url`.
+        ({"url": found.final_url, "title": found.title}, text, False)
+        for found, parts in pages.values()
+        for text in pack(parts, size)
+    ]
+    # The page each text came from, counted from 1 in the order the recall read them.
+    numbers = [
+        number for number, (_, parts) in enumerate(pages.values(), 1) for _ in pack(parts, size)
+    ]
+    held = sum(len(parts) for _, parts in pages.values())
+    recalled = stream.publish(
+        stage,
+        f"{label}: {held} pieces from {len(pages)} pages",
+        held,
+        len(pages),
+        kind="recall",
+        parent=parent,
+        question=question_id,
+    )
+
+    def publish(i: int, done: int) -> None:
+        hit = texts[i][0]
+        stream.publish(
+            stage,
+            f"{label}: read page {numbers[i]}/{len(pages)}: {hit['title'] or hit['url']}",
+            done,
+            len(texts),
+            kind="part",
+            parent=recalled,
+            page=numbers[i],
+        )
+
+    new = take_all(model, checker, brief, question, texts, first_id, step, publish)
+    corpus.record(new)
+    stream.publish(
+        stage,
+        f"{label}: {len(new)} new claims, {first_id - 1 + len(new)} in all",
+        len(new),
+        first_id - 1 + len(new),
+        kind="result",
+        parent=recalled,
+    )
     return new
 
 
-def fetch_all(hits: list[dict[str, Any]]) -> Iterator[tuple[str, bool]]:
-    """Each page's text, or its search snippet when the page cannot be read, and whether it is the
-    snippet."""
+def take_all(
+    model: GatewayModel,
+    checker: GatewayModel | None,
+    brief: str,
+    question: str,
+    texts: list[tuple[dict[str, Any], str, bool]],
+    first_id: int,
+    step: int,
+    publish: Callable[[int, int], None],
+) -> list[Claim]:
+    """The claims in each of `texts`, a hit, a text of its page and whether it is a snippet,
+    numbered from `first_id` in order. `publish` is told each read as it finishes."""
 
-    def fetch(hit: dict[str, Any]) -> tuple[str, bool]:
+    def take(call: tuple[dict[str, Any], str, bool]) -> list[Claim]:
+        hit, text, from_snippet = call
+        return intake(model, brief, question, hit, text, 0, step, from_snippet)
+
+    taken: list[tuple[str, list[Claim]]] = []
+    # Intake is most of a run's time, so its calls run side by side, as wide as the pools, and each
+    # is its own event: the page read is what a follower wants to see.
+    with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
+        for i, found in enumerate(pool.map(take, texts)):
+            publish(i, i + 1)
+            taken.append((texts[i][1], found))
+    new: list[Claim] = []
+    # Grounded once every page is read, not after each: the checker and the intake model share one
+    # local server, and alternating between them would load a model for each page.
+    for text, found in taken:
+        # Numbered in page order once read, however the calls finished.
+        for claim in found if checker is None else supported(checker, text, found):
+            claim.id = first_id + len(new)
+            new.append(claim)
+    return new
+
+
+def fetch_all(hits: list[dict[str, Any]]) -> Iterator[Page | str]:
+    """Each page, or its search snippet when the page cannot be read. A lead has no snippet: its
+    description is what another page says of it, so one that cannot be read gives no text."""
+
+    def fetch(hit: dict[str, Any]) -> Page | str:
         try:
-            return fetch_text(hit["url"]), False
+            return fetch_page(hit["url"])
         except FetchError as exc:
             logger.info("falling back to the snippet: %s", exc)
-            return str(hit["description"]), True
+            return "" if "depth" in hit else str(hit["description"])
 
     with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
         yield from pool.map(fetch, hits)
 
 
-def relevant_pieces(encoder: Encoder, query: str, text: str) -> list[str]:
-    pieces = split(text)
-    return [pieces[i] for i in closest(encoder, query, pieces, PIECES_PER_PAGE)]
+def relevant_pieces(
+    corpus: Corpus, encoder: Encoder, query: str, title: str, page: Page, lead_depth: int = 1
+) -> list[str]:
+    """The pieces of `page` closest to `query`, in page order, as many as `PAGE_CHARACTERS` holds.
+    All of them go into `corpus`, encoded once, each with the page's title, which the piece itself
+    may not name; a model reads the piece alone. The ones returned are marked read. The links of
+    the page become leads of depth `lead_depth`."""
+    pieces = split(page.text)
+    titled = [f"{title}\n{piece}" for piece in pieces]
+    added = corpus.add(page, pieces, np.asarray(encoder.encode(titled), dtype=float))
+    corpus.add_leads(encoder, page, lead_depth)
+    kept = list(range(len(pieces)))
+    if sum(map(len, pieces)) > PAGE_CHARACTERS:
+        kept = []
+        length = 0
+        scores = cosine_similarity(
+            encoder.encode([query], query=True), np.stack([piece.vector for piece in added])
+        )[0]
+        for i in (int(i) for i in np.argsort(-scores, kind="stable")):
+            if length + len(pieces[i]) > PAGE_CHARACTERS:
+                continue
+            kept.append(i)
+            length += len(pieces[i])
+    for i in kept:
+        added[i].read = True
+    return [pieces[i] for i in sorted(kept)]
 
 
 def intake(
@@ -150,7 +294,6 @@ def intake(
     piece: str,
     first_id: int,
     step: int,
-    checker: GatewayModel | None = None,
     from_snippet: bool = False,
 ) -> list[Claim]:
     """Claims whose quote really is in the piece. A paraphrased quote is not evidence, nor is one
@@ -171,13 +314,8 @@ def intake(
         if not quoted(finding.quote, piece):
             logger.info("dropped a claim whose quote is not on %s: %r", hit["url"], finding.quote)
             continue
-        # The piece of the page its quote is in, which is all a small checker has room for.
-        source = next((p for p in piece.split(GAP) if quoted(finding.quote, p)), piece)
-        if misleading(finding.quote, source):
+        if misleading(finding.quote, source(finding.quote, piece)):
             logger.info("dropped a claim whose quote leaves out a negation: %r", finding.quote)
-            continue
-        if checker is not None and not grounded(checker, source, finding.claim):
-            logger.info("dropped a claim %s does not support: %r", hit["url"], finding.claim)
             continue
         claims.append(
             Claim(
@@ -192,3 +330,19 @@ def intake(
             )
         )
     return claims
+
+
+def supported(checker: GatewayModel, piece: str, claims: list[Claim]) -> list[Claim]:
+    """Those of `claims`, read from `piece`, that the piece their quote is in supports."""
+    kept = []
+    for claim in claims:
+        if grounded(checker, source(claim.quote, piece), claim.text):
+            kept.append(claim)
+        else:
+            logger.info("dropped a claim %s does not support: %r", claim.url, claim.text)
+    return kept
+
+
+def source(quote: str, piece: str) -> str:
+    """The part of `piece` that `quote` is in, which is all a small checker has room for."""
+    return next((part for part in piece.split(GAP) if quoted(quote, part)), piece)

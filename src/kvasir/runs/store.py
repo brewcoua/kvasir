@@ -111,6 +111,16 @@ class RunStore:
             ).fetchall()
         return [RunSummary.model_validate_json(row[0]) for row in rows]
 
+    def citing(self, urls: list[str]) -> list[RunSummary]:
+        """The runs whose result holds any of `urls` as a string. Reads each stored result."""
+        found = "OR".join(" instr(json_extract(detail, '$.result'), ?) > 0 " for _ in urls)
+        with self._connect() as db:
+            rows = db.execute(
+                f"SELECT summary FROM runs WHERE {found} ORDER BY created_at DESC",
+                [json.dumps(url, ensure_ascii=False) for url in urls],
+            ).fetchall()
+        return [RunSummary.model_validate_json(row[0]) for row in rows]
+
     def detail(self, run_id: str) -> RunDetail | None:
         with self._connect() as db:
             row = db.execute("SELECT detail FROM runs WHERE id = ?", (run_id,)).fetchone()

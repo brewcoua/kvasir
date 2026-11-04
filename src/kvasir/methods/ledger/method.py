@@ -27,14 +27,16 @@ from kvasir.methods.ledger.questions import (
 )
 from kvasir.methods.ledger.repair import repair
 from kvasir.methods.ledger.signatures import Brief, Decompose, NamedQuestion, Outline
-from kvasir.research import verify, write
+from kvasir.research import fetch, verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim
+from kvasir.research.corpus import Corpus
 from kvasir.research.corroborate import cross_check
 from kvasir.research.render import SUMMARY, matrix, render
 from kvasir.research.text import names
 from kvasir.runners import build_checker, build_research_models, build_research_tools
 from kvasir.runs.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
+from kvasir.runs.run import record_questions
 from kvasir.schemas.requests import Input, LedgerOptions
 from kvasir.schemas.results import (
     Criterion,
@@ -102,6 +104,8 @@ def run_research(
     brief: str = framed.brief
     output = options.output or framed.output
     seen: set[str] = set()
+    corpus = Corpus(fetch.cache(), encoder.embedding_model_name, options.recall_past_runs)
+    fetch.use_max_age(options.max_age_hours)
 
     # Named in the question, they are final; the options override even those. The
     # brief lists options from memory as readily as from the question, so only those the question
@@ -139,6 +143,7 @@ def run_research(
     ledger: list[Question] = []
     first = predict(models["decompose"], Decompose, brief=brief).questions[:FIRST_QUESTIONS]
     add_questions(encoder, ledger, first or [NamedQuestion(title="", question=input.question)])
+    record_questions(as_results(ledger))
 
     def check(question: Question) -> None:
         asked = loop.check(models["check"], encoder, brief, claims, question)
@@ -149,7 +154,12 @@ def run_research(
     searched = 0
 
     def research(
-        questions: list[Question], budget: int, judge: Judge, frontier: Frontier | None = None
+        questions: list[Question],
+        budget: int,
+        judge: Judge,
+        stage: str = RESEARCH,
+        parent: int | None = None,
+        frontier: Frontier | None = None,
     ) -> None:
         nonlocal searched
         searched += loop.research(
@@ -161,6 +171,7 @@ def run_research(
             questions,
             claims,
             seen,
+            corpus,
             budget,
             per_query,
             attempts,
@@ -168,6 +179,10 @@ def run_research(
             searched,
             stream,
             frontier,
+            stage=stage,
+            parent=parent,
+            # A repair's questions are not the ledger's, and are not shown among them.
+            ledger=ledger if stage == RESEARCH else None,
         )
 
     # Only the first pass: filling cells and repairing sentences search for set questions.
@@ -175,7 +190,7 @@ def run_research(
         ledger,
         budget,
         check,
-        Frontier(encoder, brief, claims) if options.frontier == "worth" else None,
+        frontier=Frontier(encoder, brief, claims) if options.frontier == "worth" else None,
     )
 
     if not claims:
@@ -234,7 +249,18 @@ def run_research(
     def judge(question: Question) -> None:
         loop.check(models["check"], encoder, brief, claims, question)
 
-    checked = repair(models, encoder, brief, titles, claims, checked, research, judge, stream)
+    checked = repair(
+        models,
+        encoder,
+        brief,
+        titles,
+        claims,
+        max(q.id for q in ledger) + 1,
+        checked,
+        research,
+        judge,
+        stream,
+    )
 
     cross_check(models, encoder, claims, stream, options.corroborate, options.contradict)
 
@@ -277,6 +303,7 @@ def _defaults(settings: Settings) -> dict[str, Any]:
         "max_depth": settings.research.max_depth,
         "max_entities": settings.research.max_entities,
         "max_criteria": settings.research.max_criteria,
+        "max_age_hours": settings.fetch.max_age_hours,
         "ground": settings.model.checker is not None,
         "model_fast": settings.model.fast,
         "model_strong": settings.model.strong,

@@ -10,7 +10,7 @@ from dspy.utils.dummies import DummyLM
 
 import kvasir.methods.graph.explore as graph_explore
 import kvasir.methods.graph.method as graph_method
-from fakes import PAGE, Search, Stream, Vectors, claim, research_settings
+from fakes import PAGE, Search, Stream, Vectors, claim, page, research_settings
 from kvasir.methods.graph.explore import explore
 from kvasir.methods.graph.graph import branches, path
 from kvasir.methods.graph.method import outline, run_graph
@@ -20,12 +20,15 @@ from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.questions import Question
 from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.claims import Claim
+from kvasir.research.corpus import Corpus
 from kvasir.research.fetch import extract
 from kvasir.schemas.requests import GraphOptions, Input
 
 
 class Scattered:
     """An encoder giving each text its own random vector, so no two texts are close."""
+
+    embedding_model_name = "scattered"
 
     def encode(self, texts, query=False):
         return np.array(
@@ -52,14 +55,17 @@ def explored(
     max_depth=2,
     max_attempts=3,
     deadline=10**9,
+    late_at=None,
     status=lambda question, path: "answered",
     raised=lambda question: [question + " more"],
     found=lambda question: 1,
     gaps=lambda: [],
+    recalled=lambda question: 0,
 ):
-    """Explore `questions`. A search for a question finds `found(question)` new claims, and its
-    judgement gives it `status(question, path)` and raises `raised(question)`. Returns the
-    searches, the (path, question) of each judgement, and the stream."""
+    """Explore `questions`. A search for a question finds `found(question)` new claims, a recall
+    for it `recalled(question)`, and its judgement gives it `status(question, path)` and raises
+    `raised(question)`. Returns the searches, the (path, question) of each judgement, and the
+    stream."""
     judged = []
 
     def predict(model, signature, **inputs):
@@ -85,10 +91,38 @@ def explored(
         )
 
     def read(
-        model, encoder, brief, question, hits, first_id, step, label, stream, checker, attempt=None
+        model,
+        encoder,
+        brief,
+        question,
+        hits,
+        first_id,
+        step,
+        label,
+        stream,
+        corpus,
+        checker,
+        attempt=None,
     ):
         return [
             claim(i, f"https://site{i}.org") for i in range(first_id, first_id + found(question))
+        ]
+
+    def recall(
+        model,
+        encoder,
+        brief,
+        question,
+        corpus,
+        first_id,
+        step,
+        label,
+        stream,
+        checker,
+        **fields,
+    ):
+        return [
+            claim(i, f"https://held{i}.org") for i in range(first_id, first_id + recalled(question))
         ]
 
     class Pages:
@@ -99,6 +133,7 @@ def explored(
 
     monkeypatch.setattr(graph_explore, "predict", predict)
     monkeypatch.setattr(graph_explore, "read", read)
+    monkeypatch.setattr(graph_explore, "recall", recall)
     claims: list[Claim] = []
     stream = Stream()
     encoder = Scattered()
@@ -111,7 +146,9 @@ def explored(
         questions,
         claims,
         Frontier(encoder, "brief", claims),
+        Corpus(),
         deadline,
+        deadline if late_at is None else late_at,
         budget,
         1,
         max_attempts,
@@ -191,6 +228,36 @@ def test_a_parent_is_judged_again_once_its_children_are_answered(monkeypatch):
     assert questions[0].attempts == 1
 
 
+def test_a_question_recall_answers_costs_no_search(monkeypatch):
+    questions = [Question(id=1, text="a")]
+
+    searches, judged, _ = explored(
+        monkeypatch, questions, raised=lambda question: [], recalled=lambda question: 1
+    )
+
+    assert searches == 0
+    assert judged == [("none", "a")]
+    assert questions[0].status == "answered"
+
+
+def test_a_question_recall_leaves_open_is_still_searched_and_recall_is_not_repeated(monkeypatch):
+    questions = [Question(id=1, text="a")]
+    recalls = iter([1, 0])
+    verdicts = iter(["weak", "answered"])
+
+    searches, judged, _ = explored(
+        monkeypatch,
+        questions,
+        raised=lambda question: [],
+        status=lambda question, path: next(verdicts),
+        recalled=lambda question: next(recalls),
+    )
+
+    assert searches == 1
+    assert len(judged) == 2
+    assert questions[0].status == "answered"
+
+
 def test_an_attempt_is_followed_by_its_result(monkeypatch):
     _, _, stream = explored(
         monkeypatch, [Question(id=1, text="a")], budget=1, max_depth=0, found=lambda q: 2
@@ -245,6 +312,45 @@ def test_the_pick_walks_down_to_a_child_while_the_children_cost_no_more_than_a_r
     assert pick([first, *children, third], frontier, 3) is first
     frontier.closed.add(1)
     assert pick([first, *children, third], frontier, 3) is None
+
+
+def unequal_first_questions():
+    """A first question answered down to an untried grandchild, and one weak after one search."""
+    answered = Question(id=1, text="a", status="answered", queries=["q"])
+    child = Question(id=2, text="b", parent=1, depth=1, status="answered", queries=["q"])
+    grandchild = Question(id=3, text="c", parent=2, depth=2)
+    weak = Question(id=4, text="x", status="weak", queries=["q"])
+    return [answered, child, grandchild, weak]
+
+
+def test_a_first_question_weak_after_one_search_goes_before_two_levels_down():
+    questions = unequal_first_questions()
+    frontier = Frontier(Vectors({}, default=[1, 0]), "brief", [])
+
+    assert pick(questions, frontier, 3) is questions[3]
+    # Searched twice, it waits its turn.
+    questions[3].queries.append("q")
+    assert pick(questions, frontier, 3) is questions[2]
+
+
+def test_late_in_the_research_a_first_question_left_goes_first():
+    questions = unequal_first_questions()
+    questions[3].queries.append("q")
+    frontier = Frontier(Vectors({}, default=[1, 0]), "brief", [])
+
+    assert pick(questions, frontier, 3, late=True) is questions[3]
+
+
+def test_late_in_the_research_no_question_raises_others_and_no_gap_is_asked(monkeypatch):
+    questions = [Question(id=1, text="a")]
+
+    searches, _, stream = explored(
+        monkeypatch, questions, late_at=0, status=lambda q, p: "weak", gaps=lambda: ["b"]
+    )
+
+    assert [q.text for q in questions] == ["a"]
+    assert searches == 3
+    assert stream.events[-1][1] == "stopping: no question left to settle, and too little time"
 
 
 def test_a_run_writes_one_section_per_branch_that_found_something(monkeypatch):
@@ -305,7 +411,7 @@ def test_a_run_writes_one_section_per_branch_that_found_something(monkeypatch):
     monkeypatch.setattr(
         "kvasir.methods.graph.method.build_research_tools", lambda s: (encoder, Search(hits))
     )
-    monkeypatch.setattr("kvasir.research.read.fetch_text", lambda url: extract(PAGE))
+    monkeypatch.setattr("kvasir.research.read.fetch_page", lambda url: page(extract(PAGE)))
 
     result = run_graph(
         research_settings(),

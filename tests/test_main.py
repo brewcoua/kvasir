@@ -103,6 +103,8 @@ def test_methods_report_the_configured_defaults(environment, monkeypatch):
     # No checker is configured, so grounding is off.
     assert ledger["ground"]["default"] is False
     assert ledger["corroborate"]["default"] is False
+    assert ledger["max_age_hours"]["default"] == 48
+    assert ledger["recall_past_runs"]["default"] is True
     assert ledger["model_fast"]["default"] == ENVIRONMENT["KVASIR_MODEL_FAST"]
     assert storm["do_polish_article"]["default"] is True
     assert storm["search_top_k"]["default"] == 3
@@ -120,6 +122,17 @@ def test_every_method_can_be_requested():
 def test_an_unknown_option_is_refused(client):
     body = article_run("x", max_searches=3)
     assert client.post("/v1/runs", json=body).status_code == 422
+
+
+@pytest.mark.parametrize("method", ["ledger", "graph"])
+def test_a_negative_max_age_is_refused(client, method):
+    body = {"method": method, "input": {"question": "x"}, "options": {"max_age_hours": -1}}
+    assert client.post("/v1/runs", json=body).status_code == 422
+
+
+@pytest.mark.parametrize("option", [{"max_age_hours": 0}, {"recall_past_runs": False}])
+def test_storm_refuses_the_cache_options(client, option):
+    assert client.post("/v1/runs", json=article_run("x", **option)).status_code == 422
 
 
 def test_an_unknown_method_is_refused(client):

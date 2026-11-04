@@ -81,6 +81,10 @@ class LedgerOptions(BaseModel):
     # disagreement.
     corroborate: bool = False
     contradict: bool = False
+    # False: recall reads only this run's pages, not what past runs kept. The pieces are still kept.
+    recall_past_runs: bool = True
+    # Hours a cached page is served without asking its site. 0 fetches every page again.
+    max_age_hours: int | None = Field(default=None, ge=0)
     # `<provider>/<name>`. The provider must be configured; the name is not checked against any
     # list of known models.
     model_fast: str | None = None
@@ -105,6 +109,10 @@ class GraphOptions(BaseModel):
     ground_intake: bool = False
     corroborate: bool = False
     contradict: bool = False
+    # False: recall reads only this run's pages, not what past runs kept. The pieces are still kept.
+    recall_past_runs: bool = True
+    # Hours a cached page is served without asking its site. 0 fetches every page again.
+    max_age_hours: int | None = Field(default=None, ge=0)
     model_fast: str | None = None
     model_strong: str | None = None
     model_reason: str | None = None

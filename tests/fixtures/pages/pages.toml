@@ -1,0 +1,122 @@
+# `must` is main content that has to survive extraction, `must_not` page furniture that has to go.
+# Both are checked after collapsing whitespace. A shell or challenge page must not read as text.
+
+[[page]]
+file = "wiki_kvasir.html"
+url = "https://en.wikipedia.org/wiki/Kvasir"
+license = "CC-BY-SA-4.0"
+kind = "article"
+must = [
+  "Extremely wise, Kvasir traveled far and wide, teaching and spreading knowledge.",
+  "Scholars have connected Kvasir to methods of beverage production and peacemaking practices among ancient peoples.",
+]
+must_not = ["Jump to content", "From Wikipedia, the free encyclopedia"]
+
+[[page]]
+file = "wiki_bisection.html"
+url = "https://en.wikipedia.org/wiki/Bisection_method"
+license = "CC-BY-SA-4.0"
+kind = "article"
+must = [
+  "It is a very simple and robust method, but it is also relatively slow.",
+  "If nothing is known about the value of the root, then relative tolerance is the best stopping condition.",
+  "After 13 iterations, it becomes apparent that there is a convergence to about 1.521: a root for the polynomial.",
+]
+must_not = ["Jump to content", "From Wikipedia, the free encyclopedia"]
+
+[[page]]
+file = "python_bisect.html"
+url = "https://docs.python.org/3/library/bisect.html"
+license = "PSF-2.0"
+kind = "article"
+must = [
+  "This module provides support for maintaining a list in sorted order without having to sort the list after each insertion.",
+  "For locating specific values, dictionaries are more performant.",
+]
+must_not = ["Theme", "Table of Contents", "Previous topic"]
+
+[[page]]
+file = "mdn_array_at.html"
+url = "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/at"
+license = "CC-BY-SA-2.5"
+kind = "article"
+must = [
+  "Negative integers count back from the last item in the array.",
+  "The following example provides a function which returns the last element found in a specified array.",
+]
+must_not = ["Skip to main content", "Skip to search", "Help improve MDN", "Report a problem with this content"]
+
+[[page]]
+file = "fastapi_first_steps.html"
+url = "https://fastapi.tiangolo.com/tutorial/first-steps/"
+license = "MIT"
+kind = "article"
+must = [
+  'A "schema" is a definition or description of something.',
+  'A "decorator" takes the function below and does something with it.',
+]
+must_not = ["Skip to content", "Back to top"]
+
+[[page]]
+file = "cookie_wall.html"
+url = "https://example.org/orbit/how-tidal-locking-works"
+license = "CC0-1.0"
+kind = "article"
+must = [
+  "A moon is tidally locked when it takes as long to rotate once on its axis as it takes to orbit its planet once.",
+  "A large moon close to its planet locks within a few million years",
+]
+must_not = [
+  "We use cookies",
+  "Accept all cookies",
+  "Manage preferences",
+  "Share this article",
+  "Share on Facebook",
+]
+
+[[page]]
+file = "buttons.html"
+url = "https://example.org/bread/choosing-a-starter"
+license = "CC0-1.0"
+kind = "article"
+must = [
+  "A sourdough starter is a flour and water paste that keeps a living culture of wild yeast and lactic acid bacteria.",
+  "A starter that smells of nail polish remover is hungry.",
+]
+must_not = ["Copy link", "Subscribe", "Load more comments", "Francais", "Overview"]
+
+[[page]]
+file = "spa_shell.html"
+url = "https://example.org/app"
+license = "CC0-1.0"
+kind = "shell"
+
+[[page]]
+file = "challenge_cloudflare.html"
+url = "https://example.org/challenge/cloudflare"
+license = "CC0-1.0"
+kind = "challenge"
+
+[[page]]
+file = "challenge_akamai.html"
+url = "https://example.org/challenge/akamai"
+license = "CC0-1.0"
+kind = "challenge"
+
+[[page]]
+file = "challenge_datadome.html"
+url = "https://example.org/challenge/datadome"
+license = "CC0-1.0"
+kind = "challenge"
+
+[[page]]
+file = "challenge_imperva.html"
+url = "https://example.org/challenge/imperva"
+license = "CC0-1.0"
+kind = "challenge"
+
+[[page]]
+file = "challenge_perimeterx.html"
+url = "https://example.org/challenge/perimeterx"
+license = "CC0-1.0"
+kind = "challenge"

@@ -19,6 +19,7 @@ from kvasir.research.claims import Claim, quoted_claims
 from kvasir.research.ground import grounded
 from kvasir.research.signatures import Contradicts, Verify
 from kvasir.runs.progress import VERIFY, ProgressStream
+from kvasir.storm import runtime
 from kvasir.storm.encoder import Encoder, cosine_similarity
 from kvasir.storm.lm import GatewayModel
 
@@ -46,37 +47,73 @@ def cross_check(
     """Fill each claim's `corroborated_by` when `corroborate`, and `contradicted_by` when
     `contradict`, from the claims of other sites closest to it.
 
-    A claim another supports is not also checked for contradicting it. With a grounding checker in
-    `models`, it decides support; otherwise the `verify` model does.
+    With a grounding checker in `models`, it decides support; otherwise the `verify` model does.
+    Support is decided for every pair before any is asked about disagreeing: the checker and the
+    `contradict` model share one local server, and alternating between them would load a model for
+    each pair. Two claims either of which supports the other are not asked about disagreeing.
     """
     if not (corroborate or contradict):
         return
     pairs = neighbours(encoder, claims)
     if not pairs:
         return
-    total = len(pairs)
-    stream.publish(VERIFY, f"comparing {total} pairs of claims from different sites", 0, total)
-    compared: set[tuple[int, int]] = set()
-    for done, (claim, other) in enumerate(pairs, 1):
-        if other.id in claim.corroborated_by:
-            # Merged into it during the research already.
-            pass
-        elif corroborate and _supports(models, other, claim):
-            claim.corroborated_by.append(other.id)
-        elif contradict and (other.id, claim.id) not in compared:
-            # Disagreeing is symmetric, so each pair is asked once.
-            compared.add((claim.id, other.id))
-            if _contradicts(models["contradict"], claim, other):
-                claim.contradicted_by.append(other.id)
-                other.contradicted_by.append(claim.id)
-        stream.publish(VERIFY, f"compared {done} of {total} pairs", done, total)
+    # Merged into it during the research already.
+    agree = {(claim.id, other.id) for claim, other in pairs if other.id in claim.corroborated_by}
+    if corroborate:
+        asked = [(claim, other) for claim, other in pairs if (claim.id, other.id) not in agree]
+        total = len(asked)
+        stream.publish(
+            VERIFY, f"checking {total} pairs of claims from different sites for support", 0, total
+        )
+        for done, (claim, other) in enumerate(asked, 1):
+            if _supports(models, other, claim):
+                claim.corroborated_by.append(other.id)
+                agree.add((claim.id, other.id))
+            stream.publish(VERIFY, f"checked {done} of {total} pairs for support", done, total)
+    if contradict:
+        _contradictions(models["contradict"], pairs, agree, stream)
     stream.publish(
         VERIFY,
         f"{sum(bool(c.corroborated_by) for c in claims)} claims corroborated, "
         f"{sum(bool(c.contradicted_by) for c in claims)} contradicted",
-        total,
-        total,
+        len(pairs),
+        len(pairs),
     )
+
+
+def _contradictions(
+    model: GatewayModel,
+    pairs: list[tuple[Claim, Claim]],
+    agree: set[tuple[int, int]],
+    stream: ProgressStream,
+) -> None:
+    """Fill `contradicted_by`, both ways, for the pairs not in `agree` either way round.
+
+    Disagreeing is symmetric, so each pair is asked once. A claim is asked about all its pairs in
+    one call, which cuts the calls about threefold, and the calls run side by side.
+    """
+    groups: dict[int, tuple[Claim, list[Claim]]] = {}
+    seen: set[frozenset[int]] = set()
+    for claim, other in pairs:
+        key = frozenset((claim.id, other.id))
+        if key in seen or (claim.id, other.id) in agree or (other.id, claim.id) in agree:
+            continue
+        seen.add(key)
+        groups.setdefault(claim.id, (claim, []))[1].append(other)
+    asked = list(groups.values())
+    total = len(seen)
+    stream.publish(VERIFY, f"comparing {total} pairs of claims for disagreement", 0, total)
+    done = 0
+    with runtime.ContextThreadPoolExecutor(max_workers=runtime.max_threads()) as pool:
+        found_all = pool.map(lambda group: _disagreeing(model, *group), asked)
+        for (claim, others), found in zip(asked, found_all, strict=True):
+            for other in found:
+                claim.contradicted_by.append(other.id)
+                other.contradicted_by.append(claim.id)
+            done += len(others)
+            stream.publish(
+                VERIFY, f"compared {done} of {total} pairs for disagreement", done, total
+            )
 
 
 def neighbours(encoder: Encoder, claims: list[Claim]) -> list[tuple[Claim, Claim]]:
@@ -110,12 +147,14 @@ def _supports(models: dict[str, GatewayModel], other: Claim, claim: Claim) -> bo
     return bool(verdict.verdict == "supported")
 
 
-def _contradicts(model: GatewayModel, claim: Claim, other: Claim) -> bool:
+def _disagreeing(model: GatewayModel, claim: Claim, others: list[Claim]) -> list[Claim]:
+    """Those of `others` that disagree with `claim`; none when the answer cannot be read."""
     try:
         verdict = predict(
-            model, Contradicts, first=quoted_claims([claim]), second=quoted_claims([other])
+            model, Contradicts, claim=quoted_claims([claim]), others=quoted_claims(others)
         )
     except (AdapterParseError, ValidationError) as exc:
-        logger.warning("could not read whether [%d] and [%d] disagree: %s", claim.id, other.id, exc)
-        return False
-    return bool(verdict.disagree)
+        logger.warning("could not read which claims disagree with [%d]: %s", claim.id, exc)
+        return []
+    # Only ids it was shown: a small model otherwise cites claims from its own numbering.
+    return [other for other in others if other.id in verdict.disagree]

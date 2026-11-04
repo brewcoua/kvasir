@@ -39,5 +39,18 @@ url = "http://localhost:8888"
 # Keeps runs across restarts in data/kvasir.db, for debugging. The default is memory.
 store = "sqlite"
 
+[fetch]
+# Named in the user agent of page requests, so a site can reach you. Leave out to name no one.
+contact = "you@example.com"
+# Least time between the starts of two requests to one host.
+host_interval_seconds = 1.0
+# "auto" renders a page that needs JavaScript in Chromium (needs the browser extra); "off" never.
+render = "auto"
+# Renders through Patchright, which hides the signs of automation. Getting past a challenge can
+# break a site's terms, which is your call.
+stealth = false
+# Hours a cached page is served without asking its site; then it is revalidated. 0 fetches again.
+max_age_hours = 48
+
 [log]
 format = "text"

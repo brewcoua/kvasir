@@ -16,6 +16,7 @@ logs after the pipeline fans out.
 import concurrent.futures
 import contextvars
 import threading
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -23,10 +24,21 @@ from typing import Any, Protocol, TypeVar
 
 DEFAULT_MAX_THREADS = 10
 DEFAULT_CONTEXT_TOKENS = 16384
+DEFAULT_HOST_INTERVAL_SECONDS = 1.0
+# What a polite crawler opens to one host at once. Not a setting: a host that wants fewer says so
+# with a 429.
+HOST_CONCURRENCY = 2
 
 _max_threads = DEFAULT_MAX_THREADS
 _context_tokens = DEFAULT_CONTEXT_TOKENS
 _fetch_slots = threading.BoundedSemaphore(DEFAULT_MAX_THREADS)
+_fetch_contact = ""
+_fetch_render = "auto"
+_fetch_stealth = False
+_host_interval = DEFAULT_HOST_INTERVAL_SECONDS
+# Patched by tests, so the interval can be tested without waiting for it.
+_monotonic = time.monotonic
+_sleep = time.sleep
 
 
 def configure_concurrency(max_threads: int) -> None:
@@ -68,6 +80,78 @@ def fetch_slot() -> Iterator[None]:
         yield
     finally:
         _fetch_slots.release()
+
+
+class _Host:
+    """What one host has been asked: how many requests are open and when the next may start."""
+
+    def __init__(self) -> None:
+        self.open = threading.BoundedSemaphore(HOST_CONCURRENCY)
+        self.lock = threading.Lock()
+        self.next_start = 0.0
+
+
+_hosts: dict[str, _Host] = {}
+
+
+def configure_fetch(
+    contact: str, host_interval_seconds: float, render: str = "auto", stealth: bool = False
+) -> None:
+    """Set the contact named in the user agent, the time between requests to one host, whether
+    pages are rendered ("auto" or "off") and whether the browser is the stealth one.
+
+    Forgets what each host was last asked, so call it between runs, like `configure_concurrency`.
+    """
+    global _fetch_contact, _fetch_render, _fetch_stealth, _host_interval
+    _fetch_contact = contact
+    _fetch_render = render
+    _fetch_stealth = stealth
+    _host_interval = host_interval_seconds
+    _hosts.clear()
+
+
+def fetch_contact() -> str:
+    """The contact named in the user agent, or an empty string."""
+    return _fetch_contact
+
+
+def fetch_render() -> str:
+    """"auto" when a page that needs JavaScript is rendered in a browser, "off" when never."""
+    return _fetch_render
+
+
+def fetch_stealth() -> bool:
+    """Whether rendering goes through the stealth browser."""
+    return _fetch_stealth
+
+
+@contextmanager
+def host_slot(host: str) -> Iterator[None]:
+    """Hold a request's place with its host, then one of the process's fetch permits.
+
+    The wait for the host comes first and holds no process-wide permit, so a host that is being
+    slow cannot starve fetches to every other host. The start time is claimed in a loop rather than
+    reserved up front, so a `delay_host` that lands while others wait moves them too.
+    """
+    state = _hosts.setdefault(host, _Host())
+    with state.open:
+        while True:
+            with state.lock:
+                now = _monotonic()
+                wait = state.next_start - now
+                if wait <= 0:
+                    state.next_start = now + _host_interval
+                    break
+            _sleep(wait)
+        with fetch_slot():
+            yield
+
+
+def delay_host(host: str, seconds: float) -> None:
+    """Hold back the next request to `host` by at least `seconds`, as a Retry-After asks."""
+    state = _hosts.setdefault(host, _Host())
+    with state.lock:
+        state.next_start = max(state.next_start, _monotonic() + seconds)
 
 
 class UsageSink(Protocol):
@@ -216,13 +300,21 @@ class ContextThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 __all__ = [
     "ContextThreadPoolExecutor",
     "DEFAULT_CONTEXT_TOKENS",
+    "DEFAULT_HOST_INTERVAL_SECONDS",
     "DEFAULT_MAX_THREADS",
+    "HOST_CONCURRENCY",
     "UsageSink",
     "configure_concurrency",
     "configure_context",
+    "configure_fetch",
     "context_tokens",
     "current_usage_sink",
+    "delay_host",
+    "fetch_contact",
+    "fetch_render",
+    "fetch_stealth",
     "fetch_slot",
+    "host_slot",
     "lm_ended",
     "lm_started",
     "max_threads",

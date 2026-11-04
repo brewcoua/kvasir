@@ -9,9 +9,11 @@ readme = "README.md"
 requires-python = "==3.11.*"
 license = { text = "MIT OR Apache-2.0" }
 dependencies = [
+    "courlan==1.4.0",
     "fastapi==0.141.1",
     "httpx==0.28.1",
     "pydantic==2.13.4",
+    "trafilatura==2.3.1",
     "uvicorn==0.52.3",
     # src/kvasir/storm is a fork of knowledge_storm, so its dependencies are declared here rather
     # than pulled in through a published package. See src/kvasir/storm/NOTICE.
@@ -20,6 +22,13 @@ dependencies = [
     "dspy==3.3.0",
     "numpy==2.4.6",
     "pypdf==6.21.4",
+]
+
+[project.optional-dependencies]
+# Pages that need JavaScript are rendered in Chromium; the default image carries neither.
+browser = [
+    "playwright==1.64.1",
+    "patchright==1.64.4",
 ]
 
 [project.urls]
@@ -63,8 +72,11 @@ follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: requires a live gateway and SearXNG; skipped by default"]
-addopts = "-m 'not integration'"
+markers = [
+    "integration: requires a live gateway and SearXNG; skipped by default",
+    "browser: requires the browser extra and Chromium; skipped by default",
+]
+addopts = "-m 'not integration and not browser'"
 
 [dependency-groups]
 dev = [

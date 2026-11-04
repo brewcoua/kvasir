@@ -26,8 +26,11 @@ class Progress(BaseModel):
     seq: int | None = None
     # These place the event in the run's step tree: an attempt is one search for a question, a part
     # is one piece of a page read during it, a result is the claims it added, and a section is one
-    # report section written. All are null for an event that is not a step, and in runs recorded
-    # before steps were named.
+    # report section written. A recall is the reading of pieces the run already held, for the
+    # question it names, with a part per text read and a result under it; its `done` is the pieces
+    # recalled and its `total` the pages they came from. A repair is the search again for the
+    # sentences verification removed, which the attempts under it belong to. All are null for an
+    # event that is not a step, and in runs recorded before steps were named.
     kind: str | None = None
     # The `seq` of the event this one sits under.
     parent: int | None = None

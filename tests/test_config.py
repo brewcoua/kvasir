@@ -328,8 +328,8 @@ def test_a_boolean_in_the_config_file_is_read(tmp_path):
         ('provider = "local"\n', "provider in config file .* must be a table"),
         ('[provider]\nlocal = "x"\n', "provider.local in config file .* must be a table"),
         ('model = "local/x"\n', "model in config file .* must be a table"),
-        ("max_threads = [2]\n", "max_threads .* must be a string, an integer or a boolean"),
-        ("[runs]\nmax = [2]\n", "runs.max .* must be a string, an integer or a boolean"),
+        ("max_threads = [2]\n", "max_threads .* must be a string, a number or a boolean"),
+        ("[runs]\nmax = [2]\n", "runs.max .* must be a string, a number or a boolean"),
         ("max_threads = true\n", "KVASIR_MAX_THREADS must be an integer, got 'true'"),
         ("[model]\nfast = \n", "not valid TOML"),
     ],
@@ -362,3 +362,66 @@ def test_the_example_file_loads():
 
     assert settings.resolve(settings.model.strong).api_key == NO_API_KEY
     assert settings.runs.store == "sqlite"
+
+
+def test_fetch_settings_default_to_no_contact_and_a_second():
+    settings = Settings.from_env(MINIMAL)
+
+    assert settings.fetch.contact == ""
+    assert settings.fetch.host_interval_seconds == 1.0
+
+
+def test_fetch_settings_read_from_the_environment():
+    settings = Settings.from_env(
+        MINIMAL
+        | {"KVASIR_FETCH_CONTACT": "ops@example.org", "KVASIR_FETCH_HOST_INTERVAL_SECONDS": "0.5"}
+    )
+
+    assert settings.fetch.contact == "ops@example.org"
+    assert settings.fetch.host_interval_seconds == 0.5
+
+
+def test_fetch_render_and_stealth_default_and_read_from_the_environment():
+    settings = Settings.from_env(MINIMAL)
+    assert (settings.fetch.render, settings.fetch.stealth) == ("auto", False)
+
+    settings = Settings.from_env(
+        MINIMAL | {"KVASIR_FETCH_RENDER": "OFF", "KVASIR_FETCH_STEALTH": "true"}
+    )
+    assert (settings.fetch.render, settings.fetch.stealth) == ("off", True)
+
+    with pytest.raises(ConfigError):
+        Settings.from_env(MINIMAL | {"KVASIR_FETCH_RENDER": "always"})
+
+
+def test_fetch_settings_read_from_the_config_file(tmp_path):
+    path = _write(
+        tmp_path,
+        """
+[provider.local]
+api_base = "http://localhost:11434/v1"
+
+[model]
+fast = "local/a"
+strong = "local/a"
+embedding = "local/a"
+
+[search]
+url = "http://localhost:8888"
+
+[fetch]
+contact = "ops@example.org"
+host_interval_seconds = 2.5
+""",
+    )
+
+    settings = Settings.from_env({"KVASIR_CONFIG": path})
+
+    assert settings.fetch.contact == "ops@example.org"
+    assert settings.fetch.host_interval_seconds == 2.5
+
+
+@pytest.mark.parametrize("value", ["soon", "-1", "nan", "inf"])
+def test_the_host_interval_must_be_a_finite_number_of_seconds(value):
+    with pytest.raises(ConfigError, match="KVASIR_FETCH_HOST_INTERVAL_SECONDS"):
+        Settings.from_env(MINIMAL | {"KVASIR_FETCH_HOST_INTERVAL_SECONDS": value})

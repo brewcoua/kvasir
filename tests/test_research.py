@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 
 import httpx
+import numpy as np
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import PAGE, Encoder, Stream, claim, research_settings
+from fakes import PAGE, Encoder, Stream, Vectors, claim, page, research_settings
 from kvasir.research import fetch, verify, write
 from kvasir.research.clarify import clarify
+from kvasir.research.corpus import RECALL_MIN, RECALL_PER_SITE, RECALL_PIECES, Corpus
 from kvasir.research.fetch import FetchError, extract, split
-from kvasir.research.read import GAP, fetch_all, intake, pack, page_characters
+from kvasir.research.read import (
+    GAP,
+    PAGE_CHARACTERS,
+    fetch_all,
+    intake,
+    pack,
+    page_characters,
+    recall,
+    relevant_pieces,
+)
 from kvasir.research.render import matrix, render
 from kvasir.research.style import clean
 from kvasir.research.text import misleading, names, quoted
@@ -76,7 +88,7 @@ def serve(monkeypatch, content_type, body):
 def test_a_pdf_is_read_by_its_type_or_its_header(monkeypatch, content_type):
     serve(monkeypatch, content_type, pdf("Kvasir measured the compu-", "tation in 1904."))
 
-    text = fetch.fetch_text("https://example.org/a")
+    text = fetch.fetch_page("https://example.org/a").text
 
     assert text == "Kvasir measured the computation in 1904."
     assert quoted("measured the computation", text)
@@ -85,13 +97,13 @@ def test_a_pdf_is_read_by_its_type_or_its_header(monkeypatch, content_type):
 def test_an_unreadable_pdf_is_refused(monkeypatch):
     serve(monkeypatch, "application/pdf", pdf("Kvasir")[:40])
     with pytest.raises(FetchError, match="unreadable PDF"):
-        fetch.fetch_text("https://example.org/a.pdf")
+        fetch.fetch_page("https://example.org/a.pdf")
 
 
 def test_a_pdf_without_text_is_refused(monkeypatch):
     serve(monkeypatch, "application/pdf", pdf())
     with pytest.raises(FetchError, match="no text layer"):
-        fetch.fetch_text("https://example.org/a.pdf")
+        fetch.fetch_page("https://example.org/a.pdf")
 
 
 @pytest.mark.parametrize(
@@ -100,14 +112,14 @@ def test_a_pdf_without_text_is_refused(monkeypatch):
 def test_a_page_that_is_neither_html_nor_pdf_is_refused(monkeypatch, content_type, body):
     serve(monkeypatch, content_type, body)
     with pytest.raises(FetchError, match="not HTML or PDF"):
-        fetch.fetch_text("https://example.org/a")
+        fetch.fetch_page("https://example.org/a")
 
 
 def test_a_download_stops_at_the_byte_cap(monkeypatch):
-    serve(monkeypatch, "text/html", b"<p>" + b"a" * 100 + b"</p>")
-    monkeypatch.setattr(fetch, "MAX_BYTES", 10)
+    serve(monkeypatch, "text/html", b"<body><p>" + b"a" * 100 + b"</p></body>")
+    monkeypatch.setattr(fetch, "MAX_BYTES", 60)
 
-    assert fetch.fetch_text("https://example.org/a") == "aaaaaaa"
+    assert fetch.fetch_page("https://example.org/a").text == "a" * 51
 
 
 def test_render_numbers_sources_by_page_and_drops_made_up_ids():
@@ -207,12 +219,12 @@ def test_an_ordinary_quote_is_not_misleading(quote, page):
 
 
 def snippet_hits(monkeypatch):
-    def fetch_text(url):
+    def fetch_page(url):
         if url == "https://down":
             raise FetchError("down")
-        return "the page"
+        return page("the page")
 
-    monkeypatch.setattr("kvasir.research.read.fetch_text", fetch_text)
+    monkeypatch.setattr("kvasir.research.read.fetch_page", fetch_page)
     return [
         {"url": "https://down", "title": "D", "description": "the snippet"},
         {"url": "https://up", "title": "U", "description": "the snippet"},
@@ -222,7 +234,7 @@ def snippet_hits(monkeypatch):
 def test_fetch_all_tells_which_pages_fell_back_to_the_snippet(monkeypatch):
     hits = snippet_hits(monkeypatch)
 
-    assert list(fetch_all(hits)) == [("the snippet", True), ("the page", False)]
+    assert list(fetch_all(hits)) == ["the snippet", page("the page")]
 
 
 @pytest.mark.parametrize("from_snippet", [True, False])
@@ -232,7 +244,7 @@ def test_a_claim_knows_whether_it_was_read_from_a_snippet(from_snippet):
     )
     hit = {"url": "https://a", "title": "A"}
 
-    claims = intake(model, "b", "q", hit, "It was found in 1904.", 1, 1, None, from_snippet)
+    claims = intake(model, "b", "q", hit, "It was found in 1904.", 1, 1, from_snippet)
 
     assert [c.from_snippet for c in claims] == [from_snippet]
 
@@ -443,3 +455,191 @@ def test_the_style_pass_takes_out_filler_but_not_quotes_or_code():
         "**Ugarit** fell 1190–1185 BC [1]. Trade, the lifeline, was fragile. "
         'He wrote "very — late" and `a — b`.'
     )
+
+
+def test_the_closest_pieces_are_kept_up_to_the_page_budget_in_page_order():
+    # Four sections, each its own piece; three fit the budget, so the farthest is dropped.
+    size = PAGE_CHARACTERS // 3 - 100
+    sections = [f"## {name}\n{name[0] * size}" for name in ("Alpha", "Beta", "Gamma", "Delta")]
+    text = "# Page\n" + "\n\n".join(sections) + "\n\n## Coda\nshort"
+    near = {"q": [1.0, 0.0]}
+    for piece in split(text):
+        far = piece.startswith("## Beta")
+        near[f"T\n{piece}"] = [0.0, 1.0] if far else [1.0, 0.0]
+    corpus = Corpus()
+
+    kept = relevant_pieces(corpus, Vectors(near, default=[0.5, 0.5]), "q", "T", page(text))
+
+    assert sum(map(len, kept)) <= PAGE_CHARACTERS
+    assert not any(piece.startswith("## Beta") for piece in kept)
+    assert kept == [piece for piece in split(text) if piece in kept]
+    # The corpus holds every piece, and only the kept ones are marked read.
+    assert [p.text for p in corpus.pieces] == split(text)
+    assert [p.text for p in corpus.pieces if p.read] == kept
+
+
+def test_a_page_within_the_budget_is_read_whole():
+    text = "# Page\n## One\nfirst\n\n## Two\nsecond"
+    corpus = Corpus()
+
+    assert relevant_pieces(corpus, Encoder(), "q", "T", page(text)) == split(text)
+    assert all(p.read for p in corpus.pieces)
+
+
+class Counting(Vectors):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.calls = []
+
+    def encode(self, texts, query=False):
+        self.calls.append((list(texts), query))
+        return super().encode(texts, query)
+
+
+def test_a_page_is_encoded_once_however_it_is_picked():
+    size = PAGE_CHARACTERS // 3 - 100
+    text = "# Page\n" + "\n\n".join(
+        f"## {n}\n{n[0] * size}" for n in ("Alpha", "Beta", "Gamma", "Delta")
+    )
+    encoder = Counting({}, default=[1.0, 0.0])
+
+    relevant_pieces(Corpus(), encoder, "q", "T", page(text))
+
+    documents = [texts for texts, query in encoder.calls if not query]
+    assert len(documents) == 1
+    assert len(documents[0]) == len(split(text))
+
+
+def corpus_of(vectors, url="https://a.org/x"):
+    """A corpus holding one page with a piece per vector, named p0, p1, ... in order."""
+    corpus = Corpus()
+    texts = [f"p{i}" for i in range(len(vectors))]
+    corpus.add(with_url(url), texts, np.array(vectors))
+    return corpus
+
+
+def with_url(url):
+    return dataclasses.replace(page("x"), url=url, final_url=url)
+
+
+QUESTION = Vectors({"q": [1.0, 0.0]})
+
+
+def test_recall_reads_the_pieces_held_into_claims_and_counts_them_for_their_site():
+    corpus = Corpus()
+    corpus.add(
+        dataclasses.replace(
+            page("x"), url="https://a.org/x", final_url="https://www.a.org/x/", title="A"
+        ),
+        ["It was found in 1904.", "Far from it."],
+        np.array([[1.0, 0.0], [0.0, 1.0]]),
+    )
+    model = DummyLM(
+        [{"findings": [{"claim": "Found", "quote": "found in 1904", "confidence": "high"}]}]
+    )
+    stream = Stream()
+
+    claims = recall(model, QUESTION, "b", "q", corpus, 5, 2, "recall for q", stream)
+
+    assert [(c.id, c.url, c.title, c.step) for c in claims] == [(5, "https://www.a.org/x/", "A", 2)]
+    assert corpus.claims == {"a.org": 1}
+    assert [piece.read for piece in corpus.pieces] == [True, False]
+    assert stream.events == [
+        ("research", "recall for q: 1 pieces from 1 pages"),
+        ("research", "recall for q: read page 1/1: A"),
+        ("research", "recall for q: 1 new claims, 5 in all"),
+    ]
+    assert stream.fields == [
+        {"done": 1, "total": 1, "kind": "recall", "parent": None, "question": None},
+        {"done": 1, "total": 1, "kind": "part", "parent": 0, "page": 1},
+        {"done": 1, "total": 5, "kind": "result", "parent": 0},
+    ]
+
+
+def test_recall_numbers_its_pages_and_names_its_question_and_parent():
+    corpus = Corpus()
+    for url in ("https://a.org/x", "https://b.org/y"):
+        corpus.add(with_url(url), ["p0", "p1"], np.array([[1.0, 0.0], [1.0, 0.0]]))
+    model = DummyLM([{"findings": []}, {"findings": []}])
+    stream = Stream()
+
+    recall(
+        model,
+        QUESTION,
+        "b",
+        "q",
+        corpus,
+        1,
+        0,
+        "recall",
+        stream,
+        question_id=7,
+        parent=3,
+        stage="verify",
+    )
+
+    assert [
+        (f["kind"], f["parent"], f.get("page"), f["done"], f["total"]) for f in stream.fields
+    ] == [
+        ("recall", 3, None, 3, 2),
+        ("part", 0, 1, 1, 2),
+        ("part", 0, 2, 2, 2),
+        ("result", 0, None, 0, 0),
+    ]
+    assert stream.fields[0]["question"] == 7
+    assert {stage for stage, _ in stream.events} == {"verify"}
+
+
+def test_recall_with_nothing_held_makes_no_call():
+    stream = Stream()
+
+    assert recall(None, QUESTION, "b", "q", Corpus(), 1, 0, "recall for q", stream) == []
+    assert stream.events == []
+
+
+def test_recall_takes_the_pieces_at_or_above_the_threshold_best_first():
+    off = [RECALL_MIN - 0.1, (1 - (RECALL_MIN - 0.1) ** 2) ** 0.5]
+    corpus = corpus_of([[0.7, 0.714], [1.0, 0.0], off])
+
+    recalled = corpus.recall(QUESTION, "q")
+
+    assert [text for _, text in recalled] == ["p1", "p0"]
+
+
+def test_recall_stops_at_the_piece_limit():
+    corpus = Corpus()
+    for i in range(RECALL_PIECES + 1):
+        corpus.add(with_url(f"https://s{i}.org"), [f"p{i}"], np.array([[1.0, 0.0]]))
+
+    assert len(corpus.recall(QUESTION, "q")) == RECALL_PIECES
+
+
+def test_recall_takes_a_site_only_so_many_times():
+    corpus = Corpus()
+    corpus.add(with_url("https://www.a.org/1"), ["a1", "a2"], np.array([[1.0, 0.0]] * 2))
+    corpus.add(with_url("https://a.org/2"), ["a3"], np.array([[1.0, 0.0]]))
+    corpus.add(with_url("https://b.org"), ["b1"], np.array([[0.9, 0.1]]))
+
+    recalled = [text for _, text in corpus.recall(QUESTION, "q")]
+
+    assert RECALL_PER_SITE == 2
+    assert recalled == ["a1", "a2", "b1"]
+
+
+def test_a_piece_recalled_or_read_is_not_recalled_again():
+    corpus = corpus_of([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]])
+    corpus.pieces[0].read = True
+
+    assert [text for _, text in corpus.recall(QUESTION, "q")] == ["p1", "p2"]
+    assert corpus.recall(QUESTION, "q") == []
+
+
+def test_the_corpus_counts_pages_and_claims_per_site():
+    corpus = Corpus()
+    corpus.add(with_url("https://www.a.org/1"), ["x"], np.array([[1.0]]))
+    corpus.add(with_url("https://a.org/2"), ["y"], np.array([[1.0]]))
+
+    corpus.record([claim(1, "https://a.org/1"), claim(2, "https://b.org")])
+
+    assert corpus.pages == {"a.org": 2}
+    assert corpus.claims == {"a.org": 1, "b.org": 1}

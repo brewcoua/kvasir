@@ -138,6 +138,23 @@ publishing workflow writes the digest to its run summary. There is deliberately 
 Open `localhost:8080/` for the runs page: what is running now, which stage it is in, how long each
 stage took, and what it has spent.
 
+### Pages that need JavaScript
+
+The default image reads pages over plain HTTP. Some pages are empty until their scripts run, or
+show a challenge first. To read those, build the `browser` target, which adds Chromium through
+Playwright and Patchright:
+
+```bash
+podman build --target browser -t kvasir:browser .
+```
+
+Run it as above, with `--init --ipc=host` added: Chromium otherwise runs out of shared memory. With
+`KVASIR_FETCH_RENDER=auto`, the default, a page that comes back as a challenge, a block, an empty
+shell, a 403 or a 503 is then loaded in Chromium. Outside the image, install the extra with
+`uv sync --extra browser` and then `uv run playwright install chromium`.
+
+The `browser` target has not been built or run yet; treat it as unverified.
+
 ### Runtime requirements
 
 The image runs as uid 65532 under a read-only root filesystem. Only `/data` and `/tmp` need to be
@@ -212,7 +229,8 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
 
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
 `follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `ground_intake`,
-`corroborate`, `contradict`, `model_fast`, `model_strong`, `model_reason`. Each budget left out takes its `[research]` default from
+`corroborate`, `contradict`, `recall_past_runs`, `max_age_hours`, `model_fast`, `model_strong`,
+`model_reason`. Each budget left out takes its `[research]` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
 shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
@@ -245,8 +263,18 @@ curl -N -X POST localhost:8080/v1/runs \
 Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has the same fields as a
 `ledger` run. Options: `research_minutes`, `max_searches` (an optional cap on top of the time),
 `results_per_query` (5 by default), `max_attempts`, `max_depth` (4 by default), `ground`,
-`ground_intake`, `corroborate`, `contradict`, `model_fast`, `model_strong`, `model_reason`. See
+`ground_intake`, `corroborate`, `contradict`, `recall_past_runs`, `max_age_hours`, `model_fast`,
+`model_strong`, `model_reason`. See
 [`docs/research.md`](docs/research.md#the-graph-method).
+
+### Choose what the cache gives
+
+Two options of `ledger` and `graph` set, for one run, what the page cache gives.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `recall_past_runs` | `true` | `false`: recall reads only the pages this run read. The cache still serves downloads, and the run's pieces are still kept for later runs. |
+| `max_age_hours` | `KVASIR_FETCH_MAX_AGE_HOURS` | Hours a cached page is served without asking its site. `0` downloads every page again and replaces its cached copy. |
 
 ### Check claims more strictly
 
@@ -255,7 +283,7 @@ Four options add checks past the quote check, each at a cost in calls.
 | Option | Default | Effect |
 | --- | --- | --- |
 | `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker checks each cited sentence first, shown the claims it cites and their quotes together, and keeps one it supports. The fast model sees only the rest. Without a checker it does nothing. |
-| `ground_intake` | `false` | The checker also drops each claim the page piece it was read from does not support. Off by default: unless the checker stays loaded beside the fast model, every page then swaps the two. |
+| `ground_intake` | `false` | The checker also drops each claim the page piece it was read from does not support. Off by default: unless the checker stays loaded beside the fast model, each search then swaps the two twice. |
 | `corroborate` | `false` | Each claim is compared with up to 3 close claims from other sites. Those that support it go in its `corroborated_by`. |
 | `contradict` | `false` | Close claims from other sites that disagree with it go in its `contradicted_by`, both ways. |
 
@@ -356,7 +384,7 @@ once at startup, with no scheduler and no background task.
 
 ## Watch what is running
 
-`GET /` serves the runs page. New and Runs in its header lead to its views, and each view has its
+`GET /` serves the runs page. New, Runs and Knowledge in its header lead to its views, and each view has its
 own address, so a reload or a shared link keeps it.
 
 - New (`#/`) starts a run. Pick the method, enter the question or topic, and press Enter or the
@@ -393,6 +421,12 @@ own address, so a reload or a shared link keeps it.
     Drag a node to move it, scroll or drag the background to zoom and pan, and select a node to
     fade all but its neighbours and show its queries, or a claim's quote and source. It follows
     the run live.
+- Knowledge (`#/knowledge`) shows what the page cache, `pages.db`, holds: each site with its pages,
+  pieces, last fetch and the engines that read it. Pick a site to list its pages, and a page
+  (`#/knowledge/<id>`) to see the text a run reads from it, its links by region, and the stored
+  runs that cite it. Fetch again reads it whatever its age. Delete, on a page or a site, removes it
+  with its pieces, and cannot be undone. Recall takes a question and lists the cached pieces a run
+  would recall for it, with their similarity, and marks where `RECALL_MIN` cuts.
 
 Figures update live while the run is in progress. The theme selector in the header offers
 `system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in
@@ -408,6 +442,12 @@ The same data is available as JSON.
 | `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
 | `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls and the last 50 searches after each `progress` and every 2 seconds in between. |
+| `GET /v1/sites` | Each site in the page cache, with its pages, pieces, last fetch and engines, the one fetched from last first. |
+| `GET /v1/pages?site=` | The cached pages of a site, newest first; without `site`, the latest 200 of all. |
+| `GET /v1/pages/{id}` | One cached page: its text, its links by region, and the stored runs that cite it. |
+| `GET /v1/pages/recall?q=` | The cached pieces recall would take for the question `q`, with their similarity. Marks nothing read. 503 without an embedding model. |
+| `DELETE /v1/pages/{id}`, `DELETE /v1/sites/{domain}` | Remove a page, or every page of a site, with links and pieces. Cannot be undone. |
+| `POST /v1/pages/{id}/refetch` | Fetch the page again whatever its age. 502 with the reason when it cannot be read. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
 `POST /v1/tasks` is the one route that is not a run: it registers nothing and takes no slot. It
@@ -523,6 +563,11 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 | `KVASIR_RESEARCH_MAX_DEPTH` | `2` | Research: levels of follow-ups below the first questions. |
 | `KVASIR_RESEARCH_MAX_ENTITIES` | `8` | Research: options a ranking or table compares, when the run chooses them. |
 | `KVASIR_RESEARCH_MAX_CRITERIA` | `5` | Research: criteria, when the run chooses them. |
+| `KVASIR_FETCH_CONTACT` | unset | Contact named in the user agent of page requests, as `kvasir/<version> (+https://github.com/brewcoua/kvasir; <contact>)`. Unset names none. |
+| `KVASIR_FETCH_HOST_INTERVAL_SECONDS` | `1.0` | Least time between the starts of two page requests to one host. At most 2 are in flight to a host regardless. |
+| `KVASIR_FETCH_RENDER` | `auto` | `auto` renders a page that needs JavaScript in Chromium, when the `browser` extra is installed; `off` never does. |
+| `KVASIR_FETCH_STEALTH` | `false` | Render through Patchright, which hides the signs of automation. Needs the `browser` extra. Getting past a challenge can break a site's terms. |
+| `KVASIR_FETCH_MAX_AGE_HOURS` | `48` | Hours a page cached in `pages.db` is served without asking its site; then it is revalidated with `If-None-Match` or `If-Modified-Since`. `0` fetches every page again. |
 | `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
 | `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 | `KVASIR_CONFIG` | `kvasir.toml` | Config file. Environment only. |

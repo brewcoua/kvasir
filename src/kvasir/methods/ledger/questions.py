@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, get_args
 
-from kvasir.methods.ledger.signatures import NamedQuestion
+from kvasir.methods.ledger.signatures import NamedQuestion, Priority
 from kvasir.schemas.results import ResearchQuestion
 from kvasir.storm.encoder import Encoder, cosine_similarity
 
@@ -40,6 +40,7 @@ class Question:
     parent: int | None = None
     depth: int = 0
     status: Status = "open"
+    priority: Priority = "supporting"
     # The claims whose quotes support the answer, as the last judgement found them.
     claims: list[int] = field(default_factory=list)
     queries: list[str] = field(default_factory=list)
@@ -75,6 +76,10 @@ def add_questions(
             return
         if kept and cosine_similarity([vector], kept).max() > DUPLICATE_QUESTION:
             continue
+        priority = named.priority
+        if parent is not None:
+            # A follow-up is no more central than the question it follows up on.
+            priority = max(priority, parent.priority, key=get_args(Priority).index)
         ledger.append(
             Question(
                 id=len(ledger) + 1,
@@ -82,6 +87,7 @@ def add_questions(
                 title=named.title.strip(),
                 parent=parent.id if parent else None,
                 depth=parent.depth + 1 if parent else 0,
+                priority=priority,
             )
         )
         kept.append(vector)

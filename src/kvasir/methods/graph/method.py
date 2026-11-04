@@ -19,7 +19,7 @@ from pydantic import ValidationError
 
 from kvasir.config import Settings
 from kvasir.methods.base import Method
-from kvasir.methods.graph.explore import explore
+from kvasir.methods.graph.explore import LATE_SHARE, explore
 from kvasir.methods.graph.graph import branches
 from kvasir.methods.graph.signatures import Outline
 from kvasir.methods.ledger.brief import clarifications
@@ -27,9 +27,10 @@ from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.method import FIRST_QUESTIONS, NO_EVIDENCE
 from kvasir.methods.ledger.questions import UNSETTLED, Question, add_questions, as_results
 from kvasir.methods.ledger.signatures import Brief, Decompose, NamedQuestion
-from kvasir.research import verify, write
+from kvasir.research import fetch, verify, write
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, nearest
+from kvasir.research.corpus import Corpus
 from kvasir.research.corroborate import cross_check
 from kvasir.research.render import SUMMARY, render
 from kvasir.runners import build_checker, build_research_models, build_research_tools
@@ -86,6 +87,8 @@ def run_graph(
     add_questions(encoder, questions, first or [NamedQuestion(title="", question=input.question)])
     record_questions(as_results(questions))
     claims: list[Claim] = []
+    corpus = Corpus(fetch.cache(), encoder.embedding_model_name, options.recall_past_runs)
+    fetch.use_max_age(options.max_age_hours)
     explore(
         models,
         encoder,
@@ -95,7 +98,9 @@ def run_graph(
         questions,
         claims,
         Frontier(encoder, brief, claims),
+        corpus,
         started + options.research_minutes * 60,
+        started + options.research_minutes * 60 * (1 - LATE_SHARE),
         options.max_searches,
         options.results_per_query or RESULTS_PER_QUERY,
         options.max_attempts or settings.research.max_attempts,
@@ -217,6 +222,7 @@ def _defaults(settings: Settings) -> dict[str, Any]:
         "results_per_query": RESULTS_PER_QUERY,
         "max_attempts": settings.research.max_attempts,
         "max_depth": MAX_DEPTH,
+        "max_age_hours": settings.fetch.max_age_hours,
         "ground": settings.model.checker is not None,
         "model_fast": settings.model.fast,
         "model_strong": settings.model.strong,

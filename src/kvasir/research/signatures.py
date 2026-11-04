@@ -120,12 +120,15 @@ class Escalate(dspy.Signature):
 
 
 class Contradicts(dspy.Signature):
-    """Decide whether two claims from different sources disagree about the same fact.
+    """Decide which of the other claims, each from a different source, disagree with the claim
+    about the same fact.
 
-    They disagree when both cannot be true at once, such as two different dates for one event.
+    One disagrees when both cannot be true at once, such as two different dates for one event.
     Different facts about the same subject do not disagree, and neither does one being vaguer.
     """
 
-    first: str = dspy.InputField(desc="a claim, with the quote it was read from")
-    second: str = dspy.InputField(desc="a claim, with the quote it was read from")
-    disagree: bool = dspy.OutputField()
+    claim: str = dspy.InputField(desc="a claim, with the quote it was read from")
+    others: str = dspy.InputField(
+        desc="claims from other sources, each prefixed by its id in brackets, with its quote"
+    )
+    disagree: list[int] = dspy.OutputField(desc="the ids of the claims that disagree, or none")

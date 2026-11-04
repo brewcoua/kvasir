@@ -16,6 +16,11 @@ answered question, and the children of a question given up.
 The run takes the first question with the most worth per unit of work, then walks down it to the
 question whose search settles the most for the least: at each level, the question itself while a
 retry costs less than its children, else its child with the least work.
+
+Two rules put the first questions ahead, since they are what the brief asks and what the report is
+outlined from. A first question not yet answered after one search is searched again before the run
+goes two levels below any first question. Late in the research, a first question that can still be
+settled is searched before any question raised below one.
 """
 
 from __future__ import annotations
@@ -26,6 +31,8 @@ from kvasir.methods.ledger.frontier import Frontier, roots
 from kvasir.methods.ledger.questions import Question
 
 NEVER = math.inf
+# Searches a first question not yet answered gets before the run goes two levels below any.
+FIRST_SEARCHES = 2
 
 
 def children(questions: list[Question]) -> dict[int, list[Question]]:
@@ -70,13 +77,25 @@ def work(questions: list[Question], max_attempts: int, closed: set[int]) -> dict
     return of
 
 
-def pick(questions: list[Question], frontier: Frontier, max_attempts: int) -> Question | None:
-    """The question to search next, or None when no question can still be settled."""
+def pick(
+    questions: list[Question], frontier: Frontier, max_attempts: int, late: bool = False
+) -> Question | None:
+    """The question to search next, or None when no question can still be settled.
+
+    `late` when little of the research time is left.
+    """
     of = work(questions, max_attempts, frontier.closed)
     below = children(questions)
     first = [q for q in questions if q.parent is None and 0 < of[q.id] < NEVER]
     if not first:
         return None
+    behind = [
+        q
+        for q in first
+        if retry(q, max_attempts) < NEVER and (late or 0 < q.attempts < FIRST_SEARCHES)
+    ]
+    if late and behind:
+        return max(behind, key=lambda q: (frontier.worth(q), -q.id))
     # Worth is positive for any question close to the brief; one far from it counts as none.
     question = max(first, key=lambda q: (max(frontier.worth(q), 0.0) / of[q.id], -of[q.id], -q.id))
     while True:
@@ -84,4 +103,6 @@ def pick(questions: list[Question], frontier: Frontier, max_attempts: int) -> Qu
         # A tie goes to the children: they are what is left to find out about the question.
         if not open_below or retry(question, max_attempts) < split(below[question.id], of):
             return question
+        if question.depth >= 1 and behind:
+            return max(behind, key=lambda q: (frontier.worth(q), -q.id))
         question = min(open_below, key=lambda c: (of[c.id], -frontier.worth(c), c.id))

@@ -260,6 +260,7 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify
 | Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSIONS_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
 | STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `methods/storm/method.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
+| Pages read | `$KVASIR_DATA_DIR/pages.db`: each page's text and links, and its pieces with their vectors | Served for `fetch.max_age_hours`, then revalidated; kept until deleted from the Knowledge page | A page read once is not downloaded again, and a later run can answer from it with no search. Public page content only: no brief, question or claim. One cache serves every user of the service. |
 
 The SQLite store writes a run twice: when it starts, so a restart mid-run leaves a trace, and when
 it ends. A run in progress is always read from memory. At startup, `RunStore.sweep` marks any run
@@ -271,6 +272,15 @@ checked against `[A-Za-z0-9][A-Za-z0-9_-]{0,127}` before reaching the filesystem
 Co-STORM runner between requests: each operation loads the session, does one thing and saves it.
 The models, encoder and retriever come from current settings, not from the file, so a config change
 reaches the next turn of an existing session.
+
+`pages.db` is a SQLite file of its own in WAL mode, so deleting it loses nothing else. Each call
+opens its own connection, and writers from several runs wait for each other up to 30 seconds. A
+failure reading or writing it is logged, and the run carries on without the cache.
+
+The Knowledge page of the dashboard, `#/knowledge`, shows what it holds, through `GET /v1/sites`,
+`GET /v1/pages`, `GET /v1/pages/{id}` and `GET /v1/pages/recall?q=`. `DELETE /v1/pages/{id}`,
+`DELETE /v1/sites/{domain}` and `POST /v1/pages/{id}/refetch` change it. Like every route these
+have no authentication, so anyone who can reach the service can empty the cache.
 
 Expiry, of sessions and of stored runs, happens once at startup and, for runs, after each run ends.
 There is no scheduler and no background task.

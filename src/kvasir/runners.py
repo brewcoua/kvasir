@@ -87,7 +87,7 @@ _RESEARCH_ROLES = {
     "outline": ("strong", 2500),
     "tldr": ("strong", 2000),
     "verify": ("fast", 600),
-    "contradict": ("fast", 400),
+    "contradict": ("fast", 600),
     # The reason model's final say on a sentence the checker and the fast model reject or
     # disagree on.
     "escalate": ("reason", 2500),

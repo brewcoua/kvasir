@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Protocol
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
-from kvasir.methods.ledger.questions import Question
+from kvasir.methods.ledger.questions import Question, as_results
 from kvasir.methods.ledger.signatures import CheckAnswer, SearchFor
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, closest, quoted_claims
-from kvasir.research.read import read
+from kvasir.research.corpus import Corpus
+from kvasir.research.read import read, recall
 from kvasir.research.search import SearchUnavailable, search
 from kvasir.runs.progress import RESEARCH, ProgressStream
+from kvasir.runs.run import record_questions
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG
@@ -41,8 +44,22 @@ logger = logging.getLogger(__name__)
 
 # Judges a question on the claims gathered so far, updating its status, claims and what it misses.
 Judge = Callable[[Question], None]
-# Searches for questions within a budget of searches, judging each with the judge given.
-Research = Callable[[list[Question], int, Judge], None]
+
+
+class Research(Protocol):
+    """Searches for questions within a budget of searches, judging each with the judge given.
+
+    Its events are published under `stage`, its attempts under the event `parent`.
+    """
+
+    def __call__(
+        self,
+        questions: list[Question],
+        budget: int,
+        judge: Judge,
+        stage: str = RESEARCH,
+        parent: int | None = None,
+    ) -> None: ...
 
 
 def research(
@@ -54,6 +71,7 @@ def research(
     questions: list[Question],
     claims: list[Claim],
     seen: set[str],
+    corpus: Corpus,
     budget: int,
     per_query: int,
     max_attempts: int,
@@ -61,6 +79,10 @@ def research(
     first_step: int,
     stream: ProgressStream,
     frontier: Frontier | None = None,
+    *,
+    stage: str = RESEARCH,
+    parent: int | None = None,
+    ledger: list[Question] | None = None,
 ) -> int:
     """Search for `questions` one at a time, and return how many searches that took.
 
@@ -71,8 +93,19 @@ def research(
 
     With a `frontier`, questions are taken in the order of their worth rather than breadth first,
     and a branch that stops adding claims or sources is closed.
+
+    Events are published under `stage`, and attempts and recalls under the event `parent`. A
+    `ledger` is recorded on the run whenever a question in it changes; `questions` that are not
+    part of one, as a repair's are not, leave it out.
     """
+
+    def record() -> None:
+        if ledger is not None:
+            record_questions(as_results(ledger))
+
     searches = stalled = failed = 0
+    # The pieces the corpus held when each question was last recalled for.
+    recalled: dict[int, int] = {}
     failures: list[str] = []
     while searches < budget and stalled < STALL_SEARCHES:
         question = (
@@ -84,26 +117,58 @@ def research(
             break
         if question.judged_at < len(claims):
             judge(question)
+            record()
             continue
+        # Pieces already downloaded, by this run or an earlier one, may answer it, and cost no
+        # search; recall marks what it reads, so it is asked again only once the corpus has grown.
+        if recalled.get(question.id) != len(corpus.pieces):
+            recalled[question.id] = len(corpus.pieces)
+            held = recall(
+                models["intake"],
+                encoder,
+                brief,
+                question.text,
+                corpus,
+                len(claims) + 1,
+                first_step + searches,
+                f"recall for {question.text}",
+                stream,
+                models.get("ground_intake"),
+                question_id=question.id,
+                parent=parent,
+                stage=stage,
+            )
+            claims.extend(held)
+            if held:
+                if frontier is not None:
+                    frontier.merge(held)
+                judge(question)
+                record()
+                if question.status == "answered":
+                    continue
         searches += 1
         attempt = stream.publish(
-            RESEARCH,
+            stage,
             f"search {searches} of at most {budget}, for: {question.text}",
             kind="attempt",
+            parent=parent,
             question=question.id,
         )
-        query = str(
-            predict(
-                models["plan"],
-                SearchFor,
-                today=today,
-                brief=brief,
-                question=question.text,
-                tried="\n".join(question.queries) or "none",
-                missing=question.missing,
-                shape=QUERY_SHAPES[min(question.attempts, len(QUERY_SHAPES) - 1)],
-            ).query
-        ).strip()
+        # A site that keeps giving confirmed claims is asked for this question, no plan needed.
+        query = corpus.site_query(question.id, question.text, claims) if question.attempts else None
+        if query is None:
+            query = str(
+                predict(
+                    models["plan"],
+                    SearchFor,
+                    today=today,
+                    brief=brief,
+                    question=question.text,
+                    tried="\n".join(question.queries) or "none",
+                    missing=question.missing,
+                    shape=QUERY_SHAPES[min(question.attempts, len(QUERY_SHAPES) - 1)],
+                ).query
+            ).strip()
         try:
             hits = search(
                 searxng,
@@ -113,6 +178,8 @@ def research(
                 encoder,
                 question.text,
                 frontier.held() if frontier is not None else None,
+                corpus=corpus,
+                claims=claims,
             )
         except SearchUnavailable as exc:
             # The attempt is not spent, since the query was never answered; the budget is.
@@ -134,13 +201,15 @@ def research(
             first_step + searches,
             f"search {searches}",
             stream,
+            corpus,
             models.get("ground_intake"),
             attempt,
+            stage,
         )
         claims.extend(new)
         if frontier is not None and frontier.searched(questions, question, new):
             stream.publish(
-                RESEARCH,
+                stage,
                 f"closing the branch of {question.text}: "
                 f"{BRANCH_STALL} searches in a row added nothing new",
             )
@@ -149,9 +218,11 @@ def research(
             judge(question)
         if question.status == "open" and question.attempts >= max_attempts:
             question.status = "unresolved"
+        # Before the event, so the status that follows it carries the questions as they now stand.
+        record()
         # done and total carry the claim counts here, not progress through the stage.
         stream.publish(
-            RESEARCH,
+            stage,
             f"search {searches}: {len(new)} new claims, {len(claims)} in all; "
             f"{question.text}: {question.status}",
             len(new),

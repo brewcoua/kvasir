@@ -5,13 +5,15 @@ from __future__ import annotations
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import Logged, Stream, Vectors, claim, research_settings
+from fakes import Encoder, Logged, Stream, Vectors, claim, page, research_settings
 from kvasir.config import Settings
 from kvasir.research import verify
+from kvasir.research.corpus import Corpus
 from kvasir.research.corroborate import cross_check, domain, neighbours
 from kvasir.research.ground import PROMPT, grounded
-from kvasir.research.read import GAP, intake
+from kvasir.research.read import GAP, intake, read, supported
 from kvasir.runners import build_checker
+from kvasir.storm import runtime
 
 
 class Checker:
@@ -74,11 +76,32 @@ def test_intake_drops_a_claim_its_piece_does_not_support():
     checker = Checker("Yes", "No")
     hit = {"url": "https://a", "title": "A"}
 
-    claims = intake(model, "brief", "question", hit, piece, 1, 1, checker)
+    claims = supported(checker, piece, intake(model, "brief", "question", hit, piece, 1, 1))
 
     assert [c.text for c in claims] == ["Found in 1904"]
     # The whole piece is the document, since a claim names what its quote leaves to the page.
     assert checker.asked[0] == PROMPT.format(document=piece, claim="Found in 1904")
+
+
+def test_reading_grounds_the_claims_once_every_page_is_read(monkeypatch):
+    monkeypatch.setattr(
+        "kvasir.research.read.fetch_page", lambda url: page("It was found in 1904.")
+    )
+    log = []
+    found = {"findings": [{"claim": "Found", "quote": "found in 1904", "confidence": "high"}]}
+    model = Logged("intake", log, [found, found])
+    checker = Checker("Yes", "No", log=log)
+    hits = [
+        {"url": "https://a", "title": "A", "description": ""},
+        {"url": "https://b", "title": "B", "description": ""},
+    ]
+
+    claims = read(
+        model, Encoder(), "brief", "q", hits, 5, 1, "search 1", Stream(), Corpus(), checker
+    )
+
+    assert log == ["intake", "intake", "checker", "checker"]
+    assert [(c.id, c.url) for c in claims] == [(5, "https://a")]
 
 
 def test_the_checker_decides_every_cited_sentence_against_all_it_cites():
@@ -308,18 +331,46 @@ def test_neighbours_are_close_claims_from_other_sites():
 def test_cross_checking_records_support_and_disagreement():
     a, b = claim(1, "https://a.org"), claim(2, "https://b.org")
     encoder = Vectors({"claim 1": [1, 0], "claim 2": [1, 0]})
-    # Claim 2 supports claim 1, not the other way; the second pair is then asked about disagreeing.
-    models = {
-        "ground": Checker("Yes", "No"),
-        "contradict": DummyLM([{"disagree": True}]),
-    }
+    models = {"ground": Checker("No", "No"), "contradict": DummyLM([{"disagree": [2]}])}
+
+    cross_check(models, encoder, [a, b], Stream(), corroborate=True, contradict=True)
+
+    assert a.corroborated_by == b.corroborated_by == []
+    assert a.contradicted_by == [2]
+    assert b.contradicted_by == [1]
+
+
+def test_claims_one_supports_are_not_asked_about_disagreeing():
+    a, b = claim(1, "https://a.org"), claim(2, "https://b.org")
+    encoder = Vectors({"claim 1": [1, 0], "claim 2": [1, 0]})
+    # Claim 2 supports claim 1, not the other way.
+    contradict = DummyLM([])
+    models = {"ground": Checker("Yes", "No"), "contradict": contradict}
 
     cross_check(models, encoder, [a, b], Stream(), corroborate=True, contradict=True)
 
     assert a.corroborated_by == [2]
     assert b.corroborated_by == []
-    assert a.contradicted_by == [2]
-    assert b.contradicted_by == [1]
+    assert a.contradicted_by == b.contradicted_by == []
+    assert contradict.history == []
+
+
+def test_support_is_checked_for_every_pair_before_disagreement(monkeypatch):
+    # One thread, so the fake model's answers go to the claims in order.
+    monkeypatch.setattr(runtime, "_max_threads", 1)
+    a, b, c = claim(1, "https://a.org"), claim(2, "https://b.org"), claim(3, "https://c.org")
+    encoder = Vectors({"claim 1": [1, 0], "claim 2": [1, 0], "claim 3": [1, 0]})
+    log = []
+    # Claim 1 is asked about 2 and 3 in one call, claim 2 about 3; 9 was never shown.
+    contradict = Logged("contradict", log, [{"disagree": [3, 9]}, {"disagree": []}])
+    models = {"ground": Checker(*["No"] * 6, log=log), "contradict": contradict}
+
+    cross_check(models, encoder, [a, b, c], Stream(), corroborate=True, contradict=True)
+
+    assert log == ["checker"] * 6 + ["contradict"] * 2
+    assert a.contradicted_by == [3]
+    assert b.contradicted_by == []
+    assert c.contradicted_by == [1]
 
 
 def test_cross_checking_asks_nothing_unless_asked_to():
@@ -344,7 +395,9 @@ def test_a_claim_is_grounded_on_the_piece_its_quote_is_in():
     checker = Checker("Yes")
     hit = {"url": "https://a", "title": "A"}
 
-    claims = intake(model, "brief", "question", hit, f"{first}{GAP}{second}", 1, 1, checker)
+    piece = f"{first}{GAP}{second}"
+
+    claims = supported(checker, piece, intake(model, "brief", "question", hit, piece, 1, 1))
 
     assert [c.text for c in claims] == ["Weighs 900 kg"]
     assert checker.asked[0] == PROMPT.format(document=second, claim="Weighs 900 kg")

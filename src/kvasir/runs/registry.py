@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from uuid import uuid4
 
@@ -70,6 +71,23 @@ class RunRegistry:
             summaries += [stored for stored in self._store.summaries() if stored.id not in held]
             summaries.sort(key=lambda summary: summary.created_at, reverse=True)
         return summaries[: self._limit]
+
+    def citing(self, urls: list[str]) -> list[RunSummary]:
+        """The runs whose result holds any of `urls` as a string, newest first. Reads the result of
+        every run kept, there being no index."""
+        with self._lock:
+            live = list(self._runs.values())
+        needles = [json.dumps(url, ensure_ascii=False) for url in urls]
+        found = []
+        for run in live:
+            result = run.detail().result
+            blob = result.model_dump_json() if result else ""
+            if any(needle in blob for needle in needles):
+                found.append(run.summary())
+        if self._store is not None:
+            held = {run.id for run in live}
+            found += [s for s in self._store.citing(urls) if s.id not in held]
+        return sorted(found, key=lambda summary: summary.created_at, reverse=True)
 
     def detail(self, run_id: str) -> RunDetail:
         run = self.get(run_id)

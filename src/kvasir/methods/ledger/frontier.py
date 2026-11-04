@@ -26,6 +26,8 @@ DEPTH_PENALTY = 0.15
 ATTEMPT_PENALTY = 0.25
 # What raises it: a question with part of an answer, or with sources that disagree.
 GAP_BONUS = 0.2
+# What the model that asked a question said of how central it is to the brief adds.
+PRIORITY_BONUS = {"core": 0.2, "supporting": 0.0, "peripheral": -0.2}
 
 
 class Frontier:
@@ -56,8 +58,8 @@ class Frontier:
         return max(waiting, key=lambda q: (self.worth(q), -q.id))
 
     def worth(self, question: Question) -> float:
-        """Closeness to the brief, plus distance from every claim held, plus any gap, less depth
-        and the queries already tried."""
+        """Closeness to the brief, plus distance from every claim held, plus any gap and its
+        priority, less depth and the queries already tried."""
         vector = self._question(question)
         relevance = float(cosine_similarity(vector, self.brief)[0][0])
         held = self.held()
@@ -67,6 +69,7 @@ class Frontier:
             relevance
             + novelty
             + gap
+            + PRIORITY_BONUS[question.priority]
             - DEPTH_PENALTY * question.depth
             - ATTEMPT_PENALTY * question.attempts
         )

@@ -25,7 +25,8 @@ from kvasir.methods.ledger.questions import Question, add_questions, as_results
 from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.calls import predict
 from kvasir.research.claims import Claim, quoted_claims
-from kvasir.research.read import read
+from kvasir.research.corpus import Corpus
+from kvasir.research.read import read, recall
 from kvasir.research.search import SearchUnavailable, search
 from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.runs.run import record_questions
@@ -52,6 +53,9 @@ GAP_YIELD = 2
 # Questions in the graph at most. The time budget bounds what is searched; this bounds the input
 # of the writing and the size of the graph shown.
 MAX_QUESTIONS = 80
+# The share of the research time, at its end, in which no question raises others and no gap call
+# is made: a question asked then would go unsearched. See `proof` for what is searched instead.
+LATE_SHARE = 0.25
 logger = logging.getLogger(__name__)
 
 
@@ -64,7 +68,9 @@ def explore(
     questions: list[Question],
     claims: list[Claim],
     frontier: Frontier,
+    corpus: Corpus,
     deadline: float,
+    late_at: float,
     budget: int | None,
     per_query: int,
     max_attempts: int,
@@ -75,15 +81,35 @@ def explore(
 
     Stops at `deadline`, a `time.monotonic()`, once `budget` searches are spent when there is one,
     or once `GAP_STALL` gap calls in a row are dry. A question raises others only above
-    `max_depth`.
+    `max_depth`, and only before `late_at`, after which the research stops once no question can
+    still be settled.
     """
+
+    def take_in(new: list[Claim], question: Question, late: bool) -> None:
+        """Judge `question` on `new`, add the questions that raises, and settle what it answers."""
+        raised = expand(models["check"], brief, questions, claims, question, new)
+        if question.status == "answered":
+            room = FOLLOW_UPS
+        else:
+            room = min(MAX_CHILDREN, math.ceil(WIDEN * question.attempts**ALPHA))
+        room -= len(children(questions)[question.id])
+        if question.depth < max_depth and room > 0 and not late:
+            add_questions(encoder, questions, raised[:room], question, MAX_QUESTIONS)
+        settle(models["check"], brief, questions, claims, question)
+
     seen: set[str] = set()
+    # The pieces the corpus held when each question was last recalled for.
+    recalled: dict[int, int] = {}
     searches = failed = stalled = 0
     failures: list[str] = []
     # Searches and claims when the last gap call was made.
     gapped: tuple[int, int] | None = None
-    while time.monotonic() < deadline and (budget is None or searches < budget):
-        question = pick(questions, frontier, max_attempts)
+    while (now := time.monotonic()) < deadline and (budget is None or searches < budget):
+        late = now >= late_at
+        question = pick(questions, frontier, max_attempts, late)
+        if question is None and late:
+            stream.publish(RESEARCH, "stopping: no question left to settle, and too little time")
+            break
         if question is None:
             if gapped is not None and (spent := searches - gapped[0]):
                 found = len(claims) - gapped[1]
@@ -107,6 +133,29 @@ def explore(
                 f"{len(questions) - asked} new questions",
             )
             continue
+        # As in the ledger loop: pieces already downloaded may answer it, and cost no search.
+        if recalled.get(question.id) != len(corpus.pieces):
+            recalled[question.id] = len(corpus.pieces)
+            held = recall(
+                models["intake"],
+                encoder,
+                brief,
+                question.text,
+                corpus,
+                len(claims) + 1,
+                searches,
+                f"recall for {question.text}",
+                stream,
+                models.get("ground_intake"),
+                question_id=question.id,
+            )
+            claims.extend(held)
+            if held:
+                frontier.merge(held)
+                take_in(held, question, late)
+                record_questions(as_results(questions))
+                if question.status == "answered":
+                    continue
         searches += 1
         left = math.ceil((deadline - time.monotonic()) / 60)
         attempt = stream.publish(
@@ -115,21 +164,32 @@ def explore(
             kind="attempt",
             question=question.id,
         )
-        query = str(
-            predict(
-                models["plan"],
-                SearchFor,
-                today=today,
-                brief=brief,
-                question=question.text,
-                tried="\n".join(question.queries) or "none",
-                missing=question.missing,
-                shape=QUERY_SHAPES[min(question.attempts, len(QUERY_SHAPES) - 1)],
-            ).query
-        ).strip()
+        # A site that keeps giving confirmed claims is asked for this question, no plan needed.
+        query = corpus.site_query(question.id, question.text, claims) if question.attempts else None
+        if query is None:
+            query = str(
+                predict(
+                    models["plan"],
+                    SearchFor,
+                    today=today,
+                    brief=brief,
+                    question=question.text,
+                    tried="\n".join(question.queries) or "none",
+                    missing=question.missing,
+                    shape=QUERY_SHAPES[min(question.attempts, len(QUERY_SHAPES) - 1)],
+                ).query
+            ).strip()
         try:
             hits = search(
-                searxng, [query], per_query, seen, encoder, question.text, frontier.held()
+                searxng,
+                [query],
+                per_query,
+                seen,
+                encoder,
+                question.text,
+                frontier.held(),
+                corpus=corpus,
+                claims=claims,
             )
         except SearchUnavailable as exc:
             failed += 1
@@ -150,6 +210,7 @@ def explore(
             searches,
             f"search {searches}",
             stream,
+            corpus,
             models.get("ground_intake"),
             attempt,
         )
@@ -161,15 +222,7 @@ def explore(
                 f"{BRANCH_STALL} searches in a row added nothing new",
             )
         if new:
-            raised = expand(models["check"], brief, questions, claims, question, new)
-            if question.status == "answered":
-                room = FOLLOW_UPS
-            else:
-                room = min(MAX_CHILDREN, math.ceil(WIDEN * question.attempts**ALPHA))
-            room -= len(children(questions)[question.id])
-            if question.depth < max_depth and room > 0:
-                add_questions(encoder, questions, raised[:room], question, MAX_QUESTIONS)
-            settle(models["check"], brief, questions, claims, question)
+            take_in(new, question, late)
         if question.status == "open" and question.attempts >= max_attempts:
             question.status = "unresolved"
         # Before the event, so the status that follows it carries the graph as it now stands.

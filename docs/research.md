@@ -137,7 +137,8 @@ attempts first means every question gets a plain search before any gets a narrow
 
 A search for one question often answers another. So before spending a search on a question, the
 loop judges it again if claims arrived since its last judgement. A question already answered by
-another search costs one judgement instead of a search.
+another search costs one judgement instead of a search. Then it recalls the pieces the run already
+holds for the question (see "Recall and leads"), and a question recall answers costs no search.
 
 ### Picking by worth
 
@@ -147,8 +148,12 @@ their questions are set. A branch is a first question and its follow-ups.
 
 - **Worth.** The question with the highest score goes next. The score is its cosine similarity to
   the brief, plus its distance from the closest claim held, plus 0.2 for a `weak` or
-  `contradicted` question, less 0.15 per level of depth and 0.25 per query already tried. The
-  weights are a first guess, not tuned.
+  `contradicted` question, less 0.15 per level of depth and 0.25 per query already tried. Its
+  priority adds 0.2 for `core` and takes 0.2 for `peripheral` (`PRIORITY_BONUS`). The model that
+  asks a question gives its priority, in `Decompose`, `Expand` or `Gaps`: `core` when the brief
+  cannot be answered without it, `supporting` when it explains or qualifies the answer,
+  `peripheral` for background. A word outside the three counts as `supporting`, and a follow-up is
+  no more central than the question it follows up on. The weights are a first guess, not tuned.
 - **Merging.** A new claim at a cosine similarity of 0.92 or more to one held (`DUPLICATE_CLAIM`)
   repeats it. From another site, it adds a source: its id goes in the held claim's
   `corroborated_by`. From the same site, it adds nothing. The repeat stays in `claims`, so it can
@@ -187,7 +192,13 @@ follow-up, while one that keeps coming back `weak` is searched again and split i
   work, then walks down it, stopping at a question whose retry costs less than its children, else
   moving to its child with the least work. A question searched once with two untried
   children costs 2 either way, and the tie goes to the children, so a new question is searched
-  before its parent is tried again.
+  before its parent is tried again. A first question not answered after one search is searched
+  again before the run goes two levels below any first question (`FIRST_SEARCHES`, 2): in a live
+  run, one was left `weak` after one search while questions at depth 4 got 3 searches each.
+- **Late in the research.** In the last `LATE_SHARE` (a quarter) of `research_minutes`, no question
+  raises children and no gap call is made, since a question asked then would go unsearched. A first
+  question that can still be settled is searched before any question below one, and the research
+  ends once no question can still be settled.
 - **Children: progressive widening.** After a search that adds claims, `Expand` judges the
   question on the claims it already rests on and the new ones, and asks one question per part of
   what is still missing. A question not answered, searched n times, may hold at most
@@ -211,7 +222,7 @@ follow-up, while one that keeps coming back `weak` is searched again and split i
   loop does.
 
 The constants `WIDEN`, `ALPHA`, `MAX_CHILDREN`, `FOLLOW_UPS`, `GAP_QUESTIONS`, `GAP_STALL`,
-`GAP_YIELD`, `MAX_QUESTIONS`, `MAX_SECTIONS`, `OPEN_QUESTIONS` and the default depth and time are untuned first guesses, kept or changed on evaluation.
+`GAP_YIELD`, `FIRST_SEARCHES`, `LATE_SHARE`, `MAX_QUESTIONS`, `MAX_SECTIONS`, `OPEN_QUESTIONS` and the default depth and time are untuned first guesses, kept or changed on evaluation.
 
 After the research, one `Outline` call reads each question with claims (its id, name, status,
 claim count and what is missing) and groups them into three to seven sections under short
@@ -277,19 +288,21 @@ could not search for more.
 
 ## Reading a page
 
-Each search ranks the results not read before in this run and reads the first `results_per_query`
-of them: 3 in the ledger, 5 in the graph. Each page goes through the same steps.
+Before a question spends a search, the run recalls what it already holds (see "Recall and leads"
+below). Each search then ranks the results not read before in this run, with the leads the pages
+read so far left behind, and reads the first `results_per_query` of them: 3 in the ledger, 5 in
+the graph. Each page goes through the same steps.
 
 ```mermaid
 flowchart LR
-    search["SearXNG results<br/>not read before"]
+    search["SearXNG results<br/>and leads"]
     pool["top 20 by<br/>SearXNG score"]
     fuse["fuse 3 rankings<br/>weighted RRF"]
     pick["pick results_per_query<br/>skip repeats"]
-    fetch["fetch_text<br/>HTML or PDF"]
+    fetch["fetch_page<br/>cache, HTML, browser, PDF"]
     snippet["search snippet"]
-    split["split<br/>6,000-character pieces"]
-    filter["3 pieces closest<br/>to the question"]
+    split["split<br/>at headings"]
+    filter["closest pieces<br/>PAGE_CHARACTERS"]
     pack["pack the pieces<br/>to fit the context"]
     intake["Intake<br/>claims with quotes"]
     quote{"quote on<br/>the page?"}
@@ -315,27 +328,59 @@ flowchart LR
   rankings are fused as `Σ w / (RRF_K + rank)`, with `RRF_K` 60 and weights
   `SEARXNG_WEIGHT` 1.0, `RELEVANCE_WEIGHT` 1.0 and `NOVELTY_WEIGHT` 0.5. The weights are a first
   guess, not tuned. Results are then taken best first, skipping one whose domain was already taken
-  for the query, or whose snippet has a cosine similarity above `NEAR_DUPLICATE` (0.9) to one
-  taken, until `results_per_query` are taken. A skipped result is not marked seen, so a later
-  search can take it. Without an encoder, as in the
-  ledger's background search for `brief`, only the score order and the domain skip apply. The
-  ledger passes the claims held by its frontier when it has one, and the graph always does.
-- **Fetch.** `fetch_text` downloads with `httpx` inside a process-wide fetch permit, for 20 seconds
-  at most and 20 MB at most. HTML is reduced to visible text with BeautifulSoup, dropping scripts,
-  styles, navigation, headers, footers, asides and forms. A PDF's text layer is read with `pypdf`,
-  which is BSD-licensed and pure Python; PyMuPDF was ruled out as AGPL. A page that cannot be read
-  (another format, a scanned or truncated PDF, an HTTP error) falls back to its search snippet.
-  There is no OCR. A claim read from the snippet has `from_snippet` set: the snippet is the search
-  engine's summary of the page, not the page.
-- **Split.** Pieces of at most 6,000 characters (`PIECE_CHARACTERS`), about 1,500 tokens, cut
-  between lines. This is sized for the embedding filter, not the reading model: `nomic-embed-text`
-  was trained on 2,048 tokens, and a longer piece would be ranked on less than all of it.
-- **Filter.** Only the 3 pieces closest by embedding to the question (`PIECES_PER_PAGE`) are read.
-  Closest to the question, not the brief: a page found for one narrow fact holds it in one piece,
-  which the brief would not rank first. With `nomic-embed-text`, the encoder prefixes the question
-  `search_query: ` and each piece `search_document: `, as the model was trained to read them;
-  texts compared with each other, such as two questions, all take the document prefix. The search
-  ranking above encodes the question the same way.
+  for the query, whose snippet has a cosine similarity above `NEAR_DUPLICATE` (0.9) to one
+  taken, or whose site the run has read `PAGES_PER_SITE` (6) pages of, until `results_per_query`
+  are taken. A skipped result is not marked seen, so a later search can take it. Without an
+  encoder, as in the ledger's background search for `brief`, only the score order and the domain
+  skip apply. The ledger passes the claims held by its frontier when it has one, and the graph
+  always does.
+- **Fetch.** `fetch_page` returns a `Page`: the URL asked for and the one that answered, title,
+  text as markdown, the engine that read it (`static`, `render` or `stealth`), its links and when
+  it was fetched. In order:
+  1. **Cache.** A page in `pages.db` younger than `fetch.max_age_hours` (48) is returned with no
+     request. An older one is asked for again with `If-None-Match` and `If-Modified-Since`, and a
+     304 marks it fresh.
+  2. **Static.** `httpx`, inside a process-wide fetch permit and at most `HOST_CONCURRENCY` (2)
+     requests to one host at a time, `fetch.host_interval_seconds` (1.0) apart. For 20 seconds at
+     most (`TIMEOUT_SECONDS`) and 20 MB at most (`MAX_BYTES`). A 429 waits out `Retry-After`, at
+     most 30 seconds. The user agent names kvasir, its version and its repository, and
+     `fetch.contact` when set, as Wikimedia's user-agent policy asks.
+  3. **Check.** `check_page` refuses a challenge page (markers of Cloudflare, Akamai, DataDome,
+     PerimeterX, Imperva, Sucuri and Kasada), a short block page, and an empty shell that only
+     its scripts would fill.
+  4. **Render.** With `fetch.render` `auto` and the `browser` extra installed, a refused page, or
+     a 403 or 503, is loaded in Chromium through Playwright (`research/browser.py`), or Patchright
+     with `fetch.stealth`. Images, media, fonts and ad hosts are not loaded. The `web-som` marking
+     script hides cookie walls and overlays covering more than 80% of the page
+     (`MAX_COVER_RATIO`) before the HTML is read. The rendered page is checked again.
+  5. **Extract.** HTML becomes markdown with trafilatura, footnote markers such as `[12]` and
+     `[edit]` removed. When trafilatura returns under `MIN_TEXT` (200) characters, the page is
+     cleaned instead: scripts, menus, buttons, dialogs and other interactive parts are dropped by
+     selector and the visible text kept. Links are read before cleaning, each with its anchor, the
+     200 characters around it and its region: `main`, `related` (an `aside`, a "See also" or
+     "Related articles" block), `nav` or `footer`.
+
+  A PDF's text layer is read with `pypdf`, which is BSD-licensed and pure Python; PyMuPDF was
+  ruled out as AGPL. A page that cannot be read (another format, a scanned or truncated PDF, an
+  HTTP error, a challenge with no browser) falls back to its search snippet. There is no OCR. A
+  claim read from the snippet has `from_snippet` set: the snippet is the search engine's summary
+  of the page, not the page. A lead that cannot be read gives nothing, since its snippet is what
+  another page said about it.
+- **Split.** `split` cuts the text at its headings, merging sections while they fit and never
+  across a top-level one, into pieces of at most 6,000 characters (`PIECE_CHARACTERS`), about
+  1,500 tokens. A section that does not fit is cut between paragraphs. Each piece starts with the
+  headings above it, so a piece read alone still says what it is about, and a quote from it is
+  still on the page. The size is set by the embedding filter, not the reading model:
+  `nomic-embed-text` was trained on 2,048 tokens, and a longer piece would be ranked on less than
+  all of it.
+- **Filter.** Every piece is encoded with the page title before it, and goes into the run's corpus.
+  The pieces closest by embedding to the question are read, as many as `PAGE_CHARACTERS` (18,000
+  characters, three full pieces) holds, in page order. Closest to the question, not the brief: a
+  page found for one narrow fact holds it in one piece, which the brief would not rank first. With
+  `nomic-embed-text`, the encoder prefixes the question `search_query: ` and each piece
+  `search_document: `, as the model was trained to read them; texts compared with each other,
+  such as two questions, all take the document prefix. The search ranking above encodes the
+  question the same way.
 - **Pack.** The kept pieces of a page are joined in page order, marked apart by `[...]`, into as
   few texts as fit one call (`pack`). A call holds `page_characters(context_tokens)` characters:
 
@@ -349,7 +394,7 @@ flowchart LR
   gpt-oss came to 34 + characters / 4.07 prompt tokens, with about 600 for the prompt besides the
   page, and answers of at most about 500 tokens for one piece. Each constant is rounded towards a
   smaller page, since a token holds fewer characters in figures, PDFs and other languages. At
-  16384 a call holds 35,557 characters, so the 3 pieces of a page are read in one call.
+  16384 a call holds 35,557 characters, so the pieces kept from a page are read in one call.
 - **Intake.** One fast-model call per packed text, the calls of a search running side by side. It
   reads the brief, the question the page was found for, the page title and the text, and returns
   claims, each with a quote and a confidence. Claims are numbered in page order once read.
@@ -366,8 +411,9 @@ flowchart LR
   checker whether the piece its quote is in supports the claim, and drops the claim if not. The
   piece is the document rather than the quote, since a claim names what its quote leaves to the page, such as
   the subject of "it was found in 1904". A quote on the page shows the claim was read there, not
-  that the page says it. The option is off by default: on a GPU that cannot hold the checker beside
-  the fast model, every page would swap the two.
+  that the page says it. The claims of a search are checked once all its pages are read, so on a
+  GPU that cannot hold the checker beside the fast model, the two swap twice a search rather than
+  once a page. The option is off by default, since even that adds two model loads to each search.
 
 Intake is most of a run's calls: a search reads up to 3 pages in the ledger and 5 in the graph, one
 call each at the default context. Each call is its own progress event once it returns, since the
@@ -381,6 +427,45 @@ The methods behind picking:
 | CombSUM / CombMNZ (Fox and Shaw 1994) | Adds normalized scores; MNZ multiplies by how many systems found the result | SearXNG's `score` already does this across engines |
 | Embedding similarity of the snippet | Cosine between the question and `title + snippet`, with the encoder kvasir already uses | kvasir's relevance ranking |
 | MMR (Carbonell and Goldstein 1998) | Picks greedily by `λ·relevance − (1−λ)·max similarity to what is already held or picked` | Avoids pages that repeat claims the run already has; kvasir uses the cheap form: novelty as a ranking, plus a near-duplicate and domain skip |
+
+### Recall and leads
+
+A run keeps every piece of every page it reads in its corpus (`research/corpus.py`), with the
+vector the filter computed, and marks the pieces intake read. Before a question is searched, both
+loops recall: the unread pieces closest to the question, at most `RECALL_PIECES` (3), at a cosine
+similarity of at least `RECALL_MIN` (0.6), at most `RECALL_PER_SITE` (2) from one site. Intake
+reads them as it reads a page, under the `intake` role, and the question is judged on what they
+give. An answer costs no search. Recall does not count against the search budget, and a question is
+recalled for again only once the corpus has grown.
+
+Recall also reaches `pages.db`, which keeps the pieces of every run with the embedding model that
+encoded them. FTS5 ranks the cached pieces by the question's words (BM25), the top 200 of the
+current model are compared by vector, and the same rules apply. A page cached by an earlier run can
+answer with no search and no download. The `recall_past_runs` option set to `false` keeps recall
+to the run's own pages. The cache still serves downloads and still keeps the run's pieces.
+
+A run does not crawl. The links of each page read, from its text and its related blocks but never
+its menus or footer, stay behind as leads, at most `LEADS_PER_PAGE` (20) a page and at most
+`LEAD_DEPTH` (2) links from a search result. A lead is encoded once from its anchor, the text around
+it and its URL path, and scored for each search:
+
+```text
+worth = relevance + NOVELTY_WEIGHT * novelty + AFFINITY_WEIGHT * affinity + RELATED_BONUS
+```
+
+Relevance is its cosine similarity to the question, and a lead under `LEAD_MIN` (0.5) is not a
+candidate. Novelty is as for a search result. Affinity is its site's claims that another site
+corroborated, per page of the site read, so it is 0 without corroboration: under the `breadth`
+frontier of the ledger. `RELATED_BONUS` (0.1) is for a link in a related block. Leads join the search's pool,
+ranked by worth where a result is ranked by SearXNG's score, and at most `LEADS_PER_QUERY` (2) are
+picked a search. A lead is read only once `allowed` passes: its host resolves to public addresses
+only, since a page chose the URL, and the site's `robots.txt`, kept a day, lets it be read. A
+`robots.txt` that is missing or answers 4xx allows everything; one that answers 5xx or not at all
+refuses, a lead costing little to skip. A search result is not checked against `robots.txt`.
+
+A site whose affinity reaches `SITE_AFFINITY` (1.0) earns a site search: for a question already
+searched once, the query is `site:<domain> <question>` in place of the planner's, once a question
+and site. The weights and thresholds of this section are first guesses, not tuned.
 
 ## Ranking and comparing
 
@@ -521,9 +606,13 @@ its finding, marked `[unverified]`. Both are recorded under the table's title in
 after repair. Each claim is paired with up to 3 claims from other sites (`NEIGHBOURS`) at a cosine
 similarity of 0.8 or more (`SAME_FACT`). Pages of one site, with `www.` dropped, are one source.
 For each pair, the checker, or `Verify` without one, decides whether the other claim supports this
-one; if so it goes in `corroborated_by`. Otherwise, with `contradict`, `Contradicts` decides whether
-the two cannot both be true, and each goes in the other's `contradicted_by`. Both lists are data
-for a reader and for the methods that weigh evidence; the ledger's report does not use them.
+one; if so it goes in `corroborated_by`. Then, with `contradict`, each pair in which neither claim
+supports the other is asked once whether the two cannot both be true, and each goes in the other's
+`contradicted_by`. `Contradicts` asks about all of one claim's pairs in one call, and the calls run
+side by side, `max_threads` at a time. Support is decided for every pair before any disagreement:
+the checker and the fast model rarely fit in memory together, and alternating between them would
+load a model for each pair. Both lists are data for a reader and for the methods that weigh
+evidence; the ledger's report does not use them.
 
 **Repair.** A removed sentence is often true, cited to the wrong claim. Up to 4 removed sentences
 (`REPAIR_SENTENCES`) become questions, judged by `CheckAnswer`, and the loop searches for them with
@@ -570,7 +659,7 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 | `write` | `WriteSection` | strong | `context_tokens` - 4000 |
 | `tldr` | `Summarize` | strong | 2000 |
 | `verify` | `Verify` | fast | 600 |
-| `contradict` | `Contradicts` | fast | 400 |
+| `contradict` | `Contradicts` | fast | 600 |
 | `escalate` | `Escalate` | reason | 2500 |
 
 The outline, the sections and the summary use the strong model. They run only after the research,

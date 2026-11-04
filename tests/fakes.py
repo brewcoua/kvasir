@@ -10,11 +10,17 @@ from dspy.utils.dummies import DummyLM
 from kvasir.config import Settings
 from kvasir.methods import METHODS
 from kvasir.research.claims import Claim
+from kvasir.research.fetch import Page
 
 PAGE = (
     "<html><body><nav>Home | About</nav><h1>The stone</h1>"
     "<p>It was found in 1904 near Kvasir.</p><script>track()</script></body></html>"
 )
+
+
+def page(text: str) -> Page:
+    """A fetched page holding `text`, with no links."""
+    return Page("https://a", "https://a", "", text, "static", [], 0.0)
 
 
 class Search:
@@ -45,12 +51,16 @@ class Stream:
 class Encoder:
     """Every text the same vector, so nothing is closer than anything else and none repeats."""
 
+    embedding_model_name = "fake"
+
     def encode(self, texts, query=False):
         return [[0.0]] * len(texts)
 
 
 class Vectors:
     """An encoder giving each text the vector it was told, and any other text `default`."""
+
+    embedding_model_name = "fake"
 
     def __init__(self, vectors, default=None):
         self.vectors = vectors

@@ -26,7 +26,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kvasir.storm.runtime import DEFAULT_CONTEXT_TOKENS, DEFAULT_MAX_THREADS
+from kvasir.storm.runtime import (
+    DEFAULT_CONTEXT_TOKENS,
+    DEFAULT_HOST_INTERVAL_SECONDS,
+    DEFAULT_MAX_THREADS,
+)
 
 # Read when KVASIR_CONFIG is unset, if it exists, so a local start needs no variable at all.
 DEFAULT_CONFIG_FILE = Path("kvasir.toml")
@@ -142,6 +146,22 @@ class LogSettings:
     format: str = field(default="json", metadata=_choice("json", "text"))
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FetchSettings:
+    # Named in the user agent so a site can reach whoever runs this. Empty names no one.
+    contact: str = ""
+    # Between the starts of two requests to one host. 0 turns the wait off.
+    host_interval_seconds: float = DEFAULT_HOST_INTERVAL_SECONDS
+    # Whether a page that needs JavaScript is rendered in a browser. Needs the browser extra.
+    render: str = field(default="auto", metadata=_choice("auto", "off"))
+    # Renders through Patchright, which hides the signs of automation. Getting past a challenge can
+    # break a site's terms, so it is the operator's call and off by default.
+    stealth: bool = False
+    # How long a cached page is served without asking its site, then it is revalidated. 0 fetches
+    # every page again.
+    max_age_hours: int = 48
+
+
 # Keyed by the Settings field and the table name in the file.
 _SECTIONS: dict[str, Any] = {
     "model": ModelSettings,
@@ -150,6 +170,7 @@ _SECTIONS: dict[str, Any] = {
     "sessions": SessionSettings,
     "research": ResearchSettings,
     "storm": StormSettings,
+    "fetch": FetchSettings,
     "log": LogSettings,
 }
 
@@ -169,6 +190,7 @@ class Settings:
     sessions: SessionSettings
     research: ResearchSettings
     storm: StormSettings
+    fetch: FetchSettings
     log: LogSettings
 
     @property
@@ -178,6 +200,10 @@ class Settings:
     @property
     def runs_db(self) -> Path:
         return self.data_dir / "kvasir.db"
+
+    @property
+    def pages_db(self) -> Path:
+        return self.data_dir / "pages.db"
 
     def resolve(self, ref: str) -> Model:
         """A `<provider>/<name>` reference as the model to call. Only the first `/` splits, since
@@ -307,9 +333,9 @@ def _read_file(path: Path) -> dict[str, str]:
     def text(value: object, key: str) -> str:
         if isinstance(value, bool):
             return "true" if value else "false"
-        if isinstance(value, str | int):
+        if isinstance(value, str | int | float):
             return str(value)
-        raise ConfigError(f"{key} in config file {path} must be a string, an integer or a boolean")
+        raise ConfigError(f"{key} in config file {path} must be a string, a number or a boolean")
 
     provider_keys = {f.name for f in fields(Provider)}
     top_level = {f.name for f in _TOP_LEVEL}
@@ -351,6 +377,8 @@ def _read(f: Field[Any], name: str, env: Mapping[str, str]) -> Any:
         return _positive_int(env, name, default)
     if f.type == "bool":
         return _bool(env, name, default)
+    if f.type == "float":
+        return _non_negative_float(env, name, default)
     if name not in env:
         return default
     value = env[name]
@@ -372,6 +400,20 @@ def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
         raise ConfigError(f"{name} must be an integer, got {raw!r}") from None
     if value < 1:
         raise ConfigError(f"{name} must be at least 1, got {value}")
+    return value
+
+
+def _non_negative_float(env: Mapping[str, str], name: str, default: float) -> float:
+    raw = env.get(name, "")
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a number, got {raw!r}") from None
+    # `nan` passes float() and fails every comparison, so it would pass a `< 0` check.
+    if not value >= 0 or value == float("inf"):
+        raise ConfigError(f"{name} must be a finite number, 0 or more, got {raw!r}")
     return value
 
 

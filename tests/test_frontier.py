@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fakes import Vectors, claim
 from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
-from kvasir.methods.ledger.questions import Question
+from kvasir.methods.ledger.questions import Question, add_questions
+from kvasir.methods.ledger.signatures import NamedQuestion
 
 
 def test_a_repeat_from_another_site_adds_a_source_and_from_the_same_site_nothing():
@@ -67,3 +68,27 @@ def test_depth_and_attempts_lower_the_worth():
 
     assert frontier.worth(shallow) > frontier.worth(deep)
     assert frontier.worth(shallow) > frontier.worth(tried)
+
+
+def test_a_more_central_question_is_worth_more():
+    frontier = Frontier(Vectors({}, default=[1, 0]), "brief", [])
+    core = Question(id=1, text="a", priority="core")
+    peripheral = Question(id=2, text="b", priority="peripheral")
+
+    assert frontier.worth(core) > frontier.worth(peripheral)
+
+
+def test_a_follow_up_is_no_more_central_than_its_question():
+    questions: list[Question] = []
+    encoder = Vectors({"a": [1, 0], "b": [0, 1]})
+    add_questions(
+        encoder, questions, [NamedQuestion(title="a", question="a", priority="peripheral")]
+    )
+
+    add_questions(
+        encoder, questions, [NamedQuestion(title="b", question="b", priority="core")], questions[0]
+    )
+
+    assert [q.priority for q in questions] == ["peripheral", "peripheral"]
+    # A word outside the three fails no reply.
+    assert NamedQuestion(title="c", question="c", priority="high").priority == "supporting"

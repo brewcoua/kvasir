@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
 
-FROM docker.io/library/python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91
+FROM docker.io/library/python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91 AS app
 
 COPY --from=build /app/.venv /app/.venv
 COPY src /app/src
@@ -59,3 +59,24 @@ EXPOSE 8080
 # own, which is what keeps the access log in the same format as everything else. See
 # kvasir/__main__.py.
 CMD ["python", "-m", "kvasir"]
+
+
+# `--target browser`: the same image with the browser extra and Chromium, for pages that need
+# JavaScript. Run it with `--init --ipc=host`, as Playwright's Docker docs require against Chromium
+# running out of shared memory. Built on the slim image rather than mcr.microsoft.com/playwright,
+# which is Ubuntu with its own Python and would replace this image's venv and base digest.
+FROM build AS build-browser
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --extra browser
+
+FROM app AS browser
+COPY --from=build-browser /app/.venv /app/.venv
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+USER root
+RUN playwright install --with-deps chromium \
+    && patchright install chromium \
+    && rm -rf /var/lib/apt/lists/*
+USER 65532:65532
+
+# Last, so a build without --target still gives the image without Chromium.
+FROM app
