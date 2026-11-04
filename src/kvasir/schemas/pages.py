@@ -78,3 +78,44 @@ class Recall(BaseModel):
 
     minimum: float
     pieces: list[RecallPiece]
+
+
+class CacheStats(BaseModel):
+    """What the page cache holds and what it takes on disk."""
+
+    pages: int
+    links: int
+    pieces: int
+    # Bytes of page text, and of piece vectors.
+    text_bytes: int
+    vector_bytes: int
+    # The database file with its -wal and -shm files.
+    file_bytes: int
+    path: str
+    # Unix seconds of the oldest and newest fetch; None when empty.
+    oldest: float | None
+    newest: float | None
+
+
+class SiteNode(BaseModel):
+    """One cached site in the link graph."""
+
+    domain: str
+    pages: int
+    # Links stored on its pages, wherever they lead.
+    links: int
+
+
+class SiteEdge(BaseModel):
+    """Links from the pages of one cached site to the pages of another."""
+
+    source: str
+    target: str
+    count: int
+
+
+class SiteGraph(BaseModel):
+    """The cached sites and the links between them."""
+
+    sites: list[SiteNode]
+    edges: list[SiteEdge]

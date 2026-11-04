@@ -158,6 +158,23 @@ def test_links_round_trip_with_their_regions(store):
     assert store.get(URL) == (page, None, None)
 
 
+def test_flushing_frees_the_disk_and_the_text_index(store):
+    big = "word " * 20_000
+    store.put(page(URL, big), None, None)
+    store.put_pieces(URL, [big], np.array([[1.0, 0.0]]), "m")
+    before = store.stats().file_bytes
+    assert store.search("word", "m", []) != []
+
+    store.flush()
+
+    after = store.stats()
+    assert (after.pages, after.pieces, after.text_bytes, after.vector_bytes) == (0, 0, 0, 0)
+    assert after.file_bytes < before
+    assert store.search("word", "m", []) == []
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM pieces_fts").fetchone() == (0,)
+
+
 def test_concurrent_puts_do_not_error(store):
     errors = []
 

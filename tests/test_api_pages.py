@@ -174,13 +174,77 @@ def test_deleting_a_site_drops_all_its_pages(client, store):
     assert search(store, "gamma") == ["gamma one"]
 
 
+def test_stats_count_what_the_cache_holds(client, store):
+    body = client.get("/v1/pages/stats").json()
+
+    texts = [f"# {t}\n\nBody of {t}." for t in ("Alpha", "Beta", "Gamma")]
+    assert body == {
+        "pages": 3,
+        "links": 2,
+        "pieces": 3,
+        "text_bytes": sum(len(text) for text in texts),
+        "vector_bytes": 3 * 3 * 4,
+        "file_bytes": body["file_bytes"],
+        "path": str(store._path),
+        "oldest": pytest.approx(NOW - 300),
+        "newest": pytest.approx(NOW - 100),
+    }
+    assert body["file_bytes"] >= store._path.stat().st_size > 0
+
+
+def test_flushing_empties_the_cache_and_leaves_it_writable(client, store):
+    assert client.delete("/v1/pages").status_code == 204
+
+    assert client.get("/v1/pages").json() == []
+    assert search(store, "alpha") == []
+    assert search(store, "gamma") == []
+    stats = client.get("/v1/pages/stats").json()
+    assert (stats["pages"], stats["links"], stats["pieces"]) == (0, 0, 0)
+    assert (stats["oldest"], stats["newest"]) == (None, None)
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM pieces_fts").fetchone() == (0,)
+        assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+    store.put(page(A, "Alpha", NOW), None, None)
+    assert client.get("/v1/pages").json()[0]["title"] == "Alpha"
+
+
+def test_the_site_graph_counts_links_between_cached_sites(client, store):
+    store.put(
+        page(
+            C,
+            "Gamma",
+            NOW,
+            links=[
+                Link("https://www.example.org/a", "", "", "main"),
+                Link("https://example.org/b", "", "", "main"),
+                Link("https://other.net/d", "", "", "nav"),
+                Link("https://nowhere.io/", "", "", "main"),
+            ],
+        ),
+        None,
+        None,
+    )
+
+    body = client.get("/v1/sites/graph").json()
+
+    assert {(n["domain"], n["pages"], n["links"]) for n in body["sites"]} == {
+        ("example.org", 2, 2),
+        ("other.net", 1, 4),
+    }
+    # The two links of example.org lead to its own pages, and nowhere.io is not cached.
+    assert body["edges"] == [{"source": "other.net", "target": "example.org", "count": 2}]
+
+
 def test_every_route_is_unavailable_without_a_cache(client):
     fetch.configure_cache(None, 0)
     id = page_id(A)
 
     for method, path in [
         ("get", "/v1/sites"),
+        ("get", "/v1/sites/graph"),
         ("get", "/v1/pages"),
+        ("get", "/v1/pages/stats"),
+        ("delete", "/v1/pages"),
         ("get", "/v1/pages/recall?q=x"),
         ("get", f"/v1/pages/{id}"),
         ("delete", f"/v1/pages/{id}"),

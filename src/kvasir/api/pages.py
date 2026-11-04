@@ -15,6 +15,7 @@ from kvasir.research.pages import PageStore, page_id
 from kvasir.runners import build_research_tools
 from kvasir.runs.registry import RunRegistry
 from kvasir.schemas.pages import (
+    CacheStats,
     PageDetail,
     PageLead,
     PageRun,
@@ -22,6 +23,9 @@ from kvasir.schemas.pages import (
     Recall,
     RecallPiece,
     Site,
+    SiteEdge,
+    SiteGraph,
+    SiteNode,
 )
 from kvasir.storm.encoder import cosine_similarity
 
@@ -92,6 +96,39 @@ def list_sites() -> list[Site]:
         if row.engine not in site.engines:
             site.engines.append(row.engine)
     return list(sites.values())
+
+
+@router.get("/v1/sites/graph")
+def site_graph() -> SiteGraph:
+    """The cached sites and, between each two, how many stored links lead from one to the other."""
+    store = _store()
+    nodes: dict[str, SiteNode] = {}
+    for row in store.rows():
+        name = domain(row.key)
+        nodes.setdefault(name, SiteNode(domain=name, pages=0, links=0)).pages += 1
+    counts: dict[tuple[str, str], int] = {}
+    for page, target in store.link_pairs():
+        source, destination = domain(page), domain(target)
+        nodes[source].links += 1
+        if destination != source and destination in nodes:
+            counts[source, destination] = counts.get((source, destination), 0) + 1
+    return SiteGraph(
+        sites=list(nodes.values()),
+        edges=[SiteEdge(source=s, target=t, count=n) for (s, t), n in counts.items()],
+    )
+
+
+# Before `/v1/pages/{id}`, which would take "stats" for an id.
+@router.get("/v1/pages/stats")
+def stats() -> CacheStats:
+    """What the cache holds and what it takes on disk."""
+    return CacheStats(**_store().stats()._asdict())
+
+
+@router.delete("/v1/pages", status_code=204)
+def flush() -> None:
+    """Empties the cache, and frees its disk space."""
+    _store().flush()
 
 
 @router.get("/v1/pages")

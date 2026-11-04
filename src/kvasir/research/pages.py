@@ -10,7 +10,7 @@ import re
 import sqlite3
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import NamedTuple, cast
 
@@ -37,6 +37,20 @@ class Row(NamedTuple):
     fetched_at: float
     pieces: int
     length: int
+
+
+class Stats(NamedTuple):
+    """What the cache holds and what it takes on disk."""
+
+    pages: int
+    links: int
+    pieces: int
+    text_bytes: int
+    vector_bytes: int
+    file_bytes: int
+    path: str
+    oldest: float | None
+    newest: float | None
 
 
 class PageStore:
@@ -129,6 +143,51 @@ class PageStore:
                 "FROM pages ORDER BY fetched_at DESC"
             ).fetchall()
         return [Row(*row) for row in rows]
+
+    def stats(self) -> Stats:
+        """Row counts, bytes of text and vectors, and the file with its WAL and shared-memory
+        files."""
+        with self._connect() as db:
+            pages, text_bytes, oldest, newest = db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(length(CAST(text AS BLOB))), 0), "
+                "MIN(fetched_at), MAX(fetched_at) FROM pages"
+            ).fetchone()
+            links = db.execute("SELECT COUNT(*) FROM links").fetchone()[0]
+            pieces, vector_bytes = db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(length(vector)), 0) FROM pieces"
+            ).fetchone()
+        file_bytes = sum(
+            file.stat().st_size
+            for file in (self._path, *(Path(f"{self._path}{tail}") for tail in ("-wal", "-shm")))
+            if file.exists()
+        )
+        return Stats(
+            pages,
+            links,
+            pieces,
+            text_bytes,
+            vector_bytes,
+            file_bytes,
+            str(self._path),
+            oldest,
+            newest,
+        )
+
+    def link_pairs(self) -> list[tuple[str, str]]:
+        """The page and target URL of every stored link."""
+        with self._connect() as db:
+            return db.execute("SELECT page, target FROM links").fetchall()
+
+    def flush(self) -> None:
+        """Drops every page, link and piece, then returns the space to the disk."""
+        with self._connect() as db:
+            for table in ("pages", "links", "pieces"):
+                db.execute(f"DELETE FROM {table}")
+        # VACUUM refuses to run in a transaction, so it gets a connection that opens none. It
+        # writes through the WAL, so the checkpoint that empties the WAL comes after.
+        with closing(sqlite3.connect(self._path, timeout=BUSY_TIMEOUT_SECONDS)) as db:
+            db.execute("VACUUM")
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def delete(self, keys: list[str]) -> None:
         """Drops the pages cached under the normalized URLs `keys`, with their links and pieces."""
