@@ -425,3 +425,97 @@ host_interval_seconds = 2.5
 def test_the_host_interval_must_be_a_finite_number_of_seconds(value):
     with pytest.raises(ConfigError, match="KVASIR_FETCH_HOST_INTERVAL_SECONDS"):
         Settings.from_env(MINIMAL | {"KVASIR_FETCH_HOST_INTERVAL_SECONDS": value})
+
+
+def test_favicon_settings_default_to_the_direct_provider():
+    settings = Settings.from_env(MINIMAL)
+
+    assert settings.favicons.providers == ("direct",)
+    assert settings.favicons.custom_url == ""
+    assert (settings.favicons.ttl_days, settings.favicons.miss_ttl_days) == (30, 3)
+    assert settings.favicons_db == Path("/data/favicons.db")
+
+
+def test_favicon_providers_read_from_the_environment_in_order():
+    settings = Settings.from_env(
+        MINIMAL
+        | {
+            "KVASIR_FAVICONS_PROVIDERS": "Google, direct ,duckduckgo",
+            "KVASIR_FAVICONS_TTL_DAYS": "7",
+            "KVASIR_FAVICONS_MISS_TTL_DAYS": "1",
+        }
+    )
+
+    assert settings.favicons.providers == ("google", "direct", "duckduckgo")
+    assert (settings.favicons.ttl_days, settings.favicons.miss_ttl_days) == (7, 1)
+
+
+def test_an_empty_provider_list_turns_favicons_off():
+    assert Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_PROVIDERS": ""}).favicons.providers == ()
+
+
+def test_favicon_providers_read_from_the_config_file(tmp_path):
+    path = _write(
+        tmp_path,
+        """
+[provider.local]
+api_base = "http://localhost:11434/v1"
+
+[model]
+fast = "local/a"
+strong = "local/a"
+embedding = "local/a"
+
+[search]
+url = "http://localhost:8888"
+
+[favicons]
+providers = ["custom", "direct"]
+custom_url = "https://icons.example/{domain}.png"
+""",
+    )
+
+    settings = Settings.from_env({"KVASIR_CONFIG": path})
+
+    assert settings.favicons.providers == ("custom", "direct")
+    assert settings.favicons.custom_url == "https://icons.example/{domain}.png"
+
+
+def test_an_empty_array_in_the_config_file_turns_favicons_off(tmp_path):
+    path = _write(tmp_path, "[favicons]\nproviders = []\n")
+
+    settings = Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path})
+
+    assert settings.favicons.providers == ()
+
+
+def test_the_environment_empties_a_list_the_file_sets(tmp_path):
+    path = _write(tmp_path, '[favicons]\nproviders = ["google"]\n')
+
+    settings = Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path, "KVASIR_FAVICONS_PROVIDERS": ""})
+
+    assert settings.favicons.providers == ()
+
+
+def test_an_unknown_favicon_provider_is_rejected():
+    with pytest.raises(ConfigError, match="KVASIR_FAVICONS_PROVIDERS.*'bing'"):
+        Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_PROVIDERS": "direct,bing"})
+
+
+def test_a_favicon_provider_list_in_the_file_must_be_strings(tmp_path):
+    path = _write(tmp_path, "[favicons]\nproviders = [1]\n")
+
+    with pytest.raises(ConfigError, match="favicons.providers .* array of strings"):
+        Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path})
+
+
+@pytest.mark.parametrize("url", ["", "https://icons.example/x.png", "ftp://{domain}/x", "{domain}"])
+def test_the_custom_provider_needs_a_url_template_with_a_domain(url):
+    env = MINIMAL | {"KVASIR_FAVICONS_PROVIDERS": "custom", "KVASIR_FAVICONS_CUSTOM_URL": url}
+
+    with pytest.raises(ConfigError, match="KVASIR_FAVICONS_CUSTOM_URL"):
+        Settings.from_env(env)
+
+
+def test_the_custom_url_is_not_checked_when_the_provider_is_unused():
+    Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_CUSTOM_URL": "nonsense"})

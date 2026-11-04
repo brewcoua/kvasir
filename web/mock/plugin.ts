@@ -146,6 +146,14 @@ function status(run: RunDetail) {
 
 const view = (entry: Entry) => snapshot(entry.run, entry.timing());
 
+// A 1x1 PNG, served as every host's icon but one.
+const ICON = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPwqnkAAAK6AadmxdSEAAAAAElFTkSuQmCC",
+  "base64",
+);
+// The host with no icon, for the page to fall back on.
+const NO_ICON = "missing.example";
+
 function send(response: ServerResponse, status: number, body: unknown) {
   response.statusCode = status;
   response.setHeader("content-type", "application/json");
@@ -260,6 +268,20 @@ export function mock(): Plugin {
           return send(response, 200, all.sort((a, b) => b.created_at - a.created_at));
         }
         if (request.method === "GET" && path === "/v1/methods") return send(response, 200, METHODS);
+
+        const icon = path.match(/^\/v1\/favicons\/([^/]+)$/);
+        if (request.method === "GET" && icon) {
+          if (decodeURIComponent(icon[1]) === NO_ICON) {
+            response.statusCode = 404;
+            return response.end();
+          }
+          response.setHeader("Content-Type", "image/png");
+          return response.end(ICON);
+        }
+        if (request.method === "DELETE" && path === "/v1/favicons") {
+          response.statusCode = 204;
+          return response.end();
+        }
 
         if (request.method === "GET" && path === "/v1/sites") {
           const sites = [...new Set(pages.map((page) => site(page.url)))].map((domain) => {

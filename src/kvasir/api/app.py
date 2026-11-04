@@ -18,9 +18,10 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
-from kvasir.api import methods, pages, runs, sessions, tasks
+from kvasir.api import favicons, methods, pages, runs, sessions, tasks
 from kvasir.config import Settings, apply_environment
 from kvasir.research import fetch
+from kvasir.research.favicons import Favicons, FaviconStore
 from kvasir.research.pages import PageStore
 from kvasir.runs.registry import (
     CallContentNotFound,
@@ -57,6 +58,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logs.configure(settings)
 
     app.state.settings = settings
+    # The database file is not made when favicons are off.
+    app.state.favicons = (
+        Favicons(settings.favicons, FaviconStore(settings.favicons_db))
+        if settings.favicons.providers
+        else None
+    )
     # A run holds a thread for minutes, so saturation is rejected rather than queued. Acquiring
     # without blocking keeps this usable from the event loop.
     app.state.run_slots = threading.BoundedSemaphore(settings.runs.max_concurrent)
@@ -81,7 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
-for module in (runs, methods, pages, tasks, sessions):
+for module in (runs, methods, pages, favicons, tasks, sessions):
     app.include_router(module.router)
 
 

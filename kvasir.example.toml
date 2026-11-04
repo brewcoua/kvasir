@@ -52,5 +52,14 @@ stealth = false
 # Hours a cached page is served without asking its site; then it is revalidated. 0 fetches again.
 max_age_hours = 48
 
+# [favicons]
+# Where site icons come from, tried in order: "direct" asks the site itself; "duckduckgo" and
+# "google" are told each domain looked up; "custom" uses custom_url. An empty list turns icons off.
+# providers = ["direct"]
+# custom_url = "https://icons.example.net/{domain}"
+# Days a found icon is kept, and a site with no icon is remembered.
+# ttl_days = 30
+# miss_ttl_days = 3
+
 [log]
 format = "text"

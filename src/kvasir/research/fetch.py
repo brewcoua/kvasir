@@ -203,6 +203,7 @@ _max_age: ContextVar[int | None] = ContextVar("max_age_hours", default=None)
 # With the time each was read. RFC 9309 asks for robots.txt to be read again after 24 hours.
 _robots: dict[str, tuple[RobotFileParser | bool, float]] = {}
 ROBOTS_MAX_AGE_SECONDS = 24 * 3600
+ROBOTS_MAX_REDIRECTS = 5
 _robots_lock = threading.Lock()
 
 
@@ -253,7 +254,7 @@ class UnusablePage(FetchError):
         self.reason = reason
 
 
-def _user_agent() -> str:
+def user_agent() -> str:
     """Names the service, where to read about it and who runs it, as Wikimedia's policy asks."""
     contact = f"; {runtime.fetch_contact()}" if runtime.fetch_contact() else ""
     site = f"+https://github.com/brewcoua/kvasir{contact}"
@@ -369,7 +370,7 @@ def allowed(url: str) -> bool:
     a lead costs little to skip."""
     parts = urlsplit(url)
     # A lead's URL is written by the page it was on, so it must not reach this service's network.
-    if not _public(parts.hostname or ""):
+    if not public(parts.hostname or ""):
         return False
     origin = f"{parts.scheme}://{parts.netloc}"
     with _robots_lock:
@@ -382,7 +383,7 @@ def allowed(url: str) -> bool:
     return rules if isinstance(rules, bool) else rules.can_fetch("kvasir", url)
 
 
-def _public(host: str) -> bool:
+def public(host: str) -> bool:
     """Whether every address `host` resolves to is on the public internet."""
     try:
         addresses = socket.getaddrinfo(host, None)
@@ -393,15 +394,27 @@ def _public(host: str) -> bool:
 
 
 def _robots_txt(origin: str, host: str) -> RobotFileParser | bool:
+    url = f"{origin}/robots.txt"
     try:
         with runtime.host_slot(host):
-            response = httpx.get(
-                f"{origin}/robots.txt",
-                timeout=TIMEOUT_SECONDS,
-                follow_redirects=True,
-                headers={"User-Agent": _user_agent()},
-            )
-    except httpx.HTTPError:
+            # By hand, because a redirect must not reach this service's network either. RFC 9309
+            # asks for five hops.
+            for _ in range(ROBOTS_MAX_REDIRECTS + 1):
+                response = httpx.get(
+                    url,
+                    timeout=TIMEOUT_SECONDS,
+                    follow_redirects=False,
+                    headers={"User-Agent": user_agent()},
+                )
+                if not response.has_redirect_location:
+                    break
+                url = urljoin(url, response.headers["location"])
+                target = urlsplit(url)
+                if target.scheme not in ("http", "https") or not public(target.hostname or ""):
+                    return False
+            else:
+                return False
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError):
         return False
     if 400 <= response.status_code < 500:
         return True
@@ -428,7 +441,7 @@ def _download(url: str, validators: dict[str, str]) -> tuple[Page, str | None, s
                     url,
                     timeout=TIMEOUT_SECONDS,
                     follow_redirects=True,
-                    headers={"User-Agent": _user_agent(), **validators},
+                    headers={"User-Agent": user_agent(), **validators},
                 ) as response,
             ):
                 if response.status_code == 429:

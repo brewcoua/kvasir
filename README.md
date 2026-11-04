@@ -447,6 +447,8 @@ The same data is available as JSON.
 | `GET /v1/pages/{id}` | One cached page: its text, its links by region, and the stored runs that cite it. |
 | `GET /v1/pages/recall?q=` | The cached pieces recall would take for the question `q`, with their similarity. Marks nothing read. 503 without an embedding model. |
 | `DELETE /v1/pages/{id}`, `DELETE /v1/sites/{domain}` | Remove a page, or every page of a site, with links and pieces. Cannot be undone. |
+| `GET /v1/favicons/{host}` | The icon of a site, fetched on first request and kept in `favicons.db`. 404 when the site has none, the host is not a public DNS name, or favicons are off. |
+| `DELETE /v1/favicons` | Forget every icon, including the sites remembered as having none, and free the disk space. Use it to retry misses after changing `KVASIR_FAVICONS_PROVIDERS`. |
 | `POST /v1/pages/{id}/refetch` | Fetch the page again whatever its age. 502 with the reason when it cannot be read. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
@@ -568,9 +570,26 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 | `KVASIR_FETCH_RENDER` | `auto` | `auto` renders a page that needs JavaScript in Chromium, when the `browser` extra is installed; `off` never does. |
 | `KVASIR_FETCH_STEALTH` | `false` | Render through Patchright, which hides the signs of automation. Needs the `browser` extra. Getting past a challenge can break a site's terms. |
 | `KVASIR_FETCH_MAX_AGE_HOURS` | `48` | Hours a page cached in `pages.db` is served without asking its site; then it is revalidated with `If-None-Match` or `If-Modified-Since`. `0` fetches every page again. |
+| `KVASIR_FAVICONS_PROVIDERS` | `direct` | Where site icons come from, comma-separated and tried in order; the first icon found wins. `direct`, `duckduckgo`, `google` or `custom`. Empty turns favicons off and creates no `favicons.db`. See below for what each reveals. |
+| `KVASIR_FAVICONS_CUSTOM_URL` | empty | URL template for the `custom` provider, with `{domain}` where the site's host goes. Required to be an `http(s)` URL containing `{domain}` when `custom` is listed, or startup fails. |
+| `KVASIR_FAVICONS_TTL_DAYS` | `30` | Days a found icon is served before it is looked up again. |
+| `KVASIR_FAVICONS_MISS_TTL_DAYS` | `3` | Days a site found to have no icon is remembered before it is asked again. |
 | `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
 | `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 | `KVASIR_CONFIG` | `kvasir.toml` | Config file. Environment only. |
+
+Favicons are fetched by the server and served from `/v1/favicons/{host}`, so a browser never contacts
+the icon provider. What each provider learns:
+
+- `direct` contacts the site itself: `/favicon.ico`, then the icons its homepage declares.
+- `duckduckgo` and `google` learn each domain looked up.
+- `custom` is your own template, such as `https://icons.example.net/{domain}`. Its first request is
+  not checked against the public-address rule, so it may be a service on your network.
+
+An icon must be PNG, ICO, GIF, JPEG or WebP, judged by its first bytes, and at most 256 KiB. SVG is
+refused. Do not use as `custom` a service that answers 200 with a placeholder for a missing icon,
+such as allesedv, Yandex, icon.horse or Bitwarden (as probed): kvasir caches the placeholder as the
+site's real icon. A provider that answers 404 for a missing icon is fine.
 
 Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,

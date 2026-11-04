@@ -25,6 +25,7 @@ from dataclasses import MISSING, Field, dataclass, field, fields
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
+from urllib.parse import urlsplit
 
 from kvasir.storm.runtime import (
     DEFAULT_CONTEXT_TOKENS,
@@ -162,6 +163,20 @@ class FetchSettings:
     max_age_hours: int = 48
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FaviconSettings:
+    # Tried in order, the first icon found wins. Empty turns favicons off. `direct` asks the site
+    # itself; the others hand the site's name to a third party.
+    providers: tuple[str, ...] = field(
+        default=("direct",), metadata=_choice("direct", "duckduckgo", "google", "custom")
+    )
+    # Used by the `custom` provider: a URL with `{domain}` where the site's host goes.
+    custom_url: str = ""
+    # How long a found icon is served, and how long a failed lookup is remembered.
+    ttl_days: int = 30
+    miss_ttl_days: int = 3
+
+
 # Keyed by the Settings field and the table name in the file.
 _SECTIONS: dict[str, Any] = {
     "model": ModelSettings,
@@ -171,6 +186,7 @@ _SECTIONS: dict[str, Any] = {
     "research": ResearchSettings,
     "storm": StormSettings,
     "fetch": FetchSettings,
+    "favicons": FaviconSettings,
     "log": LogSettings,
 }
 
@@ -191,6 +207,7 @@ class Settings:
     research: ResearchSettings
     storm: StormSettings
     fetch: FetchSettings
+    favicons: FaviconSettings
     log: LogSettings
 
     @property
@@ -204,6 +221,10 @@ class Settings:
     @property
     def pages_db(self) -> Path:
         return self.data_dir / "pages.db"
+
+    @property
+    def favicons_db(self) -> Path:
+        return self.data_dir / "favicons.db"
 
     def resolve(self, ref: str) -> Model:
         """A `<provider>/<name>` reference as the model to call. Only the first `/` splits, since
@@ -233,7 +254,12 @@ class Settings:
             )
         else:
             path = env.get("KVASIR_CONFIG", "").strip() or None
-        env = {k: v.strip() for k, v in env.items() if k.startswith("KVASIR_") and v.strip()}
+        # An empty list is a value, unlike an empty string anywhere else.
+        env = {
+            k: v.strip()
+            for k, v in env.items()
+            if k.startswith("KVASIR_") and (v.strip() or k in _LISTS)
+        }
         if path is not None:
             env = _read_file(Path(path)) | env
 
@@ -289,6 +315,7 @@ class Settings:
                     settings.resolve(ref)
                 except ConfigError as exc:
                     raise ConfigError(f"{name}: {exc}") from None
+        _check_favicons(settings.favicons)
         return settings
 
 
@@ -298,6 +325,30 @@ _TOP_LEVEL = tuple(f for f in fields(Settings) if f.name != "providers" and f.na
 
 def _env_name(section: str | None, key: str) -> str:
     return (f"KVASIR_{section}_{key}" if section else f"KVASIR_{key}").upper()
+
+
+# The variables that hold a list, which may be set to nothing.
+_LISTS = frozenset(
+    _env_name(section, f.name)
+    for section, section_cls in _SECTIONS.items()
+    for f in fields(section_cls)
+    if f.type == "tuple[str, ...]"
+)
+
+
+def _check_favicons(favicons: FaviconSettings) -> None:
+    if "custom" not in favicons.providers:
+        return
+    url = urlsplit(favicons.custom_url.replace("{domain}", "example.com"))
+    if (
+        "{domain}" not in favicons.custom_url
+        or url.scheme not in ("http", "https")
+        or not url.netloc
+    ):
+        raise ConfigError(
+            "KVASIR_FAVICONS_CUSTOM_URL must be an http(s) URL containing {domain} "
+            f"when the custom provider is used, got {favicons.custom_url!r}"
+        )
 
 
 def _raw_providers(env: Mapping[str, str]) -> dict[str, dict[str, str]]:
@@ -337,6 +388,11 @@ def _read_file(path: Path) -> dict[str, str]:
             return str(value)
         raise ConfigError(f"{key} in config file {path} must be a string, a number or a boolean")
 
+    def strings(value: object, key: str) -> list[str]:
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ConfigError(f"{key} in config file {path} must be an array of strings")
+        return value
+
     provider_keys = {f.name for f in fields(Provider)}
     top_level = {f.name for f in _TOP_LEVEL}
     values: dict[str, str] = {}
@@ -354,10 +410,14 @@ def _read_file(path: Path) -> dict[str, str]:
                     else:
                         unknown.append(f"provider.{name}.{k}")
         elif key in _SECTIONS:
-            known = {f.name for f in fields(_SECTIONS[key])}
+            known = {f.name: f for f in fields(_SECTIONS[key])}
             for k, v in table(value, key).items():
                 if k in known:
-                    values[_env_name(key, k)] = text(v, f"{key}.{k}")
+                    values[_env_name(key, k)] = (
+                        ",".join(strings(v, f"{key}.{k}"))
+                        if known[k].type == "tuple[str, ...]"
+                        else text(v, f"{key}.{k}")
+                    )
                 else:
                     unknown.append(f"{key}.{k}")
         elif key in top_level:
@@ -381,6 +441,8 @@ def _read(f: Field[Any], name: str, env: Mapping[str, str]) -> Any:
         return _non_negative_float(env, name, default)
     if name not in env:
         return default
+    if f.type == "tuple[str, ...]":
+        return _names(f, name, env[name])
     value = env[name]
     if "norm" in f.metadata:
         value = f.metadata["norm"](value)
@@ -388,6 +450,18 @@ def _read(f: Field[Any], name: str, env: Mapping[str, str]) -> Any:
         options = " or ".join(f.metadata["choices"])
         raise ConfigError(f"{name} must be {options}, got {value!r}")
     return Path(value) if f.type == "Path" else value
+
+
+def _names(f: Field[Any], name: str, raw: str) -> tuple[str, ...]:
+    """A comma-separated list, each item checked against the field's choices."""
+    items = tuple(item.strip().lower() for item in raw.split(",") if item.strip())
+    unknown = [item for item in items if item not in f.metadata["choices"]]
+    if unknown:
+        options = ", ".join(f.metadata["choices"])
+        raise ConfigError(
+            f"{name} holds {', '.join(map(repr, unknown))}; each must be one of {options}"
+        )
+    return items
 
 
 def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:

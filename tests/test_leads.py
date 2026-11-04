@@ -196,13 +196,28 @@ def resolves_to(monkeypatch, *addresses):
     )
 
 
+def test_a_robots_txt_redirect_is_followed_only_to_a_public_host(monkeypatch):
+    moved = httpx.Response(301, headers={"location": "https://c.org/robots.txt"})
+    asked = serve(monkeypatch, moved, httpx.Response(200, text="User-agent: *\nDisallow: /no/\n"))
+
+    assert not allowed("https://b.org/no/page")
+    assert [url for url, _ in asked] == ["https://b.org/robots.txt", "https://c.org/robots.txt"]
+
+    inward = httpx.Response(302, headers={"location": "http://internal.example/robots.txt"})
+    asked = serve(monkeypatch, inward)
+    monkeypatch.setattr(fetch, "public", lambda host: host != "internal.example")
+
+    assert not allowed("https://d.org/page")
+    assert [url for url, _ in asked] == ["https://d.org/robots.txt"]
+
+
 def test_robots_txt_rules_apply_to_this_crawler(monkeypatch):
     asked = serve(monkeypatch, httpx.Response(200, text="User-agent: *\nDisallow: /private/\n"))
 
     assert not allowed("https://b.org/private/page")
     assert allowed("https://b.org/open")
     # Asked once for the host, with the crawler's user agent.
-    assert asked == [("https://b.org/robots.txt", fetch._user_agent())]
+    assert asked == [("https://b.org/robots.txt", fetch.user_agent())]
 
 
 @pytest.mark.parametrize(
