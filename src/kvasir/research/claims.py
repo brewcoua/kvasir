@@ -32,6 +32,11 @@ class Claim:
     contradicted_by: list[int] = field(default_factory=list)
 
 
+def next_id(claims: list[Claim]) -> int:
+    """The id for the next claim: past every one held, even after claims were dropped."""
+    return max((claim.id for claim in claims), default=0) + 1
+
+
 def closest(encoder: Encoder, query: str, texts: list[str], k: int) -> list[int]:
     """Indices of the `k` texts closest to `query`, in their original order."""
     if len(texts) <= k:

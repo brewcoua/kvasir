@@ -10,7 +10,11 @@ import numpy as np
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import PAGE, Encoder, Stream, Vectors, claim, page, research_settings
+from fakes import PAGE, Encoder, Stream, Tiers, Vectors, claim, page, research_settings
+from kvasir import runners
+from kvasir.methods.ledger.frontier import Frontier
+from kvasir.methods.ledger.loop import purge
+from kvasir.methods.ledger.questions import Question
 from kvasir.research import fetch, verify, write
 from kvasir.research.clarify import clarify
 from kvasir.research.corpus import RECALL_MIN, RECALL_PER_SITE, RECALL_PIECES, Corpus
@@ -684,3 +688,71 @@ def test_the_corpus_counts_pages_and_claims_per_site():
 
     assert corpus.pages == {"a.org": 2}
     assert corpus.claims == {"a.org": 1, "b.org": 1}
+
+
+def test_a_site_found_avoid_after_it_was_read_is_purged_with_its_corroborations():
+    claims = [claim(1, "https://a.org/1"), claim(2, "https://bad.org/2")]
+    claims[0].corroborated_by = [2]
+    question = Question(id=1, text="q", status="answered", claims=[1, 2])
+    stream = Stream()
+    corpus = Corpus(sources=Tiers(bad_org="avoid"))
+
+    purge(Encoder(), "brief", None, corpus, [question], claims, stream)
+
+    assert [c.id for c in claims] == [1]
+    assert claims[0].corroborated_by == [] and question.claims == [1]
+    assert stream.events == [("research", "dropped 1 claims from sites found untrustworthy since")]
+
+
+def test_nothing_is_purged_without_a_classifier():
+    claims = [claim(1, "https://bad.org/1")]
+    stream = Stream()
+
+    purge(Encoder(), "brief", Frontier(Encoder(), "brief", claims), Corpus(), [], claims, stream)
+
+    assert len(claims) == 1 and stream.events == []
+
+
+def test_a_purge_scrubs_the_cells_that_cited_the_dropped_claims():
+    claims = [claim(1, "https://a.org/1"), claim(2, "https://bad.org/2")]
+    rows = [
+        Row(
+            entity="X",
+            cells=[
+                Cell(criterion="c", finding="f", claims=[1, 2]),
+                Cell(criterion="d", finding="g", claims=[2]),
+            ],
+        )
+    ]
+    sources = Tiers(bad_org="avoid")
+
+    purge(Encoder(), "brief", None, Corpus(sources=sources), [], claims, Stream(), rows)
+
+    assert [(c.finding, c.claims) for c in rows[0].cells] == [("f", [1]), ("", [])]
+    # The purge before writing waits for Wikidata; the other lookups do not.
+    assert sources.deadlines[-1] > 0
+    Corpus(sources=sources).low_trust(claims)
+    assert sources.deadlines[-1] == 0
+
+
+def test_the_storm_retriever_filters_avoid_urls(monkeypatch):
+    monkeypatch.setattr(runners, "build_sources", lambda settings: Tiers(bad_org="avoid"))
+
+    retriever = runners._retriever(research_settings(), 3)
+
+    assert not retriever.is_valid_source("https://bad.org/x")
+    assert retriever.is_valid_source("https://a.org/x")
+
+
+def test_one_classifier_is_built_per_process_and_settings(tmp_path):
+    def configured(**changes):
+        return dataclasses.replace(
+            research_settings(),
+            data_dir=tmp_path,
+            sources=dataclasses.replace(research_settings().sources, enabled=True, **changes),
+        )
+
+    assert runners.build_sources(research_settings()) is None
+    first = runners.build_sources(configured())
+    assert runners.build_sources(configured()) is first
+    assert runners.build_sources(configured(wikidata=False)) is not first

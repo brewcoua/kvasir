@@ -297,7 +297,7 @@ the graph. Each page goes through the same steps.
 flowchart LR
     search["SearXNG results<br/>and leads"]
     pool["top 20 by<br/>SearXNG score"]
-    fuse["fuse 3 rankings<br/>weighted RRF"]
+    fuse["fuse 3 or 4 rankings<br/>weighted RRF"]
     pick["pick results_per_query<br/>skip repeats"]
     fetch["fetch_page<br/>cache, HTML, browser, PDF"]
     snippet["search snippet"]
@@ -324,10 +324,16 @@ flowchart LR
   order of the response, which SearXNG groups by category, and keeps the first `POOL` (20). It
   ranks them three ways: by SearXNG's score; by relevance, the cosine similarity between the
   question and the result's `title` and snippet; and by novelty, 1 less the highest cosine
-  similarity to a claim the run holds. Novelty applies only when the run holds claims. The
+  similarity to a claim the run holds. Novelty applies only when the run holds claims. With
+  `[sources] enabled`, the hosts of a call's results and leads are classified in one batch, a
+  result of an `avoid` site is dropped, and marked seen, before ranking even when nothing else is
+  left, and a fourth ranking, when the tiers differ, orders the rest by tier: `high`, `normal`,
+  `unknown`, then `low`, ties in SearXNG's order. Every other lookup (leads, recall, affinity, site
+  searches) reads only what the cache, rules and lists know, since the host was classified when
+  found. The
   rankings are fused as `Σ w / (RRF_K + rank)`, with `RRF_K` 60 and weights
-  `SEARXNG_WEIGHT` 1.0, `RELEVANCE_WEIGHT` 1.0 and `NOVELTY_WEIGHT` 0.5. The weights are a first
-  guess, not tuned. Results are then taken best first, skipping one whose domain was already taken
+  `SEARXNG_WEIGHT` 1.0, `RELEVANCE_WEIGHT` 1.0, `NOVELTY_WEIGHT` 0.5 and `TRUST_WEIGHT` 0.5. The
+  weights are a first guess, not tuned. Results are then taken best first, skipping one whose domain was already taken
   for the query, whose snippet has a cosine similarity above `NEAR_DUPLICATE` (0.9) to one
   taken, or whose site the run has read `PAGES_PER_SITE` (6) pages of, until `results_per_query`
   are taken. A skipped result is not marked seen, so a later search can take it. Without an
@@ -444,7 +450,16 @@ Recall also reaches `pages.db`, which keeps the pieces of every run with the emb
 encoded them. FTS5 ranks the cached pieces by the question's words (BM25), the top 200 of the
 current model are compared by vector, and the same rules apply. A page cached by an earlier run can
 answer with no search and no download. The `recall_past_runs` option set to `false` keeps recall
-to the run's own pages. The cache still serves downloads and still keeps the run's pieces.
+to the run's own pages. The cache still serves downloads and still keeps the run's pieces. With
+`[sources] enabled`, no piece of an `avoid` site is recalled, from the run or `pages.db`, which
+keeps it.
+
+After every research pass (the ledger's fill and repair searches too), both methods classify the
+sites read again, waiting for Wikidata. The claims of a site now
+`avoid` (Wikidata answered late, or it was marked during the run) are removed, with their ids in
+every `corroborated_by`, `contradicted_by` and question answer; a question left with no claim is
+open again, and a ranking's cells lose them. The run logs it, and a progress event gives the
+count; events already published keep the ids.
 
 A run does not crawl. The links of each page read, from its text and its related blocks but never
 its menus or footer, stay behind as leads, at most `LEADS_PER_PAGE` (20) a page and at most
@@ -453,12 +468,17 @@ it and its URL path, and scored for each search:
 
 ```text
 worth = relevance + NOVELTY_WEIGHT * novelty + AFFINITY_WEIGHT * affinity + RELATED_BONUS
+        + TRUST_BONUS[tier]
 ```
 
 Relevance is its cosine similarity to the question, and a lead under `LEAD_MIN` (0.5) is not a
 candidate. Novelty is as for a search result. Affinity is its site's claims that another site
 corroborated, per page of the site read, so it is 0 without corroboration: under the `breadth`
-frontier of the ledger. `RELATED_BONUS` (0.1) is for a link in a related block. Leads join the search's pool,
+frontier of the ledger. With `[sources] enabled`, a claim counts once, by the tier of the site that
+corroborated it (the best, if several), since affinity counts corroborated claims, not
+corroborations: `high` and `normal` 1, `unknown` 0.5, `low` 0.25, `avoid` 0.
+`RELATED_BONUS` (0.1) is for a link in a related block. `TRUST_BONUS` is the site's tier: `high`
+0.1, `normal` 0.05, `unknown` 0, `low` -0.1; a lead of an `avoid` site is not a candidate. Leads join the search's pool,
 ranked by worth where a result is ranked by SearXNG's score, and at most `LEADS_PER_QUERY` (2) are
 picked a search. A lead is read only once `allowed` passes: its host resolves to public addresses
 only, since a page chose the URL, and the site's `robots.txt`, kept a day, lets it be read. A
@@ -467,7 +487,8 @@ refuses, a lead costing little to skip. A search result is not checked against `
 
 A site whose affinity reaches `SITE_AFFINITY` (1.0) earns a site search: for a question already
 searched once, the query is `site:<domain> <question>` in place of the planner's, once a question
-and site, and no more than `SITE_SEARCHES` (2) in a run. The weights and thresholds of this section are first guesses, not tuned.
+and site, and no more than `SITE_SEARCHES` (2) in a run. With `[sources] enabled`, only a site of
+tier `high` or `normal` earns one. The weights and thresholds of this section are first guesses, not tuned.
 
 ## Ranking and comparing
 
@@ -589,7 +610,9 @@ for each sentence.
 Each removed sentence is recorded in `removed` with its section, the reason and the `stage` that
 removed it: `citation`, `verify`, `escalate` or `rewrite`. A rewritten sentence goes in
 `revised`, with its section, the sentence before and after, and the reason. A sentence left
-`[unverified]` goes in `unverified`, with its section and the reason. Bold is taken out of the
+`[unverified]` goes in `unverified`, with its section and the reason. With `[sources] enabled`, a
+cited sentence whose claims all come from `low` sites goes in `low_trust`, with its section; the
+text is not changed. Bold is taken out of the
 sentence before it is checked. A callout keeps its surviving sentences, and goes when none is
 left. Headings, tables and code are left alone, since a table row is not a sentence and cutting
 one would break the table. A sentence citing nothing is left alone too: it is a transition, or a

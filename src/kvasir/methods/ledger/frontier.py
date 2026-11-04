@@ -14,7 +14,7 @@ import numpy as np
 
 from kvasir.methods.ledger.questions import Question
 from kvasir.research.claims import Claim
-from kvasir.research.corroborate import independent
+from kvasir.research.corroborate import domain, independent
 from kvasir.storm.encoder import Encoder, cosine_similarity
 
 # Above this cosine similarity, a new claim repeats one already held.
@@ -109,6 +109,27 @@ class Frontier:
             held.append(vector)
             added += 1
         return added
+
+    def drop(self, hosts: set[str], questions: list[Question]) -> set[int]:
+        """Remove the claims read from `hosts`, their ids from every claim's `corroborated_by` and
+        `contradicted_by` and from the questions' answers, and return the ids removed. A question
+        left with no claim is open again. Events already published keep the ids."""
+        gone = {claim.id for claim in self.claims if domain(claim.url) in hosts}
+        if not gone:
+            return gone
+        kept = [i for i, claim in enumerate(self.claims) if claim.id not in gone]
+        # Vectors are encoded in claim order, and may cover only the first claims.
+        self.claim_vectors = [self.claim_vectors[i] for i in kept if i < len(self.claim_vectors)]
+        self.claims[:] = [self.claims[i] for i in kept]
+        for claim in self.claims:
+            claim.corroborated_by = [i for i in claim.corroborated_by if i not in gone]
+            claim.contradicted_by = [i for i in claim.contradicted_by if i not in gone]
+        for question in questions:
+            if gone.intersection(question.claims):
+                question.claims = [i for i in question.claims if i not in gone]
+                if not question.claims:
+                    question.status = "open"
+        return gone
 
     def held(self) -> np.ndarray:
         """Every claim's vector, encoding only those not encoded before."""

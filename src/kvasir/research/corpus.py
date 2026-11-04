@@ -7,9 +7,10 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
-from collections import Counter
+from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 import numpy as np
@@ -20,6 +21,9 @@ from kvasir.research.fetch import Page, normalize
 from kvasir.research.pages import PageStore
 from kvasir.research.search import NOVELTY_WEIGHT
 from kvasir.storm.encoder import Encoder, cosine_similarity
+
+if TYPE_CHECKING:
+    from kvasir.research.sources import Sources
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +38,10 @@ RECALL_PER_SITE = 2
 # question, so that a thin search does not get a poor lead read in its place. A lead's worth is its
 # relevance, plus NOVELTY_WEIGHT (search.py's) times its novelty, plus AFFINITY_WEIGHT times its
 # site's affinity, plus RELATED_BONUS for a link in a related block. A site whose affinity reaches
-# SITE_AFFINITY earns a search of its own, SITE_SEARCHES of them at most in a run. No run reads
-# more than PAGES_PER_SITE pages of one site.
+# SITE_AFFINITY earns a search of its own, SITE_SEARCHES of them at most in a run, if its tier is
+# high or normal. TRUST_BONUS[tier] is added to a lead's worth, and each corroboration counts in
+# affinity by CORROBORATION_WEIGHT of the corroborating claim's tier (sources enabled only). No run
+# reads more than PAGES_PER_SITE pages of one site.
 LEADS_PER_PAGE = 20
 LEAD_DEPTH = 2
 LEAD_MIN = 0.5
@@ -44,6 +50,8 @@ RELATED_BONUS = 0.1
 SITE_AFFINITY = 1.0
 PAGES_PER_SITE = 6
 SITE_SEARCHES = 2
+TRUST_BONUS = {"high": 0.1, "normal": 0.05, "unknown": 0.0, "low": -0.1}
+CORROBORATION_WEIGHT = {"high": 1.0, "normal": 1.0, "unknown": 0.5, "low": 0.25, "avoid": 0.0}
 
 _NON_WORD = re.compile(r"[\W_]+")
 
@@ -74,12 +82,18 @@ class Lead:
 class Corpus:
     """The pieces of the pages a run read, and how well each site has done. With a `store`, the
     pieces are kept there, vectors of `model`, and recall reaches pieces other runs kept, unless
-    `recall_past_runs` is off."""
+    `recall_past_runs` is off. With `sources`, sites of tier `avoid` are never recalled or led to,
+    and the tier weighs in a lead's worth, a site's affinity and its site search."""
 
     def __init__(
-        self, store: PageStore | None = None, model: str = "", recall_past_runs: bool = True
+        self,
+        store: PageStore | None = None,
+        model: str = "",
+        recall_past_runs: bool = True,
+        sources: Sources | None = None,
     ) -> None:
         self._store = store
+        self.sources = sources
         self._model = model
         self._recall_past_runs = recall_past_runs
         self.pieces: list[Piece] = []
@@ -92,6 +106,8 @@ class Corpus:
         self._refused: set[str] = set()
         self._site_searched: set[tuple[int, str]] = set()
         self._site_searches = 0
+        # Sites found `avoid`, kept so that a search of the store leaves them out the first time.
+        self._avoid: set[str] = set()
 
     def add(self, page: Page, texts: list[str], vectors: np.ndarray) -> list[Piece]:
         """Add the pieces of `page`, none read yet, and return them."""
@@ -147,6 +163,25 @@ class Corpus:
         self._refused.add(key)
         self.leads.pop(key, None)
 
+    def tiers(self, hosts: Iterable[str], deadline: float = 0.0) -> dict[str, str]:
+        """The tier of each of `hosts`; all `unknown` without a classifier. By default only what
+        the cache, rules and lists know, as the hosts were classified when found; a `deadline`
+        waits that long for Wikidata."""
+        if self.sources is None:
+            return dict.fromkeys(hosts, "unknown")
+        classified = self.sources.classify(hosts, deadline)
+        return {host: source.tier for host, source in classified.items()}
+
+    def avoided(self, claims: list[Claim], deadline: float = 0.0) -> set[str]:
+        """The sites of `claims` that are now of tier `avoid`."""
+        tiers = self.tiers({domain(claim.url) for claim in claims}, deadline)
+        return {host for host, tier in tiers.items() if tier == "avoid"}
+
+    def low_trust(self, claims: list[Claim]) -> set[int]:
+        """The ids of the `claims` read from sites of tier `low`."""
+        tiers = self.tiers({domain(claim.url) for claim in claims})
+        return {claim.id for claim in claims if tiers[domain(claim.url)] == "low"}
+
     def full(self, url: str) -> bool:
         """Whether the run has read as many pages as it may from the site of `url`."""
         return self.pages[domain(url)] >= PAGES_PER_SITE
@@ -161,11 +196,14 @@ class Corpus:
         limit: int,
     ) -> list[dict[str, Any]]:
         """The `limit` leads worth most for `question`, best first, as search hits. Those under
-        `LEAD_MIN`, already seen or read, or of a site read `PAGES_PER_SITE` times are left out."""
+        `LEAD_MIN`, already seen or read, of an `avoid` site, or of a site read `PAGES_PER_SITE`
+        times are left out."""
         skip = {u for u in map(_normalized, (*seen, *self._whole)) if u}
         candidates = [
             lead for key, lead in self.leads.items() if key not in skip and not self.full(lead.url)
         ]
+        tiers = self.tiers({domain(lead.url) for lead in candidates})
+        candidates = [lead for lead in candidates if tiers[domain(lead.url)] != "avoid"]
         if not candidates:
             return []
         vectors = np.stack([lead.vector for lead in candidates])
@@ -180,6 +218,7 @@ class Corpus:
             + NOVELTY_WEIGHT * novelty[i]
             + AFFINITY_WEIGHT * affinity.get(domain(lead.url), 0.0)
             + (RELATED_BONUS if lead.region == "related" else 0.0)
+            + TRUST_BONUS.get(tiers[domain(lead.url)], 0.0)
             for i, lead in enumerate(candidates)
         ]
         order = sorted(
@@ -197,26 +236,48 @@ class Corpus:
 
     def site_query(self, question_id: int, question: str, claims: list[Claim]) -> str | None:
         """A search of the site with the highest affinity, `SITE_AFFINITY` or more, that this
-        question has not searched and that is under `PAGES_PER_SITE`. None when no site is one, or
-        after `SITE_SEARCHES` in the run."""
+        question has not searched and that is under `PAGES_PER_SITE`. With `sources`, only a site of
+        tier `high` or `normal`. None when no site is one, or after `SITE_SEARCHES` in the run."""
         if self._site_searches >= SITE_SEARCHES:
             return None
         affinity = self._affinity(claims)
         for site in sorted(affinity, key=lambda site: -affinity[site]):
             if affinity[site] < SITE_AFFINITY:
                 break
-            if self.pages[site] < PAGES_PER_SITE and (question_id, site) not in self._site_searched:
+            if (
+                self.pages[site] < PAGES_PER_SITE
+                and (question_id, site) not in self._site_searched
+                and (self.sources is None or self.tiers([site])[site] in ("high", "normal"))
+            ):
                 self._site_searched.add((question_id, site))
                 self._site_searches += 1
                 return f"site:{site} {question}"
         return None
 
     def _affinity(self, claims: list[Claim]) -> dict[str, float]:
-        """Per site, its claims another site corroborates over its pages read. Corroboration is
-        known only to a frontier that merges claims, so under the breadth frontier this is empty
-        and a lead's worth is its relevance, novelty and region."""
-        confirmed = Counter(domain(claim.url) for claim in claims if claim.corroborated_by)
-        return {site: n / self.pages[site] for site, n in confirmed.items() if self.pages[site]}
+        """Per site, its claims another site corroborates over its pages read. With `sources`, a
+        claim counts by the best `CORROBORATION_WEIGHT` among its corroborating claims' tiers.
+        Corroboration is known only to a frontier that merges claims, so under the breadth frontier
+        this is empty and a lead's worth is its relevance, novelty and region."""
+        by_id = {claim.id: claim for claim in claims}
+        tiers = self.tiers({domain(claim.url) for claim in claims})
+        confirmed: defaultdict[str, float] = defaultdict(float)
+        for claim in claims:
+            if self.sources is None:
+                weight = 1.0 if claim.corroborated_by else 0.0
+            else:
+                weight = max(
+                    (
+                        CORROBORATION_WEIGHT[tiers[domain(by_id[i].url)]]
+                        for i in claim.corroborated_by
+                        if i in by_id
+                    ),
+                    default=0.0,
+                )
+            confirmed[domain(claim.url)] += weight
+        return {
+            site: n / self.pages[site] for site, n in confirmed.items() if n and self.pages[site]
+        }
 
     def record(self, claims: list[Claim]) -> None:
         """Count `claims` kept against the sites they were read from."""
@@ -224,8 +285,14 @@ class Corpus:
 
     def recall(self, encoder: Encoder, question: str) -> list[tuple[Page, str]]:
         """The unread pieces closest to `question`, best first, and marks them read. Pieces of
-        cached pages not in the corpus compete too, and join it when recalled."""
-        candidates = [piece for piece in self.pieces if not piece.read]
+        cached pages not in the corpus compete too, and join it when recalled. Pieces of `avoid`
+        sites are never recalled."""
+        tiers = self.tiers({domain(piece.page.url) for piece in self.pieces})
+        candidates = [
+            piece
+            for piece in self.pieces
+            if not piece.read and tiers[domain(piece.page.url)] != "avoid"
+        ]
         stored = self._stored(question)
         candidates += stored
         if not candidates:
@@ -257,7 +324,16 @@ class Corpus:
         if not self._store or not self._recall_past_runs:
             return []
         try:
-            found = self._store.search(question, self._model, list(self._whole))
+            found = self._store.search(
+                question, self._model, list(self._whole), exclude_hosts=self._avoid
+            )
+            tiers = self.tiers({domain(page.url) for page, _, _ in found})
+            new = {host for host, tier in tiers.items() if tier == "avoid"}
+            if new:
+                self._avoid |= new
+                found = self._store.search(
+                    question, self._model, list(self._whole), exclude_hosts=self._avoid
+                )
         except sqlite3.Error as exc:
             logger.warning("cached pieces not searched: %s", exc)
             return []

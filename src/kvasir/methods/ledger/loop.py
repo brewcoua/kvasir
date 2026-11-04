@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Protocol
 
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
@@ -13,12 +13,14 @@ from kvasir.methods.ledger.frontier import BRANCH_STALL, Frontier
 from kvasir.methods.ledger.questions import Question, as_results
 from kvasir.methods.ledger.signatures import CheckAnswer, SearchFor
 from kvasir.research.calls import predict
-from kvasir.research.claims import Claim, closest, quoted_claims
+from kvasir.research.claims import Claim, closest, next_id, quoted_claims
 from kvasir.research.corpus import Corpus
 from kvasir.research.read import read, recall
 from kvasir.research.search import SearchUnavailable, search
+from kvasir.research.sources import DEADLINE_SECONDS
 from kvasir.runs.progress import RESEARCH, ProgressStream
 from kvasir.runs.run import record_questions
+from kvasir.schemas.results import Row
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
 from kvasir.storm.rm import SearXNG
@@ -115,6 +117,7 @@ def research(
         )
         if question is None:
             break
+        # `judged_at` counts claims held, not ids: a purge leaves gaps in ids, not in the count.
         if question.judged_at < len(claims):
             judge(question)
             record()
@@ -129,7 +132,7 @@ def research(
                 brief,
                 question.text,
                 corpus,
-                len(claims) + 1,
+                next_id(claims),
                 first_step + searches,
                 f"recall for {question.text}",
                 stream,
@@ -137,6 +140,7 @@ def research(
                 question_id=question.id,
                 parent=parent,
                 stage=stage,
+                claims_held=len(claims),
             )
             claims.extend(held)
             if held:
@@ -182,6 +186,7 @@ def research(
                 frontier.held() if frontier is not None else None,
                 corpus=corpus,
                 claims=claims,
+                sources=corpus.sources,
             )
         except SearchUnavailable as exc:
             # The attempt is not spent, since the query was never answered; the budget is.
@@ -199,7 +204,7 @@ def research(
             brief,
             question.text,
             hits,
-            len(claims) + 1,
+            next_id(claims),
             first_step + searches,
             f"search {searches}",
             stream,
@@ -233,6 +238,34 @@ def research(
             parent=attempt,
         )
     return searches
+
+
+def purge(
+    encoder: Encoder,
+    brief: str,
+    frontier: Frontier | None,
+    corpus: Corpus,
+    questions: list[Question],
+    claims: list[Claim],
+    stream: ProgressStream,
+    rows: Iterable[Row] = (),
+) -> None:
+    """Remove the claims of sites found `avoid` since they were read, waiting for Wikidata's late
+    answers. Their ids go from the `rows` cells too; a cell left with none is empty. Without a
+    `frontier`, a new one does the removal."""
+    hosts = corpus.avoided(claims, DEADLINE_SECONDS)
+    if not hosts:
+        return
+    gone = (frontier or Frontier(encoder, brief, claims)).drop(hosts, questions)
+    for row in rows:
+        for i, cell in enumerate(row.cells):
+            if gone.intersection(cell.claims):
+                left = [n for n in cell.claims if n not in gone]
+                row.cells[i] = cell.model_copy(
+                    update={"claims": left, "finding": cell.finding if left else ""}
+                )
+    logger.warning("dropped %d claims of sites found untrustworthy: %s", len(gone), sorted(hosts))
+    stream.publish(RESEARCH, f"dropped {len(gone)} claims from sites found untrustworthy since")
 
 
 def pick(questions: list[Question], max_attempts: int) -> Question | None:

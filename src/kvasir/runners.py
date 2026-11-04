@@ -9,12 +9,15 @@ See docs/fork-notes.md for the signatures these rely on.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from kvasir.config import Settings
+from kvasir.config import Settings, SourceSettings
+from kvasir.research.corroborate import domain
 from kvasir.research.read import answer_tokens
+from kvasir.research.sources import Sources, SourceStore
 from kvasir.storm.collaborative_storm.engine import (
     CollaborativeStormLMConfigs,
     CoStormRunner,
@@ -178,6 +181,24 @@ def build_checker(settings: Settings) -> GatewayModel | None:
     )
 
 
+_sources: tuple[tuple[Path, SourceSettings], Sources] | None = None
+_sources_lock = threading.Lock()
+
+
+def build_sources(settings: Settings) -> Sources | None:
+    """The source classifier, built once per process for these settings, or None when
+    `[sources] enabled` is false."""
+    global _sources
+    if not settings.sources.enabled:
+        return None
+    key = (settings.sources_db, settings.sources)
+    with _sources_lock:
+        if _sources is None or _sources[0] != key:
+            sources = Sources(settings.sources, SourceStore(settings.sources_db), settings.data_dir)
+            _sources = (key, sources)
+        return _sources[1]
+
+
 def build_research_tools(settings: Settings) -> tuple[Encoder, SearXNG]:
     """The encoder and the search engine, for the deep research pipeline. It caps results itself."""
     return _encoder(settings), _retriever(settings, settings.search.top_k)
@@ -201,7 +222,19 @@ def _retriever(settings: Settings, k: int) -> SearXNG:
     The instance must serve the JSON output format. One serving HTML only returns an empty result
     set rather than failing, which looks like a topic with no sources.
     """
-    return SearXNG(searxng_api_url=settings.search.url, k=k)
+    sources = build_sources(settings)
+    if sources is None:
+        return SearXNG(searxng_api_url=settings.search.url, k=k)
+
+    def is_valid_source(url: str) -> bool:
+        # STORM reads what this passes; a URL that cannot be read is not worth a query's results.
+        try:
+            host = domain(url)
+        except ValueError:
+            return False
+        return sources.classify([host])[host].tier != "avoid"
+
+    return SearXNG(searxng_api_url=settings.search.url, k=k, is_valid_source=is_valid_source)
 
 
 def build_storm_runner(

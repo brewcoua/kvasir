@@ -6,7 +6,7 @@ import logging
 
 import numpy as np
 
-from fakes import Search, Vectors
+from fakes import Search, Tiers, Vectors
 from kvasir.research.search import MAX_QUERY_CHARACTERS, search
 
 QUESTION = "when was the stone found"
@@ -138,3 +138,39 @@ def test_a_short_query_is_sent_as_written():
     search(searxng, ['"a b" OR c'], 3, set())
 
     assert searxng.queries == ['"a b" OR c']
+
+
+def test_a_result_of_an_avoid_site_is_dropped_even_when_it_is_the_only_one():
+    sources = Tiers(only_org="avoid")
+    seen: set[str] = set()
+
+    picked = search(Search([hit("only", 1.0)]), ["q"], 3, seen, sources=sources)
+
+    assert picked == []
+    # Marked seen, so the next query does not classify it again.
+    assert seen == {"https://only.org/only"}
+
+
+def test_the_pool_of_a_query_is_classified_once():
+    sources = Tiers(bad_org="avoid")
+    hits = [hit("bad", 3.0), hit("a", 2.0), hit("b", 1.0)]
+
+    picked = search(Search(hits), ["q"], 3, set(), sources=sources)
+
+    assert urls(picked) == ["a", "b"]
+    assert sources.calls == [{"bad.org", "a.org", "b.org"}]
+
+    # Two queries are still one batch.
+    search(Search(hits), ["q", "r"], 3, set(), sources=sources)
+    assert len(sources.calls) == 2
+
+
+def test_the_tier_orders_results_the_other_rankings_leave_tied():
+    hits = [hit("a", 3.0), hit("b", 2.0), hit("c", 1.0)]
+    encoder = Vectors({QUESTION: [1, 0], "a\n": [0, 1], "b\n": [1, 1], "c\n": [1, 0]})
+    sources = Tiers(a_org="low", c_org="high")
+
+    picked = search(Search(hits), ["q"], 3, set(), encoder, QUESTION, sources=sources)
+
+    assert urls(picked) == ["c", "b", "a"]
+    assert urls(search(Search(hits), ["q"], 3, set(), encoder, QUESTION)) == ["a", "c", "b"]

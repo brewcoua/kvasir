@@ -9,13 +9,14 @@ import hashlib
 import re
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import Collection, Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import NamedTuple, cast
 
 import numpy as np
 
+from kvasir.research.corroborate import domain
 from kvasir.research.fetch import Engine, Link, Page, normalize
 
 # Writers from several runs wait for each other rather than failing.
@@ -25,6 +26,15 @@ BUSY_TIMEOUT_SECONDS = 30.0
 def page_id(key: str) -> str:
     """The id of the page cached under the normalized URL `key`: stateless and safe in a URL."""
     return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _host(url: str) -> str:
+    """The site of a stored URL; empty for one that cannot be read, since SQLite would fail the
+    whole query on an exception."""
+    try:
+        return domain(url)
+    except ValueError:
+        return ""
 
 
 class Row(NamedTuple):
@@ -244,15 +254,28 @@ class PageStore:
             db.executemany("INSERT INTO pieces VALUES (?, ?, ?, ?, ?)", rows)
 
     def search(
-        self, words: str, model: str, exclude_urls: list[str], limit: int = 200
+        self,
+        words: str,
+        model: str,
+        exclude_urls: list[str],
+        limit: int = 200,
+        exclude_hosts: Collection[str] = (),
     ) -> list[tuple[Page, str, np.ndarray]]:
         """The pieces of `model` that best match the words of `words` (BM25), at most `limit`,
-        leaving out the pages in `exclude_urls`. Each comes with its page, without text or links."""
+        leaving out the pages in `exclude_urls` and those of the sites in `exclude_hosts`. Each
+        comes with its page, without text or links."""
         terms = " OR ".join(f'"{word}"' for word in re.findall(r"\w+", words))
         if not terms:
             return []
         excluded = [normalize(url) for url in exclude_urls]
+        host_clause = (
+            f"AND host(pages.url) NOT IN ({','.join('?' * len(exclude_hosts))}) "
+            if exclude_hosts
+            else ""
+        )
         with self._connect() as db:
+            if exclude_hosts:
+                db.create_function("host", 1, _host, deterministic=True)
             rows = db.execute(
                 "SELECT pages.url, pages.final_url, pages.title, pages.engine, pages.fetched_at, "
                 "pieces.text, pieces.vector FROM pieces_fts "
@@ -260,8 +283,9 @@ class PageStore:
                 "JOIN pages ON pages.url = pieces.page "
                 "WHERE pieces_fts MATCH ? AND pieces.model = ? "
                 f"AND pieces.page NOT IN ({','.join('?' * len(excluded))}) "
+                f"{host_clause}"
                 "ORDER BY bm25(pieces_fts) LIMIT ?",
-                (terms, model, *excluded, limit),
+                (terms, model, *excluded, *exclude_hosts, limit),
             ).fetchall()
         return [
             (

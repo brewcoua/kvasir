@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import Encoder, Logged, Stream, Vectors, claim, page, research_settings
+from fakes import Encoder, Logged, Stream, Tiers, Vectors, claim, page, research_settings
 from kvasir.config import Settings
 from kvasir.research import verify
 from kvasir.research.corpus import Corpus
@@ -420,3 +420,23 @@ def test_a_claim_is_grounded_on_the_piece_its_quote_is_in():
 
     assert [c.text for c in claims] == ["Weighs 900 kg"]
     assert checker.asked[0] == PROMPT.format(document=second, claim="Weighs 900 kg")
+
+
+def test_a_sentence_whose_claims_all_come_from_low_sites_is_marked():
+    claims = [
+        claim(1, "https://low.org/1"),
+        claim(2, "https://low.org/2"),
+        claim(3, "https://a.org"),
+    ]
+    low = Corpus(sources=Tiers(low_org="low")).low_trust(claims)
+    sections = [
+        (
+            "S",
+            "Both low [1][2]. Mixed [1, 3]. Fine [3]. A transition. Unknown claim [9].",
+        )
+    ]
+
+    found = verify.low_trust(sections, {c.id: c for c in claims}, low)
+
+    assert [(m.section, m.sentence) for m in found] == [("S", "Both low [1][2].")]
+    assert Corpus().low_trust(claims) == set()

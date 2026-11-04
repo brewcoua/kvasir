@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Phases 1 and 2 built 2026-11-04.
+Status: written 2026-11-04. Phases 1 to 3 built 2026-11-04.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
@@ -197,6 +197,9 @@ An `avoid` page can poison the claims, so it is kept out at every way in:
    run) has its claims removed from the frontier, from every `corroborated_by` and
    `contradicted_by`, and from the questions' answers, before the write stage. The run logs it and
    the step shows how many claims were dropped.
+
+STORM is covered through `is_valid_source` of its retriever (`runners.py`), which drops `avoid`
+results.
 
 The planner's `QUERY_SHAPES[2]` ("add site: and the official domain") stays: a site the planner
 names is searched once, and its results are ranked like any other.

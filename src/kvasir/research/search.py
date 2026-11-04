@@ -1,11 +1,12 @@
 """Searching, skipping what the run already read, and choosing which results to read.
 
-Each query's results are ranked three ways before any page is downloaded: by SearXNG's score, by
-closeness of the title and snippet to the question, and by distance from what the run holds. The
-rankings are fused with weighted reciprocal rank fusion (Cormack, Clarke and Buttcher, SIGIR 2009),
-then picked greedily, skipping a repeated domain or a near-duplicate snippet, as in maximal marginal
+Each query's results are ranked four ways before any page is downloaded: by SearXNG's score, by
+closeness of the title and snippet to the question, by distance from what the run holds, and by
+the trust tier of the site. A result of an `avoid` site is dropped before ranking. The rankings
+are fused with weighted reciprocal rank fusion (Cormack, Clarke and Buttcher, SIGIR 2009), then
+picked greedily, skipping a repeated domain or a near-duplicate snippet, as in maximal marginal
 relevance (Carbonell and Goldstein, 1998). Without an encoder only SearXNG's score and the domain
-skip apply.
+skip apply; without a `sources` classifier there is no tier ranking and no drop.
 
 A run's leads, the links of pages it read, join each query's results as candidates, at most
 LEADS_PER_QUERY of them picked. Their worth stands in for SearXNG's score, which a lead has not. A
@@ -32,6 +33,7 @@ from kvasir.storm.rm import SearXNG
 if TYPE_CHECKING:
     from kvasir.research.claims import Claim
     from kvasir.research.corpus import Corpus
+    from kvasir.research.sources import Sources
 
 # Results of one query that are ranked; the rest are dropped.
 POOL = 20
@@ -44,6 +46,9 @@ RRF_K = 60
 SEARXNG_WEIGHT = 1.0
 RELEVANCE_WEIGHT = 1.0
 NOVELTY_WEIGHT = 0.5
+TRUST_WEIGHT = 0.5
+# The tiers in the order they rank, best first; `avoid` never reaches the ranking.
+TRUST_ORDER = ("high", "normal", "unknown", "low")
 # Above this cosine similarity, a snippet repeats one already picked for the query.
 NEAR_DUPLICATE = 0.9
 # Leads picked for one query, however many are worth reading.
@@ -92,6 +97,7 @@ def search(
     *,
     corpus: Corpus | None = None,
     claims: list[Claim] | None = None,
+    sources: Sources | None = None,
 ) -> list[dict[str, Any]]:
     """Results not read before, at most `per_query` from each query. Marks them seen.
 
@@ -102,9 +108,14 @@ def search(
 
     With a `corpus` and an `encoder`, its leads for `question` join the results, as many as
     `LEADS_PER_QUERY` picked. `claims` are what the leads' site affinity is counted from.
+
+    With `sources`, the hosts of all the queries' results and leads are classified in one batch,
+    results of an `avoid` site are dropped, and marked seen, even when nothing else is left, and
+    the tier is a fourth ranking when the pool's tiers differ.
     """
     hits = []
     failures: list[str] = []
+    gathered = []
     for query in queries:
         runtime.record_search_usage("SearXNG", 1)
         found = searxng(_cap(query), exclude_urls=list(seen))
@@ -119,6 +130,25 @@ def search(
             if corpus is not None and encoder is not None
             else []
         )
+        gathered.append((results, leads))
+    tiers: dict[str, str] = {}
+    if sources is not None:
+        tiers = {
+            host: source.tier
+            for host, source in sources.classify(
+                {domain(hit["url"]) for results, leads in gathered for hit in [*results, *leads]}
+            ).items()
+        }
+        seen.update(
+            hit["url"]
+            for results, leads in gathered
+            for hit in [*results, *leads]
+            if tiers[domain(hit["url"])] == "avoid"
+        )
+    for results, leads in gathered:
+        # An earlier query may have picked a URL, or it may be an `avoid` one.
+        results = [hit for hit in results if hit["url"] not in seen]
+        leads = [hit for hit in leads if hit["url"] not in seen]
         pool = [*results, *leads]
         if not pool:
             continue
@@ -129,21 +159,25 @@ def search(
             for rank in range(1, ranks + 1)
         ]
         vectors = None
+        rankings: list[tuple[float, np.ndarray]] = []
         if encoder is not None:
             vectors = np.asarray(
                 encoder.encode([f"{hit['title']}\n{hit['description']}" for hit in pool]),
                 dtype=float,
             )
             wanted = np.asarray(encoder.encode([question], query=True), dtype=float)
-            rankings = [(RELEVANCE_WEIGHT, cosine_similarity(wanted, vectors)[0])]
+            rankings.append((RELEVANCE_WEIGHT, cosine_similarity(wanted, vectors)[0]))
             if held is not None and len(held):
                 rankings.append(
                     (NOVELTY_WEIGHT, 1.0 - cosine_similarity(vectors, held).max(axis=1))
                 )
-            for weight, scores in rankings:
-                # A stable sort, so equal scores keep SearXNG's order.
-                for rank, i in enumerate(np.argsort(-scores, kind="stable"), start=1):
-                    fused[i] += weight / (RRF_K + rank)
+        trust = [-TRUST_ORDER.index(tiers[domain(hit["url"])]) for hit in pool] if tiers else []
+        if len(set(trust)) > 1:
+            rankings.append((TRUST_WEIGHT, np.asarray(trust, dtype=float)))
+        for weight, scores in rankings:
+            # A stable sort, so equal scores keep SearXNG's order.
+            for rank, i in enumerate(np.argsort(-scores, kind="stable"), start=1):
+                fused[i] += weight / (RRF_K + rank)
         picked: list[int] = []
         domains: set[str] = set()
         followed = 0

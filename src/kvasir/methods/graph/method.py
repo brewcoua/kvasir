@@ -22,6 +22,7 @@ from kvasir.methods.base import Method
 from kvasir.methods.graph.explore import LATE_SHARE, explore
 from kvasir.methods.graph.graph import branches
 from kvasir.methods.graph.signatures import Outline
+from kvasir.methods.ledger import loop
 from kvasir.methods.ledger.brief import clarifications
 from kvasir.methods.ledger.frontier import Frontier
 from kvasir.methods.ledger.method import FIRST_QUESTIONS, NO_EVIDENCE
@@ -33,7 +34,12 @@ from kvasir.research.claims import Claim, nearest
 from kvasir.research.corpus import Corpus
 from kvasir.research.corroborate import cross_check
 from kvasir.research.render import SUMMARY, render
-from kvasir.runners import build_checker, build_research_models, build_research_tools
+from kvasir.runners import (
+    build_checker,
+    build_research_models,
+    build_research_tools,
+    build_sources,
+)
 from kvasir.runs.progress import BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.runs.run import record_questions
 from kvasir.schemas.requests import GraphOptions, Input
@@ -87,8 +93,14 @@ def run_graph(
     add_questions(encoder, questions, first or [NamedQuestion(title="", question=input.question)])
     record_questions(as_results(questions))
     claims: list[Claim] = []
-    corpus = Corpus(fetch.cache(), encoder.embedding_model_name, options.recall_past_runs)
+    corpus = Corpus(
+        fetch.cache(),
+        encoder.embedding_model_name,
+        options.recall_past_runs,
+        build_sources(settings),
+    )
     fetch.use_max_age(options.max_age_hours)
+    frontier = Frontier(encoder, brief, claims)
     explore(
         models,
         encoder,
@@ -97,7 +109,7 @@ def run_graph(
         brief,
         questions,
         claims,
-        Frontier(encoder, brief, claims),
+        frontier,
         corpus,
         started + options.research_minutes * 60,
         started + options.research_minutes * 60 * (1 - LATE_SHARE),
@@ -107,6 +119,7 @@ def run_graph(
         options.max_depth or MAX_DEPTH,
         stream,
     )
+    loop.purge(encoder, brief, frontier, corpus, questions, claims, stream)
 
     def result(report: str, **fields: Any) -> ResearchResult:
         return ResearchResult(
@@ -144,12 +157,14 @@ def run_graph(
     (_, summary), *sections = checked.sections
     cross_check(models, encoder, claims, stream, options.corroborate, options.contradict)
     report, citations = render(sections, by_id, summary)
+    low_trust = verify.low_trust([(SUMMARY, summary), *sections], by_id, corpus.low_trust(claims))
     return result(
         report,
         citations=citations,
         removed=checked.removed,
         revised=checked.revised,
         unverified=checked.unverified,
+        low_trust=low_trust,
     )
 
 

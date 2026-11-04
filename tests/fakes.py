@@ -11,6 +11,7 @@ from kvasir.config import Settings
 from kvasir.methods import METHODS
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import Page
+from kvasir.research.sources import Source
 
 PAGE = (
     "<html><body><nav>Home | About</nav><h1>The stone</h1>"
@@ -87,6 +88,37 @@ def claim(id, url, quote=None):
     return Claim(
         id=id, text=f"claim {id}", quote=quote, url=url, title=url, confidence="high", step=1
     )
+
+
+# A kind and tags that `kvasir.research.sources.tier` maps to each tier.
+_BY_TIER = {
+    "high": ("government", frozenset()),
+    "normal": ("news", frozenset()),
+    "unknown": ("unknown", frozenset()),
+    "low": ("unknown", frozenset({"rsp_unreliable"})),
+    "avoid": ("unknown", frozenset({"deny"})),
+}
+
+
+class Tiers:
+    """Sources, classifying each host as the tier it was told and any other as `unknown`. Records
+    the hosts of each call."""
+
+    def __init__(self, **tiers):
+        # Keyword names cannot hold dots, so `a_org` stands for `a.org`.
+        self.tiers = {host.replace("_", "."): tier for host, tier in tiers.items()}
+        self.calls = []
+        self.deadlines = []
+
+    def classify(self, hosts, deadline=5.0):
+        hosts = list(hosts)
+        self.calls.append(set(hosts))
+        self.deadlines.append(deadline)
+        found = {}
+        for host in hosts:
+            kind, tags = _BY_TIER[self.tiers.get(host, "unknown")]
+            found[host] = Source(host=host, kind=kind, tags=tags)
+        return found
 
 
 def research_settings() -> Settings:

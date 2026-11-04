@@ -109,3 +109,21 @@ def test_a_follow_up_is_no_more_central_than_its_question():
     assert [q.priority for q in questions] == ["peripheral", "peripheral"]
     # A word outside the three fails no reply.
     assert NamedQuestion(title="c", question="c", priority="high").priority == "supporting"
+
+
+def test_dropping_a_site_removes_its_claims_and_every_reference_to_them():
+    claims = [claim(1, "https://a.org/1"), claim(2, "https://bad.org/2"), claim(3, "https://c.org")]
+    claims[0].corroborated_by = [2, 3]
+    claims[2].contradicted_by = [2]
+    answered = Question(id=1, text="q", status="answered", claims=[2, 3])
+    lost = Question(id=2, text="r", status="answered", claims=[2])
+    frontier = Frontier(Vectors({}, default=[1, 0]), "brief", claims)
+    frontier.held()
+
+    assert frontier.drop({"bad.org"}, [answered, lost]) == {2}
+
+    assert [c.id for c in claims] == [1, 3]
+    assert len(frontier.held()) == 2
+    assert claims[0].corroborated_by == [3] and claims[1].contradicted_by == []
+    assert answered.claims == [3] and answered.status == "answered"
+    assert lost.claims == [] and lost.status == "open"

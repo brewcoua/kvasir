@@ -5,6 +5,7 @@ from __future__ import annotations
 from kvasir.methods.ledger.signatures import Criteria, Entities, PlanQueries
 from kvasir.research.calls import predict
 from kvasir.research.search import search
+from kvasir.research.sources import Sources
 from kvasir.research.text import names
 from kvasir.runs.progress import BACKGROUND, ProgressStream
 from kvasir.schemas.requests import Clarification
@@ -27,6 +28,7 @@ def candidates(
     max_entities: int,
     per_query: int,
     stream: ProgressStream,
+    sources: Sources | None = None,
 ) -> tuple[list[Criterion], list[str]]:
     """The criteria and the options to compare, chosen from search snippets where not given."""
     if not (criteria and entities):
@@ -42,7 +44,7 @@ def candidates(
         # Snippets only, and not marked seen: the research still reads these pages.
         background = "\n".join(
             f"{hit['title']}: {hit['description']}"
-            for hit in search(searxng, queries, per_query, set())
+            for hit in search(searxng, queries, per_query, set(), sources=sources)
         )
         if not criteria:
             stream.publish(BACKGROUND, "choosing the criteria")

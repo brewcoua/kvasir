@@ -35,7 +35,13 @@ from kvasir.research.claims import Claim, quoted_claims
 from kvasir.research.ground import grounded
 from kvasir.research.signatures import Escalate, Verify
 from kvasir.runs.progress import VERIFY, ProgressStream
-from kvasir.schemas.results import RemovedSentence, RevisedSentence, Stage, UnverifiedSentence
+from kvasir.schemas.results import (
+    LowTrustSentence,
+    RemovedSentence,
+    RevisedSentence,
+    Stage,
+    UnverifiedSentence,
+)
 from kvasir.storm.lm import GatewayModel
 
 # Appended to a sentence no step could judge.
@@ -110,6 +116,23 @@ def report(
         len(items),
     )
     return done
+
+
+def low_trust(
+    sections: list[tuple[str, str]], claims: dict[int, Claim], low: set[int]
+) -> list[LowTrustSentence]:
+    """The cited sentences of `sections` whose claims all come from sites of low trust."""
+    found: list[LowTrustSentence] = []
+
+    def collect(title: str, sentence: str) -> str:
+        ids = {i for i in cited(sentence) if i in claims}
+        if ids and ids <= low:
+            found.append(LowTrustSentence(section=title, sentence=sentence))
+        return sentence
+
+    for title, text in sections:
+        edit(text, partial(collect, title))
+    return found
 
 
 def _apply(done: Verified, verdicts: Iterator[Verdict], title: str, sentence: str) -> str:

@@ -24,7 +24,7 @@ from kvasir.methods.ledger.loop import FAILED_SEARCHES, QUERY_SHAPES
 from kvasir.methods.ledger.questions import Question, add_questions, as_results
 from kvasir.methods.ledger.signatures import NamedQuestion, SearchFor
 from kvasir.research.calls import predict
-from kvasir.research.claims import Claim, quoted_claims
+from kvasir.research.claims import Claim, next_id, quoted_claims
 from kvasir.research.corpus import Corpus
 from kvasir.research.read import read, recall
 from kvasir.research.search import SearchUnavailable, search
@@ -142,12 +142,13 @@ def explore(
                 brief,
                 question.text,
                 corpus,
-                len(claims) + 1,
+                next_id(claims),
                 searches,
                 f"recall for {question.text}",
                 stream,
                 models.get("ground_intake"),
                 question_id=question.id,
+                claims_held=len(claims),
             )
             claims.extend(held)
             if held:
@@ -192,6 +193,7 @@ def explore(
                 frontier.held(),
                 corpus=corpus,
                 claims=claims,
+                sources=corpus.sources,
             )
         except SearchUnavailable as exc:
             failed += 1
@@ -208,7 +210,7 @@ def explore(
             brief,
             question.text,
             hits,
-            len(claims) + 1,
+            next_id(claims),
             searches,
             f"search {searches}",
             stream,

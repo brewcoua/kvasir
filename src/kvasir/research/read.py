@@ -148,13 +148,15 @@ def recall(
     question_id: int | None = None,
     parent: int | None = None,
     stage: str = RESEARCH,
+    claims_held: int | None = None,
 ) -> list[Claim]:
     """The claims in the unread pieces of `corpus` closest to `question`, read with no search.
 
     The pieces of a page are read together, as `read` reads them, and are marked read by the
     recall that returns them, so a question never reads the same piece twice. When it finds
     pieces it publishes a `recall` event under `parent`, a `part` event under it for each text
-    read, and a `result` event under it with the claims added; when it finds none, nothing.
+    read, and a `result` event under it with the claims added and the total, counted from
+    `claims_held` (by default `first_id - 1`); when it finds none, nothing.
     """
     pages: dict[str, tuple[Page, list[str]]] = {}
     for found, text in corpus.recall(encoder, question):
@@ -197,11 +199,12 @@ def recall(
 
     new = take_all(model, checker, brief, question, texts, first_id, step, publish)
     corpus.record(new)
+    total = (first_id - 1 if claims_held is None else claims_held) + len(new)
     stream.publish(
         stage,
-        f"{label}: {len(new)} new claims, {first_id - 1 + len(new)} in all",
+        f"{label}: {len(new)} new claims, {total} in all",
         len(new),
-        first_id - 1 + len(new),
+        total,
         kind="result",
         parent=recalled,
     )

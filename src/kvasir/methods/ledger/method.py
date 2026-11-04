@@ -34,7 +34,12 @@ from kvasir.research.corpus import Corpus
 from kvasir.research.corroborate import cross_check
 from kvasir.research.render import SUMMARY, matrix, render
 from kvasir.research.text import names
-from kvasir.runners import build_checker, build_research_models, build_research_tools
+from kvasir.runners import (
+    build_checker,
+    build_research_models,
+    build_research_tools,
+    build_sources,
+)
 from kvasir.runs.progress import ASSESS, BACKGROUND, BRIEF, RESEARCH, VERIFY, WRITE, ProgressStream
 from kvasir.runs.run import record_questions
 from kvasir.schemas.requests import Input, LedgerOptions
@@ -84,6 +89,7 @@ def run_research(
     if checker is not None and options.ground_intake:
         models["ground_intake"] = checker
     encoder, searxng = build_research_tools(settings)
+    sources = build_sources(settings)
     budget = _setting(options.max_searches, settings.research.max_searches)
     per_query = _setting(options.results_per_query, settings.research.results_per_query)
     attempts = _setting(options.max_attempts, settings.research.max_attempts)
@@ -104,7 +110,7 @@ def run_research(
     brief: str = framed.brief
     output = options.output or framed.output
     seen: set[str] = set()
-    corpus = Corpus(fetch.cache(), encoder.embedding_model_name, options.recall_past_runs)
+    corpus = Corpus(fetch.cache(), encoder.embedding_model_name, options.recall_past_runs, sources)
     fetch.use_max_age(options.max_age_hours)
 
     # Named in the question, they are final; the options override even those. The
@@ -126,6 +132,7 @@ def run_research(
             _setting(options.max_entities, settings.research.max_entities),
             per_query,
             stream,
+            sources,
         )
         if not (criteria and entities):
             stream.publish(BACKGROUND, "found nothing to compare, so writing a report instead")
@@ -152,6 +159,7 @@ def run_research(
             add_questions(encoder, ledger, untitled, question)
 
     searched = 0
+    rows: list[Row] = []
 
     def research(
         questions: list[Question],
@@ -184,14 +192,13 @@ def run_research(
             # A repair's questions are not the ledger's, and are not shown among them.
             ledger=ledger if stage == RESEARCH else None,
         )
+        # After every pass, since a late answer may turn a site read earlier into an `avoid` one;
+        # the cells of `rows` are scrubbed too, as filling comes after they are built.
+        loop.purge(encoder, brief, frontier, corpus, [*ledger, *questions], claims, stream, rows)
 
     # Only the first pass: filling cells and repairing sentences search for set questions.
-    research(
-        ledger,
-        budget,
-        check,
-        frontier=Frontier(encoder, brief, claims) if options.frontier == "worth" else None,
-    )
+    frontier = Frontier(encoder, brief, claims) if options.frontier == "worth" else None
+    research(ledger, budget, check, frontier=frontier)
 
     if not claims:
         # Writing sections from no evidence only produces paragraphs saying there is none.
@@ -206,7 +213,6 @@ def run_research(
             duration_seconds=round(time.monotonic() - started, 1),
         )
 
-    rows: list[Row] = []
     cells_removed: list[RemovedSentence] = []
     cells_unverified: list[UnverifiedSentence] = []
     if output != "report":
@@ -266,6 +272,9 @@ def run_research(
 
     by_id = {claim.id: claim for claim in claims}
     report, citations = render(checked.sections, by_id, summary)
+    low_trust = verify.low_trust(
+        [(SUMMARY, summary), *checked.sections], by_id, corpus.low_trust(claims)
+    )
     return ResearchResult(
         report=report,
         assumptions=list(framed.assumptions),
@@ -275,6 +284,7 @@ def run_research(
         removed=checked.removed,
         revised=checked.revised,
         unverified=checked.unverified,
+        low_trust=low_trust,
         output=output,
         criteria=criteria if rows else [],
         matrix=rows,

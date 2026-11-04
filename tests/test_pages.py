@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import Stream, Vectors
+from fakes import Stream, Tiers, Vectors
 from kvasir.methods.ledger.loop import research
 from kvasir.methods.ledger.questions import Question
 from kvasir.research import fetch
@@ -428,3 +428,24 @@ def test_a_max_age_set_in_one_context_does_not_reach_another(web, store):
     fetch.fetch_page(URL)
 
     assert len(web.requests) == 1
+
+
+def test_a_cached_piece_of_an_avoid_site_is_never_recalled(store):
+    for url in ("https://bad.org/x", "https://a.org/x"):
+        store.put(page(url), None, None)
+        kept(store, url, ["the stone was found in 1904"])
+    encoder = Vectors({"stone found": [1.0, 0.0]})
+
+    recalled = Corpus(store, "m", sources=Tiers(bad_org="avoid")).recall(encoder, "stone found")
+
+    assert [p.url for p, _ in recalled] == ["https://a.org/x"]
+    assert [p.url for p, _, _ in store.search("stone", "m", [], exclude_hosts=["bad.org"])] == [
+        "https://a.org/x"
+    ]
+
+
+def test_a_piece_of_an_avoid_site_in_the_run_is_never_recalled(store):
+    corpus = kept(store, "https://bad.org/x", ["the stone was found"])
+    corpus.sources = Tiers(bad_org="avoid")
+
+    assert corpus.recall(Vectors({"stone": [1.0, 0.0]}), "stone") == []

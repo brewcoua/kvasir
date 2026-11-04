@@ -6,7 +6,7 @@ import httpx
 import numpy as np
 import pytest
 
-from fakes import Search, Stream, Vectors, claim
+from fakes import Search, Stream, Tiers, Vectors, claim
 from kvasir.research import fetch
 from kvasir.research import read as reading
 from kvasir.research.claims import Claim
@@ -411,3 +411,94 @@ def test_a_run_makes_no_more_than_the_site_searches():
     found = [corpus.site_query(i, "when", claims) for i in range(SITE_SEARCHES + 1)]
 
     assert all(found[:SITE_SEARCHES]) and found[SITE_SEARCHES] is None
+
+
+def test_a_result_of_an_avoid_site_is_never_fetched_even_when_it_is_the_only_one(monkeypatch):
+    web = Web(monkeypatch, page("https://bad.org/x"))
+    corpus = Corpus(sources=Tiers(bad_org="avoid"))
+
+    picked = search(
+        Search([result("https://bad.org/x")]),
+        ["q"],
+        1,
+        set(),
+        Keyword(),
+        QUESTION,
+        corpus=corpus,
+        sources=corpus.sources,
+    )
+    read(None, Keyword(), "brief", QUESTION, picked, 1, 1, "s", Stream(), corpus)
+
+    assert picked == [] and web.fetched == []
+
+
+def test_a_lead_of_an_avoid_site_is_never_fetched(monkeypatch):
+    start = page(
+        "https://a.org/start",
+        [link("https://bad.org/stone", "The stone found"), link("https://b.org/stone", "stone")],
+    )
+    web = Web(monkeypatch, start, page("https://bad.org/stone"), page("https://b.org/stone"))
+    corpus = Corpus(sources=Tiers(bad_org="avoid"))
+    follow(corpus, [result(start.url)])
+
+    found = corpus.leads_for(Keyword(), QUESTION, None, [], set(), 5)
+
+    assert [hit["url"] for hit in found] == ["https://b.org/stone"]
+    assert "https://bad.org/stone" not in web.fetched
+
+
+def test_a_lead_of_a_trusted_site_outranks_an_otherwise_equal_one():
+    corpus = Corpus(sources=Tiers(b_org="high", d_org="low"))
+    for site in ("b.org", "c.org", "d.org"):
+        corpus.add_leads(
+            Keyword(), page("https://a.org/x", [link(f"https://{site}/1", "stone")]), 1
+        )
+
+    found = corpus.leads_for(Keyword(), QUESTION, None, [], set(), 3)
+
+    assert [hit["url"] for hit in found] == [
+        "https://b.org/1",
+        "https://c.org/1",
+        "https://d.org/1",
+    ]
+
+
+def corroborated(site, by_site):
+    """A claim of `site` that a claim of `by_site` corroborates, and that claim."""
+    claims = [claim(1, f"https://{site}/1"), claim(2, f"https://{by_site}/1")]
+    claims[0].corroborated_by = [2]
+    return claims
+
+
+def test_a_corroboration_counts_by_the_tier_of_the_site_that_made_it():
+    sources = Tiers(good_org="high", low_org="low", bad_org="avoid")
+    corpus = Corpus(sources=sources)
+    corpus.pages["a.org"] = 1
+
+    def affinity(by_site):
+        return corpus._affinity(corroborated("a.org", by_site)).get("a.org", 0.0)
+
+    assert [affinity(s) for s in ("good.org", "other.org", "low.org", "bad.org")] == [
+        1.0,
+        0.5,
+        0.25,
+        0.0,
+    ]
+
+
+def test_a_site_search_is_refused_for_a_site_that_is_not_high_or_normal():
+    claims = [*confirmed("a.org", 2), claim(99, "https://b.org/1")]
+    for tier, searched in (("high", True), ("normal", True), ("unknown", False), ("low", False)):
+        corpus = Corpus(sources=Tiers(a_org=tier, b_org="high"))
+        corpus.pages["a.org"] = 2
+
+        assert bool(corpus.site_query(1, "when", claims)) is searched
+
+
+def test_the_old_behaviour_holds_without_a_classifier():
+    corpus = Corpus()
+    corpus.pages["a.org"] = 1
+
+    assert corpus.sources is None
+    assert corpus.site_query(1, "when", confirmed("a.org", 2)) == "site:a.org when"
+    assert corpus._affinity(corroborated("a.org", "b.org")) == {"a.org": 1.0}

@@ -99,6 +99,13 @@ class UnverifiedSentence(BaseModel):
     reason: str
 
 
+class LowTrustSentence(BaseModel):
+    """A sentence whose cited claims all come from sites of low trust, left in the report."""
+
+    section: str
+    sentence: str
+
+
 class Criterion(BaseModel):
     """What a ranking or a table compares on, and how much it counts in the overall rank."""
 
@@ -141,6 +148,7 @@ class ResearchResult(BaseModel):
     removed: list[RemovedSentence] = []
     revised: list[RevisedSentence] = []
     unverified: list[UnverifiedSentence] = []
+    low_trust: list[LowTrustSentence] = []
     output: Output = "report"
     criteria: list[Criterion] = []
     # Best first for a ranking. Empty for a report.
