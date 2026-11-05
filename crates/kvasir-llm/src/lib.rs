@@ -3,6 +3,7 @@
 
 pub mod adapter;
 pub mod gateway;
+mod macros;
 pub mod roles;
 pub mod shape;
 pub mod signature;

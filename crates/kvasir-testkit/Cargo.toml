@@ -9,6 +9,8 @@ publish.workspace = true
 [dependencies]
 kvasir-config.workspace = true
 kvasir-llm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -1798,6 +1798,8 @@ version = "0.0.0"
 dependencies = [
  "kvasir-config",
  "kvasir-llm",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

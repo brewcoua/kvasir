@@ -132,6 +132,11 @@ pub fn literal_name(values: &[&str]) -> String {
     format!("Literal[{}]", quoted.join(", "))
 }
 
+/// `value` if it is one of `values`, as a `Literal` of strings reads it.
+pub fn exact(values: &[&str], value: &Value) -> Option<Value> {
+    values.iter().any(|v| value == *v).then(|| value.clone())
+}
+
 /// pydantic's schema for a `Literal` of strings.
 pub fn literal_schema(values: &[&str]) -> Value {
     json!({"enum": values, "type": "string"})
@@ -326,3 +331,6 @@ mod tests {
         assert_eq!(String::lax(&json!(1)), None);
     }
 }
+
+const CONFIDENCES: &[&str] = &["high", "medium", "low"];
+crate::choice!(kvasir_types::results::Confidence, CONFIDENCES, |v: &Value| exact(CONFIDENCES, v));

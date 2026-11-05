@@ -1,4 +1,7 @@
-//! Stand-ins for the services kvasir calls, for tests: a scripted language model.
+//! Stand-ins for the services kvasir calls, for tests: a scripted language model, and the golden
+//! check of a signature.
+
+pub mod golden;
 
 use std::sync::Mutex;
 
