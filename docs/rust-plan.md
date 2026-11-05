@@ -1,6 +1,6 @@
 # Rust migration: plan
 
-Status: phase 0 done in Python. No Rust is written yet. Written 2026-11-05 against commit `b34fd37`.
+Status: phase 0 done in Python, phase 1 passed. No Rust outside scratch spikes yet. Written 2026-11-05 against commit `b34fd37`.
 
 kvasir is one Python process. Its work is blocking, because dspy, litellm and the STORM fork are
 synchronous, so a run is a thread with nested thread pools under an asyncio server. This plan
@@ -230,7 +230,7 @@ one `evaluate`, close. It uses no init scripts, bindings, locators or shadow roo
 | Remove `--enable-automation`. It is in `DEFAULT_ARGS`. | Yes | Config: `disable_default_args()`, then pass our own list. |
 | Add `--disable-blink-features=AutomationControlled`. | Yes | Config: `arg()`. |
 | Remove `--disable-popup-blocking`, `--disable-component-update`, `--disable-default-apps`, `--disable-extensions`. | Yes | Config: left out of our list. |
-| Do not call `Runtime.enable`. | Yes | **Not config.** `FrameManager::init_commands` includes it and `Target::poll` runs it on attach. Spike 3. |
+| Do not call `Runtime.enable`. | Yes | **Not config.** `FrameManager::init_commands` sends it on attach. Send `Runtime.disable` after attach and before navigating (spike 3). |
 | Evaluate in an isolated world. | Yes, for `_CLEAN` | `Page.createIsolatedWorld`, then `Runtime.evaluate` with its context id. Reading and removing DOM nodes works from there. |
 | Disable the Console API. | Only if sent | Attach does not visibly send `Console.enable`. `Log.enable` is hardcoded. Check in spike 3. |
 | Inject init scripts through routes. | No | Not used. |
@@ -452,6 +452,34 @@ descriptions, JSON Schema text exported from pydantic) and rebuilt dspy 3.3's pr
   matched lax coercion for the types the signatures use: strings, integers, booleans, literals, lists
   and objects.
 
+#### Spike 3 result: pass, with `Runtime.disable`
+
+Run on 2026-11-05 with Chromium 156 for every library, headless, `--site-per-process`.
+
+The probe the plan named, a `console.debug` of an `Error` with a `stack` getter, never fired, even
+under stock Playwright. Neither did getters on other properties, a `Proxy`, or
+`Error.prepareStackTrace`. Getters on `message` and `name` fired with no CDP client attached, so they
+are Chromium's own console formatting, not a signal. What does tell: 50 `console.debug` calls on an
+array of 200,000 objects. With `Runtime.enable` the protocol serializes each, and the page can time
+it.
+
+| Client | Top page | Cross-origin frame |
+| --- | --- | --- |
+| No CDP client (`chromium --dump-dom`) | 0.0 ms | not reported |
+| Playwright | 308.5 ms | 302.3 ms |
+| Patchright | 0.3 ms | 0.2 ms |
+| `chromiumoxide` 0.9.1, stock | 305.1 ms | 0.1 ms |
+| `chromiumoxide` 0.9.1, `Runtime.disable` after attach, before `goto` | 0.2 ms | 0.2 ms |
+
+- No fork is needed. Option (c) was not built.
+- The frame stays clean even in stock `chromiumoxide` because it does not attach to out-of-process
+  frames. `_CLEAN` reads only the top document, as it does under Patchright.
+- `_CLEAN` ran in a `Page.createIsolatedWorld` context through `Runtime.evaluate`, with requests
+  filtered through `Fetch.requestPaused` and a 1280x720 viewport, Playwright's default. Its HTML was
+  identical to Patchright's on 13 of 13 fixtures in `tests/fixtures/pages/`.
+- `Log.enable` is still sent on attach. The probe does not see it.
+- One timing probe on a local page is evidence, not proof. No real anti-bot vendor was tested.
+
 ### Phase 2: foundation
 
 Build `kvasir-types`, `-config`, `-db`, `-llm`, `-testkit`, with CI: `cargo fmt --check`,
@@ -538,11 +566,6 @@ current method name, so a typed `kind` must still accept it. Test against copies
 
 ## Not verified
 
-- `chromiumoxide`: `Page.execute` with raw commands, `Runtime.evaluate` with an isolated context id,
-  and that no other attach step sends `Console.enable` or `Runtime.enable`. Read from the `main` branch
-  via excerpts, not by running it.
-- The `console.debug` probe in spike 3 is recalled, not sourced. Check it fires against stock
-  Playwright first.
 - `rusqlite` `bundled` including FTS5 and JSON functions. Phase 2 opens the real `pages.db`.
 - `psl` private-suffix behaviour against `tld`.
 - `utoipa` 6: OpenAPI version emitted, tagged enum output, and `openapi-typescript` results.
