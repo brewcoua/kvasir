@@ -192,3 +192,66 @@ def test_a_section_query_against_nothing_collected_retrieves_nothing():
     table.prepare_table_for_retrieval(_Encoder())
 
     assert table.retrieve_information("History", search_top_k=3) == []
+
+
+PUBLIC = "http://93.184.216.34"
+METADATA = "http://169.254.169.254/latest/meta-data"
+
+
+def _wiki_answers(monkeypatch, answers):
+    """Stands in for the network, and records what was asked of it."""
+    import httpx
+
+    from kvasir.storm.storm_wiki.modules import persona_generator
+
+    asked = []
+
+    def get(url, **kwargs):
+        asked.append(url)
+        assert not kwargs.get("follow_redirects"), "a hop must not skip the check"
+        status, headers = answers[url]
+        return httpx.Response(status, headers=headers, text="<h1>Title</h1><h2>Section</h2>")
+
+    monkeypatch.setattr(persona_generator.httpx, "get", get)
+    return persona_generator.get_wiki_page_title_and_toc, asked
+
+
+@pytest.mark.parametrize(
+    "url",
+    [METADATA, "http://127.0.0.1:8080/v1/settings", "http://[::1]/", "file:///etc/passwd"],
+)
+def test_a_url_the_model_chose_must_be_public(monkeypatch, url):
+    read, asked = _wiki_answers(monkeypatch, {})
+
+    with pytest.raises(ValueError, match="not a public URL"):
+        read(url)
+
+    assert asked == []
+
+
+def test_a_redirect_to_a_private_address_is_not_followed(monkeypatch):
+    read, asked = _wiki_answers(monkeypatch, {f"{PUBLIC}/a": (302, {"location": METADATA})})
+
+    with pytest.raises(ValueError, match="not a public URL"):
+        read(f"{PUBLIC}/a")
+
+    assert asked == [f"{PUBLIC}/a"]
+
+
+def test_a_redirect_between_public_pages_is_followed(monkeypatch):
+    read, asked = _wiki_answers(
+        monkeypatch,
+        {f"{PUBLIC}/wiki/a": (301, {"location": "/wiki/b"}), f"{PUBLIC}/wiki/b": (200, {})},
+    )
+
+    assert read(f"{PUBLIC}/wiki/a") == ("Title", "Section")
+    assert asked == [f"{PUBLIC}/wiki/a", f"{PUBLIC}/wiki/b"]
+
+
+def test_redirects_stop_at_a_limit(monkeypatch):
+    read, asked = _wiki_answers(monkeypatch, {f"{PUBLIC}/a": (302, {"location": "/a"})})
+
+    with pytest.raises(ValueError, match="too many redirects"):
+        read(f"{PUBLIC}/a")
+
+    assert len(asked) == 6

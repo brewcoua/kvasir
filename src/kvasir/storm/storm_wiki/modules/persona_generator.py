@@ -1,15 +1,33 @@
 import logging
 from typing import List
+from urllib.parse import urljoin, urlsplit
 
 import dspy
 import httpx
 from bs4 import BeautifulSoup
 
+from kvasir.research.fetch import public
+
+MAX_REDIRECTS = 5
+
+
+def _get_public(url):
+    """The model chooses this URL, so neither it nor a redirect may reach this service's network."""
+    for _ in range(MAX_REDIRECTS + 1):
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or not public(parts.hostname or ""):
+            raise ValueError(f"not a public URL: {url}")
+        response = httpx.get(url, timeout=30.0)
+        if not response.has_redirect_location:
+            return response
+        url = urljoin(url, response.headers["location"])
+    raise ValueError(f"too many redirects: {url}")
+
 
 def get_wiki_page_title_and_toc(url):
     """Get the main title and table of contents from an url of a Wikipedia page."""
 
-    response = httpx.get(url, timeout=30.0, follow_redirects=True)
+    response = _get_public(url)
     soup = BeautifulSoup(response.content, "html.parser")
 
     # Get the main title from the first h1 tag

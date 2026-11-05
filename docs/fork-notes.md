@@ -229,6 +229,13 @@ succeeded.
   table's `(0, 0)` embedding failed the similarity product and with it the run. It returns no
   information, and the section is written without any.
 
+## A related page's URL must be public
+
+`get_wiki_page_title_and_toc` fetched whatever URLs the model named, following redirects, so a page
+or a topic that steered the model could point it at the service's own network. Each hop now goes
+through `kvasir.research.fetch.public`, with redirects followed by hand. This is the one import from
+this tree into the rest of kvasir: the check has to be the same one the pipeline uses.
+
 ## Upstream behaviour kvasir relies on
 
 These are unchanged, and are the parts of upstream's shape that kvasir's own code is written
