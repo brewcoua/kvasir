@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05; Co-STORM citations (`conversation.py`) carry no source.
+Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05; phase 7 waits on research. Co-STORM citations (`conversation.py`) carry no source.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
@@ -313,6 +313,42 @@ the share of claims from `unknown` sites, `avoid` pages fetched (must be 0), cla
 The last phase also adds `docs/research.md` a "Source trust" section that owns the tier table and
 the resolution order, links it from `README.md`, and sets this page's status line.
 
+### Phase 7: a local content-farm dataset (research first)
+
+Added 2026-11-05 after a live `graph` run ("How do heat pumps keep working in very cold
+climates?", run `19b318512fb2`): 21 of its 38 citations were `unknown`, among them
+`pickcomfort.com` (3), `hvacbase.org`, `energybs.com`, `hvaclaboratory.com` and
+`hvac-system-guide.contentwave.net`. No list or Wikidata item names them, so only a mark or
+`deny` stops them today.
+
+Research, handed to a separate agent; nothing below it is built until its report is in:
+
+1. CRED-1 ([arXiv:2604.20856](https://arxiv.org/abs/2604.20856)): how its dataset was built. The
+   signals, how domains were labelled, the label set and its mapping to our tags, how it is kept
+   current, its size and coverage of long-tail farms, and its license.
+2. Other blocklists and ratings of domains: content farms, SEO spam, AI-generated sites, low
+   quality news. For each: size, license, last update, format, false positives on real sites, and
+   whether it may be downloaded at runtime or shipped. The CISA list and the excluded HUGE AI
+   blocklist (see the design rules) need no second look.
+3. Which of CRED-1's signals kvasir could compute locally from what it already has (pages in
+   `pages.db`, search results, claims, corroboration, Wikidata, the lists), and which need an
+   outside fetch (RDAP domain age, DNS, a site's sitemap). Cost per domain for each.
+4. Whether the dataset should score only sites kvasir has met, or also crawl outward, and how a
+   score turns into `content_farm` without demoting a real small site.
+
+Build, once the research settles it; one commit per step:
+
+1. A background job builds a local dataset in `sources.db` from the signals chosen in step 3 of
+   the research. It reruns on a schedule and on new sites met in runs, never blocks a search, and
+   writes `content_farm` (or a new tag) with the evidence behind it. It is optional, off by default,
+   and effective only with `enabled`, like `rsp`. It must not read an `avoid` site to score it.
+2. Downloaded datasets the research clears join `lists`, with any new label added to `LIST_TAGS`.
+3. A tags endpoint, for other uses than a run: `GET /v1/sources/tags?host=a.com&host=b.org` and
+   `POST /v1/sources/tags` with `{"hosts": [...]}` for a bulk, answering `{host: {kind, tags,
+   tier}}` from what is known, without waiting on Wikidata. It sits next to `GET
+   /v1/sources/{host}` in `api/sources.py`, and answers 404 when `enabled` is false like the others.
+4. Phase 6 runs again with the dataset on, and compares the share of `unknown` citations.
+
 ## Decisions
 
 Settled 2026-11-04:
@@ -322,4 +358,5 @@ Settled 2026-11-04:
 - A site can be marked both from the Knowledge page and through `allow` and `deny` in the config;
   the config wins.
 
-Nothing is open.
+Open, for phase 7: which signals and datasets to use, whether the dataset only scores sites a run
+met, and the bulk limit of the tags endpoint.
