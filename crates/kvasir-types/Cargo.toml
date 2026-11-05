@@ -8,8 +8,10 @@ publish.workspace = true
 
 [dependencies]
 idna.workspace = true
+indexmap.workspace = true
 psl.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

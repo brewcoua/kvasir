@@ -1493,6 +1493,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1749,6 +1751,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "kvasir-run"
+version = "0.0.0"
+dependencies = [
+ "indexmap",
+ "kvasir-config",
+ "kvasir-db",
+ "kvasir-llm",
+ "kvasir-types",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "kvasir-sites"
 version = "0.0.0"
 dependencies = [
@@ -1785,8 +1805,10 @@ name = "kvasir-types"
 version = "0.0.0"
 dependencies = [
  "idna",
+ "indexmap",
  "psl",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

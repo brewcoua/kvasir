@@ -15,6 +15,7 @@ kvasir-db = { path = "crates/kvasir-db" }
 kvasir-extract = { path = "crates/kvasir-extract" }
 kvasir-fetch = { path = "crates/kvasir-fetch" }
 kvasir-llm = { path = "crates/kvasir-llm" }
+kvasir-run = { path = "crates/kvasir-run" }
 kvasir-sites = { path = "crates/kvasir-sites" }
 kvasir-testkit = { path = "crates/kvasir-testkit" }
 kvasir-types = { path = "crates/kvasir-types" }
@@ -29,6 +30,7 @@ encoding_rs = "0.8"
 futures = "0.3"
 httpdate = "1"
 idna = "1.1"
+indexmap = { version = "2", features = ["serde"] }
 pdf_oxide = "0.3.78"
 psl = "2"
 regex = "1"
@@ -46,6 +48,7 @@ toml = "1"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
 url = "2.5"
+uuid = { version = "1", features = ["v4"] }
 wiremock = "0.6"
 
 [workspace.lints.rust]

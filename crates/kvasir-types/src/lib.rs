@@ -1,5 +1,9 @@
 //! Types and small pure functions shared by every kvasir crate.
 
+pub mod pages;
+pub mod requests;
+pub mod results;
+pub mod runs;
 pub mod sites;
 
 /// `text` cut as Python's `str.splitlines` cuts it, which more than a newline breaks.
