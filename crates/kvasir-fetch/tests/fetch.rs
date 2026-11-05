@@ -1,11 +1,11 @@
-//! Reading pages from a local site, with the address check off since the site is on 127.0.0.1.
+//! Reading pages from a local site, with the guard letting the site on 127.0.0.1 through.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use kvasir_browser::{BoxFuture, Render, RenderError, Rendered};
-use kvasir_fetch::{Engine, FetchError, Options, Web, system_lookup};
+use kvasir_fetch::{Engine, FetchError, Guard, Options, Web, system_lookup};
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -20,7 +20,7 @@ fn options() -> Options {
 }
 
 fn web() -> Web {
-    Web::new(options(), 8, false, system_lookup())
+    Web::new(options(), 8, Guard::Loopback, system_lookup())
 }
 
 fn fixture(name: &str) -> String {
@@ -96,7 +96,7 @@ async fn a_shell_or_a_blocked_page_is_rendered() {
 async fn a_blocked_page_is_rendered_after_its_permit_is_released() {
     let server = site(ResponseTemplate::new(403)).await;
     // One permit in all: a render taking its own while the fetch held it would never start.
-    let web = Web::new(options(), 1, false, system_lookup());
+    let web = Web::new(options(), 1, Guard::Loopback, system_lookup());
     web.set_renderer(Some(FakeBrowser::answering(article(), 200)));
 
     let url = server.uri();

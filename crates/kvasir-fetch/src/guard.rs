@@ -3,6 +3,7 @@
 //! The check runs where the connection is made: a resolver that hands the client only public
 //! addresses, so a name cannot resolve publicly when checked and privately when connected to. A
 //! literal address skips any resolver, so URLs are checked for those, on every redirect too.
+//! Every request runs through this; only an operator's own `custom` favicon service skips it.
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -91,28 +92,43 @@ fn is_public_v6(address: Ipv6Addr) -> bool {
     !NOT_PUBLIC.iter().any(|(network, size)| inside(*network, *size))
 }
 
-/// Whether a URL may be asked at all: http or https, and no literal private address.
-pub fn url_allowed(url: &Url) -> bool {
-    matches!(url.scheme(), "http" | "https")
-        && match url.host() {
-            Some(Host::Ipv4(v4)) => is_public_v4(v4),
-            Some(Host::Ipv6(v6)) => is_public_v6(v6),
-            Some(Host::Domain(_)) => true,
-            None => false,
-        }
+/// Which addresses may be reached.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Guard {
+    /// The public internet only.
+    Public,
+    /// That and this machine, for a test's fake sites. Every other private address stays refused.
+    Loopback,
+}
+
+impl Guard {
+    pub fn allows(self, address: IpAddr) -> bool {
+        is_public(address) || (self == Self::Loopback && address.is_loopback())
+    }
+
+    /// Whether a URL may be asked at all: http or https, and no literal private address.
+    pub fn allows_url(self, url: &Url) -> bool {
+        matches!(url.scheme(), "http" | "https")
+            && match url.host() {
+                Some(Host::Ipv4(v4)) => self.allows(v4.into()),
+                Some(Host::Ipv6(v6)) => self.allows(v6.into()),
+                Some(Host::Domain(_)) => true,
+                None => false,
+            }
+    }
 }
 
 /// A resolver that answers only when every address of the name is public, as one private address
 /// among public ones is how a name is pointed at a private network.
-pub struct PublicResolver(pub Lookup);
+pub struct GuardedResolver(pub Lookup, pub Guard);
 
-impl Resolve for PublicResolver {
+impl Resolve for GuardedResolver {
     fn resolve(&self, name: Name) -> Resolving {
-        let lookup = Arc::clone(&self.0);
+        let (lookup, guard) = (Arc::clone(&self.0), self.1);
         Box::pin(async move {
             let host = name.as_str().to_owned();
             let found = lookup(host.clone()).await?;
-            if found.is_empty() || !found.iter().copied().all(is_public) {
+            if found.is_empty() || !found.iter().all(|address| guard.allows(*address)) {
                 let refused = format!("{host} is not on the public internet");
                 return Err(io::Error::new(io::ErrorKind::PermissionDenied, refused).into());
             }

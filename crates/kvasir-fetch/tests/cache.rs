@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use kvasir_db::rusqlite::Connection;
 use kvasir_extract::{Link, Region};
-use kvasir_fetch::{Engine, FetchError, Options, Page, PageStore, Web, system_lookup};
+use kvasir_fetch::{Engine, FetchError, Guard, Options, Page, PageStore, Web, system_lookup};
 use tempfile::TempDir;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockGuard, MockServer, ResponseTemplate};
@@ -47,7 +47,7 @@ impl Setting {
             stealth: false,
             max_age_hours: 48,
         };
-        let web = Web::new(options, 8, false, system_lookup());
+        let web = Web::new(options, 8, Guard::Loopback, system_lookup());
         web.set_cache(Some(store.clone()));
         let url = format!("{}/a", server.uri());
         Self { server, web, store, url, dir }

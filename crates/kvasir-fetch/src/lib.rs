@@ -20,7 +20,7 @@ mod polite;
 mod robots;
 mod store;
 
-pub use guard::{Lookup, PublicResolver, is_public, system_lookup, url_allowed};
+pub use guard::{Guard, GuardedResolver, Lookup, is_public, system_lookup};
 pub use polite::{HOST_CONCURRENCY, Politeness, Slot};
 pub use robots::Robots;
 pub use store::{Cached, Found, PageStore, Row, Stats, domain, page_id};
@@ -116,12 +116,14 @@ pub struct Options {
 
 /// How the service reaches the web.
 pub struct Web {
-    guarded: bool,
+    guard: Guard,
     lookup: Lookup,
     // Follows redirects, checking each hop.
     pages: Client,
     // Follows none, for whoever walks them by hand.
     single: Client,
+    // Follows none and checks nothing.
+    unguarded: Client,
     polite: Politeness,
     options: ArcSwap<Options>,
     cache: ArcSwap<Option<PageStore>>,
@@ -130,10 +132,10 @@ pub struct Web {
     robots: Mutex<HashMap<String, (Option<Robots>, Instant)>>,
 }
 
-fn redirect(attempt: Attempt, guarded: bool) -> reqwest::redirect::Action {
+fn redirect(attempt: Attempt, guard: Guard) -> reqwest::redirect::Action {
     if attempt.previous().len() >= MAX_REDIRECTS {
         attempt.error("too many redirects")
-    } else if guarded && !url_allowed(attempt.url()) {
+    } else if !guard.allows_url(attempt.url()) {
         let refused = format!("redirect to {} refused", attempt.url());
         attempt.error(refused)
     } else {
@@ -141,7 +143,7 @@ fn redirect(attempt: Attempt, guarded: bool) -> reqwest::redirect::Action {
     }
 }
 
-fn client(policy: Policy, resolver: Option<Lookup>) -> Client {
+fn client(policy: Policy, resolver: Option<GuardedResolver>) -> Client {
     // A proxy would resolve names itself, out of reach of the resolver.
     let client = Client::builder()
         .redirect(policy)
@@ -150,26 +152,23 @@ fn client(policy: Policy, resolver: Option<Lookup>) -> Client {
         .timeout(TOTAL_TIMEOUT)
         .no_proxy();
     let client = match resolver {
-        Some(lookup) => client.dns_resolver(Arc::new(PublicResolver(lookup))),
+        Some(resolver) => client.dns_resolver(Arc::new(resolver)),
         None => client,
     };
     client.build().expect("the TLS backend starts")
 }
 
 impl Web {
-    /// `permits` caps the requests the process has open. Past `guarded`, only the contract tests'
-    /// fake sites on 127.0.0.1 go.
-    pub fn new(options: Options, permits: usize, guarded: bool, lookup: Lookup) -> Self {
-        let resolver = guarded.then(|| Arc::clone(&lookup));
+    /// `permits` caps the requests the process has open.
+    pub fn new(options: Options, permits: usize, guard: Guard, lookup: Lookup) -> Self {
+        let resolver = || Some(GuardedResolver(Arc::clone(&lookup), guard));
         let pdf_reader = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("kvasir"));
         Self {
-            guarded,
+            guard,
             lookup: Arc::clone(&lookup),
-            pages: client(
-                Policy::custom(move |attempt| redirect(attempt, guarded)),
-                resolver.clone(),
-            ),
-            single: client(Policy::none(), resolver),
+            pages: client(Policy::custom(move |attempt| redirect(attempt, guard)), resolver()),
+            single: client(Policy::none(), resolver()),
+            unguarded: client(Policy::none(), None),
             polite: Politeness::new(permits),
             options: ArcSwap::from_pointee(options),
             cache: ArcSwap::from_pointee(None),
@@ -211,30 +210,33 @@ impl Web {
         &self.single
     }
 
-    /// Whether this process is checking addresses at all.
-    pub fn guarded(&self) -> bool {
-        self.guarded
+    /// A client that follows no redirect and checks no address, for what the operator configured,
+    /// which may be on their own network. Never for a URL that came from a page.
+    pub fn unguarded(&self) -> &Client {
+        &self.unguarded
+    }
+
+    /// Which addresses this process may reach.
+    pub fn guard(&self) -> Guard {
+        self.guard
     }
 
     /// The check a browser makes of each request a page sends. A browser does its own resolving, so
     /// the name is resolved here, before it does.
     pub fn page_check(&self) -> Arc<dyn Fn(String) -> BoxFuture<'static, bool> + Send + Sync> {
-        let (guarded, lookup) = (self.guarded, Arc::clone(&self.lookup));
+        let (guard, lookup) = (self.guard, Arc::clone(&self.lookup));
         Arc::new(move |url| {
             let lookup = Arc::clone(&lookup);
             Box::pin(async move {
-                if !guarded {
-                    return true;
-                }
-                let Some(parsed) = Url::parse(&url).ok().filter(url_allowed) else {
+                let Some(parsed) = Url::parse(&url).ok().filter(|url| guard.allows_url(url)) else {
                     return false;
                 };
                 let Some(Host::Domain(name)) = parsed.host() else {
                     return true;
                 };
-                lookup(name.to_owned())
-                    .await
-                    .is_ok_and(|found| !found.is_empty() && found.into_iter().all(is_public))
+                lookup(name.to_owned()).await.is_ok_and(|found| {
+                    !found.is_empty() && found.into_iter().all(|ip| guard.allows(ip))
+                })
             })
         })
     }
@@ -257,17 +259,19 @@ impl Web {
 
     /// Whether every address `host` resolves to is on the public internet.
     pub async fn public(&self, host: &str) -> bool {
-        if !self.guarded {
-            return true;
-        }
         let bare = host.trim_start_matches('[').trim_end_matches(']');
         if let Ok(address) = bare.parse() {
-            return is_public(address);
+            return self.guard.allows(address);
         }
         match (self.lookup)(host.to_owned()).await {
-            Ok(found) => !found.is_empty() && found.into_iter().all(is_public),
+            Ok(found) => !found.is_empty() && found.into_iter().all(|ip| self.guard.allows(ip)),
             Err(_) => false,
         }
+    }
+
+    /// Whether `host` resolves at all, private or not.
+    pub async fn resolves(&self, host: &str) -> bool {
+        (self.lookup)(host.to_owned()).await.is_ok_and(|found| !found.is_empty())
     }
 
     /// Whether a lead may be read: its host is public, and the robots.txt of its site lets this
@@ -325,7 +329,7 @@ impl Web {
             }
             let location = got.headers().get(header::LOCATION)?.to_str().ok()?;
             url = url.join(location).ok()?;
-            if self.guarded && !url_allowed(&url) {
+            if !self.guard.allows_url(&url) {
                 return None;
             }
         }
@@ -400,7 +404,7 @@ impl Web {
     ) -> Result<Option<Downloaded>, FetchError> {
         let failed = |reason: String| FetchError::Failed(format!("{url}: {reason}"));
         let parsed = Url::parse(url).map_err(|e| failed(e.to_string()))?;
-        if self.guarded && !url_allowed(&parsed) {
+        if !self.guard.allows_url(&parsed) {
             return Err(failed("not on the public internet".to_owned()));
         }
         // The host asked is the one in the URL; a redirect to another is not counted against it.
@@ -647,8 +651,8 @@ mod tests {
         Mock::given(any()).respond_with(redirecting_to(&secret)).expect(1).mount(&site).await;
 
         let refused = client(
-            Policy::custom(|attempt| redirect(attempt, true)),
-            Some(resolving_to("1.1.1.1")),
+            Policy::custom(|attempt| redirect(attempt, Guard::Public)),
+            Some(GuardedResolver(resolving_to("1.1.1.1"), Guard::Public)),
         )
         .get(format!("{}/start", site.uri()))
         .send()
@@ -666,8 +670,8 @@ mod tests {
         Mock::given(any()).respond_with(ResponseTemplate::new(200)).expect(0).mount(&second).await;
 
         let refused = client(
-            Policy::custom(|attempt| redirect(attempt, true)),
-            Some(resolving_to("127.0.0.1")),
+            Policy::custom(|attempt| redirect(attempt, Guard::Public)),
+            Some(GuardedResolver(resolving_to("127.0.0.1"), Guard::Public)),
         )
         .get(first.uri())
         .send()
@@ -692,7 +696,7 @@ mod tests {
         let location = format!("{}/robots.txt", second.uri());
         Mock::given(any()).respond_with(redirecting_to(&location)).mount(&first).await;
         Mock::given(any()).respond_with(ResponseTemplate::new(200)).expect(0).mount(&second).await;
-        let web = Web::new(options(), 4, true, resolving_to("1.1.1.1"));
+        let web = Web::new(options(), 4, Guard::Public, resolving_to("1.1.1.1"));
 
         assert_eq!(web.read_robots(&first.uri(), "127.0.0.1").await, None);
     }
@@ -706,7 +710,7 @@ mod tests {
             let answer = answers.lock().unwrap().pop().expect("asked at most twice");
             Box::pin(async move { Ok(vec![answer.parse::<IpAddr>().expect("an address")]) })
         });
-        let web = Web::new(options(), 4, true, lookup);
+        let web = Web::new(options(), 4, Guard::Public, lookup);
         assert!(web.public("rebind.example").await);
 
         let url = format!("http://rebind.example:{}/", site.address().port());
@@ -717,7 +721,7 @@ mod tests {
 
     #[tokio::test]
     async fn literal_addresses_are_refused_however_they_are_written() {
-        let web = Web::new(options(), 4, true, resolving_to("1.1.1.1"));
+        let web = Web::new(options(), 4, Guard::Public, resolving_to("1.1.1.1"));
         for url in [
             "http://127.0.0.1/",
             "http://2130706433/",
@@ -739,11 +743,18 @@ mod tests {
 
     #[tokio::test]
     async fn a_page_in_a_browser_cannot_ask_for_a_name_that_resolves_privately() {
-        let private = Web::new(options(), 4, true, resolving_to("10.0.0.1"));
+        let private = Web::new(options(), 4, Guard::Public, resolving_to("10.0.0.1"));
         assert!(!(private.page_check())("https://inner.example/".to_owned()).await);
-        let public = Web::new(options(), 4, true, resolving_to("1.1.1.1"));
+        let public = Web::new(options(), 4, Guard::Public, resolving_to("1.1.1.1"));
         assert!((public.page_check())("https://example.org/".to_owned()).await);
         assert!((public.page_check())("https://1.1.1.1/".to_owned()).await);
+    }
+
+    #[test]
+    fn the_loopback_guard_lets_only_this_machine_through() {
+        let allowed = |address: &str| Guard::Loopback.allows(address.parse().unwrap());
+        assert!(allowed("127.0.0.1") && allowed("::1") && allowed("1.1.1.1"));
+        assert!(!allowed("10.0.0.1") && !allowed("169.254.169.254") && !allowed("fe80::1"));
     }
 
     #[test]
