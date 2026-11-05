@@ -578,6 +578,22 @@ Ollama ignores. A signed-in local Ollama also serves `:cloud` models through `lo
 key. A second provider, such as `https://ollama.com/v1`, takes its key from
 `KVASIR_PROVIDER_CLOUD_API_KEY`.
 
+`GET /v1/providers` lists the providers by name, with whether each listed its models, and never
+its address or key. `GET /v1/providers/<name>/models` lists what one serves. Both read the same
+list, kept for 5 minutes once a provider gave it in full; a provider that failed is asked again on
+the next call:
+
+```console
+$ curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/providers/local/models
+[{"id":"gpt-oss:20b","ref":"local/gpt-oss:20b","context_length":131072,"capabilities":["completion","tools","thinking"]}, ...]
+```
+
+`ref` is what a model setting takes. Every provider gives the ids. A provider that answers
+`/api/version` as Ollama does also gives `capabilities`, and `context_length`, the window the model was trained with; a provider whose list
+carries `context_length`, as OpenRouter's does, gives that. It is not the window the model is served
+with, such as Ollama's `num_ctx`, which `model.context_tokens` must be: a larger value cuts prompts
+off without an error.
+
 A model is written `<provider>/<name>`. Only the first `/` splits, so the name may hold more:
 `cloud/org/model:tag`. kvasir calls the provider's endpoint with the name. A request that overrides
 `model_fast`, `model_strong` or `model_reason` with an unknown provider gets 400. An override may

@@ -1,6 +1,6 @@
 # Settings in the database: plan
 
-Status: written 2026-11-05. Phases 1 to 3 built 2026-11-05.
+Status: written 2026-11-05. Phases 1 to 4 built 2026-11-05.
 
 Configuration is environment variables over an optional `kvasir.toml`, read once at startup into a
 frozen `Settings`. Every new option means a new key in the file, the README and the example file,
@@ -60,14 +60,14 @@ model list says which is which. Then `search.url`, with a reachability check, th
 
 ## Open questions
 
-What each provider reports beyond an id is unverified:
+What each provider reports beyond an id:
 
-| Provider | Where | Expected |
-|---|---|---|
-| Any OpenAI-compatible | `GET {api_base}/models` | `id` only |
-| Ollama | `POST /api/show` per model | `capabilities`, `model_info["<arch>.context_length"]` |
-| OpenRouter | `GET /models` | `context_length` |
-| LiteLLM proxy | `GET /model/info` | `max_input_tokens`, `mode` |
+| Provider | Where | Found | Built |
+|---|---|---|---|
+| Any OpenAI-compatible | `GET {api_base}/models` | `id` | Yes |
+| Ollama | `POST /api/show` per model | `capabilities`, `model_info["<arch>.context_length"]`, checked against Ollama on 2026-11-05 | Yes |
+| OpenRouter | `GET /models` | `context_length`, unverified | Read when an entry has it |
+| LiteLLM proxy | `GET /model/info` | `max_input_tokens`, `mode`, unverified | No |
 
 `model.context_tokens` must be the window the server serves, such as Ollama's `num_ctx`, which is
 often far below the model's maximum. A reported `context_length` is shown as a hint and never

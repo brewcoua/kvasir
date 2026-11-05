@@ -17,7 +17,18 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
-from kvasir.api import auth, favicons, methods, pages, runs, sessions, settings, sources, tasks
+from kvasir.api import (
+    auth,
+    favicons,
+    methods,
+    pages,
+    providers,
+    runs,
+    sessions,
+    settings,
+    sources,
+    tasks,
+)
 from kvasir.api.settings import apply
 from kvasir.config import Settings, SetupRequired, apply_environment
 from kvasir.runs.registry import (
@@ -75,7 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
 app.include_router(auth.router)
-for module in (runs, methods, pages, favicons, sources, tasks, sessions, settings):
+for module in (runs, methods, pages, favicons, sources, tasks, sessions, settings, providers):
     app.include_router(module.router, dependencies=[Depends(auth.require_token)])
 
 
