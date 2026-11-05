@@ -9,10 +9,13 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace.dependencies]
+kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
+kvasir-types = { path = "crates/kvasir-types" }
 
 anyhow = "1"
 arc-swap = "1.9"
+idna = "1.1"
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }

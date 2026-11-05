@@ -11,6 +11,8 @@ use std::time::Duration;
 use rusqlite::Connection;
 pub use rusqlite::{self, OptionalExtension, params};
 
+pub mod schema;
+
 /// How long a statement waits for another process's lock before failing.
 pub const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -98,12 +100,28 @@ fn migrate(conn: &mut Connection, path: &Path, migrations: &[&str]) -> Result<()
     if found > migrations.len() {
         return Err(DbError::TooNew { path: path.to_owned(), found, known: migrations.len() });
     }
+    if found == 0 && !migrations.is_empty() {
+        backup(conn, path)?;
+    }
     for (version, sql) in migrations.iter().enumerate().skip(found).map(|(i, sql)| (i + 1, sql)) {
         let fail = |source| DbError::Migrate { path: path.to_owned(), version, source };
         let tx = conn.transaction().map_err(fail)?;
         tx.execute_batch(sql).map_err(fail)?;
         tx.pragma_update(None, "user_version", version as i64).map_err(fail)?;
         tx.commit().map_err(fail)?;
+    }
+    Ok(())
+}
+
+/// Copies a file Python left, at version 0 with tables in it, to `<file>.pre-rust.bak`, since the
+/// migrations may leave it unreadable to Python. An existing copy is kept: it is the older one.
+fn backup(conn: &Connection, path: &Path) -> Result<(), DbError> {
+    let tables: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get(0))?;
+    let mut name = path.as_os_str().to_owned();
+    name.push(".pre-rust.bak");
+    let copy = PathBuf::from(name);
+    if tables > 0 && !copy.exists() {
+        conn.execute("VACUUM INTO ?1", [copy.to_string_lossy()])?;
     }
     Ok(())
 }
