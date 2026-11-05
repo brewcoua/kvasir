@@ -36,6 +36,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dsrust-json-repair"
+version = "0.1.0-alpha.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74bf12012af06860b8db07806353d9f31b57f6ba82bb8519d992d523229781db"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -251,6 +261,16 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "kvasir-llm"
+version = "0.0.0"
+dependencies = [
+ "dsrust-json-repair",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

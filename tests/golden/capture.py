@@ -309,16 +309,16 @@ def render(signature: type[dspy.Signature], chain_of_thought: bool) -> dict[str,
     """The prompt, a reply in the adapter's own format, and what that reply parses into."""
     if chain_of_thought:
         signature = dspy.ChainOfThought(signature).predict.signature
-    adapter = dspy.ChatAdapter()
     inputs = {k: sample(f.annotation, k) for k, f in signature.input_fields.items()}
     outputs = {k: sample(f.annotation, k) for k, f in signature.output_fields.items()}
-    reply = adapter.format_assistant_message_content(signature, outputs)
-    return {
-        "chain_of_thought": chain_of_thought,
-        "messages": adapter.format(signature, [], inputs),
-        "reply": reply,
-        "parsed": {k: _plain(v) for k, v in adapter.parse(signature, reply).items()},
-    }
+    case: dict[str, Any] = {"chain_of_thought": chain_of_thought}
+    # The chat format first, then the JSON one a call falls back to when a chat reply fails.
+    for prefix, adapter in (("", dspy.ChatAdapter()), ("json_", dspy.JSONAdapter())):
+        reply = adapter.format_assistant_message_content(signature, outputs)
+        case[f"{prefix}messages"] = adapter.format(signature, [], inputs)
+        case[f"{prefix}reply"] = reply
+        case[f"{prefix}parsed"] = {k: _plain(v) for k, v in adapter.parse(signature, reply).items()}
+    return case
 
 
 def normalized(urls: list[str]) -> list[dict[str, str | None]]:

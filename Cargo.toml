@@ -11,10 +11,12 @@ publish = false
 [workspace.dependencies]
 kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
+kvasir-llm = { path = "crates/kvasir-llm" }
 kvasir-types = { path = "crates/kvasir-types" }
 
 anyhow = "1"
 arc-swap = "1.9"
+dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }
 idna = "1.1"
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
