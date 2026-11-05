@@ -29,7 +29,7 @@ describe("steps", () => {
 
   it("makes the split event a split step", () => {
     const split = stage("research").children.filter((s) => s.kind === "split");
-    expect(split.map((s) => s.detail)).toEqual(["splitting the brief into questions"]);
+    expect(split.map((s) => [s.label, s.detail])).toEqual([["Split", "splitting the brief into questions"]]);
   });
 
   it("lists a question's claims with their confidence", () => {

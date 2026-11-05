@@ -208,7 +208,7 @@ export function steps(run: RunDetail): Step[] {
         keepCalls(ev.stage, calls);
       }
     } else if (kind === "split") {
-      add(ev.stage, own(step(`e:${seq}`, "split", ev.detail, ev.detail, state)));
+      add(ev.stage, own(step(`e:${seq}`, "split", "Split", ev.detail, state)));
     } else if (kind === "section") {
       const q = ev.question == null ? undefined : questionById.get(ev.question);
       const s = own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail, ev.detail, state));

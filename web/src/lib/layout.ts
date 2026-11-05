@@ -9,7 +9,9 @@ export const HEADER = 36;
 export const PAD = 12;
 export const GAP = 16;
 // Attempts, recalls and pages are rows of one header's height, stacked this far apart.
-export const ROW = { width: 460, height: HEADER };
+export const ROW = { width: 380, height: HEADER };
+// The split step is a header and nothing else: an icon and a word, plus a chip once it is not done.
+const SPLIT = { width: 80, running: 140 };
 const ROW_GAP = 8;
 // Where a container's children start, so they do not touch its header.
 const TOP = HEADER + PAD;
@@ -95,7 +97,7 @@ const descendants = (step: Step): number => step.children.reduce((n, child) => n
 const expandable = (step: Step) => step.children.length > 0 && step.kind !== "page";
 const isRow = (step: Step) => step.kind === "attempt" || step.kind === "recall" || step.kind === "page";
 // A page sits inside its attempt's padding, so the two share an edge.
-const closedSize = (step: Step) => (step.kind === "page" ? { width: ROW.width - 2 * PAD, height: HEADER } : isRow(step) ? ROW : step.kind === "stage" ? STAGE : CARD);
+const closedSize = (step: Step) => (step.kind === "split" ? { width: step.state === "done" ? SPLIT.width : SPLIT.running, height: HEADER } : step.kind === "page" ? { width: ROW.width - 2 * PAD, height: HEADER } : isRow(step) ? ROW : step.kind === "stage" ? STAGE : CARD);
 
 const sum = (sizes: number[], gap = GAP) => sizes.reduce((n, size) => n + size, 0) + gap * Math.max(sizes.length - 1, 0);
 const widest = (boxes: Box[]) => Math.max(...boxes.map((box) => box.width));
@@ -205,6 +207,8 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
   const nodes: Node<StepData>[] = [];
   const edges: Edge[] = [];
   const progress = (to: Step) => ({ animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? to.state : "done" });
+  // A raised link keeps its own colour once done; only the link into a question still being answered or waiting shows it.
+  const raised = (to: Step) => ({ animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? `raised ${to.state}` : "raised" });
   const chain = (from: Step, to: Step) => edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, ...progress(to) });
   // Per research container, where its arcs and trunk are in flow coordinates.
   const lanes: { id: string; x: number; y: number; research: Research }[] = [];
@@ -278,9 +282,11 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
       const [ax, ay, bx, by, tx] = [a.x + from.width!, a.y + HEADER / 2, b.x, b.y + HEADER / 2, trunk.x + trunk.research.trunk];
       const s = Math.sign(by - ay);
       const path = s === 0 ? `M${ax} ${ay}H${bx}` : `M${ax} ${ay}H${tx - R}Q${tx} ${ay} ${tx} ${ay + s * R}V${by - s * R}Q${tx} ${by} ${tx + R} ${by}H${bx}`;
-      edges.push({ id, source: l.from, target: l.to, type: "trunk", class: "raised", data: { path } satisfies LinkData });
+      edges.push({ id, source: l.from, target: l.to, type: "trunk", ...raised(to.data.step), data: { path } satisfies LinkData });
     } else if (l.kind === "removed") {
       edges.push({ id, source: l.from, target: l.to, class: "removed", style: `stroke-width: ${1 + 0.6 * l.count}px`, label: String(l.count) });
+    } else if (l.kind === "raised") {
+      edges.push({ id, source: l.from, target: l.to, ...raised(to.data.step) });
     } else {
       edges.push({ id, source: l.from, target: l.to, class: l.kind });
     }

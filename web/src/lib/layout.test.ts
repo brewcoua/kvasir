@@ -119,7 +119,7 @@ describe("layout", () => {
 
   it("chains the stages only, and hangs the attempts of an open question from it by rail", () => {
     const { nodes, edges } = layout(roots, new Set([research.id, question.id]), linked);
-    const chain = edges.filter((e) => !e.type && e.class !== "raised").map((e) => `${e.source}>${e.target}`);
+    const chain = edges.filter((e) => !e.type && !String(e.class).startsWith("raised")).map((e) => `${e.source}>${e.target}`);
     for (let i = 1; i < roots.length; i++) expect(chain).toContain(`${roots[i - 1].id}>${roots[i].id}`);
     const attempts = question.children.filter((c) => c.kind === "attempt");
     expect(attempts.length).toBeGreaterThan(1);
@@ -212,7 +212,25 @@ describe("layout", () => {
       const raised = edges.filter((e) => e.source === split.id);
       expect(raised).toHaveLength(questions.filter((q) => q.depth === 0).length);
       expect(raised.every((e) => e.type === "trunk" && typeof (e.data as { path: string }).path === "string")).toBe(true);
-      expect(edges.filter((e) => e.class === "raised" && !e.type)).toHaveLength(questions.filter((q) => q.depth! > 0).length);
+      expect(edges.filter((e) => String(e.class).startsWith("raised") && !e.type)).toHaveLength(questions.filter((q) => q.depth! > 0).length);
+    });
+
+    it("animates the raised link into a question being answered, and dashes the one into a waiting question", () => {
+      const { edges } = layout(roots, open, linked);
+      const state = new Map(questions.map((q) => [q.id, q.state]));
+      const raised = edges.filter((e) => String(e.class).startsWith("raised"));
+      expect(raised.length).toBeGreaterThan(0);
+      for (const e of raised) {
+        expect(!!e.animated).toBe(state.get(e.target) === "current");
+        expect(e.class).toBe(state.get(e.target) === "pending" ? "raised pending" : "raised");
+      }
+    });
+
+    it("sizes the split step to its header", () => {
+      const { nodes } = layout(roots, open, linked);
+      const node = nodes.find((n) => n.id === split.id)!;
+      expect(node.height).toBe(HEADER);
+      expect(node.width).toBeLessThan(ROW.width / 2);
     });
 
     it("draws no link whose end is not shown", () => {
