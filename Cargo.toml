@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace.dependencies]
+kvasir-browser = { path = "crates/kvasir-browser" }
 kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
 kvasir-extract = { path = "crates/kvasir-extract" }
@@ -19,8 +20,10 @@ kvasir-types = { path = "crates/kvasir-types" }
 anyhow = "1"
 arc-swap = "1.9"
 backon = "1.6"
+chromiumoxide = "0.9.1"
 dom_query = "0.24"
 dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }
+futures = "0.3"
 idna = "1.1"
 pdf_oxide = "0.3.78"
 regex = "1"

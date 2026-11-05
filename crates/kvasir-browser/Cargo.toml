@@ -1,0 +1,27 @@
+[package]
+name = "kvasir-browser"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+chromium = ["dep:chromiumoxide", "dep:futures", "dep:kvasir-extract", "dep:serde_json", "dep:tempfile", "dep:tokio", "dep:url"]
+
+[dependencies]
+chromiumoxide = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+kvasir-extract = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+thiserror.workspace = true
+tokio = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio.workspace = true
+wiremock.workspace = true
+
+[lints]
+workspace = true

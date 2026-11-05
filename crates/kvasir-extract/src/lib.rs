@@ -8,7 +8,7 @@ pub mod pdf;
 mod split;
 
 pub use check::{Reason, Unusable, check_page};
-pub use html::{Link, Region, Static, extract, read_html};
+pub use html::{INTERACTIVE, Link, Region, Static, extract, read_html};
 pub use normalize::{BadUrl, normalize};
 pub use split::split;
 

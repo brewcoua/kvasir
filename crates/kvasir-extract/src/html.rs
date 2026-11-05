@@ -20,7 +20,7 @@ const BOILERPLATE: &str = "script, style, nav, header, footer, aside, form, nosc
 // Interactive elements, from web-som's SELECTORS, are controls and never prose. Links are kept
 // because their text is read, and [tabindex] and [contenteditable] also mark content. #siteSub is
 // Wikipedia's "From Wikipedia, the free encyclopedia", which rs-trafilatura keeps.
-const INTERACTIVE: &str = concat!(
+pub const INTERACTIVE: &str = concat!(
     r#"button, input:not([type="hidden"]), select, textarea, .btn, [role="button"], "#,
     r#"[role="checkbox"], [role="radio"], [role="input"], [role="menuitem"], "#,
     r#"[role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="switch"], "#,
