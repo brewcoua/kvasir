@@ -28,8 +28,9 @@ static LINE_BREAK_HYPHEN: LazyLock<Regex> =
 /// The text of a PDF, page by page until there is enough of it. A page that fails is skipped, as
 /// the rest of the file may read.
 pub fn text_of(data: Vec<u8>) -> Result<String, String> {
-    let document = pdf_oxide::PdfDocument::from_bytes(data).map_err(|e| e.to_string())?;
-    let count = document.page_count().map_err(|e| e.to_string())?;
+    let unreadable = |e: pdf_oxide::Error| format!("unreadable PDF ({e})");
+    let document = pdf_oxide::PdfDocument::from_bytes(data).map_err(unreadable)?;
+    let count = document.page_count().map_err(unreadable)?;
     let mut pages = Vec::new();
     let mut length = 0;
     for page in 0..count {

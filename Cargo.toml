@@ -13,6 +13,7 @@ kvasir-browser = { path = "crates/kvasir-browser" }
 kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
 kvasir-extract = { path = "crates/kvasir-extract" }
+kvasir-fetch = { path = "crates/kvasir-fetch" }
 kvasir-llm = { path = "crates/kvasir-llm" }
 kvasir-testkit = { path = "crates/kvasir-testkit" }
 kvasir-types = { path = "crates/kvasir-types" }
@@ -23,16 +24,19 @@ backon = "1.6"
 chromiumoxide = "0.9.1"
 dom_query = "0.24"
 dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }
+encoding_rs = "0.8"
 futures = "0.3"
+httpdate = "1"
 idna = "1.1"
 pdf_oxide = "0.3.78"
 regex = "1"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["brotli", "deflate", "gzip", "json", "rustls"] }
 rlimit = "0.11"
 rs-trafilatura = "0.2.2"
-rusqlite = { version = "0.41", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled", "functions"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
 toml = "1"
