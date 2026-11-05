@@ -1744,6 +1744,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kvasir-graph"
+version = "0.0.0"
+dependencies = [
+ "indexmap",
+ "kvasir-config",
+ "kvasir-fetch",
+ "kvasir-ledger",
+ "kvasir-llm",
+ "kvasir-research",
+ "kvasir-run",
+ "kvasir-sites",
+ "kvasir-testkit",
+ "kvasir-types",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kvasir-ledger"
 version = "0.0.0"
 dependencies = [

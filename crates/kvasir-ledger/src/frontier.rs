@@ -57,7 +57,8 @@ pub struct Frontier {
     claim_vectors: Vec<Vec<f32>>,
     question_vectors: HashMap<u64, Vec<f32>>,
     stalled: HashMap<u64, usize>,
-    closed: HashSet<u64>,
+    /// The first questions whose branches are closed.
+    pub closed: HashSet<u64>,
 }
 
 impl Frontier {

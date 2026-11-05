@@ -36,7 +36,7 @@ use crate::search_loop::{Judge, Research, research as search};
 use crate::signatures::{NamedQuestion, brief as frame, decompose, outline};
 
 /// Questions the first split of the brief adds at most.
-const FIRST_QUESTIONS: usize = 6;
+pub const FIRST_QUESTIONS: usize = 6;
 
 pub const NO_EVIDENCE: &str = "## No findings\n\nNo page read during the research supported a \
 claim about this question. Try rephrasing it, or answering the clarifying questions.";

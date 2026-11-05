@@ -129,7 +129,7 @@ pub fn notes(ledger: &[Question]) -> String {
 }
 
 /// How the report names a question's status when the research did not settle it.
-fn unsettled(status: QuestionStatus) -> Option<&'static str> {
+pub fn unsettled(status: QuestionStatus) -> Option<&'static str> {
     match status {
         QuestionStatus::Open | QuestionStatus::Unresolved => Some("not found"),
         QuestionStatus::Weak => Some("partly answered"),
@@ -172,7 +172,7 @@ pub fn as_results(ledger: &[Question]) -> Vec<ResearchQuestion> {
         .collect()
 }
 
-pub(crate) fn status_name(status: QuestionStatus) -> &'static str {
+pub fn status_name(status: QuestionStatus) -> &'static str {
     match status {
         QuestionStatus::Open => "open",
         QuestionStatus::Weak => "weak",
