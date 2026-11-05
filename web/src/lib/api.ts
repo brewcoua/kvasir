@@ -25,6 +25,10 @@ export type CacheStats = Schemas["CacheStats"];
 export type PageSummary = Schemas["PageSummary"];
 export type PageDetail = Schemas["PageDetail"];
 export type Recall = Schemas["Recall"];
+export type SettingInfo = Schemas["SettingInfo"];
+export type SettingsView = Schemas["SettingsView"];
+export type ProviderInfo = Schemas["ProviderInfo"];
+export type ModelInfo = Schemas["ModelInfo"];
 // The options with a configured default, every method's together. Their names do not collide, but
 // for the models, which mean the same in every method.
 type Configured = Omit<Schemas["LedgerOptions"] & Schemas["GraphOptions"] & Schemas["StormOptions"], "output" | "criteria" | "entities">;
@@ -52,7 +56,7 @@ export async function json<T>(path: string): Promise<T> {
 }
 
 // Like `json`, with the reason the service gives for a refusal, and for requests that change something.
-export async function request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
   const response = reloadOn401(
     await fetch(
       path,

@@ -906,7 +906,9 @@ header .icon {
   grid-template-columns: 1fr 16rem 3.5rem;
 }
 .setting input[type="number"],
-.setting input[type="text"] {
+.setting input[type="text"],
+.setting select,
+.setting textarea {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
@@ -918,6 +920,14 @@ header .icon {
 }
 .setting input[type="checkbox"] {
   justify-self: end;
+}
+.settings h4 {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+.setting .hint.error {
+  color: var(--bad);
 }
 .setting .hint {
   grid-column: 1 / 3;
@@ -2312,5 +2322,33 @@ tr.cut td {
   margin: 0;
 }
 .login button {
+  justify-self: end;
+}
+
+.setup {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 32rem;
+  margin: 8vh auto;
+  padding: 0 0.85rem 0.85rem;
+}
+.setup h2 {
+  margin: 0 -0.85rem 0.25rem;
+}
+.setup input {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+}
+.setup p {
+  margin: 0;
+}
+.setup label {
+  margin-top: 0.5rem;
+}
+.setup button {
   justify-self: end;
 }

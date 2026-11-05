@@ -3,6 +3,7 @@
   import type { Defaults } from "../lib/api";
   import { forget, PANES } from "../lib/settings.svelte";
   import Icon from "./Icon.svelte";
+  import ServiceSettings from "./ServiceSettings.svelte";
   import SettingField from "./SettingField.svelte";
 
   let { open = $bindable(), defaults }: { open: boolean; defaults: Partial<Defaults> } = $props();
@@ -18,7 +19,7 @@
     <Dialog.Content class="settings">
       <header>
         <Dialog.Title class="title">Settings</Dialog.Title>
-        <button type="button" class="action" onclick={forget}>Reset all</button>
+        {#if pane !== "service"}<button type="button" class="action" onclick={forget}>Reset all</button>{/if}
         <Dialog.Close class="action">Close</Dialog.Close>
       </header>
       <Tabs.Root bind:value={pane} orientation="vertical" class="layout">
@@ -26,6 +27,7 @@
           {#each PANES as { name, label } (name)}
             <Tabs.Trigger value={name}><Icon name={ICONS[name as keyof typeof ICONS]} />{label}</Tabs.Trigger>
           {/each}
+          <Tabs.Trigger value="service"><Icon name="stage" />Service</Tabs.Trigger>
         </Tabs.List>
         <div class="panes">
           {#each PANES as { name, title, settings } (name)}
@@ -36,6 +38,9 @@
               {/each}
             </Tabs.Content>
           {/each}
+          <Tabs.Content value="service" class="pane">
+            {#if pane === "service"}<ServiceSettings />{/if}
+          </Tabs.Content>
         </div>
       </Tabs.Root>
     </Dialog.Content>

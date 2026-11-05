@@ -313,6 +313,11 @@ export function mock(): Plugin {
           return send(response, 200, all.sort((a, b) => b.created_at - a.created_at));
         }
         if (request.method === "GET" && path === "/v1/methods") return send(response, 200, METHODS);
+        // Set up already. The setup page and the service settings are tested against the service.
+        if (request.method === "GET" && path === "/v1/settings") {
+          return send(response, 200, { fields: [], missing: [], restart_required: [] });
+        }
+        if (request.method === "GET" && path === "/v1/providers") return send(response, 200, []);
 
         const icon = path.match(/^\/v1\/favicons\/([^/]+)$/);
         if (request.method === "GET" && icon) {
