@@ -7,12 +7,19 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+backon.workspace = true
 dsrust-json-repair.workspace = true
+kvasir-config.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+kvasir-testkit.workspace = true
+wiremock.workspace = true
 
 [lints]
 workspace = true

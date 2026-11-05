@@ -12,12 +12,15 @@ publish = false
 kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
 kvasir-llm = { path = "crates/kvasir-llm" }
+kvasir-testkit = { path = "crates/kvasir-testkit" }
 kvasir-types = { path = "crates/kvasir-types" }
 
 anyhow = "1"
 arc-swap = "1.9"
+backon = "1.6"
 dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }
 idna = "1.1"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
@@ -25,6 +28,7 @@ tempfile = "3"
 thiserror = "2"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
+wiremock = "0.6"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
