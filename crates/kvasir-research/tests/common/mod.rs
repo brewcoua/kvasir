@@ -125,12 +125,26 @@ impl Search for Results {
     }
 }
 
-/// Pages by URL; any other fails to fetch. Every lead is allowed.
+/// Pages by URL; any other fails to fetch. Records each URL fetched. A lead is allowed unless its
+/// URL holds one of `refused`.
 #[derive(Default)]
 pub struct Fetched {
     pub pages: HashMap<String, Page>,
     /// Served for any URL not in `pages`.
     pub any: Option<Page>,
+    pub refused: Vec<String>,
+    pub fetched: Mutex<Vec<String>>,
+}
+
+impl Fetched {
+    pub fn of(pages: impl IntoIterator<Item = Page>) -> Self {
+        let pages = pages.into_iter().map(|page| (page.url.clone(), page)).collect();
+        Self { pages, ..Self::default() }
+    }
+
+    pub fn fetched(&self) -> Vec<String> {
+        self.fetched.lock().unwrap().clone()
+    }
 }
 
 impl Pages for Fetched {
@@ -139,12 +153,14 @@ impl Pages for Fetched {
         url: &'a str,
         _max_age: Option<u32>,
     ) -> BoxFuture<'a, Result<Page, FetchError>> {
+        self.fetched.lock().unwrap().push(url.to_owned());
         let found = self.pages.get(url).or(self.any.as_ref()).cloned();
         Box::pin(async move { found.ok_or_else(|| FetchError::Failed("down".into())) })
     }
 
-    fn allowed<'a>(&'a self, _url: &'a str) -> BoxFuture<'a, bool> {
-        Box::pin(async { true })
+    fn allowed<'a>(&'a self, url: &'a str) -> BoxFuture<'a, bool> {
+        let allowed = !self.refused.iter().any(|part| url.contains(part.as_str()));
+        Box::pin(async move { allowed })
     }
 
     fn cache(&self) -> Option<PageStore> {

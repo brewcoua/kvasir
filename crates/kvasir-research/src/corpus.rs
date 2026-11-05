@@ -34,13 +34,13 @@ pub const RECALL_PER_SITE: usize = 2;
 // counts in affinity by the corroboration weight of the corroborating claim's tier (sources
 // enabled only). No run reads more than PAGES_PER_SITE pages of one site.
 const LEADS_PER_PAGE: usize = 20;
-const LEAD_DEPTH: u32 = 2;
+pub const LEAD_DEPTH: u32 = 2;
 const LEAD_MIN: f64 = 0.5;
 const AFFINITY_WEIGHT: f64 = 0.5;
 const RELATED_BONUS: f64 = 0.1;
-const SITE_AFFINITY: f64 = 1.0;
+pub const SITE_AFFINITY: f64 = 1.0;
 pub const PAGES_PER_SITE: usize = 6;
-const SITE_SEARCHES: usize = 2;
+pub const SITE_SEARCHES: usize = 2;
 /// The pieces one search of the store returns at most.
 const STORED_PIECES: usize = 200;
 
@@ -76,14 +76,14 @@ pub struct Piece {
 
 /// A link of a page read, to a page that is not: what it says about itself and its vector.
 #[derive(Clone, Debug)]
-struct Lead {
-    url: String,
-    anchor: String,
-    context: String,
-    region: Region,
+pub struct Lead {
+    pub url: String,
+    pub anchor: String,
+    pub context: String,
+    pub region: Region,
     /// Links from a search result: 1 for a link of a result, 2 for one of that page, and so on.
-    depth: u32,
-    vector: Vec<f32>,
+    pub depth: u32,
+    pub vector: Vec<f32>,
 }
 
 /// The pieces of the pages a run read, and how well each site has done. With a `store`, the pieces
@@ -104,7 +104,7 @@ pub struct Corpus {
     /// Claims kept, by site.
     pub claims: HashMap<String, usize>,
     // By normalized URL, so that two spellings of a page are one lead.
-    leads: IndexMap<String, Lead>,
+    pub leads: IndexMap<String, Lead>,
     refused: HashSet<String>,
     site_searched: HashSet<(u64, String)>,
     site_searches: usize,
@@ -353,7 +353,7 @@ impl Corpus {
     /// counts by the best corroboration weight among its corroborating claims' tiers.
     /// Corroboration is known only to a frontier that merges claims, so under the breadth frontier
     /// this is empty and a lead's worth is its relevance, novelty and region.
-    async fn affinity(&self, claims: &[Claim]) -> IndexMap<String, f64> {
+    pub async fn affinity(&self, claims: &[Claim]) -> IndexMap<String, f64> {
         let by_id: HashMap<u64, &Claim> = claims.iter().map(|claim| (claim.id, claim)).collect();
         let tiers = self.claim_tiers(claims, Duration::ZERO).await;
         let mut confirmed: IndexMap<String, f64> = IndexMap::new();

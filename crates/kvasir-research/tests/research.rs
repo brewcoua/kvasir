@@ -147,7 +147,7 @@ async fn read_with(
 ) -> (Vec<Claim>, Arc<ScriptedLlm>) {
     let llm = Arc::new(ScriptedLlm::by_role(&[("intake", replies)]));
     let mut tools = tools(&llm, &["intake"]);
-    tools.pages = Arc::new(Fetched { pages, any: None });
+    tools.pages = Arc::new(Fetched { pages, ..Fetched::default() });
     let mut corpus = Corpus::default();
     let stage = kvasir_run::stages::RESEARCH;
     let claims =

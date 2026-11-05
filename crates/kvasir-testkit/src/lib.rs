@@ -10,8 +10,7 @@ use kvasir_config::Model;
 use kvasir_llm::{BoxFuture, Completion, Llm, LlmError, Message, Request, Sink, Usage};
 
 type Script = Box<dyn Fn(&Request<'_>) -> Result<String, LlmError> + Send + Sync>;
-/// Vectors by text, and the one for any other text.
-type Vectors = (HashMap<String, Vec<f32>>, Option<Vec<f32>>);
+type Embedding = Box<dyn Fn(&str) -> Vec<f32> + Send + Sync>;
 
 /// A sent request, as the script saw it.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,14 +25,18 @@ pub struct Sent {
 pub struct ScriptedLlm {
     script: Script,
     sent: Mutex<Vec<Sent>>,
-    vectors: Option<Vectors>,
+    embedding: Embedding,
 }
 
 impl ScriptedLlm {
     pub fn new(
         script: impl Fn(&Request<'_>) -> Result<String, LlmError> + Send + Sync + 'static,
     ) -> Self {
-        Self { script: Box::new(script), sent: Mutex::new(Vec::new()), vectors: None }
+        Self {
+            script: Box::new(script),
+            sent: Mutex::new(Vec::new()),
+            embedding: Box::new(letters),
+        }
     }
 
     /// Replies with each of `replies` in turn, then fails the test.
@@ -63,9 +66,22 @@ impl ScriptedLlm {
 
     /// Embeds each text as the vector it is given here and any other as `default`, failing the
     /// test without one, instead of by its letters.
-    pub fn with_vectors(mut self, vectors: &[(&str, &[f32])], default: Option<&[f32]>) -> Self {
-        let vectors = vectors.iter().map(|(text, v)| ((*text).to_owned(), v.to_vec())).collect();
-        self.vectors = Some((vectors, default.map(<[f32]>::to_vec)));
+    pub fn with_vectors(self, vectors: &[(&str, &[f32])], default: Option<&[f32]>) -> Self {
+        let vectors: HashMap<String, Vec<f32>> =
+            vectors.iter().map(|(text, v)| ((*text).to_owned(), v.to_vec())).collect();
+        let default = default.map(<[f32]>::to_vec);
+        self.with_embedding(move |text| {
+            let found = vectors.get(text).or(default.as_ref());
+            found.cloned().unwrap_or_else(|| panic!("no vector for {text:?}"))
+        })
+    }
+
+    /// Embeds each text as `embedding` gives it, instead of by its letters.
+    pub fn with_embedding(
+        mut self,
+        embedding: impl Fn(&str) -> Vec<f32> + Send + Sync + 'static,
+    ) -> Self {
+        self.embedding = Box::new(embedding);
         self
     }
 
@@ -98,8 +114,7 @@ impl Llm for ScriptedLlm {
         })
     }
 
-    /// Counts of each letter, so texts sharing letters are near each other, unless vectors were
-    /// given.
+    /// By default, counts of each letter, so texts sharing letters are near each other.
     fn embed<'a>(
         &'a self,
         model: &'a Model,
@@ -109,14 +124,7 @@ impl Llm for ScriptedLlm {
     ) -> BoxFuture<'a, Result<Vec<Vec<f32>>, LlmError>> {
         Box::pin(async move {
             sink.embedded(model, texts.len() as u64);
-            let Some((vectors, default)) = &self.vectors else {
-                return Ok(texts.iter().map(|t| letters(t)).collect());
-            };
-            let vector = |text: &String| {
-                let found = vectors.get(text).or(default.as_ref());
-                found.cloned().unwrap_or_else(|| panic!("no vector for {text:?}"))
-            };
-            Ok(texts.iter().map(vector).collect())
+            Ok(texts.iter().map(|text| (self.embedding)(text)).collect())
         })
     }
 }
