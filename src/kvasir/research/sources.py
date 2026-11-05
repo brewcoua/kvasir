@@ -1,14 +1,17 @@
 """What kind of site a host is, and how far to trust it: government, news, AI-generated and so on.
 
 A host resolves in order: config `allow`/`deny`, a mark, the lists, suffix rules, the cache, then
-Wikidata. Hosts come from search results, so they are attacker-influenced: they are normalized
-before they reach a query, and the only text sent to Wikidata is a host or a URL built from one.
+Wikidata. With `rsp`, Wikipedia's perennial sources list adds `rsp_*` tags to what the host
+resolves to, and sets no kind. Hosts come from search results, so they are attacker-influenced: they
+are normalized before they reach a query, and the only text sent to Wikidata is a host or a URL
+built from one.
 Nothing here is built unless `[sources] enabled`; the caller decides that.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
 import os
@@ -20,7 +23,7 @@ import tomllib
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import NamedTuple, TypeVar
 from urllib.parse import urlparse
@@ -45,6 +48,12 @@ QUERY_TIMEOUT_SECONDS = 30.0
 LIST_TIMEOUT_SECONDS = 30.0
 # The CISA list is about 1 MB; past this a list is not one, or not worth the disk.
 MAX_LIST_BYTES = 16 * 1024 * 1024
+# Every page the perennial sources list transcludes, in one answer: the rows are in its subpages.
+RSP_URL = (
+    "https://en.wikipedia.org/w/api.php?action=query&generator=templates"
+    "&titles=Wikipedia:Reliable_sources/Perennial_sources&gtlnamespace=4&gtllimit=max"
+    "&prop=revisions&rvprop=content&rvslots=main&formatversion=2&format=json"
+)
 # After a transport error or a 5xx, so a down endpoint is not asked again by every search.
 FAILURE_BACKOFF_SECONDS = 10.0
 MAX_BACKOFF_SECONDS = 3600.0
@@ -75,6 +84,15 @@ _HIGH_KINDS = frozenset(KINDS[:4])
 _AVOID_TAGS = frozenset({"ai_generated", "content_farm", "predatory", "rsp_deprecated", "deny"})
 # The tags a list or the bundled file may set.
 LIST_TAGS = frozenset({"ai_generated", "content_farm", "predatory"})
+# A row's class on the perennial sources page, and its tag. The least reliable comes last.
+_RSP_STATUS = {
+    "gr": "rsp_reliable",
+    "nc": "rsp_mixed",
+    "gu": "rsp_unreliable",
+    "d": "rsp_deprecated",
+    "b": "rsp_deprecated",
+}
+_RSP_ORDER = ("rsp_reliable", "rsp_mixed", "rsp_unreliable", "rsp_deprecated")
 MARKS = frozenset({"allow", "deny", *KINDS[:-1]})
 # What a list may be labelled: a kind, or a tag.
 LIST_LABELS = frozenset({*KINDS[:-1], *LIST_TAGS})
@@ -246,6 +264,7 @@ class Sources:
         self._backoff_until = 0.0
         self._bundled = _bundled()
         self._index: dict[str, Source] | None = None
+        self._rsp: dict[str, frozenset[str]] = {}
         self._lists_checked = float("-inf")
 
     def classify(
@@ -269,7 +288,7 @@ class Sources:
         for raw, key in asked.items():
             fixed = self._fixed(key, marks)
             if fixed is not None:
-                out[raw] = fixed
+                out[raw] = self._overlay(fixed)
                 continue
             rule = _rule(key)
             entry = self._cached(key)
@@ -277,7 +296,7 @@ class Sources:
                 fetching.append(key)
                 if rule is None:
                     waiting.append(raw)
-            out[raw] = _merge(key, rule, entry and entry.match)
+            out[raw] = self._overlay(_merge(key, rule, entry and entry.match))
         flights = self._start(fetching)
         end = time.monotonic() + deadline
         for raw in waiting:
@@ -286,7 +305,7 @@ class Sources:
                 flight.wait(max(0.0, end - time.monotonic()))
             # Read again even with no flight: a lookup that finished since the first read stored it.
             entry = self._cached(asked[raw])
-            out[raw] = _merge(asked[raw], None, entry and entry.match)
+            out[raw] = self._overlay(_merge(asked[raw], None, entry and entry.match))
         return out
 
     def mark(self, host: str, value: str) -> None:
@@ -315,10 +334,11 @@ class Sources:
         self._store.clear()
 
     def refresh_lists(self) -> None:
-        """Downloads each list that is missing or older than `ttl_days`, then rebuilds the index.
-        A list that fails to download keeps the copy on disk."""
+        """Downloads each list, and with `rsp` the perennial sources page, that is missing or older
+        than `ttl_days`, then rebuilds the index. One that fails to download keeps the copy on
+        disk."""
         self._lists_checked = time.monotonic()
-        for entry in self._settings.lists:
+        for entry in self._list_entries():
             label, _, url = entry.partition("=")
             path = self._list_path(url)
             if path.exists() and time.time() - path.stat().st_mtime < (
@@ -348,13 +368,20 @@ class Sources:
             except (httpx.HTTPError, OSError, ValueError) as exc:
                 logger.warning("source list %s not fetched (%s): %s", label, url, exc)
         self._index = self._load_lists()
+        self._rsp = self._load_rsp()
+
+    def _list_entries(self) -> tuple[str, ...]:
+        if self._settings.enabled and self._settings.rsp:
+            return (*self._settings.lists, f"rsp={RSP_URL}")
+        return self._settings.lists
 
     def _check_lists(self) -> None:
-        if not self._settings.lists:
+        if not self._list_entries():
             return
         with self._lock:
             if self._index is None:
                 self._index = self._load_lists()
+                self._rsp = self._load_rsp()
             if time.monotonic() - self._lists_checked < LIST_CHECK_SECONDS:
                 return
             self._lists_checked = time.monotonic()
@@ -383,6 +410,28 @@ class Sources:
             for host in parse_list(text):
                 index[host] = template
         return index
+
+    def _load_rsp(self) -> dict[str, frozenset[str]]:
+        if not (self._settings.enabled and self._settings.rsp):
+            return {}
+        try:
+            text = self._list_path(RSP_URL).read_text(encoding="utf-8")
+            return {host: frozenset({tag}) for host, tag in parse_rsp(text).items()}
+        except (OSError, ValueError, LookupError, TypeError) as exc:
+            logger.warning("perennial sources list unreadable: %s", exc)
+            return {}
+
+    def _overlay(self, source: Source) -> Source:
+        """`source` with the `rsp_*` tags of its host or registrable domain. A config entry or a
+        mark decides alone."""
+        if source.origin in ("config", "mark"):
+            return source
+        for name in dict.fromkeys((source.host, _registrable(source.host))):
+            if name in self._rsp:
+                return replace(
+                    source, tags=source.tags | self._rsp[name], origin=source.origin or "list"
+                )
+        return source
 
     def _marks(self, keys: list[str]) -> dict[str, str]:
         if not keys:
@@ -588,6 +637,29 @@ def parse_list(text: str) -> set[str]:
         if host:
             hosts.add(host)
     return hosts
+
+
+def parse_rsp(text: str) -> dict[str, str]:
+    """The `rsp_*` tag of each site on the perennial sources page, from the JSON the API answers
+    with. A row is `|- class="s-<status>"` and its sites are in `{{WP:RSPUSES|a.com|b.com}}`. A
+    site in several rows (a topic with a status of its own) takes the least reliable. Rows with no
+    site, a status that is none of the five, or a part of a site (`a.com/news`) are skipped."""
+    found: dict[str, str] = {}
+    for page in json.loads(text)["query"]["pages"]:
+        wikitext = page["revisions"][0]["slots"]["main"]["content"] if "revisions" in page else ""
+        for status, row in re.findall(
+            r'^\|- class="s-(\w+)"(.*?)(?=^\|-|\Z)', wikitext, re.M | re.S
+        ):
+            tag = _RSP_STATUS.get(status)
+            for names in re.findall(r"\{\{WP:RSPUSES\|([^{}]*)\}\}", row):
+                for raw in names.split("|"):
+                    name, slash, path = raw.partition("/")
+                    host = normalize(name)
+                    if not tag or not host or (slash and path not in ("", "*")):
+                        continue
+                    if host not in found or _RSP_ORDER.index(tag) > _RSP_ORDER.index(found[host]):
+                        found[host] = tag
+    return found
 
 
 def normalize(raw: str) -> str | None:

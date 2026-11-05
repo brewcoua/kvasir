@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import threading
 import time
@@ -12,7 +13,7 @@ import pytest
 
 from kvasir.config import SourceSettings
 from kvasir.research import fetch, sources
-from kvasir.research.sources import Source, Sources, SourceStore, parse_list, tier
+from kvasir.research.sources import Source, Sources, SourceStore, parse_list, parse_rsp, tier
 
 DAY = 86400
 NS = "http://www.wikidata.org/entity/"
@@ -598,3 +599,155 @@ def test_a_server_error_backs_off_briefly(store, tmp_path, wdqs):
     one(svc, "reintech.io")
 
     assert len(asked.queries) == 1
+
+
+def row(status, name, uses=None, extra=""):
+    cell = f"| {{{{WP:RSPUSES|{uses}}}}}" if uses else "| "
+    return (
+        f'|- class="s-{status}" id="{name}"\n| [[{name}]]\n| {{{{WP:RSPSTATUS|{status}}}}}\n'
+        f"| [[WP:Reliable sources/Noticeboard/Archive 1#{name}|1]]\n| {{{{WP:RSPLAST|2021}}}}\n"
+        f"| Summary of {name}.{extra}\n{cell}\n"
+    )
+
+
+# Modelled on the API's answer for the page's transcluded subpages, with rows cut to the columns
+# that matter.
+RSP = json.dumps(
+    {
+        "query": {
+            "pages": [
+                {
+                    "title": "Wikipedia:RSPUSES",
+                    "revisions": [{"slots": {"main": {"content": "x"}}}],
+                },
+                {"title": "Gone"},
+                {
+                    "title": "Wikipedia:Reliable sources/Perennial sources/1",
+                    "revisions": [
+                        {
+                            "slots": {
+                                "main": {
+                                    "content": '{{WP:RSPTableFull}}\n{| class="wikitable"\n'
+                                    + row("gr", "Reuters", "reuters.com")
+                                    + row("nc", "Wired", "wired.com", " ({{duses|x.example}})")
+                                    + row("gu", "Quora", "quora.com|www.quora.example")
+                                    + row(
+                                        "d",
+                                        "Daily Mail",
+                                        "dailymail.co.uk|pressreader.com/uk/daily-mail",
+                                    )
+                                    + row("b", "Spam", "spam.example")
+                                    + row("gr", "Guardian", "theguardian.com")
+                                    + row("nc", "Guardian blogs", "theguardian.com")
+                                    + row("gr", "Peerage")
+                                    + row("m", "Polygon", "polygon.com")
+                                    + "|}"
+                                }
+                            }
+                        }
+                    ],
+                },
+            ]
+        }
+    }
+)
+
+
+def rsp_service(store, tmp_path, monkeypatch, wdqs, answer=RSP, **settings):
+    wdqs()
+    gets = []
+
+    def get(method, url, **kwargs):
+        gets.append((url, kwargs["headers"]))
+        return contextlib.nullcontext(httpx.Response(200, text=answer))
+
+    monkeypatch.setattr(sources.httpx, "stream", get)
+    return service(store, tmp_path, **settings), gets
+
+
+def test_the_perennial_sources_rows_give_a_tag_by_status_and_skip_what_has_no_site():
+    assert parse_rsp(RSP) == {
+        "reuters.com": "rsp_reliable",
+        "wired.com": "rsp_mixed",
+        "quora.com": "rsp_unreliable",
+        "quora.example": "rsp_unreliable",
+        "dailymail.co.uk": "rsp_deprecated",
+        "spam.example": "rsp_deprecated",
+        # Two rows, a status each: the less reliable holds.
+        "theguardian.com": "rsp_mixed",
+    }
+
+
+def test_rsp_tags_give_the_tier_and_leave_the_kind_to_the_rest(store, tmp_path, monkeypatch, wdqs):
+    svc, gets = rsp_service(store, tmp_path, monkeypatch, wdqs, rsp=True)
+    svc.refresh_lists()
+
+    found = svc.classify(
+        [
+            "reuters.com",
+            "www.dailymail.co.uk",
+            "m.quora.com",
+            "wired.com",
+            "agency.gov",
+            "a.example",
+        ],
+        0,
+    )
+
+    assert gets[0][0] == sources.RSP_URL
+    assert gets[0][1]["User-Agent"] == fetch.user_agent()
+    assert found["reuters.com"].tags == {"rsp_reliable"}
+    assert found["reuters.com"].tier == "high"
+    assert found["reuters.com"].kind == "unknown"
+    assert found["www.dailymail.co.uk"].tier == "avoid"
+    assert found["m.quora.com"].tier == "low"
+    assert found["wired.com"].tier == "unknown"
+    assert found["agency.gov"].tags == set()
+    assert found["a.example"].tags == set()
+
+
+def test_an_rsp_tag_joins_the_kind_a_rule_or_a_list_gives(store, tmp_path, monkeypatch, wdqs):
+    answer = RSP.replace("reuters.com", "agency.gov")
+    svc, _ = rsp_service(
+        store,
+        tmp_path,
+        monkeypatch,
+        wdqs,
+        answer,
+        rsp=True,
+        lists=("ai_generated=https://l.example/a",),
+    )
+    svc.refresh_lists()
+
+    found = one(svc, "agency.gov", 0)
+
+    assert (found.kind, found.tags, found.origin) == ("government", {"rsp_reliable"}, "rule")
+
+
+def test_a_mark_or_a_config_entry_is_not_changed_by_the_rsp_overlay(
+    store, tmp_path, monkeypatch, wdqs
+):
+    svc, _ = rsp_service(store, tmp_path, monkeypatch, wdqs, rsp=True, allow=("dailymail.co.uk",))
+    svc.refresh_lists()
+    svc.mark("quora.com", "news")
+
+    assert one(svc, "dailymail.co.uk", 0).tags == {"allow"}
+    assert one(svc, "quora.com", 0).tags == set()
+
+
+def test_rsp_off_or_sources_off_fetches_and_tags_nothing(store, tmp_path, monkeypatch, wdqs):
+    svc, gets = rsp_service(store, tmp_path, monkeypatch, wdqs)
+    svc.refresh_lists()
+    assert gets == [] and one(svc, "dailymail.co.uk", 0).tags == set()
+
+    wdqs()
+    off = Sources(SourceSettings(enabled=False, rsp=True, lists=()), store, tmp_path)
+    off.refresh_lists()
+    assert gets == [] and one(off, "dailymail.co.uk", 0).tags == set()
+
+
+def test_an_unreadable_rsp_download_keeps_the_page_untagged(store, tmp_path, monkeypatch, wdqs):
+    svc, _ = rsp_service(store, tmp_path, monkeypatch, wdqs, "<html>", rsp=True)
+    svc.refresh_lists()
+
+    assert one(svc, "dailymail.co.uk", 0).tags == set()

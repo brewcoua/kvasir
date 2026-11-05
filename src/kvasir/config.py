@@ -188,6 +188,9 @@ class SourceSettings:
     # the age at which a downloaded list is fetched again.
     ttl_days: int = 30
     miss_ttl_days: int = 7
+    # Whether Wikipedia's perennial sources list (WP:RSP) tags hosts `rsp_reliable`, `rsp_mixed`,
+    # `rsp_unreliable` or `rsp_deprecated`. Fetched with the lists; needs `enabled`.
+    rsp: bool = False
     # Hosts, and their subdomains, that are always trusted or never read. They beat any mark.
     allow: tuple[str, ...] = ()
     deny: tuple[str, ...] = ()

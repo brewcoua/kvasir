@@ -526,6 +526,7 @@ def test_source_settings_default_to_off_with_the_cisa_list():
 
     assert settings.sources.enabled is False
     assert settings.sources.wikidata is True
+    assert settings.sources.rsp is False
     assert (settings.sources.ttl_days, settings.sources.miss_ttl_days) == (30, 7)
     assert settings.sources.allow == settings.sources.deny == ()
     assert [entry.partition("=")[0] for entry in settings.sources.lists] == ["government"]
@@ -537,6 +538,7 @@ def test_source_lists_read_from_the_environment_keep_their_case():
         MINIMAL
         | {
             "KVASIR_SOURCES_ENABLED": "true",
+            "KVASIR_SOURCES_RSP": "true",
             "KVASIR_SOURCES_ALLOW": "example.org, Example.com",
             "KVASIR_SOURCES_DENY": "farm.example",
             "KVASIR_SOURCES_LISTS": "ai_generated=https://lists.example/Ai.txt",
@@ -544,6 +546,7 @@ def test_source_lists_read_from_the_environment_keep_their_case():
     )
 
     assert settings.sources.enabled is True
+    assert settings.sources.rsp is True
     assert settings.sources.allow == ("example.org", "Example.com")
     assert settings.sources.deny == ("farm.example",)
     assert settings.sources.lists == ("ai_generated=https://lists.example/Ai.txt",)

@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Phases 1 to 4 built 2026-11-04; Co-STORM citations (`conversation.py`) carry no source.
+Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05; Co-STORM citations (`conversation.py`) carry no source.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
@@ -292,10 +292,15 @@ No classification needed. It fixes the run above on its own.
 
 ### Phase 5: the WP:RSP overlay (optional, after phase 2)
 
-Parse the perennial sources wikitext through the MediaWiki API into `rsp_*` tags by domain,
-refreshed with the other lists. Its "Source" column names publications, not domains; the domain
-comes from the row's link or from Wikidata. Check the page's license before shipping a parsed copy;
-fetching it at runtime needs no copy.
+Built behind `[sources] rsp` (false), effective only with `enabled`. One MediaWiki API call
+(`generator=templates`, since the rows are in the page's transcluded subpages) fetches the wikitext
+of every subpage; it is cached in `data_dir` and refreshed with the other lists. A row is
+`|- class="s-<status>"` with its sites in `{{WP:RSPUSES|a.com|b.com}}`: `gr` gives `rsp_reliable`,
+`nc` `rsp_mixed`, `gu` `rsp_unreliable`, `d` and `b` `rsp_deprecated`. The domains come from that
+template only: a row with none, a part of a site (`a.com/news`) or the status `m` is skipped, and
+Wikidata is not asked. A site in several rows takes the least reliable. The tags are added to
+whatever the host otherwise resolves to, after it resolves and unless the config or a mark decided
+it, so they set no kind. The page's license (CC BY-SA) is why no copy is shipped.
 
 ### Phase 6: evaluate
 

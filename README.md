@@ -589,6 +589,7 @@ The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.u
 | `KVASIR_SOURCES_MISS_TTL_DAYS` | `7` | Days a host Wikidata does not know is remembered. |
 | `KVASIR_SOURCES_ALLOW` | empty | Comma-separated hosts, with their subdomains, always trusted (`high`). Beats any mark. |
 | `KVASIR_SOURCES_DENY` | empty | Comma-separated hosts, with their subdomains, never read (`avoid`). Beats `ALLOW` and any mark. |
+| `KVASIR_SOURCES_RSP` | `false` | Also tag hosts by Wikipedia's perennial sources list, fetched from `en.wikipedia.org` and refreshed with the lists. Needs `KVASIR_SOURCES_ENABLED`. |
 | `KVASIR_SOURCES_LISTS` | CISA `.gov` list | Comma-separated `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, uBlacklist files and CSVs with the host first are read. Empty uses none. |
 | `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
 | `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
@@ -619,6 +620,17 @@ domains of search results in one query per 50 hosts, so its operators see those 
 `unknown` for that search and is known by the next. The default list is CISA's `.gov` list. The
 HUGE AI blocklist is not default: its last commit is from October 2025 and it targets AI-generated
 imagery. Add it to `KVASIR_SOURCES_LISTS` as `ai_generated=<url>` if you want it.
+
+With `KVASIR_SOURCES_RSP=true` as well, kvasir fetches Wikipedia's [perennial sources
+list](https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources) (WP:RSP) from
+`en.wikipedia.org` through the MediaWiki API, nothing of it shipped, and refreshes it with the other
+lists. A site it names gets a tag from its status: `rsp_reliable` (generally reliable, tier `high`),
+`rsp_mixed` (no consensus, no effect), `rsp_unreliable` (generally unreliable, `low`) or
+`rsp_deprecated` (deprecated or blacklisted, `avoid`). The tag joins the kind the host resolves to,
+and does not replace it; a config `ALLOW` or `DENY` and a mark ignore it. A site in several rows,
+such as a newspaper and its blogs, takes the least reliable status; a row with no site, or only a
+part of one (`example.com/news`), is skipped. Rows name publications, not domains, so only sites
+the page lists are tagged.
 
 Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,

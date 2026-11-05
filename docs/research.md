@@ -328,7 +328,10 @@ flowchart LR
   `[sources] enabled`, the hosts of a call's results and leads are classified in one batch, a
   result of an `avoid` site is dropped, and marked seen, before ranking even when nothing else is
   left, and a fourth ranking, when the tiers differ, orders the rest by tier: `high`, `normal`,
-  `unknown`, then `low`, ties in SearXNG's order. Every other lookup (leads, recall, affinity, site
+  `unknown`, then `low`, ties in SearXNG's order. With `rsp` also set, Wikipedia's perennial sources
+  list adds a tag to a site it names: `rsp_reliable` makes it `high`, `rsp_unreliable` `low` and
+  `rsp_deprecated`, which takes in its blacklisted sites, `avoid`; `rsp_mixed` changes nothing, and
+  the kind stays what the rules and Wikidata give. Every other lookup (leads, recall, affinity, site
   searches) reads only what the cache, rules and lists know, since the host was classified when
   found. The
   rankings are fused as `Σ w / (RRF_K + rank)`, with `RRF_K` 60 and weights

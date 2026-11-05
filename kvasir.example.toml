@@ -78,6 +78,10 @@ max_age_hours = 48
 # CISA .gov list. laylavish's HUGE AI blocklist (CC0) is left out: no commit since 2025-10-02.
 # A URL cannot contain a comma, since the environment variable is split on commas.
 # lists = ["government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"]
+# Also tag hosts by Wikipedia's perennial sources list (WP:RSP): reliable, mixed, unreliable or
+# deprecated. Fetched from en.wikipedia.org at runtime and refreshed with the lists; deprecated
+# sites are never read, unreliable ones rank low. Needs enabled = true.
+# rsp = true
 
 [log]
 format = "text"
