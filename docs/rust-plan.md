@@ -528,6 +528,42 @@ Build `kvasir-extract`, `-browser`, `-fetch`, `-sites`. Port `test_fetch.py`, `t
 Gate: `pages.toml` fixtures pass. A copy of the real `pages.db`, `sources.db` and `favicons.db` opens
 and answers recall. SSRF tests cover redirect hops, literal IPs and rebinding.
 
+#### Phase 3 result: pass
+
+Done on 2026-11-05.
+
+- **Fixtures:** `tests/fixtures/pages` and `pages.toml` pass through `kvasir-extract`.
+- **Corpus:** against Python's text on the real page cache, F1 median 0.978 and tenth percentile
+  0.807; precision median 0.973; recall median 0.998 and tenth percentile 0.932. Pages below that are
+  truncated rather than wrong: a GitHub issue keeps 6,165 characters of 55,168, and the same holds for
+  wasmruntime, nordiso, a chromedevtools Tracing page, novasolver and airarabia. `zylos.ai/research`
+  goes the other way and keeps too much. Phase 6 reads these again in real reports.
+- **Databases:** `crates/kvasir-sites/tests/real_copies.rs` runs on copies of the real files. Of 253
+  pages all 253 read, with their 2,045 pieces, and full-text recall answered with vectors. All 716
+  hosts in `sources.db` read (229 matches, 487 misses, no marks) and all 117 in `favicons.db` (97
+  icons).
+- **SSRF:** `kvasir-fetch` covers redirect hops to a private literal and to a name resolving
+  privately, literal spellings, rebinding, the robots redirect, and the browser's request check.
+  Each of the three guards was removed in turn and a test failed each time.
+
+Differences from Python, all deliberate:
+
+- `robots.txt` has its own RFC 9309 parser in place of `texting_robots`, which this plan named: the
+  longest match wins and allow wins a tie, where `RobotFileParser` took the first match. Patterns are
+  not percent-normalized.
+- Extraction: only `&amp;` is unescaped in link targets; a PDF page that fails is skipped; a page
+  nested over 2,000 elements is refused, for icons as well. `kvasir-extract` owns `normalize`.
+- The browser runs without the request check on CDP-created targets and without site isolation, as
+  spike 3 settled. `LINK_BOXES` and padding removal are gone.
+- Page clients ignore proxies from the environment. The user agent ends in `reqwest/0.13`. A content
+  type is compared case-insensitively.
+- `Guard::Loopback` replaces turning the guard off, so tests run the same paths production does.
+- Each hop of `describe` is checked against the guard, which Python missed. A downloaded list is
+  written to a temporary file, synced, then renamed.
+
+`registrable` uses `psl` where Python used `tld`. They agreed on all 59 hosts of a hand-written list,
+private suffixes included, but were not compared on the real hosts.
+
 ### Phase 4: runs and API
 
 Build `kvasir-run`, `-research`, `-ledger`, `-graph`, `-api`, and the `kvasir` binary.
@@ -598,7 +634,7 @@ current method name, so a typed `kind` must still accept it. Test against copies
 
 ## Not verified
 
-- `psl` private-suffix behaviour against `tld`.
+- `psl` against `tld` on real hosts. A hand-written list of 59 agreed.
 - `utoipa` 6: OpenAPI version emitted, tagged enum output, and `openapi-typescript` results.
 - Crate choices marked production rest on release dates and download counts, not on use here.
 - Races other than `storm/lm.py:84` and the Co-STORM ones were read from code by a reviewer and not
