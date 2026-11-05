@@ -1,6 +1,6 @@
 # Rust migration: plan
 
-Status: phase 0 done in Python, phase 1 passed. No Rust outside scratch spikes yet. Written 2026-11-05 against commit `b34fd37`.
+Status: phase 0 done in Python, phases 1 and 2 passed. Written 2026-11-05 against commit `b34fd37`.
 
 kvasir is one Python process. Its work is blocking, because dspy, litellm and the STORM fork are
 synchronous, so a run is a thread with nested thread pools under an asyncio server. This plan
@@ -294,15 +294,16 @@ Versions are from crates.io on 2026-11-05. `Cargo.lock` is committed, and Renova
 | Runtime | `tokio` 1.54, `tokio-util` 0.7, `futures` 0.3 | asyncio, threads | Production |
 | Server | `axum` 0.8, `tower-http` 0.7 | FastAPI, uvicorn | Production |
 | OpenAPI | `utoipa` 6, `utoipa-axum`, `schemars` 1.2 | FastAPI schema | Production. Fit with `openapi-typescript` tested in phase 4. |
-| Client | `reqwest` 0.13 | httpx | Production |
+| Client | `reqwest` 0.13, rustls | httpx | Production |
 | Retries | `backon` 1.6 | backoff | Production |
 | Serialisation | `serde` 1.0, `serde_json` 1.0 | pydantic | Production |
+| JSON repair | `dsrust-json-repair` 0.1.0-alpha.3, pinned exactly | json_repair | Alpha; passed spike 2 |
 | Parsing HTML | `dom_query` 0.29 | bs4 | Production |
 | Extraction and markdown | `rs-trafilatura` 0.2 | trafilatura | Passed spike 1. Weak on a few pages, so pin it and keep a corpus test. |
 | URLs | `url` 2.5, `psl` 2.1 | courlan, tld | Production |
 | PDF | `pdf_oxide` 0.3 | pypdf | Passed spike 1, in a child process |
 | Browser | `chromiumoxide` 0.9 | playwright, patchright | Usable; spike 3 |
-| SQLite | `rusqlite` 0.41, bundled; `rusqlite_migration` 2.6 | sqlite3 | Production |
+| SQLite | `rusqlite` 0.41, bundled | sqlite3 | Production. `rusqlite_migration` 2.6 needs rusqlite 0.40, so `kvasir-db` runs its own `user_version` steps. |
 | Atomic files | `tempfile` 3 | `os.replace` | Production |
 | Settings swap | `arc-swap` 1.9 | module globals | Production |
 | Regex | `regex` 1.13; `fancy-regex` 0.20 only where lookaround is needed | re | Production |
@@ -488,6 +489,37 @@ Build `kvasir-types`, `-config`, `-db`, `-llm`, `-testkit`, with CI: `cargo fmt 
 Gate: golden prompts pass. `Settings` loads the same environment and settings rows as Python, and
 rejects what it rejects. A live call to a local model parses, with usage recorded.
 
+#### Phase 2 result: pass
+
+Done on 2026-11-05.
+
+- **Prompts:** `crates/kvasir-llm/tests/golden.rs` renders nine signatures, which between them use
+  every field kind: text, integer input, boolean, literal, `list[int]`, `list[str]`, the four
+  models, and `ChainOfThought`. All nine are byte-equal to dspy in both formats, and dspy's replies
+  parse to the same values. `tests/golden/signatures.json` now holds the JSON format as well. The
+  other 23 signatures are checked the same way as their method crates land.
+- **Settings:** `tests/golden/settings.json` holds 123 cases, environment and stored, strict and not.
+  Rust gives the same settings, the same warnings and the same error text for all of them.
+- **Live call:** `gpt-oss:20b` on a local Ollama answered a three-field signature in the chat
+  format, and the call recorded 331 prompt and 57 completion tokens. `nomic-embed-text` embedded a
+  query. Ollama reports no reasoning tokens and no cost, so both were 0.
+- **Databases:** the first migration of each file reproduces Python's schema exactly, FTS5
+  included. A file Python left is copied to `<file>.pre-rust.bak` first. A copy of the real
+  `pages.db` migrated, kept its 253 pages and 2,045 pieces, and answered a full-text query.
+
+Differences from Python, all deliberate:
+
+- `KVASIR_PORT` above 65535 is refused at load. Python failed later, at bind.
+- A host with non-ASCII characters goes through UTS 46, where Python used IDNA 2003. They differ on
+  a few characters, such as `ß`.
+- Embedding requests retry like chat calls. Python did not retry them.
+- Calls report to a `Sink` trait, a fourth trait beside `Llm`, `Search` and `Method`. A run is one
+  implementation and `NoSink`, for a client's housekeeping, is the other.
+
+Left for later phases: listing a provider's models moves with `api/providers.py` in phase 4. A run
+must key its usage by `openai/<name>`, as Python did, since `tests/contract/shapes.json` records
+those keys.
+
 ### Phase 3: reading the web
 
 Build `kvasir-extract`, `-browser`, `-fetch`, `-sites`. Port `test_fetch.py`, `test_fetch_politeness.py`,
@@ -566,7 +598,6 @@ current method name, so a typed `kind` must still accept it. Test against copies
 
 ## Not verified
 
-- `rusqlite` `bundled` including FTS5 and JSON functions. Phase 2 opens the real `pages.db`.
 - `psl` private-suffix behaviour against `tld`.
 - `utoipa` 6: OpenAPI version emitted, tagged enum output, and `openapi-typescript` results.
 - Crate choices marked production rest on release dates and download counts, not on use here.

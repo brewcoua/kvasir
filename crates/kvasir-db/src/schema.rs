@@ -135,3 +135,28 @@ mod tests {
         assert!(!dir.path().join("f.db.pre-rust.bak").exists());
     }
 }
+
+/// Opens a copy of a real `pages.db`. Ignored by default; run with
+/// `KVASIR_REAL_PAGES=<copy of pages.db> cargo test -p kvasir-db -- --ignored`.
+#[cfg(test)]
+#[test]
+#[ignore = "needs a copy of a real pages.db"]
+fn a_real_pages_db_opens_and_searches() {
+    let path = std::env::var("KVASIR_REAL_PAGES").expect("set KVASIR_REAL_PAGES");
+    let db = crate::Db::open(std::path::Path::new(&path), PAGES).unwrap();
+    let (pages, pieces, found): (i64, i64, i64) = db
+        .call_blocking(|c| {
+            Ok((
+                c.query_row("SELECT count(*) FROM pages", [], |r| r.get(0))?,
+                c.query_row("SELECT count(*) FROM pieces", [], |r| r.get(0))?,
+                c.query_row(
+                    "SELECT count(*) FROM pieces_fts WHERE pieces_fts MATCH 'the'",
+                    [],
+                    |r| r.get(0),
+                )?,
+            ))
+        })
+        .unwrap();
+    println!("{pages} pages, {pieces} pieces, {found} match 'the'");
+    assert!(pages > 0 && pieces > 0 && found > 0);
+}
