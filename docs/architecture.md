@@ -289,8 +289,8 @@ failure reading or writing it is logged, and the run carries on without the cach
 
 The Knowledge page of the dashboard, `#/knowledge`, shows what it holds, through `GET /v1/sites`,
 `GET /v1/pages`, `GET /v1/pages/{id}` and `GET /v1/pages/recall?q=`. `DELETE /v1/pages/{id}`,
-`DELETE /v1/sites/{domain}` and `POST /v1/pages/{id}/refetch` change it. Like every route these
-have no authentication, so anyone who can reach the service can empty the cache.
+`DELETE /v1/sites/{domain}` and `POST /v1/pages/{id}/refetch` change it. Like every route they
+need the token, and anyone who holds it can empty the cache.
 
 With `KVASIR_SOURCES_ENABLED=true`, `api/sources.py` adds `GET /v1/sources/{host}`,
 `PUT` and `DELETE /v1/sources/{host}/mark`, and `DELETE /v1/sources`, which clears the cache and
@@ -353,7 +353,7 @@ Each row is a choice someone changing kvasir is likely to question, and the reas
 
 | Decision | Reason |
 | --- | --- |
-| No authentication, and none to be added here. | The service is reached over a private network behind the consumer's own policy layer. `api/__init__.py` says so at the top. |
+| One shared token, `KVASIR_TOKEN`, and no users. | Settings are moving into the API (see [`settings-plan.md`](settings-plan.md)), and an open API that writes them is one anyone on the network can repoint. The page cannot send a header from `EventSource` or `<img>`, so `POST /v1/login` sets the token as an HttpOnly, SameSite=Strict cookie, accepted beside `Authorization: Bearer`. `api/auth.py`. |
 | Every provider is OpenAI-compatible, reached through dspy only. | One wire protocol, with the endpoint and key per provider in `[provider.<name>]`. A gateway in front gives one place for credentials, routing, caching and pricing. litellm is not a direct dependency; dspy uses it as its transport. |
 | No response cache in kvasir. | The provider or a gateway caches. A second cache is a second place to invalidate, and upstream's cache, opened under the home directory at import, failed under a read-only root. |
 | A model is `<provider>/<name>`, and an unknown provider is refused at startup. | The provider picks the endpoint and key; dspy is given `openai/<name>`. Guessing a provider would hide a misconfiguration. |

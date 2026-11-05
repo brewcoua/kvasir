@@ -30,8 +30,8 @@ Open WebUI keeps functions in its own database. It reads this file once, at impo
 4. On the create page, set the id to `kvasir`. The id prefixes every model, so this is what makes
    them `kvasir.research`, `kvasir.storm` and `kvasir.co-storm`. The name and description come from the file's
    header, so leave them.
-5. Save, then set `KVASIR_URL` under the function's valves, unless the default
-   `http://kvasir:8080` already resolves.
+5. Save, then set `KVASIR_TOKEN` under the function's valves to the service's `KVASIR_TOKEN`, and
+   `KVASIR_URL` unless the default `http://kvasir:8080` already resolves.
 6. Enable the function.
 
 Verify: **Research**, **STORM** and **Co-STORM** appear in the model picker. Send a short topic to STORM. Within
@@ -131,6 +131,7 @@ reply, under one reasoning block.
 | Valve | Default | Effect |
 | --- | --- | --- |
 | `KVASIR_URL` | `http://kvasir:8080` | Base URL of the service. |
+| `KVASIR_TOKEN` | empty | The service's `KVASIR_TOKEN`, sent with every request. |
 | `RESEARCH_TIMEOUT_SECONDS` | `3600` | Total timeout for one STORM or research run. |
 | `SESSION_TIMEOUT_SECONDS` | `1800` | Total timeout for one Co-STORM call. Warm start is the slow one. |
 | `MODEL_FAST` | empty | Overrides the service's fast model. Empty leaves it to the service. |
@@ -163,6 +164,7 @@ The embedding model and session lifetime are service configuration, set through
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `Could not reach kvasir at ...` | Wrong `KVASIR_URL`, or the service is down. | Check the URL resolves from the Open WebUI container, and that `/healthz` answers. |
+| `kvasir returned 401` | `KVASIR_TOKEN` is unset or differs from the service's. | Set the valve to the service's `KVASIR_TOKEN`. |
 | `kvasir returned 429` | Another run is in progress. | Wait, or raise `KVASIR_RUNS_MAX_CONCURRENT` on the service. |
 | An article with no references | SearXNG is not serving JSON. | Add `json` to `search.formats` in its `settings.yml`. |
 | `Open WebUI did not supply a chat id` | Co-STORM was called outside a normal chat. | Start a new chat. |

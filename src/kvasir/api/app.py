@@ -1,6 +1,6 @@
 """The application: settings and shared state at startup, the page, health, and error responses.
 
-The routes are in the modules beside this one. See `kvasir.api` on why there is no authentication.
+The routes are in the modules beside this one. Each needs the token: see `kvasir.api.auth`.
 """
 
 from __future__ import annotations
@@ -13,12 +13,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
-from kvasir.api import favicons, methods, pages, runs, sessions, sources, tasks
+from kvasir.api import auth, favicons, methods, pages, runs, sessions, sources, tasks
 from kvasir.config import Settings, apply_environment
 from kvasir.research import fetch
 from kvasir.research.favicons import Favicons, FaviconStore
@@ -91,8 +91,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
+app.include_router(auth.router)
 for module in (runs, methods, pages, favicons, sources, tasks, sessions):
-    app.include_router(module.router)
+    app.include_router(module.router, dependencies=[Depends(auth.require_token)])
 
 
 @app.get("/", include_in_schema=False)
@@ -153,6 +154,15 @@ async def _reachable(url: str, headers: dict[str, str] | None = None) -> bool:
         logger.warning("readiness check failed for %s: %s", url, exc)
         return False
     return result.status_code < 500
+
+
+@app.exception_handler(auth.Unauthorized)
+async def _unauthorized(request: Request, exc: auth.Unauthorized) -> JSONResponse:
+    return JSONResponse(
+        {"message": "missing or wrong token"},
+        status_code=401,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 @app.exception_handler(RunNotFound)

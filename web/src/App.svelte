@@ -3,6 +3,7 @@
   import { defaultsOf, json, type Defaults, type MethodInfo, type RunSummary } from "./lib/api";
   import { go, route } from "./lib/route.svelte";
   import Icon from "./components/Icon.svelte";
+  import Login from "./components/Login.svelte";
   import RunList from "./components/RunList.svelte";
   import Settings from "./components/Settings.svelte";
   import Theme from "./components/Theme.svelte";
@@ -17,6 +18,8 @@
   let summary = $state("loading…");
   let settingsOpen = $state(false);
   let defaults: Partial<Defaults> = $state({});
+  // Null until the service says whether this browser holds the token.
+  let authed: boolean | null = $state(null);
 
   const active = $derived(runs.filter((run) => run.state === "running").length);
 
@@ -40,50 +43,60 @@
   }
 
   onMount(() => {
-    // Rewrites a link from before the pages were split into its current form.
-    go(route.current, true);
-    refresh();
-    json<MethodInfo[]>("/v1/methods")
-      .then((methods) => (defaults = Object.assign({}, ...methods.map(defaultsOf))))
-      .catch((error) => console.warn("no defaults:", error));
-    const timer = setInterval(refresh, LIST_INTERVAL_MS);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    // A service that cannot be reached is shown as such by the page itself, not as a login.
+    fetch("/v1/runs").then((probe) => probe.status !== 401, () => true).then((ok) => {
+      authed = ok;
+      if (!authed) return;
+      // Rewrites a link from before the pages were split into its current form.
+      go(route.current, true);
+      refresh();
+      json<MethodInfo[]>("/v1/methods")
+        .then((methods) => (defaults = Object.assign({}, ...methods.map(defaultsOf))))
+        .catch((error) => console.warn("no defaults:", error));
+      timer = setInterval(refresh, LIST_INTERVAL_MS);
+    });
     return () => clearInterval(timer);
   });
 </script>
 
-<header>
-  <h1><a href="#/">kvasir</a></h1>
-  <nav>
-    <a href="#/" aria-current={route.current.page === "new" ? "page" : undefined}>New</a>
-    <a href="#/runs" aria-current={route.current.page === "runs" || route.current.page === "run" ? "page" : undefined}>
-      Runs{#if active > 0}<span class="meta">{" · "}{active} running</span>{/if}
-    </a>
-    <a href="#/knowledge" aria-current={route.current.page === "knowledge" ? "page" : undefined}>Knowledge</a>
-  </nav>
-  <Theme />
-  <button type="button" class="icon" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>
-    <Icon name="sliders" />
-  </button>
-</header>
+{#if authed === false}
+  <Login />
+{:else if authed}
+  <header>
+    <h1><a href="#/">kvasir</a></h1>
+    <nav>
+      <a href="#/" aria-current={route.current.page === "new" ? "page" : undefined}>New</a>
+      <a href="#/runs" aria-current={route.current.page === "runs" || route.current.page === "run" ? "page" : undefined}>
+        Runs{#if active > 0}<span class="meta">{" · "}{active} running</span>{/if}
+      </a>
+      <a href="#/knowledge" aria-current={route.current.page === "knowledge" ? "page" : undefined}>Knowledge</a>
+    </nav>
+    <Theme />
+    <button type="button" class="icon" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>
+      <Icon name="sliders" />
+    </button>
+  </header>
 
-<main>
-  {#if route.current.page === "run"}
-    <div class="run-split">
-      <section class="panel">
-        <h2>Runs</h2>
-        <RunList {runs} selected={route.current.id} />
-      </section>
-      {#key route.current.id}<Run id={route.current.id} tab={route.current.tab} />{/key}
-    </div>
-  {:else if route.current.page === "runs"}
-    <Runs {runs} {summary} />
-  {:else if route.current.page === "knowledge"}
-    <Knowledge id={route.current.id} />
-  {:else}
-    <NewRun {defaults} {runs} onstarted={(id) => (go({ page: "run", id, tab: null }), refresh())} />
-  {/if}
-</main>
+  <main>
+    {#if route.current.page === "run"}
+      <div class="run-split">
+        <section class="panel">
+          <h2>Runs</h2>
+          <RunList {runs} selected={route.current.id} />
+        </section>
+        {#key route.current.id}<Run id={route.current.id} tab={route.current.tab} />{/key}
+      </div>
+    {:else if route.current.page === "runs"}
+      <Runs {runs} {summary} />
+    {:else if route.current.page === "knowledge"}
+      <Knowledge id={route.current.id} />
+    {:else}
+      <NewRun {defaults} {runs} onstarted={(id) => (go({ page: "run", id, tab: null }), refresh())} />
+    {/if}
+  </main>
+
+  <Settings bind:open={settingsOpen} {defaults} />
+{/if}
 
 <svelte:window onkeydown={slash} />
-
-<Settings bind:open={settingsOpen} {defaults} />

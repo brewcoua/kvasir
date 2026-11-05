@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import article_run, stub_method
+from fakes import AUTH, article_run, stub_method
 from kvasir import conversation
 from kvasir.api import streaming
 from kvasir.api.app import app
@@ -32,6 +32,7 @@ ENVIRONMENT = {
     "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
     "KVASIR_MODEL_EMBEDDING": "gateway/embed",
     "KVASIR_SEARCH_URL": "http://searxng.example",
+    "KVASIR_TOKEN": "token",
 }
 
 RESULT = ArticleResult(
@@ -52,7 +53,7 @@ def environment(monkeypatch, tmp_path):
 
 @pytest.fixture
 def client(environment):
-    with TestClient(app) as client:
+    with TestClient(app, headers=AUTH) as client:
         yield client
 
 
@@ -92,7 +93,7 @@ def test_methods_report_the_configured_defaults(environment, monkeypatch):
     monkeypatch.setenv("KVASIR_RESEARCH_MAX_SEARCHES", "9")
     monkeypatch.setenv("KVASIR_RESEARCH_FOLLOW_UPS", "false")
 
-    with TestClient(app) as client:
+    with TestClient(app, headers=AUTH) as client:
         methods = {method["name"]: method for method in client.get("/v1/methods").json()}
 
     assert set(methods) == set(METHODS)
@@ -144,7 +145,7 @@ def test_startup_fails_loudly_on_missing_configuration(monkeypatch):
     for name in ENVIRONMENT:
         monkeypatch.delenv(name, raising=False)
 
-    with pytest.raises(Exception, match="KVASIR_SEARCH_URL"), TestClient(app):
+    with pytest.raises(Exception, match="KVASIR_SEARCH_URL"), TestClient(app, headers=AUTH):
         pass
 
 
@@ -185,7 +186,7 @@ def test_readyz_probes_each_provider_a_model_uses_once(environment, monkeypatch)
         return "other" not in url
 
     monkeypatch.setattr("kvasir.api.app._reachable", reachable)
-    with TestClient(app) as client:
+    with TestClient(app, headers=AUTH) as client:
         response = client.get("/readyz")
 
     assert response.status_code == 503

@@ -1,5 +1,5 @@
-"""The HTTP service. JSON in, SSE out, no authentication.
+"""The HTTP service. JSON in, SSE out, behind one shared token (`kvasir.api.auth`).
 
-The service is reached only over a private network and sits behind the consumer's own policy layer.
-Do not add an auth layer here, and do not bind to a public interface by default.
+Do not bind to a public interface by default: the token guards the routes, and nothing here
+limits how often it may be guessed.
 """

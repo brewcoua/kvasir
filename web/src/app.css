@@ -2290,3 +2290,27 @@ tr.cut td {
   font-size: 0.75rem;
   border-top: 2px solid var(--accent);
 }
+.login {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 22rem;
+  margin: 15vh auto 0;
+  padding: 0 0.85rem 0.85rem;
+}
+.login h2 {
+  margin: 0 -0.85rem 0.25rem;
+}
+.login input {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+}
+.login p {
+  margin: 0;
+}
+.login button {
+  justify-self: end;
+}

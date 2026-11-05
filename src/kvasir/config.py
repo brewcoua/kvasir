@@ -222,6 +222,8 @@ class Settings:
     """Resolved configuration. Build with `Settings.from_env()`."""
 
     data_dir: Path = Path("/data")
+    # Every route but health, the login and the page needs it. See `kvasir.api.auth`.
+    token: str
     # How wide each of the pipeline's thread pools runs, and how many search or page
     # requests may be in flight at once across the whole process.
     max_threads: int = DEFAULT_MAX_THREADS

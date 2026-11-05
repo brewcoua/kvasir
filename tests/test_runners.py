@@ -21,6 +21,7 @@ MINIMAL = {
     "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
     "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
     "KVASIR_SEARCH_URL": "http://searxng.example",
+    "KVASIR_TOKEN": "token",
     "KVASIR_MODEL_EMBEDDING": "gateway/ollama/embed:cloud",
 }
 

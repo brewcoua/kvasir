@@ -12,6 +12,7 @@ MINIMAL = {
     "KVASIR_MODEL_STRONG": "local/strong:cloud",
     "KVASIR_MODEL_EMBEDDING": "local/embed:latest",
     "KVASIR_SEARCH_URL": "http://searxng.example",
+    "KVASIR_TOKEN": "token",
 }
 REQUIRED = [name for name in MINIMAL if "PROVIDER" not in name]
 
@@ -261,7 +262,7 @@ format = "text"
 """,
     )
 
-    settings = Settings.from_env({"KVASIR_CONFIG": path})
+    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
 
     assert settings.providers["local"].api_key == "file-key"
     assert settings.model.strong == "local/qwen3.8:27b"
@@ -358,7 +359,7 @@ def test_kvasir_toml_is_found_in_the_working_directory(tmp_path, monkeypatch, de
 def test_the_example_file_loads():
     example = Path(__file__).parent.parent / "kvasir.example.toml"
 
-    settings = Settings.from_env({"KVASIR_CONFIG": str(example)})
+    settings = Settings.from_env({"KVASIR_CONFIG": str(example), "KVASIR_TOKEN": "token"})
 
     assert settings.resolve(settings.model.strong).api_key == NO_API_KEY
     assert settings.runs.store == "sqlite"
@@ -415,7 +416,7 @@ host_interval_seconds = 2.5
 """,
     )
 
-    settings = Settings.from_env({"KVASIR_CONFIG": path})
+    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
 
     assert settings.fetch.contact == "ops@example.org"
     assert settings.fetch.host_interval_seconds == 2.5
@@ -475,7 +476,7 @@ custom_url = "https://icons.example/{domain}.png"
 """,
     )
 
-    settings = Settings.from_env({"KVASIR_CONFIG": path})
+    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
 
     assert settings.favicons.providers == ("custom", "direct")
     assert settings.favicons.custom_url == "https://icons.example/{domain}.png"
@@ -577,7 +578,7 @@ deny = ["farm.example"]
 """,
     )
 
-    settings = Settings.from_env({"KVASIR_CONFIG": path})
+    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
 
     assert settings.sources.wikidata is False
     assert settings.sources.deny == ("farm.example",)

@@ -13,6 +13,9 @@ from kvasir.research.claims import Claim
 from kvasir.research.fetch import Page
 from kvasir.research.sources import Source
 
+# The token every test environment sets, as a client sends it.
+AUTH = {"Authorization": "Bearer token"}
+
 PAGE = (
     "<html><body><nav>Home | About</nav><h1>The stone</h1>"
     "<p>It was found in 1904 near Kvasir.</p><script>track()</script></body></html>"
@@ -130,6 +133,7 @@ def research_settings() -> Settings:
             "KVASIR_MODEL_STRONG": "gateway/strong",
             "KVASIR_MODEL_EMBEDDING": "gateway/embed",
             "KVASIR_SEARCH_URL": "http://searxng.example",
+            "KVASIR_TOKEN": "token",
         }
     )
 

@@ -9,7 +9,7 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import article_run, stub_method
+from fakes import AUTH, article_run, stub_method
 from kvasir.api.app import app
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import (
@@ -36,6 +36,7 @@ ENVIRONMENT = {
     "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
     "KVASIR_MODEL_EMBEDDING": "gateway/embed",
     "KVASIR_SEARCH_URL": "http://searxng.example",
+    "KVASIR_TOKEN": "token",
 }
 
 RESULT = ArticleResult(article="a", outline="o", citations=[], duration_seconds=1.0)
@@ -46,7 +47,7 @@ def client(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    with TestClient(app) as client:
+    with TestClient(app, headers=AUTH) as client:
         yield client
 
 
@@ -57,7 +58,7 @@ def sqlite(monkeypatch, tmp_path):
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("KVASIR_RUNS_STORE", "sqlite")
-    return lambda: TestClient(app)
+    return lambda: TestClient(app, headers=AUTH)
 
 
 def parse(text):

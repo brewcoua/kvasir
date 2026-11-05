@@ -6,6 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from fakes import AUTH
 from kvasir.api.app import app
 from kvasir.research import favicons, fetch
 from test_main import ENVIRONMENT
@@ -50,7 +51,7 @@ def make_client(monkeypatch, data):
 
     @contextlib.contextmanager
     def make():
-        with TestClient(app) as client:
+        with TestClient(app, headers=AUTH) as client:
             yield client
 
     return make

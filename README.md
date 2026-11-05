@@ -84,10 +84,13 @@ for SearXNG only.
 
    ```bash
    cp kvasir.example.toml kvasir.toml
+   export KVASIR_TOKEN="$(openssl rand -hex 32)"
    uv run python -m kvasir
    ```
 
-   Edit `kvasir.toml` to use other models. See [Configuration](#configuration) for every key.
+   Every `/v1` route needs the token, and the runs page asks for it once. Keep the shell open:
+   the examples below send `$KVASIR_TOKEN`. Edit `kvasir.toml` to use other models. See
+   [Configuration](#configuration) for every key.
 
 5. Check both dependencies are reachable:
 
@@ -99,8 +102,9 @@ for SearXNG only.
 Then [write an article](#write-an-article). On one local model a run takes much longer than through
 a hosted gateway.
 
-kvasir binds `0.0.0.0:8080` and has no authentication, so on a laptop it is reachable from the local
-network.
+kvasir binds `0.0.0.0:8080`, so on a laptop it is reachable from the local network. The token
+guards every route but `/healthz`, `/readyz`, `POST /v1/login` and the page itself, and nothing
+limits how often it may be guessed: use a long random one.
 
 ## Run it
 
@@ -114,6 +118,7 @@ podman run --rm \
   -e KVASIR_MODEL_STRONG=gateway/strong-model \
   -e KVASIR_MODEL_EMBEDDING=gateway/embedding-model \
   -e KVASIR_SEARCH_URL=http://searxng.example \
+  -e KVASIR_TOKEN=... \
   ghcr.io/brewcoua/kvasir:0.1.0
 ```
 
@@ -176,6 +181,9 @@ Every run starts at `POST /v1/runs`. The body names a method, the input and the 
 | `graph` | A cited report answering a question, following the questions each finding raises. |
 | `storm` | A Wikipedia-style article on the topic given as `input.question`. |
 
+A client sends the token as `Authorization: Bearer <token>`, or gets 401. The runs page posts it
+to `POST /v1/login` instead, which sets it as an HttpOnly cookie that every route accepts too.
+
 `GET /v1/methods` lists each method with its stages, whether it asks clarifying questions, and its
 options as a JSON Schema whose defaults are the configured ones. An option the method does not take
 is refused with 422, before any run starts.
@@ -199,6 +207,7 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
 
    ```bash
    curl -s -X POST localhost:8080/v1/clarify \
+     -H "Authorization: Bearer $KVASIR_TOKEN" \
      -H 'content-type: application/json' \
      -d '{"question": "Which open-weight LLMs are best for local coding?"}'
    ```
@@ -209,6 +218,7 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
 
    ```bash
    curl -N -X POST localhost:8080/v1/runs \
+     -H "Authorization: Bearer $KVASIR_TOKEN" \
      -H 'content-type: application/json' \
      -d '{"method": "ledger",
           "input": {"question": "Which open-weight LLMs are best for local coding?",
@@ -256,6 +266,7 @@ never makes a ranking or a table.
 
 ```bash
 curl -N -X POST localhost:8080/v1/runs \
+  -H "Authorization: Bearer $KVASIR_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"method": "graph", "input": {"question": "Why did the Kvasir stone end up in a museum?"}}'
 ```
@@ -310,6 +321,7 @@ for clients that already have them as data.
 
 ```bash
 curl -N -X POST localhost:8080/v1/runs \
+  -H "Authorization: Bearer $KVASIR_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"method": "ledger", "input": {"question": "Rank the open-weight coding models that fit one 24 GB GPU on coding benchmark score, VRAM at 4-bit and licence"}}'
 ```
@@ -331,6 +343,7 @@ in each column, with the finding and its sources on hover.
 
 ```bash
 curl -N -X POST localhost:8080/v1/runs \
+  -H "Authorization: Bearer $KVASIR_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"method": "storm", "input": {"question": "The Antikythera mechanism"}}'
 ```
@@ -539,11 +552,12 @@ A model is written `<provider>/<name>`. Only the first `/` splits, so the name m
 configured stops startup, and a request that overrides `model_fast`, `model_strong` or `model_reason`
 with one gets 400. An override may name a different provider.
 
-The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.url` and the
-`api_base` of every provider you declare.
+The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.url`, the
+`api_base` of every provider you declare, and `KVASIR_TOKEN`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `KVASIR_TOKEN` | required | The token every route but health, `POST /v1/login` and the page needs. See [Start a run](#start-a-run). |
 | `KVASIR_PROVIDER_<NAME>_API_BASE` | required | Provider base URL, such as `http://localhost:11434/v1`. |
 | `KVASIR_PROVIDER_<NAME>_API_KEY` | unset | Provider credential. |
 | `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing, and research intake. |
@@ -727,7 +741,7 @@ A fixture is a run's detail as `GET /v1/runs/{id}` returns it. To add one from a
 SQLite history:
 
 ```bash
-curl -s localhost:8080/v1/runs/<run id> > web/fixtures/<name>.json
+curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/<run id> > web/fixtures/<name>.json
 ```
 
 To include its calls' content, with the run kept by a service started with
@@ -736,7 +750,7 @@ To include its calls' content, with the run kept by a service started with
 ```bash
 run=<run id>
 for n in $(jq -r '.calls[] | select(.has_content) | .id' web/fixtures/<name>.json); do
-  curl -s localhost:8080/v1/runs/$run/calls/$n | jq -c --arg n "$n" '{($n): .}'
+  curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/$run/calls/$n | jq -c --arg n "$n" '{($n): .}'
 done | jq -s -c add > web/fixtures/<name>.calls.json
 ```
 
@@ -744,7 +758,7 @@ Its searches' results are fetched the same way:
 
 ```bash
 for n in $(jq -r '.searches[] | select(.has_content) | .id' web/fixtures/<name>.json); do
-  curl -s localhost:8080/v1/runs/$run/searches/$n | jq -c --arg n "$n" '{($n): .}'
+  curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/$run/searches/$n | jq -c --arg n "$n" '{($n): .}'
 done | jq -s -c add > web/fixtures/<name>.searches.json
 ```
 

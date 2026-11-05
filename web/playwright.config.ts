@@ -33,6 +33,7 @@ export default defineConfig({
         KVASIR_MODEL_EMBEDDING: "unused/embed",
         KVASIR_SEARCH_URL: "http://127.0.0.1:9",
         KVASIR_DATA_DIR: "test-results/data",
+        KVASIR_TOKEN: "e2e-token",
       },
       timeout: 120_000,
       reuseExistingServer: false,

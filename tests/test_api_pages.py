@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import Vectors
+from fakes import AUTH, Vectors
 from kvasir.api import pages
 from kvasir.api.app import app
 from kvasir.config import ConfigError
@@ -35,7 +35,7 @@ def client(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    with TestClient(app) as client:
+    with TestClient(app, headers=AUTH) as client:
         yield client
 
 
@@ -338,7 +338,7 @@ def test_sites_and_graph_nodes_carry_their_source_when_sources_are_on(
     monkeypatch.setenv("KVASIR_SOURCES_WIKIDATA", "false")
     monkeypatch.setenv("KVASIR_SOURCES_LISTS", "")
     monkeypatch.setenv("KVASIR_SOURCES_DENY", "other.net")
-    with TestClient(app) as sourced:
+    with TestClient(app, headers=AUTH) as sourced:
         fetch.cache().put(page("https://stats.gov/a", "Stats", NOW), None, None)
         listed = {site["domain"]: site["source"] for site in sourced.get("/v1/sites").json()}
         nodes = {s["domain"]: s["source"] for s in sourced.get("/v1/sites/graph").json()["sites"]}

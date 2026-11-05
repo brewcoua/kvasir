@@ -5,7 +5,7 @@ import contextlib
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import article_run, stub_method
+from fakes import AUTH, article_run, stub_method
 from kvasir.api.app import app
 from kvasir.config import Settings
 from kvasir.research.sources import _Match
@@ -28,7 +28,7 @@ def make_client(monkeypatch, tmp_path):
     @contextlib.contextmanager
     def make(enabled=True):
         monkeypatch.setenv("KVASIR_SOURCES_ENABLED", str(enabled).lower())
-        with TestClient(app) as client:
+        with TestClient(app, headers=AUTH) as client:
             yield client
 
     return make

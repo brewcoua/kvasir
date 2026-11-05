@@ -52,6 +52,7 @@ def test_a_configured_checker_answers_at_temperature_zero():
         "KVASIR_MODEL_STRONG": "gateway/strong",
         "KVASIR_MODEL_EMBEDDING": "gateway/embed",
         "KVASIR_SEARCH_URL": "http://searxng.example",
+        "KVASIR_TOKEN": "token",
     }
     checker = build_checker(Settings.from_env(env | {"KVASIR_MODEL_CHECKER": "gateway/minicheck"}))
 

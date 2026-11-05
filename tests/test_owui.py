@@ -96,6 +96,7 @@ def service(monkeypatch, tmp_path):
         "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
         "KVASIR_MODEL_EMBEDDING": "gateway/embed",
         "KVASIR_SEARCH_URL": "http://searxng.example",
+        "KVASIR_TOKEN": "token",
     }.items():
         monkeypatch.setenv(name, value)
 
@@ -161,6 +162,7 @@ def engine(service, monkeypatch):
 def pipe(service):
     instance = load_pipe().Pipe()
     instance.valves.KVASIR_URL = service
+    instance.valves.KVASIR_TOKEN = "token"
     return instance
 
 

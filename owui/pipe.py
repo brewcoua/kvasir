@@ -59,6 +59,10 @@ class Pipe:
             default="http://kvasir:8080",
             description="Base URL of the kvasir service.",
         )
+        KVASIR_TOKEN: str = Field(
+            default="",
+            description="The service's KVASIR_TOKEN, sent with every request.",
+        )
         RESEARCH_TIMEOUT_SECONDS: int = Field(
             default=3600,
             description=(
@@ -241,7 +245,7 @@ class Pipe:
         """
         timeout = aiohttp.ClientTimeout(total=self.valves.TASK_TIMEOUT_SECONDS)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as http:
+            async with self._session(timeout) as http:
                 payload = {"messages": body.get("messages") or []}
                 async with http.post(self._url("/v1/tasks"), json=payload) as response:
                     if response.status != 200:
@@ -278,7 +282,7 @@ class Pipe:
 
         out: dict[str, Any] = {}
         timeout = aiohttp.ClientTimeout(total=self.valves.RESEARCH_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        async with self._session(timeout) as http:
             yield think.start()
             request = self._request(topic, options)
             async for line in self._call(http, "POST", "/v1/runs", request, think, status, out):
@@ -320,7 +324,7 @@ class Pipe:
     ) -> AsyncIterator[str]:
         question, clarifications = _clarified(body, message)
         timeout = aiohttp.ClientTimeout(total=self.valves.RESEARCH_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        async with self._session(timeout) as http:
             if question is None:
                 question = message
                 if self.valves.CLARIFY:
@@ -388,7 +392,7 @@ class Pipe:
         session_id = str(session_id)
 
         timeout = aiohttp.ClientTimeout(total=self.valves.SESSION_TIMEOUT_SECONDS)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        async with self._session(timeout) as http:
             if not await self._exists(http, session_id):
                 if message.strip().lstrip("/").lower() in (ADVANCE, REPORT):
                     yield "No round table in this chat yet. Send a topic to start one."
@@ -545,6 +549,11 @@ class Pipe:
                 return _spent(await response.json())
         except aiohttp.ClientError:
             return ""
+
+    def _session(self, timeout: aiohttp.ClientTimeout) -> aiohttp.ClientSession:
+        return aiohttp.ClientSession(
+            timeout=timeout, headers={"Authorization": f"Bearer {self.valves.KVASIR_TOKEN}"}
+        )
 
     def _url(self, path: str) -> str:
         return f"{self.valves.KVASIR_URL.rstrip('/')}{path}"
