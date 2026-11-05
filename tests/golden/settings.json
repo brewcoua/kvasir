@@ -1,0 +1,9396 @@
+[
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ]
+  ],
+  "name": "minimal",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [],
+  "error": "missing required environment variables: KVASIR_TOKEN",
+  "name": "no token",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PORT",
+    "  "
+   ]
+  ],
+  "name": "blank values are unset",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "  t  "
+   ],
+   [
+    "KVASIR_HOST",
+    " ::1 "
+   ]
+  ],
+  "name": "values are stripped",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "::1",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "TOKEN",
+    "x"
+   ],
+   [
+    "kvasir_port",
+    "1"
+   ]
+  ],
+  "name": "not kvasir",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PORT",
+    "+81"
+   ]
+  ],
+  "name": "port",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 81,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PORT",
+    "abc"
+   ]
+  ],
+  "error": "KVASIR_PORT must be an integer, got 'abc'",
+  "name": "port words",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PORT",
+    "0"
+   ]
+  ],
+  "error": "KVASIR_PORT must be at least 1, got 0",
+  "name": "port zero",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PORT",
+    "80.0"
+   ]
+  ],
+  "error": "KVASIR_PORT must be an integer, got '80.0'",
+  "name": "port float",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_MAX_THREADS",
+    "1_0"
+   ]
+  ],
+  "name": "threads underscore",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_MAX_THREADS",
+    "-3"
+   ]
+  ],
+  "error": "KVASIR_MAX_THREADS must be at least 1, got -3",
+  "name": "threads negative",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_DATA_DIR",
+    "/srv/k/"
+   ]
+  ],
+  "name": "data dir",
+  "settings": {
+   "data_dir": "/srv/k",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_LOG_LEVEL",
+    "debug"
+   ],
+   [
+    "KVASIR_LOG_FORMAT",
+    "TEXT"
+   ]
+  ],
+  "name": "log",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "text",
+    "level": "DEBUG"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_LOG_FORMAT",
+    "xml"
+   ]
+  ],
+  "error": "KVASIR_LOG_FORMAT must be json or text, got 'xml'",
+  "name": "log format",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_SEARCH_URL",
+    "http://s"
+   ],
+   [
+    "KVASIR_ALPHA",
+    "1"
+   ]
+  ],
+  "name": "unread",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {},
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": [
+   "not read from the environment, set them in the settings instead: KVASIR_ALPHA, KVASIR_SEARCH_URL"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1/"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_KEY",
+    "k"
+   ],
+   [
+    "KVASIR_PROVIDER_MY_LOCAL_API_BASE",
+    "http://l:11434/v1"
+   ]
+  ],
+  "name": "providers",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "k"
+    },
+    "my_local": {
+     "api_base": "http://l:11434/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_PROVIDER_A_API_KEY",
+    "k"
+   ],
+   [
+    "KVASIR_PROVIDER_B_API_KEY",
+    "k"
+   ]
+  ],
+  "error": "missing required environment variables: KVASIR_PROVIDER_A_API_BASE, KVASIR_PROVIDER_B_API_BASE, KVASIR_TOKEN",
+  "name": "provider without base",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_A.B_API_BASE",
+    "http://x"
+   ]
+  ],
+  "error": "KVASIR_PROVIDER_A.B_API_BASE does not name a provider: names are lowercase letters, digits, _ and -",
+  "name": "provider bad name",
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_A_API_BASE",
+    "http://x"
+   ],
+   [
+    "KVASIR_PROVIDER_A_TIMEOUT",
+    "3"
+   ]
+  ],
+  "name": "provider other suffix",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "a": {
+     "api_base": "http://x",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {},
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "int as text",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "research.max_searches": "3"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: research.max_searches must be an integer, got '3'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "research.max_searches must be an integer, got '3'",
+  "name": "int as text, strict",
+  "stored": {
+   "research.max_searches": "3"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "int as bool",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "research.max_searches": true
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: research.max_searches must be an integer, got True"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "research.max_searches must be an integer, got True",
+  "name": "int as bool, strict",
+  "stored": {
+   "research.max_searches": true
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "int as float",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "research.max_searches": 3.0
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: research.max_searches must be an integer, got 3.0"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "research.max_searches must be an integer, got 3.0",
+  "name": "int as float, strict",
+  "stored": {
+   "research.max_searches": 3.0
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "int below one",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "storm.max_conv_turn": 0
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: storm.max_conv_turn must be at least 1, got 0"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "storm.max_conv_turn must be at least 1, got 0",
+  "name": "int below one, strict",
+  "stored": {
+   "storm.max_conv_turn": 0
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "int big",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 123456789012,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "runs.max": 123456789012
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "int big, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 123456789012,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "runs.max": 123456789012
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "min zero",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 0,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.max_age_hours": 0
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "min zero, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 0,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.max_age_hours": 0
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "min zero below",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.max_age_hours": -1
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.max_age_hours must be at least 0, got -1"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.max_age_hours must be at least 0, got -1",
+  "name": "min zero below, strict",
+  "stored": {
+   "fetch.max_age_hours": -1
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float from int",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 2.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": 2
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float from int, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 2.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": 2
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 0.25,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": 0.25
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 0.25,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": 0.25
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float tiny",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1e-07,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": 1e-07
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float tiny, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1e-07,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": 1e-07
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float negative",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": -0.5
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.host_interval_seconds must be a finite number, 0 or more, got -0.5"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.host_interval_seconds must be a finite number, 0 or more, got -0.5",
+  "name": "float negative, strict",
+  "stored": {
+   "fetch.host_interval_seconds": -0.5
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float text",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": "1"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.host_interval_seconds must be a number, got '1'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.host_interval_seconds must be a number, got '1'",
+  "name": "float text, strict",
+  "stored": {
+   "fetch.host_interval_seconds": "1"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "float bool",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.host_interval_seconds": false
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.host_interval_seconds must be a number, got False"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.host_interval_seconds must be a number, got False",
+  "name": "float bool, strict",
+  "stored": {
+   "fetch.host_interval_seconds": false
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "bool",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": true
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": false,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.stealth": true,
+   "research.follow_ups": false
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "bool, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": true
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": false,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.stealth": true,
+   "research.follow_ups": false
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "bool text",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.stealth": "true"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.stealth must be true or false, got 'true'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.stealth must be true or false, got 'true'",
+  "name": "bool text, strict",
+  "stored": {
+   "fetch.stealth": "true"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "bool int",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.stealth": 1
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.stealth must be true or false, got 1"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.stealth must be true or false, got 1",
+  "name": "bool int, strict",
+  "stored": {
+   "fetch.stealth": 1
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [
+     "a.example",
+     "b.example"
+    ],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    " a.example ",
+    "",
+    "b.example"
+   ]
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [
+     "a.example",
+     "b.example"
+    ],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    " a.example ",
+    "",
+    "b.example"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list not list",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": "a.example"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.allow must be a list of strings, got 'a.example'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.allow must be a list of strings, got 'a.example'",
+  "name": "list not list, strict",
+  "stored": {
+   "sources.allow": "a.example"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list not strings",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.deny": [
+    "a",
+    1
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.deny must be a list of strings, got ['a', 1]"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.deny must be a list of strings, got ['a', 1]",
+  "name": "list not strings, strict",
+  "stored": {
+   "sources.deny": [
+    "a",
+    1
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list choices",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "google",
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.providers": [
+    " Google ",
+    "direct"
+   ]
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list choices, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "google",
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.providers": [
+    " Google ",
+    "direct"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list choices empty",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.providers": []
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list choices empty, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.providers": []
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "list choices unknown",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.providers": [
+    "bing",
+    "direct",
+    "Yandex"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: favicons.providers holds 'bing', 'yandex'; each must be one of direct, duckduckgo, google, custom"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "favicons.providers holds 'bing', 'yandex'; each must be one of direct, duckduckgo, google, custom",
+  "name": "list choices unknown, strict",
+  "stored": {
+   "favicons.providers": [
+    "bing",
+    "direct",
+    "Yandex"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "text",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "ops@example.org",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.contact": "  ops@example.org  "
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "text, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "ops@example.org",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.contact": "  ops@example.org  "
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "text not string",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.contact": 5
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.contact must be a string, got 5"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.contact must be a string, got 5",
+  "name": "text not string, strict",
+  "stored": {
+   "fetch.contact": 5
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "text list",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.contact": [
+    "a"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.contact must be a string, got ['a']"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.contact must be a string, got ['a']",
+  "name": "text list, strict",
+  "stored": {
+   "fetch.contact": [
+    "a"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "text dict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.contact": {
+    "a": "it's"
+   }
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: fetch.contact must be a string, got {'a': \"it's\"}"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "fetch.contact must be a string, got {'a': \"it's\"}",
+  "name": "text dict, strict",
+  "stored": {
+   "fetch.contact": {
+    "a": "it's"
+   }
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "text quotes",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "fetch.contact": 7.5,
+   "search.top_k": "it's \"x\"\n"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: search.top_k must be an integer, got 'it\\'s \"x\"\\n'",
+   "stored setting ignored: fetch.contact must be a string, got 7.5"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "search.top_k must be an integer, got 'it\\'s \"x\"\\n'",
+  "name": "text quotes, strict",
+  "stored": {
+   "fetch.contact": 7.5,
+   "search.top_k": "it's \"x\"\n"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "optional empty",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": null,
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.reason_effort": "",
+   "model.reasoning_effort": null
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "optional empty, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": null,
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.reason_effort": "",
+   "model.reasoning_effort": null
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "optional set",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": "none",
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.reasoning_effort": " none "
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "optional set, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": "none",
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.reasoning_effort": " none "
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "choice",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "sqlite",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "runs.store": " SQLITE "
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "choice, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "sqlite",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "runs.store": " SQLITE "
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "choice unknown",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "runs.store": "redis"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: runs.store must be memory or sqlite, got 'redis'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "runs.store must be memory or sqlite, got 'redis'",
+  "name": "choice unknown, strict",
+  "stored": {
+   "runs.store": "redis"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "url",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": "http://searx:8080"
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "search.url": " http://searx:8080/// "
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "url, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": "http://searx:8080"
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "search.url": " http://searx:8080/// "
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "unknown key",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "a.b": 1,
+   "sessions.ttl_hours": 168
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: unknown setting a.b",
+   "stored setting ignored: unknown setting sessions.ttl_hours"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "unknown setting a.b",
+  "name": "unknown key, strict",
+  "stored": {
+   "a.b": 1,
+   "sessions.ttl_hours": 168
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "models",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "gateway/e",
+    "fast": "gateway/a/b:c",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": "gateway/s"
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": "http://s"
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.embedding": "gateway/e",
+   "model.fast": "gateway/a/b:c",
+   "model.strong": "gateway/s",
+   "search.url": "http://s"
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "models, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "gateway/e",
+    "fast": "gateway/a/b:c",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": "gateway/s"
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": "http://s"
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.embedding": "gateway/e",
+   "model.fast": "gateway/a/b:c",
+   "model.strong": "gateway/s",
+   "search.url": "http://s"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "model no slash",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.fast": "fast"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: model.fast: model 'fast' must name a provider, as in <provider>/<name>"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "model.fast: model 'fast' must name a provider, as in <provider>/<name>",
+  "name": "model no slash, strict",
+  "stored": {
+   "model.fast": "fast"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "model no name",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.strong": "gateway/"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: model.strong: model 'gateway/' must name a provider, as in <provider>/<name>"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "model.strong: model 'gateway/' must name a provider, as in <provider>/<name>",
+  "name": "model no name, strict",
+  "stored": {
+   "model.strong": "gateway/"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "model unknown provider",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": "gateway/c",
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "model.checker": "gateway/c",
+   "model.reason": "cloud/x"
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: model.reason: model 'cloud/x' names unknown provider 'cloud'; configured: gateway"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "model.reason: model 'cloud/x' names unknown provider 'cloud'; configured: gateway",
+  "name": "model unknown provider, strict",
+  "stored": {
+   "model.checker": "gateway/c",
+   "model.reason": "cloud/x"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "favicons custom",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "https://i.example/{domain}.png",
+    "miss_ttl_days": 3,
+    "providers": [
+     "custom"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.custom_url": "https://i.example/{domain}.png",
+   "favicons.providers": [
+    "custom"
+   ]
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "favicons custom, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "https://i.example/{domain}.png",
+    "miss_ttl_days": 3,
+    "providers": [
+     "custom"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.custom_url": "https://i.example/{domain}.png",
+   "favicons.providers": [
+    "custom"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "favicons custom no url",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.providers": [
+    "custom"
+   ],
+   "favicons.ttl_days": 9
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: favicons.custom_url must be an http(s) URL containing {domain} when the custom provider is used, got ''"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "favicons.custom_url must be an http(s) URL containing {domain} when the custom provider is used, got ''",
+  "name": "favicons custom no url, strict",
+  "stored": {
+   "favicons.providers": [
+    "custom"
+   ],
+   "favicons.ttl_days": 9
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "favicons custom no domain",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.custom_url": "https://i.example/x.png",
+   "favicons.providers": [
+    "direct",
+    "custom"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: favicons.custom_url must be an http(s) URL containing {domain} when the custom provider is used, got 'https://i.example/x.png'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "favicons.custom_url must be an http(s) URL containing {domain} when the custom provider is used, got 'https://i.example/x.png'",
+  "name": "favicons custom no domain, strict",
+  "stored": {
+   "favicons.custom_url": "https://i.example/x.png",
+   "favicons.providers": [
+    "direct",
+    "custom"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "favicons custom ftp",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "favicons.custom_url": "ftp://i.example/{domain}",
+   "favicons.providers": [
+    "custom"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: favicons.custom_url must be an http(s) URL containing {domain} when the custom provider is used, got 'ftp://i.example/{domain}'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "favicons.custom_url must be an http(s) URL containing {domain} when the custom provider is used, got 'ftp://i.example/{domain}'",
+  "name": "favicons custom ftp, strict",
+  "stored": {
+   "favicons.custom_url": "ftp://i.example/{domain}",
+   "favicons.providers": [
+    "custom"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources off unchecked",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [
+     "not a host"
+    ],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "nope",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    "not a host"
+   ],
+   "sources.endpoint": "nope"
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources off unchecked, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [
+     "not a host"
+    ],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "nope",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    "not a host"
+   ],
+   "sources.endpoint": "nope"
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [
+     "Example.ORG.",
+     "www.a.example:443"
+    ],
+    "deny": [],
+    "enabled": true,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "academic=https://l.example/a.txt",
+     "predatory=http://l.example/p"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    "Example.ORG.",
+    "www.a.example:443"
+   ],
+   "sources.enabled": true,
+   "sources.lists": [
+    "academic=https://l.example/a.txt",
+    "predatory=http://l.example/p"
+   ]
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [
+     "Example.ORG.",
+     "www.a.example:443"
+    ],
+    "deny": [],
+    "enabled": true,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "academic=https://l.example/a.txt",
+     "predatory=http://l.example/p"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    "Example.ORG.",
+    "www.a.example:443"
+   ],
+   "sources.enabled": true,
+   "sources.lists": [
+    "academic=https://l.example/a.txt",
+    "predatory=http://l.example/p"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources endpoint",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.enabled": true,
+   "sources.endpoint": "query.wikidata.org/sparql",
+   "sources.ttl_days": 2
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.endpoint must be an http(s) URL, got 'query.wikidata.org/sparql'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.endpoint must be an http(s) URL, got 'query.wikidata.org/sparql'",
+  "name": "sources endpoint, strict",
+  "stored": {
+   "sources.enabled": true,
+   "sources.endpoint": "query.wikidata.org/sparql",
+   "sources.ttl_days": 2
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources list label",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.enabled": true,
+   "sources.lists": [
+    "unknown=https://l.example/a"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.lists entry 'unknown=https://l.example/a' must be <label>=<url> with a label of academic, ai_generated, content_farm, government, intergovernmental, news, organization, predatory, reference, standards"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.lists entry 'unknown=https://l.example/a' must be <label>=<url> with a label of academic, ai_generated, content_farm, government, intergovernmental, news, organization, predatory, reference, standards",
+  "name": "sources list label, strict",
+  "stored": {
+   "sources.enabled": true,
+   "sources.lists": [
+    "unknown=https://l.example/a"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources list no url",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.enabled": true,
+   "sources.lists": [
+    "government"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.lists must be an http(s) URL, got ''"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.lists must be an http(s) URL, got ''",
+  "name": "sources list no url, strict",
+  "stored": {
+   "sources.enabled": true,
+   "sources.lists": [
+    "government"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources list ftp",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.enabled": true,
+   "sources.lists": [
+    "news=ftp://l.example/a"
+   ]
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.lists must be an http(s) URL, got 'ftp://l.example/a'"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.lists must be an http(s) URL, got 'ftp://l.example/a'",
+  "name": "sources list ftp, strict",
+  "stored": {
+   "sources.enabled": true,
+   "sources.lists": [
+    "news=ftp://l.example/a"
+   ]
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources allow ip",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.allow": [
+    "1.2.3.4"
+   ],
+   "sources.enabled": true
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.allow holds '1.2.3.4', which is not a DNS name"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.allow holds '1.2.3.4', which is not a DNS name",
+  "name": "sources allow ip, strict",
+  "stored": {
+   "sources.allow": [
+    "1.2.3.4"
+   ],
+   "sources.enabled": true
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources deny bad",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.deny": [
+    "under_score.example"
+   ],
+   "sources.enabled": true
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.deny holds 'under_score.example', which is not a DNS name"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.deny holds 'under_score.example', which is not a DNS name",
+  "name": "sources deny bad, strict",
+  "stored": {
+   "sources.deny": [
+    "under_score.example"
+   ],
+   "sources.enabled": true
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources idn",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [
+     "bücher.example",
+     "xn--bcher-kva.example"
+    ],
+    "enabled": true,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.deny": [
+    "bücher.example",
+    "xn--bcher-kva.example"
+   ],
+   "sources.enabled": true
+  },
+  "strict": false,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources idn, strict",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [
+     "bücher.example",
+     "xn--bcher-kva.example"
+    ],
+    "enabled": true,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.deny": [
+    "bücher.example",
+    "xn--bcher-kva.example"
+   ],
+   "sources.enabled": true
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "sources one label",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "sources.deny": [
+    "localhost"
+   ],
+   "sources.enabled": true
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: sources.deny holds 'localhost', which is not a DNS name"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "sources.deny holds 'localhost', which is not a DNS name",
+  "name": "sources one label, strict",
+  "stored": {
+   "sources.deny": [
+    "localhost"
+   ],
+   "sources.enabled": true
+  },
+  "strict": true,
+  "warnings": []
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "name": "several problems",
+  "settings": {
+   "data_dir": "/data",
+   "favicons": {
+    "custom_url": "",
+    "miss_ttl_days": 3,
+    "providers": [
+     "direct"
+    ],
+    "ttl_days": 30
+   },
+   "fetch": {
+    "contact": "",
+    "host_interval_seconds": 1.0,
+    "max_age_hours": 48,
+    "render": "auto",
+    "stealth": false
+   },
+   "host": "0.0.0.0",
+   "log": {
+    "format": "json",
+    "level": "INFO"
+   },
+   "max_threads": 10,
+   "missing": [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.url"
+   ],
+   "model": {
+    "checker": null,
+    "context_tokens": 16384,
+    "embedding": "",
+    "fast": "",
+    "reason": null,
+    "reason_effort": "medium",
+    "reasoning_effort": null,
+    "strong": ""
+   },
+   "port": 8080,
+   "providers": {
+    "gateway": {
+     "api_base": "http://g/v1",
+     "api_key": "none"
+    }
+   },
+   "research": {
+    "follow_ups": true,
+    "max_attempts": 4,
+    "max_criteria": 5,
+    "max_depth": 2,
+    "max_entities": 8,
+    "max_searches": 16,
+    "results_per_query": 3
+   },
+   "runs": {
+    "keep_call_content": false,
+    "max": 100,
+    "max_concurrent": 1,
+    "store": "memory",
+    "ttl_days": 30
+   },
+   "search": {
+    "top_k": 3,
+    "url": ""
+   },
+   "sources": {
+    "allow": [],
+    "deny": [],
+    "enabled": false,
+    "endpoint": "https://query.wikidata.org/sparql",
+    "lists": [
+     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+    ],
+    "miss_ttl_days": 7,
+    "rsp": false,
+    "ttl_days": 30,
+    "wikidata": true
+   },
+   "storm": {
+    "max_conv_turn": 3,
+    "max_perspective": 3
+   },
+   "token": "t"
+  },
+  "stored": {
+   "a.b": 1,
+   "model.fast": "nope/x",
+   "research.max_searches": "x",
+   "storm.max_perspective": 0
+  },
+  "strict": false,
+  "warnings": [
+   "stored setting ignored: unknown setting a.b",
+   "stored setting ignored: research.max_searches must be an integer, got 'x'",
+   "stored setting ignored: storm.max_perspective must be at least 1, got 0",
+   "stored setting ignored: model.fast: model 'nope/x' names unknown provider 'nope'; configured: gateway"
+  ]
+ },
+ {
+  "env": [
+   [
+    "KVASIR_TOKEN",
+    "t"
+   ],
+   [
+    "KVASIR_PROVIDER_GATEWAY_API_BASE",
+    "http://g/v1"
+   ]
+  ],
+  "error": "unknown setting a.b",
+  "name": "several problems, strict",
+  "stored": {
+   "a.b": 1,
+   "model.fast": "nope/x",
+   "research.max_searches": "x",
+   "storm.max_perspective": 0
+  },
+  "strict": true,
+  "warnings": []
+ }
+]
