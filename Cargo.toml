@@ -14,6 +14,7 @@ kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
 kvasir-extract = { path = "crates/kvasir-extract" }
 kvasir-fetch = { path = "crates/kvasir-fetch" }
+kvasir-ledger = { path = "crates/kvasir-ledger" }
 kvasir-llm = { path = "crates/kvasir-llm" }
 kvasir-research = { path = "crates/kvasir-research" }
 kvasir-run = { path = "crates/kvasir-run" }

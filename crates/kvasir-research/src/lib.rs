@@ -20,8 +20,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use kvasir_config::{ConfigError, Settings};
 use kvasir_fetch::{FetchError, Page, PageStore, Web};
-use kvasir_llm::{BoxFuture, Llm, LlmError, RETRY_FOR, Signature, Target};
+use kvasir_llm::{BoxFuture, Llm, LlmError, RETRY_FOR, Signature, Target, roles};
 use kvasir_run::RunCtx;
 use kvasir_sites::sources::Sources;
 use kvasir_types::sites::Tier;
@@ -149,5 +150,74 @@ impl ResearchError {
             }
         }
         Self::SearchUnavailable { searches, failures: unique }
+    }
+}
+
+/// One target per research role, keyed by role, with `fast`, `strong` and `reason` in place of
+/// the configured models where given. The grounding checker, when one is set, is added as
+/// `ground` when `ground` and as `ground_intake` when `ground_intake`.
+pub fn targets(
+    settings: &Settings,
+    fast: Option<&str>,
+    strong: Option<&str>,
+    reason: Option<&str>,
+    ground: bool,
+    ground_intake: bool,
+) -> Result<HashMap<&'static str, Target>, ConfigError> {
+    let given = |name: Option<&str>| name.filter(|n| !n.is_empty()).map(str::to_owned);
+    let mut settings = settings.clone();
+    if let Some(fast) = given(fast) {
+        settings.model.fast = fast;
+    }
+    if let Some(strong) = given(strong) {
+        settings.model.strong = strong;
+    }
+    if let Some(reason) = given(reason) {
+        settings.model.reason = Some(reason);
+    }
+    let mut targets: HashMap<&'static str, Target> =
+        roles::research(&settings)?.into_iter().map(|target| (target.role, target)).collect();
+    if let Some(checker) = roles::checker(&settings)? {
+        if ground {
+            targets.insert("ground", checker.clone());
+        }
+        if ground_intake {
+            targets.insert("ground_intake", checker);
+        }
+    }
+    Ok(targets)
+}
+
+/// Today's date in UTC, as `2026-11-05`. A model's sense of "now" is its training cutoff, so a
+/// question about what is best or latest is told the date.
+pub fn today() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    date(secs)
+}
+
+/// The UTC date `secs` after the epoch, by Howard Hinnant's days-to-civil algorithm.
+fn date(secs: u64) -> String {
+    let z = (secs / 86_400) as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_date_is_the_utc_day_it_falls_on() {
+        assert_eq!(super::date(0), "1970-01-01");
+        assert_eq!(super::date(951_782_400), "2000-02-29");
+        assert_eq!(super::date(1_793_836_799), "2026-11-04");
+        assert_eq!(super::date(4_107_542_400), "2100-03-01");
     }
 }
