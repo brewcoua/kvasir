@@ -1,0 +1,37 @@
+[package]
+name = "kvasir-research"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+fancy-regex.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+kvasir-config.workspace = true
+kvasir-extract.workspace = true
+kvasir-fetch.workspace = true
+kvasir-llm.workspace = true
+kvasir-run.workspace = true
+kvasir-sites.workspace = true
+kvasir-types.workspace = true
+psl.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+kvasir-testkit.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+wiremock.workspace = true
+
+[lints]
+workspace = true

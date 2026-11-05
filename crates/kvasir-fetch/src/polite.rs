@@ -82,6 +82,12 @@ impl Politeness {
         Slot { _host: host_permit, _process: process }
     }
 
+    /// One of the process's permits alone, for a service of the operator's own that no host limit
+    /// applies to.
+    pub async fn permit(&self) -> OwnedSemaphorePermit {
+        Arc::clone(&self.permits).acquire_owned().await.expect("never closed")
+    }
+
     /// Holds back the next request to `name` by at least `by`, as a Retry-After asks.
     pub fn delay(&self, name: &str, by: Duration) {
         let host = self.host(name);

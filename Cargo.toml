@@ -15,6 +15,7 @@ kvasir-db = { path = "crates/kvasir-db" }
 kvasir-extract = { path = "crates/kvasir-extract" }
 kvasir-fetch = { path = "crates/kvasir-fetch" }
 kvasir-llm = { path = "crates/kvasir-llm" }
+kvasir-research = { path = "crates/kvasir-research" }
 kvasir-run = { path = "crates/kvasir-run" }
 kvasir-sites = { path = "crates/kvasir-sites" }
 kvasir-testkit = { path = "crates/kvasir-testkit" }
@@ -27,6 +28,7 @@ chromiumoxide = "0.9.1"
 dom_query = "0.24"
 dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }
 encoding_rs = "0.8"
+fancy-regex = "0.20"
 futures = "0.3"
 httpdate = "1"
 idna = "1.1"

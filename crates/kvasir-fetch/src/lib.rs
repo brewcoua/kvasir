@@ -246,6 +246,11 @@ impl Web {
         self.polite.slot(host, self.options().host_interval).await
     }
 
+    /// Holds one of the process's permits, and no place with a host.
+    pub async fn permit(&self) -> tokio::sync::OwnedSemaphorePermit {
+        self.polite.permit().await
+    }
+
     /// Names the service, where to read about it and who runs it, as Wikimedia's policy asks.
     pub fn user_agent(&self) -> String {
         let options = self.options();

@@ -896,6 +896,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
+name = "fancy-regex"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20ed7f62ce0ae0da1a8b93c3c7104ab7e0760a74491e097c701fff966e945390"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "fast-float2"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1747,6 +1758,34 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "wiremock",
+]
+
+[[package]]
+name = "kvasir-research"
+version = "0.0.0"
+dependencies = [
+ "fancy-regex",
+ "futures",
+ "indexmap",
+ "kvasir-config",
+ "kvasir-extract",
+ "kvasir-fetch",
+ "kvasir-llm",
+ "kvasir-run",
+ "kvasir-sites",
+ "kvasir-testkit",
+ "kvasir-types",
+ "psl",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
  "wiremock",
 ]
 
