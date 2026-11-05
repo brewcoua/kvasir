@@ -1,0 +1,3929 @@
+{
+ "events.status": {
+  "calls": [
+   {
+    "completion_tokens": "number",
+    "ended_at": "number",
+    "event": "number",
+    "failed": "bool",
+    "has_content": "bool",
+    "id": "number",
+    "model": "string",
+    "prompt_tokens": "number",
+    "role": "string",
+    "started_at": "number"
+   }
+  ],
+  "created_at": "number",
+  "ended_at": "null",
+  "error": "null",
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "questions": [],
+  "searches": [],
+  "stage": "string",
+  "stages": [
+   {
+    "ended_at": "null",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "null",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   },
+   {
+    "ended_at": "number",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "number",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   }
+  ],
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "methods": [
+  {
+   "clarifies": "bool",
+   "name": "string",
+   "options": {
+    "additionalProperties": "bool",
+    "description": "string",
+    "properties": {
+     "contradict": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "corroborate": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "criteria": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "entities": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "follow_ups": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "bool",
+      "title": "string"
+     },
+     "frontier": {
+      "default": "string",
+      "enum": [
+       "string"
+      ],
+      "title": "string",
+      "type": "string"
+     },
+     "ground": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "bool",
+      "title": "string"
+     },
+     "ground_intake": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "max_age_hours": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_attempts": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_criteria": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_depth": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_entities": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_searches": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "model_fast": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "model_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "model_strong": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "output": {
+      "anyOf": [
+       {
+        "enum": [
+         "string"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "recall_past_runs": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "results_per_query": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     }
+    },
+    "title": "string",
+    "type": "string"
+   },
+   "stages": [
+    "string"
+   ]
+  },
+  {
+   "clarifies": "bool",
+   "name": "string",
+   "options": {
+    "additionalProperties": "bool",
+    "description": "string",
+    "properties": {
+     "contradict": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "corroborate": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "ground": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "bool",
+      "title": "string"
+     },
+     "ground_intake": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "max_age_hours": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_attempts": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_depth": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_searches": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "model_fast": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "model_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "model_strong": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "recall_past_runs": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "research_minutes": {
+      "default": "number",
+      "exclusiveMinimum": "number",
+      "title": "string",
+      "type": "string"
+     },
+     "results_per_query": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     }
+    },
+    "title": "string",
+    "type": "string"
+   },
+   "stages": [
+    "string"
+   ]
+  },
+  {
+   "clarifies": "bool",
+   "name": "string",
+   "options": {
+    "additionalProperties": "bool",
+    "description": "string",
+    "properties": {
+     "do_polish_article": {
+      "default": "bool",
+      "title": "string",
+      "type": "string"
+     },
+     "max_conv_turn": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "max_perspective": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     },
+     "model_fast": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "model_strong": {
+      "anyOf": [
+       {
+        "type": "string"
+       }
+      ],
+      "default": "string",
+      "title": "string"
+     },
+     "search_top_k": {
+      "anyOf": [
+       {
+        "minimum": "number",
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "number",
+      "title": "string"
+     }
+    },
+    "title": "string",
+    "type": "string"
+   },
+   "stages": [
+    "string"
+   ]
+  }
+ ],
+ "pages.detail": {
+  "engine": "string",
+  "fetched_at": "number",
+  "final_url": "string",
+  "id": "string",
+  "leads": {
+   "main": [
+    {
+     "anchor": "string",
+     "context": "string",
+     "url": "string"
+    }
+   ]
+  },
+  "runs": [
+   {
+    "id": "string",
+    "topic": "string"
+   }
+  ],
+  "text": "string",
+  "title": "string",
+  "url": "string"
+ },
+ "pages.list": [
+  {
+   "engine": "string",
+   "fetched_at": "number",
+   "id": "string",
+   "length": "number",
+   "pieces": "number",
+   "title": "string",
+   "url": "string"
+  }
+ ],
+ "pages.recall": {
+  "minimum": "number",
+  "pieces": [
+   {
+    "clears": "bool",
+    "page": "string",
+    "similarity": "number",
+    "site": "string",
+    "text": "string",
+    "title": "string",
+    "url": "string"
+   }
+  ]
+ },
+ "pages.stats": {
+  "file_bytes": "number",
+  "links": "number",
+  "newest": "null",
+  "oldest": "null",
+  "pages": "number",
+  "path": "string",
+  "pieces": "number",
+  "text_bytes": "number",
+  "vector_bytes": "number"
+ },
+ "provider.models": [
+  {
+   "capabilities": "null",
+   "context_length": "null",
+   "id": "string",
+   "ref": "string"
+  },
+  {
+   "capabilities": "null",
+   "context_length": "number",
+   "id": "string",
+   "ref": "string"
+  }
+ ],
+ "provider.ollama_models": [
+  {
+   "capabilities": [
+    "string"
+   ],
+   "context_length": "number",
+   "id": "string",
+   "ref": "string"
+  }
+ ],
+ "run.call": {
+  "messages": [
+   {
+    "content": "string",
+    "role": "string"
+   }
+  ],
+  "reasoning": "null",
+  "response": "string"
+ },
+ "run.failed.detail": {
+  "calls": [
+   {
+    "completion_tokens": "null",
+    "ended_at": "number",
+    "event": "number",
+    "failed": "bool",
+    "has_content": "bool",
+    "id": "number",
+    "model": "string",
+    "prompt_tokens": "null",
+    "role": "string",
+    "started_at": "number"
+   }
+  ],
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "string",
+  "events": [
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   }
+  ],
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "questions": [],
+  "result": "null",
+  "searches": [],
+  "stage": "string",
+  "stages": [
+   {
+    "ended_at": "number",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "number",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   }
+  ],
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {},
+   "by_role": {},
+   "by_stage": {},
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.graph.detail": {
+  "calls": [
+   {
+    "completion_tokens": "number",
+    "ended_at": "number",
+    "event": "number",
+    "failed": "bool",
+    "has_content": "bool",
+    "id": "number",
+    "model": "string",
+    "prompt_tokens": "number",
+    "role": "string",
+    "started_at": "number"
+   }
+  ],
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "events": [
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "string",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "number"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "number",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "number",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "number",
+    "parent": "number",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   }
+  ],
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "questions": [
+   {
+    "claims": [
+     "number"
+    ],
+    "depth": "number",
+    "id": "number",
+    "missing": "string",
+    "parent": "null",
+    "queries": [
+     "string"
+    ],
+    "status": "string",
+    "text": "string",
+    "title": "string"
+   }
+  ],
+  "result": {
+   "assumptions": [
+    "string"
+   ],
+   "citations": [
+    {
+     "index": "number",
+     "snippet": "string",
+     "source": {
+      "kind": "string",
+      "label": "string",
+      "origin": "string",
+      "qid": "string",
+      "tags": [],
+      "tier": "string"
+     },
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "claims": [
+    {
+     "confidence": "string",
+     "contradicted_by": [],
+     "corroborated_by": [],
+     "from_snippet": "bool",
+     "id": "number",
+     "quote": "string",
+     "step": "number",
+     "text": "string",
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "criteria": [],
+   "duration_seconds": "number",
+   "low_trust": [],
+   "matrix": [],
+   "output": "string",
+   "questions": [
+    {
+     "claims": [
+      "number"
+     ],
+     "depth": "number",
+     "id": "number",
+     "missing": "string",
+     "parent": "null",
+     "queries": [
+      "string"
+     ],
+     "status": "string",
+     "text": "string",
+     "title": "string"
+    }
+   ],
+   "removed": [],
+   "report": "string",
+   "revised": [],
+   "unverified": []
+  },
+  "searches": [
+   {
+    "ended_at": "number",
+    "engine": "string",
+    "event": "number",
+    "failures": [],
+    "has_content": "bool",
+    "id": "number",
+    "query": "string",
+    "results": "number",
+    "started_at": "number"
+   }
+  ],
+  "stage": "string",
+  "stages": [
+   {
+    "ended_at": "number",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "number",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   }
+  ],
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "check": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "decompose": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "intake": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "plan": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "tldr": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.graph.done": {
+  "assumptions": [
+   "string"
+  ],
+  "citations": [
+   {
+    "index": "number",
+    "snippet": "string",
+    "source": {
+     "kind": "string",
+     "label": "string",
+     "origin": "string",
+     "qid": "string",
+     "tags": [],
+     "tier": "string"
+    },
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "claims": [
+   {
+    "confidence": "string",
+    "contradicted_by": [],
+    "corroborated_by": [],
+    "from_snippet": "bool",
+    "id": "number",
+    "quote": "string",
+    "step": "number",
+    "text": "string",
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "criteria": [],
+  "duration_seconds": "number",
+  "low_trust": [],
+  "matrix": [],
+  "output": "string",
+  "questions": [
+   {
+    "claims": [
+     "number"
+    ],
+    "depth": "number",
+    "id": "number",
+    "missing": "string",
+    "parent": "null",
+    "queries": [
+     "string"
+    ],
+    "status": "string",
+    "text": "string",
+    "title": "string"
+   }
+  ],
+  "removed": [],
+  "report": "string",
+  "revised": [],
+  "unverified": []
+ },
+ "run.graph.progress": [
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "number"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "number",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "number",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "number",
+   "parent": "number",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  }
+ ],
+ "run.graph.run": {
+  "run_id": "string"
+ },
+ "run.graph.summary": {
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "stage": "string",
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "check": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "decompose": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "intake": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "plan": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "tldr": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.ledger.detail": {
+  "calls": [
+   {
+    "completion_tokens": "number",
+    "ended_at": "number",
+    "event": "number",
+    "failed": "bool",
+    "has_content": "bool",
+    "id": "number",
+    "model": "string",
+    "prompt_tokens": "number",
+    "role": "string",
+    "started_at": "number"
+   }
+  ],
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "events": [
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "string",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "number"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "number",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "number",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "number",
+    "parent": "number",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   }
+  ],
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "questions": [
+   {
+    "claims": [
+     "number"
+    ],
+    "depth": "number",
+    "id": "number",
+    "missing": "string",
+    "parent": "null",
+    "queries": [
+     "string"
+    ],
+    "status": "string",
+    "text": "string",
+    "title": "string"
+   }
+  ],
+  "result": {
+   "assumptions": [
+    "string"
+   ],
+   "citations": [
+    {
+     "index": "number",
+     "snippet": "string",
+     "source": {
+      "kind": "string",
+      "label": "string",
+      "origin": "string",
+      "qid": "string",
+      "tags": [],
+      "tier": "string"
+     },
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "claims": [
+    {
+     "confidence": "string",
+     "contradicted_by": [],
+     "corroborated_by": [],
+     "from_snippet": "bool",
+     "id": "number",
+     "quote": "string",
+     "step": "number",
+     "text": "string",
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "criteria": [],
+   "duration_seconds": "number",
+   "low_trust": [],
+   "matrix": [],
+   "output": "string",
+   "questions": [
+    {
+     "claims": [
+      "number"
+     ],
+     "depth": "number",
+     "id": "number",
+     "missing": "string",
+     "parent": "null",
+     "queries": [
+      "string"
+     ],
+     "status": "string",
+     "text": "string",
+     "title": "string"
+    }
+   ],
+   "removed": [],
+   "report": "string",
+   "revised": [],
+   "unverified": []
+  },
+  "searches": [
+   {
+    "ended_at": "number",
+    "engine": "string",
+    "event": "number",
+    "failures": [],
+    "has_content": "bool",
+    "id": "number",
+    "query": "string",
+    "results": "number",
+    "started_at": "number"
+   }
+  ],
+  "stage": "string",
+  "stages": [
+   {
+    "ended_at": "number",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "number",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   }
+  ],
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "check": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "decompose": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "intake": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "plan": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "tldr": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.ledger.done": {
+  "assumptions": [
+   "string"
+  ],
+  "citations": [
+   {
+    "index": "number",
+    "snippet": "string",
+    "source": {
+     "kind": "string",
+     "label": "string",
+     "origin": "string",
+     "qid": "string",
+     "tags": [],
+     "tier": "string"
+    },
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "claims": [
+   {
+    "confidence": "string",
+    "contradicted_by": [],
+    "corroborated_by": [],
+    "from_snippet": "bool",
+    "id": "number",
+    "quote": "string",
+    "step": "number",
+    "text": "string",
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "criteria": [],
+  "duration_seconds": "number",
+  "low_trust": [],
+  "matrix": [],
+  "output": "string",
+  "questions": [
+   {
+    "claims": [
+     "number"
+    ],
+    "depth": "number",
+    "id": "number",
+    "missing": "string",
+    "parent": "null",
+    "queries": [
+     "string"
+    ],
+    "status": "string",
+    "text": "string",
+    "title": "string"
+   }
+  ],
+  "removed": [],
+  "report": "string",
+  "revised": [],
+  "unverified": []
+ },
+ "run.ledger.progress": [
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "number"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "number",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "number",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "number",
+   "parent": "number",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  }
+ ],
+ "run.ledger.run": {
+  "run_id": "string"
+ },
+ "run.ledger.summary": {
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "stage": "string",
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "check": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "decompose": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "intake": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "plan": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "tldr": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.ranking.detail": {
+  "calls": [
+   {
+    "completion_tokens": "number",
+    "ended_at": "number",
+    "event": "number",
+    "failed": "bool",
+    "has_content": "bool",
+    "id": "number",
+    "model": "string",
+    "prompt_tokens": "number",
+    "role": "string",
+    "started_at": "number"
+   }
+  ],
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "events": [
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "string",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "string",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "number"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "null",
+    "question": "number",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "null",
+    "parent": "number",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "string",
+    "page": "number",
+    "parent": "number",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   }
+  ],
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "questions": [
+   {
+    "claims": [
+     "number"
+    ],
+    "depth": "number",
+    "id": "number",
+    "missing": "string",
+    "parent": "null",
+    "queries": [
+     "string"
+    ],
+    "status": "string",
+    "text": "string",
+    "title": "string"
+   }
+  ],
+  "result": {
+   "assumptions": [
+    "string"
+   ],
+   "citations": [
+    {
+     "index": "number",
+     "snippet": "string",
+     "source": {
+      "kind": "string",
+      "label": "string",
+      "origin": "string",
+      "qid": "string",
+      "tags": [],
+      "tier": "string"
+     },
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "claims": [
+    {
+     "confidence": "string",
+     "contradicted_by": [],
+     "corroborated_by": [],
+     "from_snippet": "bool",
+     "id": "number",
+     "quote": "string",
+     "step": "number",
+     "text": "string",
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "criteria": [
+    {
+     "name": "string",
+     "weight": "number"
+    }
+   ],
+   "duration_seconds": "number",
+   "low_trust": [],
+   "matrix": [
+    {
+     "cells": [
+      {
+       "claims": [
+        "number"
+       ],
+       "criterion": "string",
+       "finding": "string",
+       "rank": "number"
+      }
+     ],
+     "entity": "string",
+     "rank": "number"
+    }
+   ],
+   "output": "string",
+   "questions": [
+    {
+     "claims": [
+      "number"
+     ],
+     "depth": "number",
+     "id": "number",
+     "missing": "string",
+     "parent": "null",
+     "queries": [
+      "string"
+     ],
+     "status": "string",
+     "text": "string",
+     "title": "string"
+    }
+   ],
+   "removed": [],
+   "report": "string",
+   "revised": [],
+   "unverified": []
+  },
+  "searches": [
+   {
+    "ended_at": "number",
+    "engine": "string",
+    "event": "number",
+    "failures": [],
+    "has_content": "bool",
+    "id": "number",
+    "query": "string",
+    "results": "number",
+    "started_at": "number"
+   }
+  ],
+  "stage": "string",
+  "stages": [
+   {
+    "ended_at": "number",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "number",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   }
+  ],
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "assess": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "check": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "decompose": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "intake": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "plan": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "tldr": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "assess": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.ranking.done": {
+  "assumptions": [
+   "string"
+  ],
+  "citations": [
+   {
+    "index": "number",
+    "snippet": "string",
+    "source": {
+     "kind": "string",
+     "label": "string",
+     "origin": "string",
+     "qid": "string",
+     "tags": [],
+     "tier": "string"
+    },
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "claims": [
+   {
+    "confidence": "string",
+    "contradicted_by": [],
+    "corroborated_by": [],
+    "from_snippet": "bool",
+    "id": "number",
+    "quote": "string",
+    "step": "number",
+    "text": "string",
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "criteria": [
+   {
+    "name": "string",
+    "weight": "number"
+   }
+  ],
+  "duration_seconds": "number",
+  "low_trust": [],
+  "matrix": [
+   {
+    "cells": [
+     {
+      "claims": [
+       "number"
+      ],
+      "criterion": "string",
+      "finding": "string",
+      "rank": "number"
+     }
+    ],
+    "entity": "string",
+    "rank": "number"
+   }
+  ],
+  "output": "string",
+  "questions": [
+   {
+    "claims": [
+     "number"
+    ],
+    "depth": "number",
+    "id": "number",
+    "missing": "string",
+    "parent": "null",
+    "queries": [
+     "string"
+    ],
+    "status": "string",
+    "text": "string",
+    "title": "string"
+   }
+  ],
+  "removed": [],
+  "report": "string",
+  "revised": [],
+  "unverified": []
+ },
+ "run.ranking.progress": [
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "number"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "null",
+   "question": "number",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "null",
+   "parent": "number",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "string",
+   "page": "number",
+   "parent": "number",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  }
+ ],
+ "run.ranking.run": {
+  "run_id": "string"
+ },
+ "run.ranking.summary": {
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "stage": "string",
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "assess": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "check": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "decompose": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "intake": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "plan": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "tldr": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "assess": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "brief": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "verify": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "write": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.rejected.summary": {
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "string",
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": "null",
+  "planned_stages": [
+   "string"
+  ],
+  "stage": "null",
+  "started_at": "null",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {},
+   "by_role": {},
+   "by_stage": {},
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.search": {
+  "results": [
+   {
+    "snippet": "string",
+    "source": {
+     "kind": "string",
+     "label": "string",
+     "origin": "string",
+     "qid": "string",
+     "tags": [],
+     "tier": "string"
+    },
+    "title": "string",
+    "url": "string"
+   }
+  ]
+ },
+ "run.storm.detail": {
+  "calls": [
+   {
+    "completion_tokens": "number",
+    "ended_at": "number",
+    "event": "number",
+    "failed": "bool",
+    "has_content": "bool",
+    "id": "number",
+    "model": "string",
+    "prompt_tokens": "number",
+    "role": "string",
+    "started_at": "number"
+   }
+  ],
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "events": [
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "null",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "null",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "null",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "null"
+   },
+   {
+    "at": "number",
+    "detail": "string",
+    "done": "number",
+    "kind": "null",
+    "page": "null",
+    "parent": "null",
+    "question": "null",
+    "search": "null",
+    "seq": "number",
+    "series": "string",
+    "stage": "string",
+    "total": "number",
+    "updated_at": "number"
+   }
+  ],
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "questions": [],
+  "result": {
+   "article": "string",
+   "citations": [
+    {
+     "index": "number",
+     "snippet": "string",
+     "source": {
+      "kind": "string",
+      "label": "string",
+      "origin": "string",
+      "qid": "string",
+      "tags": [],
+      "tier": "string"
+     },
+     "title": "string",
+     "url": "string"
+    }
+   ],
+   "duration_seconds": "number",
+   "outline": "string"
+  },
+  "searches": [
+   {
+    "ended_at": "number",
+    "engine": "string",
+    "event": "number",
+    "failures": [],
+    "has_content": "bool",
+    "id": "number",
+    "query": "string",
+    "results": "number",
+    "started_at": "number"
+   }
+  ],
+  "stage": "string",
+  "stages": [
+   {
+    "ended_at": "number",
+    "name": "string",
+    "seconds": "number",
+    "spans": [
+     {
+      "ended_at": "number",
+      "started_at": "number"
+     }
+    ],
+    "started_at": "number"
+   }
+  ],
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "article_gen": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "conv_simulator": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline_gen": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "question_asker": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "article": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "polish": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "run.storm.done": {
+  "article": "string",
+  "citations": [
+   {
+    "index": "number",
+    "snippet": "string",
+    "source": {
+     "kind": "string",
+     "label": "string",
+     "origin": "string",
+     "qid": "string",
+     "tags": [],
+     "tier": "string"
+    },
+    "title": "string",
+    "url": "string"
+   }
+  ],
+  "duration_seconds": "number",
+  "outline": "string"
+ },
+ "run.storm.progress": [
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "null"
+  },
+  {
+   "at": "number",
+   "detail": "string",
+   "done": "number",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "string",
+   "stage": "string",
+   "total": "number",
+   "updated_at": "number"
+  }
+ ],
+ "run.storm.run": {
+  "run_id": "string"
+ },
+ "run.storm.summary": {
+  "created_at": "number",
+  "ended_at": "number",
+  "error": "null",
+  "has_result": "bool",
+  "id": "string",
+  "kind": "string",
+  "latest": {
+   "at": "number",
+   "detail": "string",
+   "done": "null",
+   "kind": "null",
+   "page": "null",
+   "parent": "null",
+   "question": "null",
+   "search": "null",
+   "seq": "number",
+   "series": "null",
+   "stage": "string",
+   "total": "null",
+   "updated_at": "null"
+  },
+  "planned_stages": [
+   "string"
+  ],
+  "stage": "string",
+  "started_at": "number",
+  "state": "string",
+  "topic": "string",
+  "usage": {
+   "by_model": {
+    "openai/fast": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "openai/strong": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_role": {
+    "article_gen": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "conv_simulator": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "outline_gen": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    },
+    "question_asker": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "seconds": "number"
+    }
+   },
+   "by_stage": {
+    "article": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "outline": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "polish": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    },
+    "research": {
+     "calls": "number",
+     "completion_tokens": "number",
+     "cost": "number",
+     "embedding_tokens": "number",
+     "prompt_tokens": "number",
+     "reasoning_tokens": "number",
+     "searches": "number",
+     "seconds": "number"
+    }
+   },
+   "completion_tokens": "number",
+   "cost": "number",
+   "embedding_tokens": "number",
+   "prompt_tokens": "number",
+   "reasoning_tokens": "number",
+   "searches": "number"
+  }
+ },
+ "settings.keys": {
+  "favicons.custom_url": "string",
+  "favicons.miss_ttl_days": "string",
+  "favicons.providers": "string",
+  "favicons.ttl_days": "string",
+  "fetch.contact": "string",
+  "fetch.host_interval_seconds": "string",
+  "fetch.max_age_hours": "string",
+  "fetch.render": "string",
+  "fetch.stealth": "string",
+  "model.checker": "string",
+  "model.context_tokens": "string",
+  "model.embedding": "string",
+  "model.fast": "string",
+  "model.reason": "string",
+  "model.reason_effort": "string",
+  "model.reasoning_effort": "string",
+  "model.strong": "string",
+  "research.follow_ups": "string",
+  "research.max_attempts": "string",
+  "research.max_criteria": "string",
+  "research.max_depth": "string",
+  "research.max_entities": "string",
+  "research.max_searches": "string",
+  "research.results_per_query": "string",
+  "runs.keep_call_content": "string",
+  "runs.max": "string",
+  "runs.max_concurrent": "string",
+  "runs.store": "string",
+  "runs.ttl_days": "string",
+  "search.top_k": "string",
+  "search.url": "string",
+  "sources.allow": "string",
+  "sources.deny": "string",
+  "sources.enabled": "string",
+  "sources.endpoint": "string",
+  "sources.lists": "string",
+  "sources.miss_ttl_days": "string",
+  "sources.rsp": "string",
+  "sources.ttl_days": "string",
+  "sources.wikidata": "string",
+  "storm.max_conv_turn": "string",
+  "storm.max_perspective": "string"
+ },
+ "settings.view": {
+  "fields": [
+   {
+    "choices": "null",
+    "default": "bool",
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": "bool"
+   },
+   {
+    "choices": "null",
+    "default": "null",
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": "null"
+   },
+   {
+    "choices": "null",
+    "default": "number",
+    "help": "string",
+    "key": "string",
+    "minimum": "number",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": "number"
+   },
+   {
+    "choices": "null",
+    "default": "string",
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": "string"
+   },
+   {
+    "choices": "null",
+    "default": [
+     "string"
+    ],
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": []
+   },
+   {
+    "choices": "null",
+    "default": [],
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": [
+     "string"
+    ]
+   },
+   {
+    "choices": "null",
+    "default": [],
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": []
+   },
+   {
+    "choices": [
+     "string"
+    ],
+    "default": "string",
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": "string"
+   },
+   {
+    "choices": [
+     "string"
+    ],
+    "default": [
+     "string"
+    ],
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": [
+     "string"
+    ]
+   }
+  ],
+  "missing": [],
+  "restart_required": []
+ },
+ "sites.graph": {
+  "edges": [],
+  "sites": [
+   {
+    "domain": "string",
+    "links": "number",
+    "pages": "number",
+    "source": {
+     "kind": "string",
+     "label": "string",
+     "origin": "string",
+     "qid": "string",
+     "tags": [],
+     "tier": "string"
+    }
+   }
+  ]
+ },
+ "sites.list": [
+  {
+   "domain": "string",
+   "engines": [
+    "string"
+   ],
+   "fetched_at": "number",
+   "pages": "number",
+   "pieces": "number",
+   "source": {
+    "kind": "string",
+    "label": "string",
+    "origin": "string",
+    "qid": "string",
+    "tags": [],
+    "tier": "string"
+   }
+  }
+ ],
+ "sources.info": {
+  "kind": "string",
+  "label": "string",
+  "origin": "string",
+  "qid": "string",
+  "tags": [],
+  "tier": "string"
+ },
+ "sources.marked": {
+  "kind": "string",
+  "label": "string",
+  "origin": "string",
+  "qid": "string",
+  "tags": [
+   "string"
+  ],
+  "tier": "string"
+ }
+}

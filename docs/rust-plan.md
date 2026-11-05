@@ -353,6 +353,7 @@ Clients must not notice the change, apart from Co-STORM.
   `web/src/App.svelte` reads it. `schemars` and pydantic spell optional fields differently. Test this
   early, and adapt the output or the UI.
 - **Auth:** token or HttpOnly cookie, and the `Sec-Fetch-Site` check.
+- **FastAPI's own pages:** `/docs`, `/redoc` and `/openapi.json` are not part of the contract.
 - **Types:** `pnpm types` calls `kvasir openapi`. The gate is `pnpm check`, `pnpm test` and `pnpm e2e`
   passing, not a byte-equal spec.
 - **Stored data:** see [Data migration](#data-migration).
@@ -365,8 +366,11 @@ Each phase ends at a gate. Python stays what ships until phase 6, with no new fe
 
 1. Remove Co-STORM: routes, modules, schemas, `SessionSettings`, the pipe model, tests, docs.
 2. Check the URL in `persona_generator.py` with `fetch.public` per hop.
-3. Write `tests/contract/`: black-box tests in Python against `KVASIR_URL`, using a scripted fake
-   gateway and fake SearXNG over HTTP. Cover every route, error body and SSE transcript.
+3. Write `tests/contract/`: black-box tests in Python, using a scripted fake gateway and fake
+   SearXNG over HTTP. Cover every route, error body and SSE transcript. The harness starts the
+   service itself, since it has to point it at the fakes and restart it. `KVASIR_CONTRACT_COMMAND`
+   names the command, and the fake site is on 127.0.0.1, so the Rust binary needs a test-only way
+   past its SSRF check.
 4. Add a capture script for golden data: every signature rendered through `ChatAdapter`
    (`tests/test_storm_signatures.py` already formats them) with parsed samples, a URL corpus from
    `pages.db` with `normalize` output, each database's schema, and run JSON.
