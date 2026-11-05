@@ -2352,3 +2352,37 @@ tr.cut td {
 .setup button {
   justify-self: end;
 }
+
+.model-field {
+  position: relative;
+  display: grid;
+}
+.model-field input {
+  padding-right: 1.6rem !important;
+}
+.model-field .open {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 1.5rem;
+  font: inherit;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.menu.models {
+  /* Above the settings dialog, which it opens from. */
+  z-index: 60;
+  min-width: var(--bits-combobox-anchor-width);
+  max-width: 32rem;
+  max-height: min(18rem, var(--bits-combobox-content-available-height));
+  overflow-y: auto;
+}
+.menu.models .option {
+  padding: 0.25rem 0.5rem;
+  overflow-wrap: anywhere;
+}
+.menu.models .meta {
+  display: block;
+  font-size: 0.72rem;
+}

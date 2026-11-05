@@ -2,9 +2,8 @@
   import { onMount } from "svelte";
   import { request, type ModelInfo, type SettingsView } from "../lib/api";
   import { describeModel, labelOf, loadModels } from "../lib/service";
-  import ModelList from "./ModelList.svelte";
+  import ModelField from "./ModelField.svelte";
 
-  const MODEL_LIST = "setup-models";
   const EMBEDDING = "model.embedding";
 
   let { view, ondone }: { view: SettingsView; ondone: () => void } = $props();
@@ -78,18 +77,14 @@
   {#if unreachable.length > 0}
     <p class="meta" role="status">Did not list its models: {unreachable.join(", ")}. Its models can still be typed, as <code>provider/name</code>.</p>
   {/if}
-  <ModelList id={MODEL_LIST} {models} />
   {#each fields as field (field.key)}
     {@const chosen = models.find((model) => model.ref === values[field.key])}
     <label for={field.key}>{field.type === "model" ? `${labelOf(field.key)} model` : field.key === "search.url" ? "SearXNG URL" : labelOf(field.key)}</label>
-    <input
-      id={field.key}
-      type="text"
-      list={field.type === "model" ? MODEL_LIST : undefined}
-      autocomplete="off"
-      bind:value={values[field.key]}
-      required
-    />
+    {#if field.type === "model"}
+      <ModelField id={field.key} bind:value={values[field.key]} {models} required />
+    {:else}
+      <input id={field.key} type="text" autocomplete="off" bind:value={values[field.key]} required />
+    {/if}
     <p class="meta">{field.help}{#if chosen && describeModel(chosen)}{" "}<br />{describeModel(chosen)}{/if}</p>
   {/each}
   {#if error}<p class="error" role="alert">{error}</p>{/if}

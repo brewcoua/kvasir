@@ -1,18 +1,22 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { request, type SettingInfo, type SettingsView } from "../lib/api";
+  import { request, type ModelInfo, type SettingInfo, type SettingsView } from "../lib/api";
   import { labelOf } from "../lib/service";
+  import ModelField from "./ModelField.svelte";
 
-  let { field, modelList, onsaved }: { field: SettingInfo; modelList: string; onsaved: (view: SettingsView) => void } = $props();
+  let { field, models, onsaved }: { field: SettingInfo; models: ModelInfo[]; onsaved: (view: SettingsView) => void } = $props();
 
   const uid = $props.id();
   const id = $derived(`${uid}-${field.key}`);
   const label = $derived(labelOf(field.key));
   let error = $state("");
   let control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | undefined = $state();
+  // svelte-ignore state_referenced_locally
+  let model = $state(String(field.value ?? ""));
 
   // What the service holds, which a refused value or a reset to the same default would not rewrite.
   function show() {
+    model = String(field.value ?? "");
     if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = Boolean(field.value);
     else if (control) control.value = field.type === "list" ? (field.value as string[]).join("\n") : String(field.value ?? "");
   }
@@ -38,8 +42,8 @@
   }
 
   // Empty turns a nullable setting off, and gives any other its default. A required one has none.
-  function text(input: HTMLInputElement) {
-    const value = input.value.trim();
+  function text(typed: string) {
+    const value = typed.trim();
     if (value !== "") save(value);
     else if (field.nullable) save("");
     else if (!field.required) reset();
@@ -72,15 +76,10 @@
     <select {id} bind:this={control} value={field.value} onchange={(e) => save(e.currentTarget.value)}>
       {#each field.choices as choice (choice)}<option value={choice}>{choice}</option>{/each}
     </select>
+  {:else if field.type === "model"}
+    <ModelField {id} bind:value={model} {models} oncommit={() => text(model)} />
   {:else}
-    <input
-      {id}
-      bind:this={control}
-      type="text"
-      list={field.type === "model" ? modelList : undefined}
-      value={field.value ?? ""}
-      onchange={(e) => text(e.currentTarget)}
-    />
+    <input {id} bind:this={control} type="text" value={field.value ?? ""} onchange={(e) => text(e.currentTarget.value)} />
   {/if}
   <button type="button" class="reset" aria-label={`Reset ${label.toLowerCase()} to the default`} onclick={reset}>Reset</button>
   <p class="hint">

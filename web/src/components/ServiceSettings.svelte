@@ -2,10 +2,7 @@
   import { onMount } from "svelte";
   import { json, type ModelInfo, type SettingInfo, type SettingsView } from "../lib/api";
   import { capitalize, loadModels } from "../lib/service";
-  import ModelList from "./ModelList.svelte";
   import ServiceField from "./ServiceField.svelte";
-
-  const MODEL_LIST = "service-models";
 
   let view: SettingsView | null = $state(null);
   let models: ModelInfo[] = $state([]);
@@ -33,10 +30,9 @@
 {#if view && view.restart_required.length > 0}
   <p class="hint" role="status">Waiting for a restart: {view.restart_required.join(", ")}.</p>
 {/if}
-<ModelList id={MODEL_LIST} {models} />
 {#each sections as [section, fields] (section)}
   <h4>{capitalize(section)}</h4>
   {#each fields as field (field.key)}
-    <ServiceField {field} modelList={MODEL_LIST} onsaved={(saved) => (view = saved)} />
+    <ServiceField {field} {models} onsaved={(saved) => (view = saved)} />
   {/each}
 {/each}

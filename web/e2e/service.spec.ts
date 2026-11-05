@@ -107,6 +107,60 @@ test("a service setting saves as it changes, and resets", async ({ page, request
   await expect(searches).toHaveValue("16");
 });
 
+test("a model is picked from a list of every model, or typed", async ({ page, request }) => {
+  await settings(request, SET_UP);
+  // The configured provider answers nothing here, so what it would list is given.
+  await page.route("**/v1/providers", (route) => route.fulfill({ json: [{ name: "unused", reachable: true }] }));
+  await page.route("**/v1/providers/unused/models", (route) =>
+    route.fulfill({
+      json: [
+        { id: "fast", ref: "unused/fast", capabilities: ["completion"], context_length: 4096 },
+        { id: "large", ref: "unused/large", capabilities: ["completion", "tools"], context_length: 8192 },
+        { id: "embed", ref: "unused/embed", capabilities: ["embedding"] },
+      ],
+    }),
+  );
+  await logIn(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Service" }).click();
+  const fast = page.getByLabel("Fast", { exact: true });
+  const options = page.getByRole("listbox").getByRole("option");
+
+  // A filled field still offers the others, each named by its ref.
+  await fast.click();
+  await expect(options).toHaveCount(3);
+  await expect(options.nth(1)).toContainText("unused/large");
+  await expect(options.nth(1)).toContainText("completion, tools");
+
+  // What is typed filters by the model's name, and not by what it can do.
+  await fast.fill("comp");
+  await expect(options).toHaveCount(0);
+  await fast.fill("lar");
+  await expect(options).toHaveCount(1);
+  await options.first().click();
+  await expect(fast).toHaveValue("unused/large");
+  await expect.poll(async () => (await field(request, "model.fast")).value).toBe("unused/large");
+
+  // A provider's model it did not list can be typed.
+  await fast.fill("unused/not-listed");
+  await page.getByRole("heading", { name: "Service" }).click();
+  await expect.poll(async () => (await field(request, "model.fast")).value).toBe("unused/not-listed");
+  await expect(fast).toHaveValue("unused/not-listed");
+
+  // What was typed does not filter the list once left.
+  await fast.click();
+  await expect(options).toHaveCount(3);
+  await page.keyboard.press("Escape");
+
+  // A refused value is restored, and refused again when typed again.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await fast.fill("elsewhere/x");
+    await page.getByRole("heading", { name: "Service" }).click();
+    await expect(page.getByRole("alert")).toContainText("unknown provider 'elsewhere'");
+    await expect(fast).toHaveValue("unused/not-listed");
+  }
+});
+
 async function field(request: APIRequestContext, key: string) {
   const view = await (await request.get("/v1/settings", { headers: AUTH })).json();
   return view.fields.find((f: { key: string }) => f.key === key);
