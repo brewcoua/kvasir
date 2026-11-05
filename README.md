@@ -94,7 +94,9 @@ for SearXNG only.
    `KVASIR_MAX_THREADS=2` keeps intake calls from only queueing; start Ollama with
    `OLLAMA_NUM_PARALLEL=2` for them to run side by side.
 
-5. From another shell with the same `KVASIR_TOKEN`, store the models and the search URL:
+5. Open <http://localhost:8080>, log in with the token, and fill in the setup page: the models,
+   suggested from what Ollama serves, and `http://localhost:8888` for SearXNG. Or, from another shell
+   with the same `KVASIR_TOKEN`:
 
    ```bash
    curl -s -X PATCH localhost:8080/v1/settings \
@@ -540,7 +542,8 @@ Settings come from two places, and each setting has one:
 
 ### Store a setting
 
-`GET /v1/settings` lists every stored setting with its value, its default, its type and what it
+The page's Settings dialog has a Service tab holding every stored setting, saved as it changes.
+From a client, `GET /v1/settings` lists every stored setting with its value, its default, its type and what it
 accepts. `PATCH /v1/settings` sets the keys it is sent, and `null` sets one back to its default:
 
 ```bash
@@ -565,7 +568,7 @@ A nullable text setting, such as `model.reason_effort`, is turned off by storing
 ### First start
 
 With `model.fast`, `model.strong`, `model.embedding` or `search.url` unset, the service starts and
-logs which are missing. Until they are stored, `/readyz` answers 503 with
+logs which are missing, and the page opens on a setup form asking for them. Until they are stored, `/readyz` answers 503 with
 `{"setup":"required","missing":[...]}`, and every route that starts a run, a task or a session
 step answers 409. A model whose provider is no longer in the environment counts as unset.
 

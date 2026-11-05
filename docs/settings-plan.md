@@ -1,6 +1,6 @@
 # Settings in the database: plan
 
-Status: written 2026-11-05. Phases 1 to 4 built 2026-11-05.
+Status: built 2026-11-05.
 
 Configuration is environment variables over an optional `kvasir.toml`, read once at startup into a
 frozen `Settings`. Every new option means a new key in the file, the README and the example file,
@@ -54,9 +54,10 @@ Providers stay in the environment, keys and bases both. An API that could change
 
 With `model.fast`, `model.strong`, `model.embedding` or `search.url` unset, the service starts
 anyway. `/readyz` answers 503 with `"setup": "required"`, run endpoints answer 409, and the UI opens
-the setup wizard: pick a provider, its models load, `embedding` is suggested from the `embedding`
-capability or an id containing `embed`. `fast` and `strong` are the user's pick, since nothing in a
-model list says which is which. Then `search.url`, with a reachability check, then save.
+a setup form: each model field suggests every provider's models and can be typed, `embedding` is
+filled from the `embedding` capability or an id containing `embed`. `fast` and `strong` are the
+user's pick, since nothing in a model list says which is which. After saving, `/readyz` says whether
+SearXNG and the providers answer; one that does not is reported and does not stop the setup.
 
 ## Open questions
 
