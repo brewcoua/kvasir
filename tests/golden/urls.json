@@ -1,0 +1,122 @@
+[
+ {
+  "key": "https://example.org",
+  "url": "https://example.org"
+ },
+ {
+  "key": "https://example.org",
+  "url": "https://example.org/"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "http://example.org/a"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://www.example.org/a/"
+ },
+ {
+  "key": "https://example.org/A",
+  "url": "https://WWW.Example.ORG/A"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://example.org:443/a"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "http://example.org:80/a"
+ },
+ {
+  "key": "https://example.org:8443/a",
+  "url": "https://example.org:8443/a"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://example.org/a/index.html"
+ },
+ {
+  "key": "https://example.org/a/index.htm",
+  "url": "https://example.org/a/index.htm"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://example.org/a#section"
+ },
+ {
+  "key": "https://example.org#/route/a",
+  "url": "https://example.org/#/route/a"
+ },
+ {
+  "key": "https://example.org#!/route/a?b=1",
+  "url": "https://example.org/#!/route/a?b=1"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://example.org/a?b=2&a=1"
+ },
+ {
+  "key": "https://example.org/a?id=1",
+  "url": "https://example.org/a?utm_source=x&id=1"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://example.org/a?fbclid=x"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "https://example.org/a?gclid=x&ref=y"
+ },
+ {
+  "key": "https://example.org/a%20b/%C3%A9",
+  "url": "https://example.org/a%20b/%C3%A9"
+ },
+ {
+  "key": "https://example.org/%C3%A9",
+  "url": "https://example.org/é"
+ },
+ {
+  "key": "https://bücher.example/a",
+  "url": "https://bücher.example/a"
+ },
+ {
+  "key": "https://example.org/a/../b",
+  "url": "https://example.org/a/../b"
+ },
+ {
+  "key": "https://example.org/a/b",
+  "url": "https://example.org//a//b"
+ },
+ {
+  "key": "https://user:secret@example.org/a",
+  "url": "https://user:secret@example.org/a"
+ },
+ {
+  "key": "https://[2001:db8::1]/a",
+  "url": "https://[2001:db8::1]/a"
+ },
+ {
+  "key": null,
+  "url": "https://[bad/a"
+ },
+ {
+  "key": "https://127.0.0.1:8000/a",
+  "url": "http://127.0.0.1:8000/a"
+ },
+ {
+  "key": "https:///example.org/a",
+  "url": "example.org/a"
+ },
+ {
+  "key": "https://example.org/a",
+  "url": "ftp://example.org/a"
+ },
+ {
+  "key": "https:///a%40example.org",
+  "url": "mailto:a@example.org"
+ },
+ {
+  "key": "https://",
+  "url": ""
+ }
+]

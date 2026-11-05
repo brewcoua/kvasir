@@ -1,6 +1,6 @@
 # Rust migration: plan
 
-Status: draft, under review. Nothing is built. Written 2026-11-05 against commit `b34fd37`.
+Status: phase 0 done in Python. No Rust is written yet. Written 2026-11-05 against commit `b34fd37`.
 
 kvasir is one Python process. Its work is blocking, because dspy, litellm and the STORM fork are
 synchronous, so a run is a thread with nested thread pools under an asyncio server. This plan
@@ -374,8 +374,10 @@ Each phase ends at a gate. Python stays what ships until phase 6, with no new fe
 4. Add a capture script for golden data: every signature rendered through `ChatAdapter`
    (`tests/test_storm_signatures.py` already formats them) with parsed samples, a URL corpus from
    `pages.db` with `normalize` output, each database's schema, and run JSON.
+   `tests/golden/capture.py` writes these. What holds research stays out of git, in `<data>/golden/`.
 
-Gate: `uv run pytest` and `tests/contract/` pass against Python. The current baseline is 979 passed.
+Gate: `uv run pytest` and `tests/contract/` pass against Python. The baseline is 993 passed, 103 of
+them in `tests/contract/`.
 
 ### Phase 1: spikes, go or no-go
 

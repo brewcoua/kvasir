@@ -1,0 +1,692 @@
+{
+ "kvasir.methods.graph.signatures.Expand": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `path` (str): the questions above this one, first first, or none\n3. `question` (str): \n4. `evidence` (str): each claim with the quote it was read from\nYour output fields are:\n1. `status` (Literal['answered', 'weak', 'contradicted', 'open']): \n2. `claims` (list[int]): ids of the claims counted as support\n3. `missing` (str): what is still missing, in a few words, or empty\n4. `raised` (list[NamedQuestion]): at most four questions, one when answered, or empty\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## path ## ]]\n{path}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## evidence ## ]]\n{evidence}\n\n[[ ## status ## ]]\n{status}        # note: the value you produce must exactly match (no extra characters) one of: answered; weak; contradicted; open\n\n[[ ## claims ## ]]\n{claims}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"integer\"}}\n\n[[ ## missing ## ]]\n{missing}\n\n[[ ## raised ## ]]\n{raised}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"$defs\": {\"NamedQuestion\": {\"type\": \"object\", \"description\": \"A question, the short name a graph of the research shows it by, and how central it is.\", \"properties\": {\"priority\": {\"type\": \"string\", \"default\": \"supporting\", \"description\": \"core: the brief cannot be answered without it; supporting: it explains or qualifies the answer; peripheral: background a good answer can do without\", \"enum\": [\"core\", \"supporting\", \"peripheral\"], \"title\": \"Priority\"}, \"question\": {\"type\": \"string\", \"title\": \"Question\"}, \"title\": {\"type\": \"string\", \"description\": \"two to five words naming what the question asks about\", \"title\": \"Title\"}}, \"required\": [\"title\", \"question\"], \"title\": \"NamedQuestion\"}}, \"items\": {\"$ref\": \"#/$defs/NamedQuestion\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Decide how well the evidence answers one research question, and what it raises next.\n        \n        The path is the chain of questions this one was asked under, from the first. Count a claim\n        only if its quote states what the claim says. answered: the counted claims settle the\n        question. weak: they settle part of it. contradicted: they disagree with each other. open: no\n        claim speaks to it. Then ask the questions the evidence itself raises: something a claim names\n        without explaining, a figure it gives without a source or a date, a point two claims disagree\n        on. Unless it is answered, ask one for each separate part of what is still missing: a question\n        nearly answered raises one or none, a hard one up to four. When it is answered, ask the one\n        harder question that would take the answer deeper. Ask none the path already asks.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## path ## ]]\nthe path\n\n[[ ## question ## ]]\nthe question\n\n[[ ## evidence ## ]]\nthe evidence\n\nRespond with the corresponding output fields, starting with the field `[[ ## status ## ]]` (must be formatted as a valid Python Literal['answered', 'weak', 'contradicted', 'open']), then `[[ ## claims ## ]]` (must be formatted as a valid Python list[int]), then `[[ ## missing ## ]]`, then `[[ ## raised ## ]]` (must be formatted as a valid Python list[NamedQuestion]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "claims": [
+    3,
+    3
+   ],
+   "missing": "the missing",
+   "raised": [
+    {
+     "priority": "core",
+     "question": "the question",
+     "title": "the title"
+    },
+    {
+     "priority": "core",
+     "question": "the question",
+     "title": "the title"
+    }
+   ],
+   "status": "answered"
+  },
+  "reply": "[[ ## status ## ]]\nanswered\n\n[[ ## claims ## ]]\n[3, 3]\n\n[[ ## missing ## ]]\nthe missing\n\n[[ ## raised ## ]]\n[{\"title\": \"the title\", \"question\": \"the question\", \"priority\": \"core\"}, {\"title\": \"the title\", \"question\": \"the question\", \"priority\": \"core\"}]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.graph.signatures.Gaps": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `questions` (str): one question per line: name: question (status)\nYour output fields are:\n1. `raised` (list[NamedQuestion]): at most three new questions, or empty\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## questions ## ]]\n{questions}\n\n[[ ## raised ## ]]\n{raised}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"$defs\": {\"NamedQuestion\": {\"type\": \"object\", \"description\": \"A question, the short name a graph of the research shows it by, and how central it is.\", \"properties\": {\"priority\": {\"type\": \"string\", \"default\": \"supporting\", \"description\": \"core: the brief cannot be answered without it; supporting: it explains or qualifies the answer; peripheral: background a good answer can do without\", \"enum\": [\"core\", \"supporting\", \"peripheral\"], \"title\": \"Priority\"}, \"question\": {\"type\": \"string\", \"title\": \"Question\"}, \"title\": {\"type\": \"string\", \"description\": \"two to five words naming what the question asks about\", \"title\": \"Title\"}}, \"required\": [\"title\", \"question\"], \"title\": \"NamedQuestion\"}}, \"items\": {\"$ref\": \"#/$defs/NamedQuestion\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Name what a research report answering a brief still lacks, given every question asked so far.\n        \n        Ask a new question only for a part of the brief no question below covers, or for one left\n        unanswered, from an angle its own question did not take. Ask none that repeats a question\n        below. Return none when the questions already cover the brief.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## questions ## ]]\nthe questions\n\nRespond with the corresponding output fields, starting with the field `[[ ## raised ## ]]` (must be formatted as a valid Python list[NamedQuestion]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "raised": [
+    {
+     "priority": "core",
+     "question": "the question",
+     "title": "the title"
+    },
+    {
+     "priority": "core",
+     "question": "the question",
+     "title": "the title"
+    }
+   ]
+  },
+  "reply": "[[ ## raised ## ]]\n[{\"title\": \"the title\", \"question\": \"the question\", \"priority\": \"core\"}, {\"title\": \"the title\", \"question\": \"the question\", \"priority\": \"core\"}]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.graph.signatures.Outline": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `questions` (str): one question per line: [id] name: question (status, claims found); what is missing\nYour output fields are:\n1. `sections` (list[Section]): three to seven sections\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## questions ## ]]\n{questions}\n\n[[ ## sections ## ]]\n{sections}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"$defs\": {\"Section\": {\"type\": \"object\", \"description\": \"One section of the report, and the questions whose findings it reports.\", \"properties\": {\"questions\": {\"type\": \"array\", \"description\": \"ids of the questions it reports on\", \"items\": {\"type\": \"integer\"}, \"title\": \"Questions\"}, \"subsections\": {\"type\": \"array\", \"description\": \"two to four subheadings when the section covers distinct parts, else empty\", \"items\": {\"type\": \"string\"}, \"title\": \"Subsections\"}, \"title\": {\"type\": \"string\", \"description\": \"two to six words, a heading a reader scans, not a question\", \"title\": \"Title\"}}, \"required\": [\"title\", \"questions\"], \"title\": \"Section\"}}, \"items\": {\"$ref\": \"#/$defs/Section\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Outline a research report answering a brief, from the questions the research settled.\n        \n        Each section reports on one theme, under a short heading. Group the questions that bear on one\n        theme, whichever first question they were raised under; a question may serve two sections.\n        Order the sections as the answer reads best: what answers the brief first, then what explains,\n        qualifies or disputes it. Give every question at least one section. Split a section that\n        covers distinct parts into subsections, under headings as short as the sections'. No two\n        sections share a title.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## questions ## ]]\nthe questions\n\nRespond with the corresponding output fields, starting with the field `[[ ## sections ## ]]` (must be formatted as a valid Python list[Section]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "sections": [
+    {
+     "questions": [
+      3,
+      3
+     ],
+     "subsections": [
+      "the subsections 1",
+      "the subsections 2"
+     ],
+     "title": "the title"
+    },
+    {
+     "questions": [
+      3,
+      3
+     ],
+     "subsections": [
+      "the subsections 1",
+      "the subsections 2"
+     ],
+     "title": "the title"
+    }
+   ]
+  },
+  "reply": "[[ ## sections ## ]]\n[{\"title\": \"the title\", \"questions\": [3, 3], \"subsections\": [\"the subsections 1\", \"the subsections 2\"]}, {\"title\": \"the title\", \"questions\": [3, 3], \"subsections\": [\"the subsections 1\", \"the subsections 2\"]}]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.Assess": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `entity` (str): the option\n3. `criterion` (str): \n4. `evidence` (str): one claim per line, prefixed by its id in brackets\nYour output fields are:\n1. `finding` (str): at most six words, or empty\n2. `claims` (list[int]): ids of the claims the finding rests on\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## entity ## ]]\n{entity}\n\n[[ ## criterion ## ]]\n{criterion}\n\n[[ ## evidence ## ]]\n{evidence}\n\n[[ ## finding ## ]]\n{finding}\n\n[[ ## claims ## ]]\n{claims}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"integer\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        State what the evidence says about one option on one criterion.\n        \n        Use only claims about this option. The finding is a table cell: at most six words, without the\n        option's name, such as \"24 GB at 4-bit\" or \"Apache 2.0\". Return an empty finding and no claim\n        ids if no claim speaks to it.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## entity ## ]]\nthe entity\n\n[[ ## criterion ## ]]\nthe criterion\n\n[[ ## evidence ## ]]\nthe evidence\n\nRespond with the corresponding output fields, starting with the field `[[ ## finding ## ]]`, then `[[ ## claims ## ]]` (must be formatted as a valid Python list[int]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "claims": [
+    3,
+    3
+   ],
+   "finding": "the finding"
+  },
+  "reply": "[[ ## finding ## ]]\nthe finding\n\n[[ ## claims ## ]]\n[3, 3]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.Brief": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `today` (str): today's date\n2. `question` (str): \n3. `clarifications` (str): questions asked and the answers given, or none\nYour output fields are:\n1. `brief` (str): one paragraph\n2. `assumptions` (list[str]): choices made on the author's behalf\n3. `output` (Literal['report', 'ranking', 'table']): ranking if the question asks which options are best, table if it asks to compare options without ranking them, report otherwise\n4. `criteria` (list[str]): the criteria the question says to compare or rank on, in its words, or empty\n5. `entities` (list[str]): the options the question names as the full set to compare, or empty if it leaves the set open\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## today ## ]]\n{today}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## clarifications ## ]]\n{clarifications}\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## assumptions ## ]]\n{assumptions}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## output ## ]]\n{output}        # note: the value you produce must exactly match (no extra characters) one of: report; ranking; table\n\n[[ ## criteria ## ]]\n{criteria}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## entities ## ]]\n{entities}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Turn a research question and its clarifications into a research brief.\n        \n        The brief states what to find out, the scope, and what a good answer contains. Record every\n        choice the question and the clarifications left open as an assumption. A question about what\n        is best, latest or current is about the state of things on the given date.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## today ## ]]\nthe today\n\n[[ ## question ## ]]\nthe question\n\n[[ ## clarifications ## ]]\nthe clarifications\n\nRespond with the corresponding output fields, starting with the field `[[ ## brief ## ]]`, then `[[ ## assumptions ## ]]` (must be formatted as a valid Python list[str]), then `[[ ## output ## ]]` (must be formatted as a valid Python Literal['report', 'ranking', 'table']), then `[[ ## criteria ## ]]` (must be formatted as a valid Python list[str]), then `[[ ## entities ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "assumptions": [
+    "the assumptions 1",
+    "the assumptions 2"
+   ],
+   "brief": "the brief",
+   "criteria": [
+    "the criteria 1",
+    "the criteria 2"
+   ],
+   "entities": [
+    "the entities 1",
+    "the entities 2"
+   ],
+   "output": "report"
+  },
+  "reply": "[[ ## brief ## ]]\nthe brief\n\n[[ ## assumptions ## ]]\n[\"the assumptions 1\", \"the assumptions 2\"]\n\n[[ ## output ## ]]\nreport\n\n[[ ## criteria ## ]]\n[\"the criteria 1\", \"the criteria 2\"]\n\n[[ ## entities ## ]]\n[\"the entities 1\", \"the entities 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.CheckAnswer": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `question` (str): \n3. `evidence` (str): each claim with the quote it was read from\nYour output fields are:\n1. `status` (Literal['answered', 'weak', 'contradicted', 'open']): \n2. `claims` (list[int]): ids of the claims counted as support\n3. `missing` (str): what is still missing, in a few words, or empty\n4. `follow_ups` (list[str]): at most two harder questions, or empty\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## evidence ## ]]\n{evidence}\n\n[[ ## status ## ]]\n{status}        # note: the value you produce must exactly match (no extra characters) one of: answered; weak; contradicted; open\n\n[[ ## claims ## ]]\n{claims}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"integer\"}}\n\n[[ ## missing ## ]]\n{missing}\n\n[[ ## follow_ups ## ]]\n{follow_ups}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Decide how well the evidence answers one research question.\n        \n        Count a claim only if its quote states what the claim says. answered: the counted claims\n        settle the question. weak: they settle part of it. contradicted: they disagree with each\n        other. open: no claim speaks to it. When answered, suggest harder questions an expert would\n        ask next about the same subject, which the brief would gain from.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## question ## ]]\nthe question\n\n[[ ## evidence ## ]]\nthe evidence\n\nRespond with the corresponding output fields, starting with the field `[[ ## status ## ]]` (must be formatted as a valid Python Literal['answered', 'weak', 'contradicted', 'open']), then `[[ ## claims ## ]]` (must be formatted as a valid Python list[int]), then `[[ ## missing ## ]]`, then `[[ ## follow_ups ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "claims": [
+    3,
+    3
+   ],
+   "follow_ups": [
+    "the follow_ups 1",
+    "the follow_ups 2"
+   ],
+   "missing": "the missing",
+   "status": "answered"
+  },
+  "reply": "[[ ## status ## ]]\nanswered\n\n[[ ## claims ## ]]\n[3, 3]\n\n[[ ## missing ## ]]\nthe missing\n\n[[ ## follow_ups ## ]]\n[\"the follow_ups 1\", \"the follow_ups 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.Criteria": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `background` (str): search results on the topic\nYour output fields are:\n1. `criteria` (list[ChosenCriterion]): three to five criteria\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## background ## ]]\n{background}\n\n[[ ## criteria ## ]]\n{criteria}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"$defs\": {\"ChosenCriterion\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\", \"title\": \"Name\"}, \"weight\": {\"type\": \"integer\", \"title\": \"Weight\"}}, \"required\": [\"name\", \"weight\"], \"title\": \"ChosenCriterion\"}}, \"items\": {\"$ref\": \"#/$defs/ChosenCriterion\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Choose the criteria to compare options on, for a research brief.\n        \n        Include every criterion the brief names. Each is one thing a source can state about an option,\n        such as a size, a price or a feature, not a judgement such as \"overall quality\". Weigh each\n        from 1 to 3 by how much it matters to the brief.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## background ## ]]\nthe background\n\nRespond with the corresponding output fields, starting with the field `[[ ## criteria ## ]]` (must be formatted as a valid Python list[ChosenCriterion]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "criteria": [
+    {
+     "name": "the name",
+     "weight": 3
+    },
+    {
+     "name": "the name",
+     "weight": 3
+    }
+   ]
+  },
+  "reply": "[[ ## criteria ## ]]\n[{\"name\": \"the name\", \"weight\": 3}, {\"name\": \"the name\", \"weight\": 3}]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.Decompose": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str):\nYour output fields are:\n1. `questions` (list[NamedQuestion]): three to six questions\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## questions ## ]]\n{questions}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"$defs\": {\"NamedQuestion\": {\"type\": \"object\", \"description\": \"A question, the short name a graph of the research shows it by, and how central it is.\", \"properties\": {\"priority\": {\"type\": \"string\", \"default\": \"supporting\", \"description\": \"core: the brief cannot be answered without it; supporting: it explains or qualifies the answer; peripheral: background a good answer can do without\", \"enum\": [\"core\", \"supporting\", \"peripheral\"], \"title\": \"Priority\"}, \"question\": {\"type\": \"string\", \"title\": \"Question\"}, \"title\": {\"type\": \"string\", \"description\": \"two to five words naming what the question asks about\", \"title\": \"Title\"}}, \"required\": [\"title\", \"question\"], \"title\": \"NamedQuestion\"}}, \"items\": {\"$ref\": \"#/$defs/NamedQuestion\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Split a research brief into the questions a good answer has to settle.\n        \n        Each question asks for one thing a source can state, such as a figure, a date, a cause or a\n        name. Together they cover the brief. Order them from the most central to the least. Ask, do\n        not answer: name no fact, example or figure the brief does not state, since what you recall\n        may be wrong and would steer the search towards it.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\nRespond with the corresponding output fields, starting with the field `[[ ## questions ## ]]` (must be formatted as a valid Python list[NamedQuestion]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "questions": [
+    {
+     "priority": "core",
+     "question": "the question",
+     "title": "the title"
+    },
+    {
+     "priority": "core",
+     "question": "the question",
+     "title": "the title"
+    }
+   ]
+  },
+  "reply": "[[ ## questions ## ]]\n[{\"title\": \"the title\", \"question\": \"the question\", \"priority\": \"core\"}, {\"title\": \"the title\", \"question\": \"the question\", \"priority\": \"core\"}]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.Entities": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `background` (str): search results on the topic\n3. `count` (int): the most options to return\nYour output fields are:\n1. `entities` (list[str]):\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## background ## ]]\n{background}\n\n[[ ## count ## ]]\n{count}\n\n[[ ## entities ## ]]\n{entities}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        List the options a research brief compares, such as products, companies or models.\n        \n        Include every option the brief names. Then add the options the search results show are the\n        main ones. An option is something the brief asks to choose between: never a benchmark, a\n        leaderboard, an article or a website, and never one the brief rules out. Name each the way the\n        sources do, shortly.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## background ## ]]\nthe background\n\n[[ ## count ## ]]\n3\n\nRespond with the corresponding output fields, starting with the field `[[ ## entities ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "entities": [
+    "the entities 1",
+    "the entities 2"
+   ]
+  },
+  "reply": "[[ ## entities ## ]]\n[\"the entities 1\", \"the entities 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.Outline": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `shape` (str): how the report is organised\n3. `notes` (str):\nYour output fields are:\n1. `sections` (list[str]): section titles, three to seven\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## shape ## ]]\n{shape}\n\n[[ ## notes ## ]]\n{notes}\n\n[[ ## sections ## ]]\n{sections}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Outline a research report answering a brief from research notes, in the shape asked for.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## shape ## ]]\nthe shape\n\n[[ ## notes ## ]]\nthe notes\n\nRespond with the corresponding output fields, starting with the field `[[ ## sections ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "sections": [
+    "the sections 1",
+    "the sections 2"
+   ]
+  },
+  "reply": "[[ ## sections ## ]]\n[\"the sections 1\", \"the sections 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.PlanQueries": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `today` (str): today's date\n2. `brief` (str): \n3. `notes` (str): what is known so far, or empty at the start\n4. `count` (int): how many queries to return\nYour output fields are:\n1. `queries` (list[str]): search engine queries\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## today ## ]]\n{today}\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## notes ## ]]\n{notes}\n\n[[ ## count ## ]]\n{count}\n\n[[ ## queries ## ]]\n{queries}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Plan the next web searches for a research brief.\n        \n        The notes say what is known and what is missing. Search for what is missing. Do not repeat a\n        search the notes show was already done. When the brief is about the current state of things,\n        name the current year in the query, since what you know may be out of date.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## today ## ]]\nthe today\n\n[[ ## brief ## ]]\nthe brief\n\n[[ ## notes ## ]]\nthe notes\n\n[[ ## count ## ]]\n3\n\nRespond with the corresponding output fields, starting with the field `[[ ## queries ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "queries": [
+    "the queries 1",
+    "the queries 2"
+   ]
+  },
+  "reply": "[[ ## queries ## ]]\n[\"the queries 1\", \"the queries 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.RankCriterion": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `criterion` (str): \n3. `options` (str): one option per line, with its finding\nYour output fields are:\n1. `ranking` (list[str]): every option's name, best first\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## criterion ## ]]\n{criterion}\n\n[[ ## options ## ]]\n{options}\n\n[[ ## ranking ## ]]\n{ranking}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Rank options on one criterion, best first, from what the evidence says about each.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## criterion ## ]]\nthe criterion\n\n[[ ## options ## ]]\nthe options\n\nRespond with the corresponding output fields, starting with the field `[[ ## ranking ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "ranking": [
+    "the ranking 1",
+    "the ranking 2"
+   ]
+  },
+  "reply": "[[ ## ranking ## ]]\n[\"the ranking 1\", \"the ranking 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.methods.ledger.signatures.SearchFor": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `today` (str): today's date\n2. `brief` (str): \n3. `question` (str): \n4. `tried` (str): queries already tried for this question, one per line\n5. `missing` (str): what the last search left out, or empty\n6. `shape` (str): the kind of query to write\nYour output fields are:\n1. `query` (str): a search engine query\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## today ## ]]\n{today}\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## tried ## ]]\n{tried}\n\n[[ ## missing ## ]]\n{missing}\n\n[[ ## shape ## ]]\n{shape}\n\n[[ ## query ## ]]\n{query}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Write one web search query that would find the answer to a research question.\n        \n        Write it in the shape asked for. Do not repeat a query already tried; the missing part says\n        what the last search left out. When the brief is about the current state of things, name the\n        current year, since what you know may be out of date.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## today ## ]]\nthe today\n\n[[ ## brief ## ]]\nthe brief\n\n[[ ## question ## ]]\nthe question\n\n[[ ## tried ## ]]\nthe tried\n\n[[ ## missing ## ]]\nthe missing\n\n[[ ## shape ## ]]\nthe shape\n\nRespond with the corresponding output fields, starting with the field `[[ ## query ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "query": "the query"
+  },
+  "reply": "[[ ## query ## ]]\nthe query\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.clarify.Clarify": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `question` (str):\nYour output fields are:\n1. `questions` (list[str]): at most three short questions, or an empty list\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## question ## ]]\n{question}\n\n[[ ## questions ## ]]\n{questions}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Before researching a question, decide what you would need to ask its author.\n        \n        Ask only what would change what you research or how you report it, such as scope, region,\n        period, or what to compare. Ask at most three questions. Return none if the question is clear.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## question ## ]]\nthe question\n\nRespond with the corresponding output fields, starting with the field `[[ ## questions ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "questions": [
+    "the questions 1",
+    "the questions 2"
+   ]
+  },
+  "reply": "[[ ## questions ## ]]\n[\"the questions 1\", \"the questions 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.evaluate.Check": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `question` (str): \n2. `report` (str): \n3. `requirement` (str):\nYour output fields are:\n1. `met` (bool): \n2. `reason` (str): one short sentence\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## question ## ]]\n{question}\n\n[[ ## report ## ]]\n{report}\n\n[[ ## requirement ## ]]\n{requirement}\n\n[[ ## met ## ]]\n{met}        # note: the value you produce must be True or False\n\n[[ ## reason ## ]]\n{reason}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Decide whether a research report meets one requirement. Judge only what the report says.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## question ## ]]\nthe question\n\n[[ ## report ## ]]\nthe report\n\n[[ ## requirement ## ]]\nthe requirement\n\nRespond with the corresponding output fields, starting with the field `[[ ## met ## ]]` (must be formatted as a valid Python bool), then `[[ ## reason ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "met": true,
+   "reason": "the reason"
+  },
+  "reply": "[[ ## met ## ]]\nTrue\n\n[[ ## reason ## ]]\nthe reason\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.signatures.Contradicts": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `claim` (str): a claim, with the quote it was read from\n2. `others` (str): claims from other sources, each prefixed by its id in brackets, with its quote\nYour output fields are:\n1. `disagree` (list[int]): the ids of the claims that disagree, or none\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## claim ## ]]\n{claim}\n\n[[ ## others ## ]]\n{others}\n\n[[ ## disagree ## ]]\n{disagree}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"integer\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Decide which of the other claims, each from a different source, disagree with the claim\n        about the same fact.\n        \n        One disagrees when both cannot be true at once, such as two different dates for one event.\n        Different facts about the same subject do not disagree, and neither does one being vaguer.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## claim ## ]]\nthe claim\n\n[[ ## others ## ]]\nthe others\n\nRespond with the corresponding output fields, starting with the field `[[ ## disagree ## ]]` (must be formatted as a valid Python list[int]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "disagree": [
+    3,
+    3
+   ]
+  },
+  "reply": "[[ ## disagree ## ]]\n[3, 3]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.signatures.Escalate": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `sentence` (str): \n2. `evidence` (str): each cited claim, with the quote it was read from\nYour output fields are:\n1. `verdict` (Literal['supported', 'partial', 'unsupported']): \n2. `reason` (str): one short sentence\n3. `rewrite` (str): the rewritten sentence if partial, otherwise empty\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## sentence ## ]]\n{sentence}\n\n[[ ## evidence ## ]]\n{evidence}\n\n[[ ## verdict ## ]]\n{verdict}        # note: the value you produce must exactly match (no extra characters) one of: supported; partial; unsupported\n\n[[ ## reason ## ]]\n{reason}\n\n[[ ## rewrite ## ]]\n{rewrite}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Decide whether a sentence from a report is supported by the evidence it cites, and when it\n        is only partly, rewrite it.\n        \n        Supported means every fact in the sentence is stated in the quotes, or follows directly from\n        them. Partial means some facts are stated and others are added: a number, a name or a\n        comparison the quotes do not contain. Unsupported means the quotes do not state what the\n        sentence says. Wording may differ. For a partial sentence, rewrite it to state only what the\n        quotes say, in the same style, keeping only the claim markers it already cites.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## sentence ## ]]\nthe sentence\n\n[[ ## evidence ## ]]\nthe evidence\n\nRespond with the corresponding output fields, starting with the field `[[ ## verdict ## ]]` (must be formatted as a valid Python Literal['supported', 'partial', 'unsupported']), then `[[ ## reason ## ]]`, then `[[ ## rewrite ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "reason": "the reason",
+   "rewrite": "the rewrite",
+   "verdict": "supported"
+  },
+  "reply": "[[ ## verdict ## ]]\nsupported\n\n[[ ## reason ## ]]\nthe reason\n\n[[ ## rewrite ## ]]\nthe rewrite\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.signatures.Intake": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `question` (str): what the search that found the page was for\n3. `title` (str): \n4. `text` (str): a piece of the page\nYour output fields are:\n1. `findings` (list[Finding]):\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## title ## ]]\n{title}\n\n[[ ## text ## ]]\n{text}\n\n[[ ## findings ## ]]\n{findings}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"$defs\": {\"Finding\": {\"type\": \"object\", \"properties\": {\"claim\": {\"type\": \"string\", \"title\": \"Claim\"}, \"confidence\": {\"type\": \"string\", \"enum\": [\"high\", \"medium\", \"low\"], \"title\": \"Confidence\"}, \"quote\": {\"type\": \"string\", \"title\": \"Quote\"}}, \"required\": [\"claim\", \"quote\", \"confidence\"], \"title\": \"Finding\"}}, \"items\": {\"$ref\": \"#/$defs/Finding\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Extract the facts in a piece of a web page that help answer a research brief.\n        \n        The page was found while searching for the question, so look for its answer first, then for\n        anything else the brief needs. Each claim is one self-contained fact. Its quote is copied\n        exactly from the text, word for word, short but enough to support the claim. Return an empty\n        list if nothing in the text helps.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## question ## ]]\nthe question\n\n[[ ## title ## ]]\nthe title\n\n[[ ## text ## ]]\nthe text\n\nRespond with the corresponding output fields, starting with the field `[[ ## findings ## ]]` (must be formatted as a valid Python list[Finding]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "findings": [
+    {
+     "claim": "the claim",
+     "confidence": "high",
+     "quote": "the quote"
+    },
+    {
+     "claim": "the claim",
+     "confidence": "high",
+     "quote": "the quote"
+    }
+   ]
+  },
+  "reply": "[[ ## findings ## ]]\n[{\"claim\": \"the claim\", \"quote\": \"the quote\", \"confidence\": \"high\"}, {\"claim\": \"the claim\", \"quote\": \"the quote\", \"confidence\": \"high\"}]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.signatures.Summarize": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `report` (str): the start of each section, with its claim ids\nYour output fields are:\n1. `points` (list[str]): three to five points, each citing claim ids\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## report ## ]]\n{report}\n\n[[ ## points ## ]]\n{points}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Sum up a research report for a reader who reads nothing else.\n        \n        Each point is one plain sentence giving a finding, most important first, and keeps the\n        bracketed claim ids the report cites for it. The first point answers the brief. Add nothing the\n        report does not say. No filler, no em dashes.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## report ## ]]\nthe report\n\nRespond with the corresponding output fields, starting with the field `[[ ## points ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "points": [
+    "the points 1",
+    "the points 2"
+   ]
+  },
+  "reply": "[[ ## points ## ]]\n[\"the points 1\", \"the points 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.signatures.Verify": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `sentence` (str): \n2. `evidence` (str): each cited claim, with the quote it was read from\nYour output fields are:\n1. `verdict` (Literal['supported', 'partial', 'unsupported']): \n2. `reason` (str): one short sentence\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## sentence ## ]]\n{sentence}\n\n[[ ## evidence ## ]]\n{evidence}\n\n[[ ## verdict ## ]]\n{verdict}        # note: the value you produce must exactly match (no extra characters) one of: supported; partial; unsupported\n\n[[ ## reason ## ]]\n{reason}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Decide whether a sentence from a report is supported by the evidence it cites.\n        \n        Supported means every fact in the sentence is stated in the quotes, or follows directly from\n        them. Partial means some facts are stated and others are added: a number, a name or a\n        comparison the quotes do not contain. Unsupported means the quotes do not state what the\n        sentence says. Wording may differ.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## sentence ## ]]\nthe sentence\n\n[[ ## evidence ## ]]\nthe evidence\n\nRespond with the corresponding output fields, starting with the field `[[ ## verdict ## ]]` (must be formatted as a valid Python Literal['supported', 'partial', 'unsupported']), then `[[ ## reason ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "reason": "the reason",
+   "verdict": "supported"
+  },
+  "reply": "[[ ## verdict ## ]]\nsupported\n\n[[ ## reason ## ]]\nthe reason\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.research.signatures.WriteSection": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `brief` (str): \n2. `outline` (str): \n3. `section` (str): \n4. `subsections` (str): the `###` headings to use, one per line, or empty\n5. `earlier_sections` (str): the start of each section already written\n6. `evidence` (str): one claim per line, prefixed by its id in brackets\nYour output fields are:\n1. `text` (str): the section's paragraphs, in markdown\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## brief ## ]]\n{brief}\n\n[[ ## outline ## ]]\n{outline}\n\n[[ ## section ## ]]\n{section}\n\n[[ ## subsections ## ]]\n{subsections}\n\n[[ ## earlier_sections ## ]]\n{earlier_sections}\n\n[[ ## evidence ## ]]\n{evidence}\n\n[[ ## text ## ]]\n{text}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Write one section of a research report from its evidence.\n        \n        Use only the evidence. Cite every factual sentence with the bracketed ids of the claims that\n        support it, such as [3] or [3][7]. Say plainly what the evidence does not settle. Do not repeat\n        what earlier sections said. Do not write the section title. When subsections are given, write\n        each under its own `###` heading, in that order, and add no other heading.\n        \n        Style:\n        - Start with the finding, not with what the section will cover. Name who did what, in the\n          active voice.\n        - Prefer the evidence's numbers, dates and names to general words.\n        - One idea per sentence, and sentences of different lengths.\n        - No filler: no \"it is important to note\", \"notably\", \"overall\", \"in conclusion\", no\n          rhetorical questions, no \"not X but Y\" setups, no lists of three for rhythm, no em dashes.\n        - No inflated words such as \"crucial\", \"pivotal\", \"landscape\", \"delve\", \"multifaceted\",\n          \"testament\", \"tapestry\".\n        - Bold the one or two terms a reader scanning the paragraph should catch, with **, no more.\n        - At most one callout, and only for a point that needs one: a line `> [!WARNING]` for evidence\n          that is disputed or contradicted, `> [!CAUTION]` for a likely misreading, `> [!IMPORTANT]`\n          for the point the section turns on, or `> [!NOTE]` for context, then its cited sentences on\n          lines starting with `> `.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## brief ## ]]\nthe brief\n\n[[ ## outline ## ]]\nthe outline\n\n[[ ## section ## ]]\nthe section\n\n[[ ## subsections ## ]]\nthe subsections\n\n[[ ## earlier_sections ## ]]\nthe earlier_sections\n\n[[ ## evidence ## ]]\nthe evidence\n\nRespond with the corresponding output fields, starting with the field `[[ ## text ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "text": "the text"
+  },
+  "reply": "[[ ## text ## ]]\nthe text\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.article_generation.WriteSection": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `info` (str): the collected information\n2. `topic` (str): the topic of the page\n3. `section` (str): the section you need to write\nYour output fields are:\n1. `written_section` (str): the section, with proper inline citations. Start with the # section title. Do not include the page title or write other sections.\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## info ## ]]\n{info}\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## section ## ]]\n{section}\n\n[[ ## written_section ## ]]\n{written_section}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Write a Wikipedia section based on the collected information.\n        \n        Here is the format of your writing:\n            1. Use \"#\" Title\" to indicate section title, \"##\" Title\" to indicate subsection title, \"###\" Title\" to indicate subsubsection title, and so on.\n            2. Use [1], [2], ..., [n] in line (for example, \"The capital of the United States is Washington, D.C.[1][3].\"). You DO NOT need to include a References or Sources section to list the sources at the end.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## info ## ]]\nthe info\n\n[[ ## topic ## ]]\nthe topic\n\n[[ ## section ## ]]\nthe section\n\nRespond with the corresponding output fields, starting with the field `[[ ## written_section ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "written_section": "the written_section"
+  },
+  "reply": "[[ ## written_section ## ]]\nthe written_section\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.article_polish.PolishPage": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `draft_page` (str): the draft article\nYour output fields are:\n1. `page` (str): your revised article\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## draft_page ## ]]\n{draft_page}\n\n[[ ## page ## ]]\n{page}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        You are a faithful text editor that is good at finding repeated information in the article and deleting them to make sure there is no repetition in the article. You won't delete any non-repeated part in the article. You will keep the inline citations and article structure (indicated by \"#\", \"##\", etc.) appropriately. Do your job for the following article.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## draft_page ## ]]\nthe draft_page\n\nRespond with the corresponding output fields, starting with the field `[[ ## page ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "page": "the page"
+  },
+  "reply": "[[ ## page ## ]]\nthe page\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.article_polish.WriteLeadSection": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): the topic of the page\n2. `draft_page` (str): the draft page\nYour output fields are:\n1. `lead_section` (str):\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## draft_page ## ]]\n{draft_page}\n\n[[ ## lead_section ## ]]\n{lead_section}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Write a lead section for the given Wikipedia page with the following guidelines:\n        1. The lead should stand on its own as a concise overview of the article's topic. It should identify the topic, establish context, explain why the topic is notable, and summarize the most important points, including any prominent controversies.\n        2. The lead section should be concise and contain no more than four well-composed paragraphs.\n        3. The lead section should be carefully sourced as appropriate. Add inline citations (e.g., \"Washington, D.C., is the capital of the United States.[1][3].\") where necessary.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## draft_page ## ]]\nthe draft_page\n\nRespond with the corresponding output fields, starting with the field `[[ ## lead_section ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "lead_section": "the lead_section"
+  },
+  "reply": "[[ ## lead_section ## ]]\nthe lead_section\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.knowledge_curation.AnswerQuestion": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): topic you are discussing about\n2. `conv` (str): the question\n3. `info` (str): gathered information\nYour output fields are:\n1. `answer` (str):\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## conv ## ]]\n{conv}\n\n[[ ## info ## ]]\n{info}\n\n[[ ## answer ## ]]\n{answer}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        You are an expert who can use information effectively. You are chatting with a Wikipedia writer who wants to write a Wikipedia page on topic you know. You have gathered the related information and will now use the information to form a response.\n        Make your response as informative as possible, ensuring that every sentence is supported by the gathered information. If the [gathered information] is not directly related to the [topic] or [question], provide the most relevant answer based on the available information. If no appropriate answer can be formulated, respond with, “I cannot answer this question based on the available information,” and explain any limitations or gaps.\n        Try to use as many different sources as possible, and do not hallucinate.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## conv ## ]]\nthe conv\n\n[[ ## info ## ]]\nthe info\n\nRespond with the corresponding output fields, starting with the field `[[ ## answer ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "answer": "the answer"
+  },
+  "reply": "[[ ## answer ## ]]\nthe answer\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.knowledge_curation.AskQuestion": {
+  "chain_of_thought": true,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): topic you want to write about\n2. `conv` (str): conversation history\nYour output fields are:\n1. `reasoning` (str): \n2. `question` (str): a single question, or the closing thanks\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## conv ## ]]\n{conv}\n\n[[ ## reasoning ## ]]\n{reasoning}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        You are an experienced Wikipedia writer. You are chatting with an expert to get information for the topic you want to contribute. Ask good questions to get more useful information relevant to the topic.\n        When you have no more question to ask, say \"Thank you so much for your help!\" to end the conversation.\n        Please only ask a question at a time and don't ask what you have asked before. Your questions should be related to the topic you want to write.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## conv ## ]]\nthe conv\n\nRespond with the corresponding output fields, starting with the field `[[ ## reasoning ## ]]`, then `[[ ## question ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "question": "the question",
+   "reasoning": "the reasoning"
+  },
+  "reply": "[[ ## reasoning ## ]]\nthe reasoning\n\n[[ ## question ## ]]\nthe question\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.knowledge_curation.AskQuestionWithPersona": {
+  "chain_of_thought": true,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): topic you want to write about\n2. `persona` (str): your persona besides being a Wikipedia writer\n3. `conv` (str): conversation history\nYour output fields are:\n1. `reasoning` (str): \n2. `question` (str): a single question, or the closing thanks\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## persona ## ]]\n{persona}\n\n[[ ## conv ## ]]\n{conv}\n\n[[ ## reasoning ## ]]\n{reasoning}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        You are an experienced Wikipedia writer and want to edit a specific page. Besides your identity as a Wikipedia writer, you have specific focus when researching the topic.\n        Now, you are chatting with an expert to get information. Ask good questions to get more useful information.\n        When you have no more question to ask, say \"Thank you so much for your help!\" to end the conversation.\n        Please only ask a question at a time and don't ask what you have asked before. Your questions should be related to the topic you want to write.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## persona ## ]]\nthe persona\n\n[[ ## conv ## ]]\nthe conv\n\nRespond with the corresponding output fields, starting with the field `[[ ## reasoning ## ]]`, then `[[ ## question ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "question": "the question",
+   "reasoning": "the reasoning"
+  },
+  "reply": "[[ ## reasoning ## ]]\nthe reasoning\n\n[[ ## question ## ]]\nthe question\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.knowledge_curation.QuestionToQuery": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): topic you are discussing about\n2. `question` (str): question you want to answer\nYour output fields are:\n1. `queries` (list[str]): the search queries you will use\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## question ## ]]\n{question}\n\n[[ ## queries ## ]]\n{queries}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        You want to answer the question using Google search. What do you type in the search box?",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## question ## ]]\nthe question\n\nRespond with the corresponding output fields, starting with the field `[[ ## queries ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "queries": [
+    "the queries 1",
+    "the queries 2"
+   ]
+  },
+  "reply": "[[ ## queries ## ]]\n[\"the queries 1\", \"the queries 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.outline_generation.WritePageOutline": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): the topic you want to write about\nYour output fields are:\n1. `outline` (str): the Wikipedia page outline\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## outline ## ]]\n{outline}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Write an outline for a Wikipedia page.\n        Here is the format of your writing:\n        1. Use \"#\" Title\" to indicate section title, \"##\" Title\" to indicate subsection title, \"###\" Title\" to indicate subsubsection title, and so on.\n        2. Do not include other information.\n        3. Do not include topic name itself in the outline.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\nRespond with the corresponding output fields, starting with the field `[[ ## outline ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "outline": "the outline"
+  },
+  "reply": "[[ ## outline ## ]]\nthe outline\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.outline_generation.WritePageOutlineFromConv": {
+  "chain_of_thought": false,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): the topic you want to write about\n2. `conv` (str): conversation history\n3. `old_outline` (str): the current outline, to be improved\nYour output fields are:\n1. `outline` (str): the improved Wikipedia page outline\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## conv ## ]]\n{conv}\n\n[[ ## old_outline ## ]]\n{old_outline}\n\n[[ ## outline ## ]]\n{outline}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        Improve an outline for a Wikipedia page. You already have a draft outline that covers the general information. Now you want to improve it based on the information learned from an information-seeking conversation to make it more informative.\n        Here is the format of your writing:\n        1. Use \"#\" Title\" to indicate section title, \"##\" Title\" to indicate subsection title, \"###\" Title\" to indicate subsubsection title, and so on.\n        2. Do not include other information.\n        3. Do not include topic name itself in the outline.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## conv ## ]]\nthe conv\n\n[[ ## old_outline ## ]]\nthe old_outline\n\nRespond with the corresponding output fields, starting with the field `[[ ## outline ## ]]`, and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "outline": "the outline"
+  },
+  "reply": "[[ ## outline ## ]]\nthe outline\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.persona_generator.FindRelatedTopic": {
+  "chain_of_thought": true,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): topic of interest\nYour output fields are:\n1. `reasoning` (str): \n2. `related_topics` (list[str]): URLs of Wikipedia pages on closely related subjects\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## reasoning ## ]]\n{reasoning}\n\n[[ ## related_topics ## ]]\n{related_topics}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        I'm writing a Wikipedia page for a topic mentioned below. Please identify and recommend some Wikipedia pages on closely related subjects. I'm looking for examples that provide insights into interesting aspects commonly associated with this topic, or examples that help me understand the typical content and structure included in Wikipedia pages for similar topics.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\nRespond with the corresponding output fields, starting with the field `[[ ## reasoning ## ]]`, then `[[ ## related_topics ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "reasoning": "the reasoning",
+   "related_topics": [
+    "the related_topics 1",
+    "the related_topics 2"
+   ]
+  },
+  "reply": "[[ ## reasoning ## ]]\nthe reasoning\n\n[[ ## related_topics ## ]]\n[\"the related_topics 1\", \"the related_topics 2\"]\n\n[[ ## completed ## ]]\n"
+ },
+ "kvasir.storm.storm_wiki.modules.persona_generator.GenPersona": {
+  "chain_of_thought": true,
+  "messages": [
+   {
+    "content": "Your input fields are:\n1. `topic` (str): topic of interest\n2. `examples` (str): wiki page outlines of related topics, for inspiration\nYour output fields are:\n1. `reasoning` (str): \n2. `personas` (list[str]): one editor per item, written as 'short summary of the editor: description'\nAll interactions will be structured in the following way, with the appropriate values filled in.\n\n[[ ## topic ## ]]\n{topic}\n\n[[ ## examples ## ]]\n{examples}\n\n[[ ## reasoning ## ]]\n{reasoning}\n\n[[ ## personas ## ]]\n{personas}        # note: the value you produce must adhere to the JSON schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n\n[[ ## completed ## ]]\nIn adhering to this structure, your objective is: \n        You need to select a group of Wikipedia editors who will work together to create a comprehensive article on the topic. Each of them represents a different perspective, role, or affiliation related to this topic. You can use other Wikipedia pages of related topics for inspiration. For each editor, add a description of what they will focus on.",
+    "role": "system"
+   },
+   {
+    "content": "[[ ## topic ## ]]\nthe topic\n\n[[ ## examples ## ]]\nthe examples\n\nRespond with the corresponding output fields, starting with the field `[[ ## reasoning ## ]]`, then `[[ ## personas ## ]]` (must be formatted as a valid Python list[str]), and then ending with the marker for `[[ ## completed ## ]]`.",
+    "role": "user"
+   }
+  ],
+  "parsed": {
+   "personas": [
+    "the personas 1",
+    "the personas 2"
+   ],
+   "reasoning": "the reasoning"
+  },
+  "reply": "[[ ## reasoning ## ]]\nthe reasoning\n\n[[ ## personas ## ]]\n[\"the personas 1\", \"the personas 2\"]\n\n[[ ## completed ## ]]\n"
+ }
+}
