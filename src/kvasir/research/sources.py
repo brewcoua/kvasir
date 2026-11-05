@@ -101,6 +101,8 @@ _NS = "http://www.wikidata.org/entity/"
 _ROOT_KINDS = {
     "Q327333": "government",
     "Q2659904": "government",
+    # A country: `canada.ca` is the Government of Canada's site, and its item is the country's.
+    "Q6256": "government",
     "Q3918": "academic",
     "Q31855": "academic",
     "Q4671277": "academic",

@@ -83,7 +83,7 @@ Kinds, the Wikidata roots that give them (QIDs checked 2026-11-04), and their pr
 | Priority | Kind | Suffix rule | Wikidata roots |
 | --- | --- | --- | --- |
 | 1 | `intergovernmental` | `.int`, `europa.eu` | Q484652 international organization, unless it also reaches Q79913 non-governmental organization |
-| 2 | `government` | `.gov`, `.mil`, `.gov.<cc>`, `.gouv.<cc>`, `.gc.ca`, CISA list | Q327333 government agency, Q2659904 government organization |
+| 2 | `government` | `.gov`, `.mil`, `.gov.<cc>`, `.gouv.<cc>`, `.gc.ca`, CISA list | Q327333 government agency, Q2659904 government organization, Q6256 country (`canada.ca` is the item of Canada) |
 | 3 | `academic` | `.edu`, `.ac.<cc>`, `.edu.<cc>` | Q3918 university, Q31855 research institute, Q4671277 academic institution |
 | 4 | `standards` | none | Q1328899 standards organization |
 | 5 | `news` | none | Q11032 newspaper, Q192283 news agency, Q1153191 online newspaper |
@@ -146,7 +146,7 @@ The query, as run for this plan, cut to two hosts:
 
 ```sparql
 SELECT ?h ?i ?root WHERE {
-  VALUES ?root { wd:Q484652 wd:Q79913 wd:Q327333 wd:Q2659904 wd:Q3918 wd:Q31855 wd:Q4671277
+  VALUES ?root { wd:Q484652 wd:Q79913 wd:Q327333 wd:Q2659904 wd:Q6256 wd:Q3918 wd:Q31855 wd:Q4671277
                  wd:Q1328899 wd:Q11032 wd:Q192283 wd:Q1153191 wd:Q5292 wd:Q171 wd:Q125361038
                  wd:Q43229 }
   { VALUES (?h ?d) { ("en.wikipedia.org" "wikipedia.org") ("w3.org" "w3.org") }

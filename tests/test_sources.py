@@ -19,7 +19,7 @@ DAY = 86400
 NS = "http://www.wikidata.org/entity/"
 NEWSPAPER, ORG, STANDARDS = "Q11032", "Q43229", "Q1328899"
 INTERNATIONAL, NGO, WIKI, AI = "Q484652", "Q79913", "Q171", "Q125361038"
-UNIVERSITY, ENCYCLOPEDIA, GOVERNMENT = "Q3918", "Q5292", "Q327333"
+UNIVERSITY, ENCYCLOPEDIA, GOVERNMENT, COUNTRY = "Q3918", "Q5292", "Q327333", "Q6256"
 
 
 class Wdqs:
@@ -171,6 +171,17 @@ def test_who_is_intergovernmental(store, tmp_path, wdqs):
     wdqs(rows={"example-who.org": [("Q7817", "WHO", [INTERNATIONAL, ORG])]})
 
     assert one(service(store, tmp_path), "example-who.org").kind == "intergovernmental"
+
+
+def test_a_country_is_government(store, tmp_path, wdqs):
+    wdqs(
+        rows={"natural-resources.canada.ca": [("Q16", "Canada", [COUNTRY, ORG])]},
+        names={"natural-resources.canada.ca": "canada.ca"},
+    )
+
+    found = one(service(store, tmp_path), "natural-resources.canada.ca")
+
+    assert (found.kind, found.tier, found.qid) == ("government", "high", "Q16")
 
 
 def test_a_host_matching_several_items_takes_the_best_kind_and_all_tags(store, tmp_path, wdqs):
