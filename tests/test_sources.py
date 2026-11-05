@@ -652,6 +652,7 @@ RSP = json.dumps(
                                     + row("nc", "Guardian blogs", "theguardian.com")
                                     + row("gr", "Peerage")
                                     + row("m", "Polygon", "polygon.com")
+                                    + row("gu", "Wikipedia", "wikipedia.org")
                                     + "|}"
                                 }
                             }

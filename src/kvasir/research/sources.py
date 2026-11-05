@@ -93,6 +93,9 @@ _RSP_STATUS = {
     "b": "rsp_deprecated",
 }
 _RSP_ORDER = ("rsp_reliable", "rsp_mixed", "rsp_unreliable", "rsp_deprecated")
+# Rows whose status does not apply here. Wikipedia is unreliable there for being circular
+# (WP:CIRCULAR), an article citing an article; a run citing it is not circular.
+_RSP_SKIP = frozenset({"wikipedia.org"})
 MARKS = frozenset({"allow", "deny", *KINDS[:-1]})
 # What a list may be labelled: a kind, or a tag.
 LIST_LABELS = frozenset({*KINDS[:-1], *LIST_TAGS})
@@ -645,7 +648,8 @@ def parse_rsp(text: str) -> dict[str, str]:
     """The `rsp_*` tag of each site on the perennial sources page, from the JSON the API answers
     with. A row is `|- class="s-<status>"` and its sites are in `{{WP:RSPUSES|a.com|b.com}}`. A
     site in several rows (a topic with a status of its own) takes the least reliable. Rows with no
-    site, a status that is none of the five, or a part of a site (`a.com/news`) are skipped."""
+    site, a status that is none of the five, a part of a site (`a.com/news`) or a site in
+    `_RSP_SKIP` are skipped."""
     found: dict[str, str] = {}
     for page in json.loads(text)["query"]["pages"]:
         wikitext = page["revisions"][0]["slots"]["main"]["content"] if "revisions" in page else ""
@@ -657,7 +661,12 @@ def parse_rsp(text: str) -> dict[str, str]:
                 for raw in names.split("|"):
                     name, slash, path = raw.partition("/")
                     host = normalize(name)
-                    if not tag or not host or (slash and path not in ("", "*")):
+                    if (
+                        not tag
+                        or not host
+                        or host in _RSP_SKIP
+                        or (slash and path not in ("", "*"))
+                    ):
                         continue
                     if host not in found or _RSP_ORDER.index(tag) > _RSP_ORDER.index(found[host]):
                         found[host] = tag

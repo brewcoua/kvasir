@@ -629,7 +629,9 @@ lists. A site it names gets a tag from its status: `rsp_reliable` (generally rel
 `rsp_deprecated` (deprecated or blacklisted, `avoid`). The tag joins the kind the host resolves to,
 and does not replace it; a config `ALLOW` or `DENY` and a mark ignore it. A site in several rows,
 such as a newspaper and its blogs, takes the least reliable status; a row with no site, or only a
-part of one (`example.com/news`), is skipped. Rows name publications, not domains, so only sites
+part of one (`example.com/news`), is skipped. Wikipedia's own row is skipped too: the page calls it
+unreliable because an article citing an article is circular (WP:CIRCULAR), which a run citing it
+is not. Rows name publications, not domains, so only sites
 the page lists are tagged.
 
 Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts

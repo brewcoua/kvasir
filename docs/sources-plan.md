@@ -298,7 +298,8 @@ of every subpage; it is cached in `data_dir` and refreshed with the other lists.
 `|- class="s-<status>"` with its sites in `{{WP:RSPUSES|a.com|b.com}}`: `gr` gives `rsp_reliable`,
 `nc` `rsp_mixed`, `gu` `rsp_unreliable`, `d` and `b` `rsp_deprecated`. The domains come from that
 template only: a row with none, a part of a site (`a.com/news`) or the status `m` is skipped, and
-Wikidata is not asked. A site in several rows takes the least reliable. The tags are added to
+Wikidata is not asked. `wikipedia.org` is skipped as well: its `gu` is for WP:CIRCULAR, an
+article citing an article, which a run citing Wikipedia is not. A site in several rows takes the least reliable. The tags are added to
 whatever the host otherwise resolves to, after it resolves and unless the config or a mark decided
 it, so they set no kind. The page's license (CC BY-SA) is why no copy is shipped.
 
