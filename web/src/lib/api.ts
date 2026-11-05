@@ -39,17 +39,25 @@ export const defaultsOf = (method: MethodInfo): Partial<Defaults> =>
     ]),
   ) as Partial<Defaults>;
 
+// The token expired or changed: starting the page over shows the login.
+export function reloadOn401(response: Response): Response {
+  if (response.status === 401) location.reload();
+  return response;
+}
+
 export async function json<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = reloadOn401(await fetch(path));
   if (!response.ok) throw new Error(`${path}: ${response.status}`);
   return response.json();
 }
 
 // Like `json`, with the reason the service gives for a refusal, and for requests that change something.
 export async function request<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
-  const response = await fetch(
-    path,
-    body === undefined ? { method } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+  const response = reloadOn401(
+    await fetch(
+      path,
+      body === undefined ? { method } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    ),
   );
   if (!response.ok) {
     const failure = await response.json().catch(() => ({}));

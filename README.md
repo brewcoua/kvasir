@@ -106,6 +106,10 @@ kvasir binds `0.0.0.0:8080`, so on a laptop it is reachable from the local netwo
 guards every route but `/healthz`, `/readyz`, `POST /v1/login` and the page itself, and nothing
 limits how often it may be guessed: use a long random one.
 
+Behind a proxy that ends TLS, set `FORWARDED_ALLOW_IPS` to the proxy's address. uvicorn then reads
+`X-Forwarded-Proto`, and the login cookie is marked Secure. Without it, the cookie is not marked
+Secure, and a browser sends it over plain HTTP too.
+
 ## Run it
 
 ```bash

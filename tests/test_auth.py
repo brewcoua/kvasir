@@ -84,3 +84,31 @@ def test_a_wrong_header_falls_back_to_no_cookie(anonymous):
     anonymous.post("/v1/login", json={"token": "token"})
 
     assert anonymous.get("/v1/runs", headers={"Authorization": "Bearer wrong"}).status_code == 401
+
+
+@pytest.mark.parametrize("site", ["same-site", "cross-site"])
+def test_a_cookie_cannot_change_anything_from_another_origin(anonymous, site):
+    """Another port of the same host is the same site, so SameSite lets its page send the cookie."""
+    anonymous.post("/v1/login", json={"token": "token"})
+    headers = {"Sec-Fetch-Site": site}
+
+    assert anonymous.delete("/v1/favicons", headers=headers).status_code == 401
+    assert anonymous.get("/v1/runs", headers=headers).status_code == 200
+
+
+def test_a_cookie_changes_things_from_the_page_itself(anonymous):
+    anonymous.post("/v1/login", json={"token": "token"})
+
+    for site in ("same-origin", None):
+        headers = {"Sec-Fetch-Site": site} if site else {}
+        assert anonymous.delete("/v1/favicons", headers=headers).status_code == 204
+
+
+def test_a_bearer_token_is_not_bound_to_an_origin(anonymous):
+    headers = AUTH | {"Sec-Fetch-Site": "cross-site"}
+
+    assert anonymous.delete("/v1/favicons", headers=headers).status_code == 204
+
+
+def test_the_token_stays_out_of_the_settings_repr(anonymous):
+    assert "token='" not in repr(app.state.settings)

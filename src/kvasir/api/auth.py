@@ -2,7 +2,9 @@
 
 A client sends `Authorization: Bearer <token>`. The page cannot on every request: `EventSource`
 and `<img>` send no header. So `POST /v1/login` sets the token as a cookie, which is accepted too.
-SameSite=Strict keeps another site's page from sending it.
+SameSite=Strict keeps another site's page from sending it, but a page on another port of the same
+host is the same site. So a cookie-authenticated request that changes something is refused when the
+browser says it comes from another origin.
 """
 
 from __future__ import annotations
@@ -17,6 +19,9 @@ from kvasir.config import Settings
 COOKIE = "kvasir_token"
 # A browser left alone for a month logs in again.
 COOKIE_MAX_AGE_SECONDS = 30 * 24 * 3600
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# `Sec-Fetch-Site` values of a request another page made. A client that sends none is no browser.
+_FOREIGN = frozenset({"same-site", "cross-site"})
 
 router = APIRouter()
 
@@ -39,6 +44,8 @@ def require_token(http: Request) -> None:
     scheme, _, given = http.headers.get("authorization", "").partition(" ")
     if scheme.lower() != "bearer":
         given = http.cookies.get(COOKIE, "")
+        if http.method not in _SAFE_METHODS and http.headers.get("sec-fetch-site") in _FOREIGN:
+            raise Unauthorized
     if not _valid(http, given):
         raise Unauthorized
 
@@ -55,7 +62,8 @@ async def login(body: Login, http: Request) -> Response:
         max_age=COOKIE_MAX_AGE_SECONDS,
         httponly=True,
         samesite="strict",
-        # Behind a proxy that ends TLS the scheme reads http, and the cookie is sent without it.
+        # Behind a proxy that ends TLS, uvicorn reads https from X-Forwarded-Proto only when the
+        # proxy's address is in FORWARDED_ALLOW_IPS.
         secure=http.url.scheme == "https",
     )
     return response

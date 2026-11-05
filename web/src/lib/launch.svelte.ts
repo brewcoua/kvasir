@@ -1,4 +1,5 @@
 // Starting a run, shared by every layout of the new run page.
+import { reloadOn401 } from "./api";
 import { METHODS, type Method, type Picked } from "./methods";
 import { chosen } from "./settings.svelte";
 
@@ -36,11 +37,11 @@ export class Launch {
     this.status = "checking whether the question needs clarifying…";
     this.busy = true;
     try {
-      const response = await fetch("/v1/clarify", {
+      const response = reloadOn401(await fetch("/v1/clarify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question: this.text.trim() }),
-      });
+      }));
       if (!response.ok) throw new Error(`clarify: ${response.status}`);
       const { questions } = await response.json();
       if (questions.length > 0) {
@@ -75,11 +76,11 @@ export class Launch {
     this.busy = true;
     this.status = "starting…";
     try {
-      const response = await fetch("/v1/runs", {
+      const response = reloadOn401(await fetch("/v1/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
-      });
+      }));
       if (!response.ok || !response.body) {
         const error = await response.json().catch(() => ({}));
         this.status = `refused: ${error.message ?? JSON.stringify(error.detail ?? response.status)}`;
