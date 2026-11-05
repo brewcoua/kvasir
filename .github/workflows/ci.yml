@@ -32,6 +32,23 @@ jobs:
       # expression in pyproject.toml.
       - run: uv run pytest
 
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # rust-toolchain.toml pins the compiler; rustup installs it on first use.
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-deny
+
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo nextest run --locked --no-tests=pass
+      - run: cargo deny check
+
   web:
     runs-on: ubuntu-latest
     defaults:

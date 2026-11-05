@@ -9,3 +9,4 @@ dist/
 kvasir.toml
 data/
 src/kvasir/static/
+/target/
