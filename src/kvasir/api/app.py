@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
 from kvasir.api import auth, favicons, methods, pages, runs, sessions, sources, tasks
-from kvasir.config import Settings, apply_environment
+from kvasir.config import Settings, SetupRequired, apply_environment
 from kvasir.research import fetch
 from kvasir.research.favicons import Favicons, FaviconStore
 from kvasir.research.pages import PageStore
@@ -32,6 +32,7 @@ from kvasir.runs.registry import (
 )
 from kvasir.runs.store import RunStore
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
+from kvasir.settings_store import SettingsStore
 from kvasir.storm.runtime import configure_concurrency, configure_context, configure_fetch
 
 READINESS_TIMEOUT_SECONDS = 5.0
@@ -45,7 +46,8 @@ logger = logging.getLogger("kvasir")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Fail here rather than on the first request if the environment is unusable."""
-    settings = Settings.from_env()
+    settings = Settings.load()
+    SettingsStore(settings.db)  # Created at the first start, whatever runs.store is.
     apply_environment()
     configure_concurrency(settings.max_threads)
     configure_context(settings.model.context_tokens)
@@ -72,7 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.run_slots = threading.BoundedSemaphore(settings.runs.max_concurrent)
     app.state.sessions = SessionStore(settings.sessions_dir, settings.sessions.ttl_hours)
     store = (
-        RunStore(settings.runs_db, settings.runs.ttl_days, settings.runs.max)
+        RunStore(settings.db, settings.runs.ttl_days, settings.runs.max)
         if settings.runs.store == "sqlite"
         else None
     )
@@ -87,6 +89,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.search.url,
         settings.runs.max_concurrent,
     )
+    if settings.missing:
+        logger.warning("nothing can run until these are set: %s", ", ".join(settings.missing))
     yield
 
 
@@ -116,19 +120,23 @@ async def healthz() -> dict[str, str]:
 
 @app.get("/readyz")
 async def readyz(response: Response) -> dict[str, object]:
-    """Readiness. Fails when SearXNG or any provider a model uses is unreachable.
+    """Readiness. Fails while a required setting is unset, or when SearXNG or any provider a model
+    uses is unreachable.
 
     No check spends tokens. Listing models is free, and SearXNG is only asked for its root. A
     provider no model refers to is not probed, since no run needs it.
     """
     settings: Settings = app.state.settings
+    if settings.missing:
+        response.status_code = 503
+        return {"setup": "required", "missing": list(settings.missing)}
     refs = (
         settings.model.fast,
         settings.model.strong,
         settings.model.checker,
         settings.model.embedding,
     )
-    names = sorted({ref.partition("/")[0] for ref in refs if ref is not None})
+    names = sorted({ref.partition("/")[0] for ref in refs if ref})
     *probed, searxng = await asyncio.gather(
         *(
             _reachable(
@@ -163,6 +171,11 @@ async def _unauthorized(request: Request, exc: auth.Unauthorized) -> JSONRespons
         status_code=401,
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+@app.exception_handler(SetupRequired)
+async def _setup_required(request: Request, exc: SetupRequired) -> JSONResponse:
+    return JSONResponse({"message": f"set these settings first: {exc}"}, status_code=409)
 
 
 @app.exception_handler(RunNotFound)

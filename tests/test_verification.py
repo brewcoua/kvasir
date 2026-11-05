@@ -5,7 +5,18 @@ from __future__ import annotations
 import pytest
 from dspy.utils.dummies import DummyLM
 
-from fakes import Encoder, Logged, Stream, Tiers, Vectors, claim, page, research_settings
+from fakes import (
+    ENVIRONMENT,
+    STORED,
+    Encoder,
+    Logged,
+    Stream,
+    Tiers,
+    Vectors,
+    claim,
+    page,
+    research_settings,
+)
 from kvasir.config import Settings
 from kvasir.research import verify
 from kvasir.research.corpus import Corpus
@@ -45,21 +56,14 @@ def test_no_checker_is_built_unless_configured():
 
 
 def test_a_configured_checker_answers_at_temperature_zero():
-    env = {
-        "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
-        "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-        "KVASIR_MODEL_FAST": "gateway/fast",
-        "KVASIR_MODEL_STRONG": "gateway/strong",
-        "KVASIR_MODEL_EMBEDDING": "gateway/embed",
-        "KVASIR_SEARCH_URL": "http://searxng.example",
-        "KVASIR_TOKEN": "token",
-    }
-    checker = build_checker(Settings.from_env(env | {"KVASIR_MODEL_CHECKER": "gateway/minicheck"}))
+    checker = build_checker(
+        Settings.load(ENVIRONMENT, STORED | {"model.checker": "gateway/minicheck"})
+    )
 
     assert checker is not None
     assert checker.kwargs["temperature"] == 0.0
     with pytest.raises(Exception, match="must name a provider"):
-        Settings.from_env(env | {"KVASIR_MODEL_CHECKER": "minicheck"})
+        Settings.load(ENVIRONMENT, STORED | {"model.checker": "minicheck"}, strict=True)
 
 
 def test_intake_drops_a_claim_its_piece_does_not_support():

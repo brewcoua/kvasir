@@ -51,7 +51,7 @@ flowchart LR
 | --- | --- |
 | `api/` | The app and its routers: runs, tasks and Co-STORM sessions. `api/streaming.py` holds `streamed`, which turns blocking work into an SSE response. |
 | `__main__.py` | The entry point. Configures logging before uvicorn starts. |
-| `config.py` | `Settings`, resolved once from the environment over `kvasir.toml`. |
+| `config.py` | `Settings`, loaded from the environment and the `settings` table of `kvasir.db`. |
 | `runners.py` | Builds every model, the encoder and the retriever from settings, one model per role. |
 | `schemas/` | The request, result and run models the API serves. |
 | `runs/progress.py` | `ProgressStream`, and the callback handlers that turn STORM's callbacks into progress events. |
@@ -137,7 +137,7 @@ The order inside `streamed` is deliberate:
 A disconnecting client does not stop the work: there is no way to cancel a STORM run, so the
 thread carries on to completion. The worker thread releases the slot when the work ends, not when
 the response does, so a client that leaves mid-run cannot let more runs start than
-`KVASIR_RUNS_MAX_CONCURRENT` allows. A client that leaves before the work starts frees the slot at
+`runs.max_concurrent` allows. A client that leaves before the work starts frees the slot at
 once.
 
 ### Run states
@@ -155,7 +155,7 @@ stateDiagram-v2
     rejected --> [*]
 ```
 
-`failed` after a restart only exists with `KVASIR_RUNS_STORE=sqlite`. A memory-only registry
+`failed` after a restart only exists with `runs.store` set to `sqlite`. A memory-only registry
 forgets the run instead.
 
 ### Following a run
@@ -254,23 +254,23 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify
 
 | Data | Where | Lifetime | Why there |
 | --- | --- | --- | --- |
-| Runs | Memory, in `RunRegistry` | The `KVASIR_RUNS_MAX` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
-| Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `KVASIR_RUNS_STORE=sqlite` | `KVASIR_RUNS_TTL_DAYS` and `KVASIR_RUNS_MAX` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
-| Model call content and search results | With its run, in memory and in `kvasir.db`, with `KVASIR_RUNS_KEEP_CALL_CONTENT=true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. Search results follow the same setting. |
-| Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `KVASIR_SESSIONS_TTL_HOURS`, swept at startup | A round table spans many requests and must survive a restart. |
+| Runs | Memory, in `RunRegistry` | The `runs.max` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
+| Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `runs.store` set to `sqlite` | `runs.ttl_days` and `runs.max` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
+| Model call content and search results | With its run, in memory and in `kvasir.db`, with `runs.keep_call_content` set to `true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. Search results follow the same setting. |
+| Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `sessions.ttl_hours`, swept at startup | A round table spans many requests and must survive a restart. |
 | STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `methods/storm/method.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
 | Pages read | `$KVASIR_DATA_DIR/pages.db`: each page's text and links, and its pieces with their vectors | Served for `fetch.max_age_hours`, then revalidated; kept until deleted from the Knowledge page | A page read once is not downloaded again, and a later run can answer from it with no search. Public page content only: no brief, question or claim. One cache serves every user of the service. |
-| Site icons | `$KVASIR_DATA_DIR/favicons.db`: one row per host, with the image and the provider that gave it | `KVASIR_FAVICONS_TTL_DAYS` for an icon, `KVASIR_FAVICONS_MISS_TTL_DAYS` for a site with none; emptied by `DELETE /v1/favicons`. File not created when `KVASIR_FAVICONS_PROVIDERS` is empty | An icon is public and cheap to refetch, but a site should be asked once a month, not per page view. A separate file so flushing the page cache keeps them. |
-| Source trust | `$KVASIR_DATA_DIR/sources.db`: `sources`, Wikidata's answer per host, and `marks`, the kinds and `allow`/`deny` a user set; downloaded lists, and with `KVASIR_SOURCES_RSP` the perennial sources page as the API's JSON, beside it as `sources-<hash>.txt`. Not created unless `KVASIR_SOURCES_ENABLED` | `KVASIR_SOURCES_TTL_DAYS` for an answer and a list, `KVASIR_SOURCES_MISS_TTL_DAYS` for a host Wikidata does not know; marks never expire | A host is classified once a month, not per search. Marks are the user's, so they sit apart from the cache that may be dropped. |
+| Site icons | `$KVASIR_DATA_DIR/favicons.db`: one row per host, with the image and the provider that gave it | `favicons.ttl_days` for an icon, `favicons.miss_ttl_days` for a site with none; emptied by `DELETE /v1/favicons`. File not created when `favicons.providers` is empty | An icon is public and cheap to refetch, but a site should be asked once a month, not per page view. A separate file so flushing the page cache keeps them. |
+| Source trust | `$KVASIR_DATA_DIR/sources.db`: `sources`, Wikidata's answer per host, and `marks`, the kinds and `allow`/`deny` a user set; downloaded lists, and with `sources.rsp` the perennial sources page as the API's JSON, beside it as `sources-<hash>.txt`. Not created unless `sources.enabled` | `sources.ttl_days` for an answer and a list, `sources.miss_ttl_days` for a host Wikidata does not know; marks never expire | A host is classified once a month, not per search. Marks are the user's, so they sit apart from the cache that may be dropped. |
 
-With `KVASIR_SOURCES_ENABLED=true`, the server also contacts, from `research/sources.py`: the Wikidata
-Query Service (`KVASIR_SOURCES_ENDPOINT`), which learns the domains of the search results a run
+With `sources.enabled` set to `true`, the server also contacts, from `research/sources.py`: the Wikidata
+Query Service (`sources.endpoint`), which learns the domains of the search results a run
 considers, at most 50 a query, with a user agent naming this service; and the URLs in
-`KVASIR_SOURCES_LISTS`, fetched at most once per `KVASIR_SOURCES_TTL_DAYS`. With `KVASIR_SOURCES_RSP=true`, it also fetches
+`sources.lists`, fetched at most once per `sources.ttl_days`. With `sources.rsp` set to `true`, it also fetches
 Wikipedia's perennial sources page through the MediaWiki API on `en.wikipedia.org`, on the same
 schedule, with the same user agent.
-`KVASIR_SOURCES_WIKIDATA=false` stops the first. Off, none of it runs.
+`sources.wikidata` set to `false` stops the first. Off, none of it runs.
 
 The SQLite store writes a run twice: when it starts, so a restart mid-run leaves a trace, and when
 it ends. A run in progress is always read from memory. At startup, `RunStore.sweep` marks any run
@@ -292,7 +292,7 @@ The Knowledge page of the dashboard, `#/knowledge`, shows what it holds, through
 `DELETE /v1/sites/{domain}` and `POST /v1/pages/{id}/refetch` change it. Like every route they
 need the token, and anyone who holds it can empty the cache.
 
-With `KVASIR_SOURCES_ENABLED=true`, `api/sources.py` adds `GET /v1/sources/{host}`,
+With `sources.enabled` set to `true`, `api/sources.py` adds `GET /v1/sources/{host}`,
 `PUT` and `DELETE /v1/sources/{host}/mark`, and `DELETE /v1/sources`, which clears the cache and
 keeps the marks. The routes answer 404 when it is off. They use the `Sources` instance runs use
 (`runners.build_sources`), so a mark reaches a run in flight. A host set in `ALLOW` or `DENY` answers

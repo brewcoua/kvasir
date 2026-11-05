@@ -15,14 +15,16 @@ from kvasir.runners import (
     load_costorm_runner,
 )
 
-MINIMAL = {
+ENV = {
     "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
     "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
-    "KVASIR_SEARCH_URL": "http://searxng.example",
     "KVASIR_TOKEN": "token",
-    "KVASIR_MODEL_EMBEDDING": "gateway/ollama/embed:cloud",
+}
+STORED = {
+    "model.fast": "gateway/ollama/fast:cloud",
+    "model.strong": "gateway/ollama/strong:cloud",
+    "model.embedding": "gateway/ollama/embed:cloud",
+    "search.url": "http://searxng.example",
 }
 
 STORM_ROLES = (
@@ -45,7 +47,7 @@ COSTORM_ROLES = (
 
 @pytest.fixture
 def settings():
-    return Settings.from_env(MINIMAL)
+    return Settings.load(ENV, STORED)
 
 
 @pytest.fixture
@@ -155,7 +157,7 @@ REASON_ROLES = ("decompose", "check", "criteria", "entities", "judge", "escalate
 
 
 def test_the_judgements_are_made_by_the_reason_model():
-    settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_REASON": "gateway/ollama/reason:cloud"})
+    settings = Settings.load(ENV, STORED | {"model.reason": "gateway/ollama/reason:cloud"})
 
     models = build_research_models(settings)
 
@@ -180,7 +182,7 @@ def test_a_request_may_override_the_reason_model(settings):
 
 
 def test_the_reason_tier_gets_its_own_effort():
-    settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_REASONING_EFFORT": "none"})
+    settings = Settings.load(ENV, STORED | {"model.reasoning_effort": "none"})
 
     models = build_research_models(settings)
 
@@ -191,13 +193,13 @@ def test_the_reason_tier_gets_its_own_effort():
 
 
 def test_a_model_on_another_provider_gets_that_providers_endpoint_and_key():
-    settings = Settings.from_env(
-        MINIMAL
+    settings = Settings.load(
+        ENV
         | {
             "KVASIR_PROVIDER_OTHER_API_BASE": "https://other.example/v1",
             "KVASIR_PROVIDER_OTHER_API_KEY": "other-key",
-            "KVASIR_MODEL_STRONG": "other/big",
-        }
+        },
+        STORED | {"model.strong": "other/big"},
     )
 
     models = build_research_models(settings)
@@ -272,7 +274,7 @@ def test_a_session_file_carries_no_credential(settings):
     """Sessions persist under the data directory for their TTL, so a key there outlives the run."""
     state = build_costorm_runner(settings, "a narrow topic").to_dict()
 
-    assert MINIMAL["KVASIR_PROVIDER_GATEWAY_API_KEY"] not in json.dumps(state)
+    assert ENV["KVASIR_PROVIDER_GATEWAY_API_KEY"] not in json.dumps(state)
     for role in COSTORM_ROLES:
         assert not [key for key in state["lm_config"][role] if key.startswith("api_")]
 
@@ -283,7 +285,7 @@ def test_reasoning_effort_is_not_sent_unless_set(storm):
 
 
 def test_reasoning_effort_reaches_every_role_in_the_body(tmp_path):
-    settings = Settings.from_env(MINIMAL | {"KVASIR_MODEL_REASONING_EFFORT": "none"})
+    settings = Settings.load(ENV, STORED | {"model.reasoning_effort": "none"})
     storm = build_storm_runner(settings, tmp_path)
     costorm = build_costorm_runner(settings, "a narrow topic")
 

@@ -1,4 +1,4 @@
-"""The most recent runs, in memory and, with KVASIR_RUNS_STORE=sqlite, in the store."""
+"""The most recent runs, in memory and, with runs.store set to sqlite, in the store."""
 
 from __future__ import annotations
 

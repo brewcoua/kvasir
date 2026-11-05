@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import uvicorn
 
-from fakes import stub_method
+from fakes import ENVIRONMENT, STORED, store_settings, stub_method
 from kvasir import conversation
 from kvasir.api.app import app
 from kvasir.schemas.results import (
@@ -89,15 +89,8 @@ def service(monkeypatch, tmp_path):
     """A real kvasir on a real port, with both engines faked."""
     # Startup creates the sessions directory, and the default /data is not writable here.
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    for name, value in {
-        "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
-        "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-        "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
-        "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
-        "KVASIR_MODEL_EMBEDDING": "gateway/embed",
-        "KVASIR_SEARCH_URL": "http://searxng.example",
-        "KVASIR_TOKEN": "token",
-    }.items():
+    store_settings(tmp_path / "data", STORED)
+    for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
 
     def fake_run(settings, input, options, stream):

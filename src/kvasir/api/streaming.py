@@ -36,6 +36,7 @@ def streamed(
     Returns 429 rather than queueing when every run slot is taken, because a queued request would
     wait longer than any sensible client timeout, and a refusal consumes no slot.
     """
+    state.settings.ready()
     # Registered before the slot is claimed, so a refusal is a run that shows up as rejected rather
     # than a 429 with nothing behind it. Saturation is the case where the registry earns its keep.
     run = state.runs.start(kind, topic, planned_stages)

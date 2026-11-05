@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import threading
+from contextlib import closing
 
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import AUTH, article_run, stub_method
+from fakes import AUTH, ENVIRONMENT, STORED, article_run, store_settings, stub_method
 from kvasir.api.app import app
 from kvasir.runs.registry import RunRegistry
 from kvasir.runs.run import (
@@ -29,16 +31,6 @@ from kvasir.schemas.runs import Progress
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
 
-ENVIRONMENT = {
-    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
-    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
-    "KVASIR_MODEL_EMBEDDING": "gateway/embed",
-    "KVASIR_SEARCH_URL": "http://searxng.example",
-    "KVASIR_TOKEN": "token",
-}
-
 RESULT = ArticleResult(article="a", outline="o", citations=[], duration_seconds=1.0)
 
 
@@ -47,6 +39,7 @@ def client(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
+    store_settings(tmp_path / "data", STORED)
     with TestClient(app, headers=AUTH) as client:
         yield client
 
@@ -57,7 +50,7 @@ def sqlite(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("KVASIR_RUNS_STORE", "sqlite")
+    store_settings(tmp_path / "data", STORED | {"runs.store": "sqlite"})
     return lambda: TestClient(app, headers=AUTH)
 
 
@@ -471,8 +464,13 @@ def test_the_registry_forgets_the_oldest():
     assert [run.topic for run in registry.summaries()] == ["three", "two"]
 
 
-def test_memory_mode_writes_no_database(client, tmp_path):
-    assert not (tmp_path / "data" / "kvasir.db").exists()
+def test_memory_mode_keeps_no_runs_table(client, tmp_path):
+    """kvasir.db holds the settings either way. Only the sqlite store adds the runs to it."""
+    with closing(sqlite3.connect(tmp_path / "data" / "kvasir.db")) as db:
+        tables = {name for (name,) in db.execute("SELECT name FROM sqlite_master")}
+
+    assert "settings" in tables
+    assert not tables & {"runs", "calls", "searches"}
 
 
 def test_a_run_survives_a_restart(sqlite, monkeypatch):
@@ -504,8 +502,8 @@ def _article_with_a_call(*args):
     return RESULT
 
 
-def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
-    monkeypatch.setenv("KVASIR_RUNS_KEEP_CALL_CONTENT", "true")
+def test_call_content_is_served_from_memory_and_after_a_restart(sqlite, monkeypatch, tmp_path):
+    store_settings(tmp_path / "data", {"runs.keep_call_content": True})
     stub_method(monkeypatch, "storm", _article_with_a_call)
     with sqlite() as client:
         events = parse(client.post("/v1/runs", json=article_run("The Kvasir stone")).text)
@@ -535,8 +533,8 @@ def _article_with_a_search(*args):
     return RESULT
 
 
-def test_search_results_are_served_from_memory_and_after_a_restart(sqlite, monkeypatch):
-    monkeypatch.setenv("KVASIR_RUNS_KEEP_CALL_CONTENT", "true")
+def test_search_results_are_served_from_memory_and_after_a_restart(sqlite, monkeypatch, tmp_path):
+    store_settings(tmp_path / "data", {"runs.keep_call_content": True})
     monkeypatch.setattr("kvasir.storm.rm.httpx.get", lambda url, **kwargs: _SearxngAnswer())
     stub_method(monkeypatch, "storm", _article_with_a_search)
     with sqlite() as client:

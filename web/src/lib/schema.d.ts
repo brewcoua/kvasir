@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/v1/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Sets the cookie the page authenticates with. 401 for a wrong token.
+         */
+        post: operations["login_v1_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs": {
         parameters: {
             query?: never;
@@ -54,7 +74,7 @@ export interface paths {
         };
         /**
          * Call Content
-         * @description What one model call was sent and answered. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT.
+         * @description What one model call was sent and answered. Kept only with runs.keep_call_content.
          */
         get: operations["call_content_v1_runs__run_id__calls__call_id__get"];
         put?: never;
@@ -74,7 +94,7 @@ export interface paths {
         };
         /**
          * Search Content
-         * @description What one search returned. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT.
+         * @description What one search returned. Kept only with runs.keep_call_content.
          */
         get: operations["search_content_v1_runs__run_id__searches__search_id__get"];
         put?: never;
@@ -548,7 +568,8 @@ export interface paths {
         };
         /**
          * Readyz
-         * @description Readiness. Fails when SearXNG or any provider a model uses is unreachable.
+         * @description Readiness. Fails while a required setting is unset, or when SearXNG or any provider a model
+         *     uses is unreachable.
          *
          *     No check spends tokens. Listing models is free, and SearXNG is only asked for its root. A
          *     provider no model refers to is not probed, since no run needs it.
@@ -870,7 +891,7 @@ export interface components {
         };
         /**
          * LmCallContent
-         * @description What one completion was sent and answered, kept with KVASIR_RUNS_KEEP_CALL_CONTENT.
+         * @description What one completion was sent and answered, kept with runs.keep_call_content.
          */
         LmCallContent: {
             /** Messages */
@@ -881,6 +902,11 @@ export interface components {
             response: string | null;
             /** Reasoning */
             reasoning?: string | null;
+        };
+        /** Login */
+        Login: {
+            /** Token */
+            token: string;
         };
         /**
          * LowTrustSentence
@@ -1409,7 +1435,7 @@ export interface components {
         };
         /**
          * SearchContent
-         * @description What one search returned, kept with KVASIR_RUNS_KEEP_CALL_CONTENT.
+         * @description What one search returned, kept with runs.keep_call_content.
          */
         SearchContent: {
             /** Results */
@@ -1670,6 +1696,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    login_v1_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Login"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_runs_v1_runs_get: {
         parameters: {
             query?: never;

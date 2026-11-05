@@ -23,15 +23,11 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      // From web/, so a developer's kvasir.toml at the repository root is not read.
+      // Nothing stored in its data directory, so it starts as a first start does.
       command: "pnpm build && uv run uvicorn kvasir.api.app:app --host 127.0.0.1 --port 8765",
       url: `${SERVICE}/healthz`,
       env: {
         KVASIR_PROVIDER_UNUSED_API_BASE: "http://127.0.0.1:9",
-        KVASIR_MODEL_FAST: "unused/fast",
-        KVASIR_MODEL_STRONG: "unused/strong",
-        KVASIR_MODEL_EMBEDDING: "unused/embed",
-        KVASIR_SEARCH_URL: "http://127.0.0.1:9",
         KVASIR_DATA_DIR: "test-results/data",
         KVASIR_TOKEN: "e2e-token",
       },

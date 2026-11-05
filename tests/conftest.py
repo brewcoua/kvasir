@@ -1,11 +1,6 @@
-"""Keeps a developer's own configuration file, and the fetch politeness, out of the tests.
+"""Keeps a developer's own environment, and the fetch politeness, out of the tests."""
 
-`Settings.from_env()` reads `kvasir.toml` from the working directory, which is the repository root
-under pytest, and the quickstart puts one there. Tests that start the app would otherwise run
-against it.
-"""
-
-from pathlib import Path
+import os
 
 import pytest
 
@@ -14,15 +9,14 @@ from kvasir.storm import runtime
 
 
 @pytest.fixture(autouse=True)
-def _no_config_file(monkeypatch, tmp_path):
-    monkeypatch.delenv("KVASIR_CONFIG", raising=False)
-    monkeypatch.setattr("kvasir.config.DEFAULT_CONFIG_FILE", tmp_path / "absent.toml")
-
-
-@pytest.fixture
-def default_config_file(monkeypatch):
-    """Restores the real default, for the one test about finding it."""
-    monkeypatch.setattr("kvasir.config.DEFAULT_CONFIG_FILE", Path("kvasir.toml"))
+def _no_kvasir_environment(request, monkeypatch):
+    """A test sets what it needs. A developer's KVASIR_DATA_DIR would point it at their data. An
+    integration test runs against exactly that, so it keeps the environment."""
+    if request.node.get_closest_marker("integration"):
+        return
+    for name in os.environ:
+        if name.startswith("KVASIR_"):
+            monkeypatch.delenv(name)
 
 
 @pytest.fixture(autouse=True)

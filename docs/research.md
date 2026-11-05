@@ -121,7 +121,7 @@ The loop stops when any of these holds:
 
 | Condition | Constant |
 | --- | --- |
-| `max_searches` searches are spent. | `KVASIR_RESEARCH_MAX_SEARCHES`, default 16 |
+| `max_searches` searches are spent. | `research.max_searches`, default 16 |
 | No question is left to search for. | |
 | 4 searches in a row add no claim. | `STALL_SEARCHES` |
 | 3 searches in a row fail. The run then fails with `SearchUnavailable`, rather than write from no evidence. | `FAILED_SEARCHES` |
@@ -397,7 +397,7 @@ flowchart LR
   (context_tokens - PROMPT_TOKENS - context_tokens / 4) * MARGIN * CHARACTERS_PER_TOKEN
   ```
 
-  The context is `KVASIR_MODEL_CONTEXT_TOKENS` (16384 by default), the window the models are served with.
+  The context is `model.context_tokens` (16384 by default), the window the models are served with.
   The prompt besides the page is `PROMPT_TOKENS` (1,000), the answer gets a quarter of the
   context, `MARGIN` is 0.9 and `CHARACTERS_PER_TOKEN` is 3.5. The 47 intake calls of one run on
   gpt-oss came to 34 + characters / 4.07 prompt tokens, with about 600 for the prompt besides the
@@ -695,18 +695,18 @@ Each step has its own role in `runners._RESEARCH_ROLES`, so a run's usage splits
 The outline, the sections and the summary use the strong model. They run only after the research,
 so a strong model too large to share memory with the fast model is loaded once.
 
-The reason tier serves the roles that judge rather than extract or write. `KVASIR_MODEL_REASON`
+The reason tier serves the roles that judge rather than extract or write. `model.reason`
 sets its model, and unset it falls back to the strong model. It has its own
-`KVASIR_MODEL_REASON_EFFORT`, `medium` by default, which replaces `KVASIR_MODEL_REASONING_EFFORT`
+`model.reason_effort`, `medium` by default, which replaces `model.reasoning_effort`
 for this tier: these roles are meant to think. Thinking counts against `max_tokens`, so their
 budgets are about three times what the answer needs. Without `reason` set, these roles therefore
 run on the strong model, at effort `medium` and with the larger budgets. A `ledger` or `graph`
 request can override the model with `model_reason`.
 
 With the reason model on a cloud provider, each escalated sentence and its quotes are sent to that
-provider. `KVASIR_RUNS_KEEP_CALL_CONTENT` governs only what kvasir stores, not this.
+provider. `runs.keep_call_content` governs only what kvasir stores, not this.
 
-The grounding checker is its own model, `KVASIR_MODEL_CHECKER`, with the role `ground`, 10 tokens
+The grounding checker is its own model, `model.checker`, with the role `ground`, 10 tokens
 and temperature 0.
 
 Signatures are typed dspy signatures: those every method shares in `research/signatures.py`,

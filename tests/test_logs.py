@@ -9,19 +9,10 @@ from dataclasses import replace
 import pytest
 import uvicorn
 
+from fakes import ENVIRONMENT
 from kvasir import __main__, logs
 from kvasir.config import Settings
 from kvasir.storm.runtime import ContextThreadPoolExecutor
-
-MINIMAL = {
-    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
-    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
-    "KVASIR_MODEL_EMBEDDING": "gateway/embed",
-    "KVASIR_SEARCH_URL": "http://searxng.example",
-    "KVASIR_TOKEN": "token",
-}
 
 
 @pytest.fixture
@@ -30,7 +21,7 @@ def emit(capsys):
     before = logging.getLogger().handlers[:]
 
     def configure(log_format="json"):
-        settings = Settings.from_env(MINIMAL)
+        settings = Settings.load(ENVIRONMENT, {})
         logs.configure(replace(settings, log=replace(settings.log, format=log_format)))
 
         def lines():
@@ -150,7 +141,7 @@ def test_the_entrypoint_configures_logging_before_uvicorn_can(emit, monkeypatch,
 
     `emit` is taken only for its teardown, which puts the root handlers back.
     """
-    for name, value in MINIMAL.items():
+    for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     seen = {}
 

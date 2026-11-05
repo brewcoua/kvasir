@@ -39,7 +39,7 @@ Run kvasir from a checkout with [uv](https://docs.astral.sh/uv/), against a loca
 [Ollama](https://ollama.com/) and a throwaway SearXNG. This needs uv, Ollama, and podman or docker
 for SearXNG only.
 
-1. Pull the models the example configuration names:
+1. Pull the models the quickstart stores:
 
    ```bash
    ollama pull gpt-oss:20b
@@ -80,19 +80,37 @@ for SearXNG only.
 
    Without it the API works, and `GET /` answers 503 with the command to run.
 
-4. Configure and start kvasir:
+4. Store the models and the search URL, which live in `data/kvasir.db`:
 
    ```bash
-   cp kvasir.example.toml kvasir.toml
+   mkdir -p data && sqlite3 data/kvasir.db \
+     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT OR REPLACE INTO settings VALUES
+        ('model.fast', json_quote('local/gpt-oss:20b')),
+        ('model.strong', json_quote('local/deepseek-v4.1-flash:cloud')),
+        ('model.embedding', json_quote('local/nomic-embed-text:latest')),
+        ('model.reasoning_effort', json_quote('none')),
+        ('search.url', json_quote('http://localhost:8888'));"
+   ```
+
+   `reasoning_effort` `none` keeps a thinking model from spending each role's token budget on
+   reasoning. See [Configuration](#configuration) for every setting.
+
+5. Start kvasir:
+
+   ```bash
    export KVASIR_TOKEN="$(openssl rand -hex 32)"
+   export KVASIR_DATA_DIR=data KVASIR_LOG_FORMAT=text KVASIR_MAX_THREADS=2
+   export KVASIR_PROVIDER_LOCAL_API_BASE=http://localhost:11434/v1
    uv run python -m kvasir
    ```
 
    Every `/v1` route needs the token, and the runs page asks for it once. Keep the shell open:
-   the examples below send `$KVASIR_TOKEN`. Edit `kvasir.toml` to use other models. See
-   [Configuration](#configuration) for every key.
+   the examples below send `$KVASIR_TOKEN`. Ollama answers one request at a time by default, so
+   `KVASIR_MAX_THREADS=2` keeps intake calls from only queueing; start Ollama with
+   `OLLAMA_NUM_PARALLEL=2` for them to run side by side.
 
-5. Check both dependencies are reachable:
+6. Check both dependencies are reachable:
 
    ```console
    $ curl -s localhost:8080/readyz
@@ -102,7 +120,7 @@ for SearXNG only.
 Then [write an article](#write-an-article). On one local model a run takes much longer than through
 a hosted gateway.
 
-kvasir binds `0.0.0.0:8080`, so on a laptop it is reachable from the local network. The token
+kvasir binds `0.0.0.0:8080` unless `KVASIR_HOST` and `KVASIR_PORT` say otherwise, so on a laptop it is reachable from the local network. The token
 guards every route but `/healthz`, `/readyz`, `POST /v1/login` and the page itself, and nothing
 limits how often it may be guessed: use a long random one.
 
@@ -113,15 +131,11 @@ Secure, and a browser sends it over plain HTTP too.
 ## Run it
 
 ```bash
-podman run --rm \
+podman run --rm --name kvasir \
   --read-only --tmpfs /tmp --user 65532:65532 \
   -p 8080:8080 -v kvasir-data:/data \
   -e KVASIR_PROVIDER_GATEWAY_API_BASE=https://gateway.example/v1 \
   -e KVASIR_PROVIDER_GATEWAY_API_KEY=... \
-  -e KVASIR_MODEL_FAST=gateway/fast-model \
-  -e KVASIR_MODEL_STRONG=gateway/strong-model \
-  -e KVASIR_MODEL_EMBEDDING=gateway/embedding-model \
-  -e KVASIR_SEARCH_URL=http://searxng.example \
   -e KVASIR_TOKEN=... \
   ghcr.io/brewcoua/kvasir:0.1.0
 ```
@@ -136,10 +150,10 @@ $ curl -s localhost:8080/readyz
 ```
 
 `/readyz` returns 503 if SearXNG or a provider is unreachable, and names which one. It probes only
-the providers a model refers to. A missing or
-unusable variable makes the container exit at startup, rather than starting and failing on the
-first request. Missing required variables are listed together; an unusable value is reported on its
-own, so fixing one may reveal the next.
+the providers a model refers to. On a first start it answers 503 with the settings still to
+store, listed as `missing`: store them as in [Store a setting](#store-a-setting) and restart. A
+missing or unusable environment variable makes the container exit at startup, rather than starting
+and failing on the first request.
 
 Pin the digest in production. `ghcr.io/brewcoua/kvasir:0.1.0@sha256:...` is the intended form; the
 publishing workflow writes the digest to its run summary. There is deliberately no moving `latest`.
@@ -158,7 +172,7 @@ podman build --target browser -t kvasir:browser .
 ```
 
 Run it as above, with `--init --ipc=host` added: Chromium otherwise runs out of shared memory. With
-`KVASIR_FETCH_RENDER=auto`, the default, a page that comes back as a challenge, a block, an empty
+`fetch.render` set to `auto`, the default, a page that comes back as a challenge, a block, an empty
 shell, a 403 or a 503 is then loaded in Chromium. Outside the image, install the extra with
 `uv sync --extra browser` and then `uv run playwright install chromium`.
 
@@ -197,7 +211,7 @@ is refused with 422, before any run starts.
 The `ledger` method answers a question with a cited report. It splits the brief into questions and
 searches for one at a time: a question the search leaves open is searched for again with a narrower
 query, and one it answers can add harder follow-ups. It reads as much of each page in one call as
-`KVASIR_MODEL_CONTEXT_TOKENS` holds, keeps only claims whose quote appears word for word on the page, and writes the
+`model.context_tokens` holds, keeps only claims whose quote appears word for word on the page, and writes the
 report one section at a time from those claims. Each sentence that cites a claim is then checked
 against the claim's quote by a cascade of cheaper models first: it is taken out if the quote does
 not support it, rewritten to what the quote says if it supports it in part, and marked
@@ -289,7 +303,7 @@ Two options of `ledger` and `graph` set, for one run, what the page cache gives.
 | Option | Default | Effect |
 | --- | --- | --- |
 | `recall_past_runs` | `true` | `false`: recall reads only the pages this run read. The cache still serves downloads, and the run's pieces are still kept for later runs. |
-| `max_age_hours` | `KVASIR_FETCH_MAX_AGE_HOURS` | Hours a cached page is served without asking its site. `0` downloads every page again and replaces its cached copy. |
+| `max_age_hours` | `fetch.max_age_hours` | Hours a cached page is served without asking its site. `0` downloads every page again and replaces its cached copy. |
 
 ### Check claims more strictly
 
@@ -297,7 +311,7 @@ Four options add checks past the quote check, each at a cost in calls.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `ground` | on when `KVASIR_MODEL_CHECKER` is set | The checker checks each cited sentence first, shown the claims it cites and their quotes together, and keeps one it supports. The fast model sees only the rest. Without a checker it does nothing. |
+| `ground` | on when `model.checker` is set | The checker checks each cited sentence first, shown the claims it cites and their quotes together, and keeps one it supports. The fast model sees only the rest. Without a checker it does nothing. |
 | `ground_intake` | `false` | The checker also drops each claim the page piece it was read from does not support. Off by default: unless the checker stays loaded beside the fast model, each search then swaps the two twice. |
 | `corroborate` | `false` | Each claim is compared with up to 3 close claims from other sites. Those that support it go in its `corroborated_by`. |
 | `contradict` | `false` | Close claims from other sites that disagree with it go in its `contradicted_by`, both ways. |
@@ -306,8 +320,10 @@ To use MiniCheck on Ollama, pull it, then point the checker at it through the `l
 
 ```bash
 ollama pull bespoke-minicheck
-export KVASIR_MODEL_CHECKER=local/bespoke-minicheck
 ```
+
+Then store `model.checker` as `local/bespoke-minicheck`, as in [Store a
+setting](#store-a-setting).
 
 Bespoke-MiniCheck-7B is licensed CC BY-NC 4.0. Whether Ollama keeps it loaded next to the main
 model, or swaps the two on each call, depends on its memory; a swap on every check makes a run far
@@ -426,10 +442,10 @@ own address, so a reload or a shared link keeps it.
     embedding tokens, then the usage split by stage, by role and by model, with the time spent in
     calls, output tokens per second and the mean time per call.
   - Calls lists every model call with a clock on any still waiting. Opening one shows what it sent
-    and what it answered, when `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it.
+    and what it answered, when `runs.keep_call_content` kept it.
   - Searches lists every query sent to SearXNG, with the event it followed, how many results came
     back and why it failed if it did. Opening one lists the results, when
-    `KVASIR_RUNS_KEEP_CALL_CONTENT` kept them.
+    `runs.keep_call_content` kept them.
   - Graph is shown for a run of the `graph` method. It lays out the topic, the first questions
     hanging from it, each follow-up hanging from the question whose evidence raised it, and, once
     the run is done, the claims each question rests on, with the links between claims that
@@ -444,7 +460,7 @@ own address, so a reload or a shared link keeps it.
   runs that cite it. Fetch again reads it whatever its age. Delete, on a page or a site, removes it
   with its pieces, and cannot be undone. Recall takes a question and lists the cached pieces a run
   would recall for it, with their similarity, and marks where `RECALL_MIN` cuts. With
-  `KVASIR_SOURCES_ENABLED=true`, a site, a citation and a search result show a badge with the kind
+  `sources.enabled` set to `true`, a site, a citation and a search result show a badge with the kind
   and tier (`gov · high`), linked to its Wikidata item when it has one; a site of tier `avoid` or
   `low` is tinted, and in the site graph a site's outline follows its tier. Mark, on a site, sets
   `allow`, `deny` or a kind, or clears the mark; a site the config sets shows Locked. With sources
@@ -461,8 +477,8 @@ The same data is available as JSON.
 | --- | --- |
 | `GET /v1/runs` | Every run kept, newest first. `has_result` says whether its detail carries a result. |
 | `GET /v1/runs/{id}` | One run, with per-stage timings, usage, its last 2000 model calls, its last 1000 searches, its events (the last 1000 steps, 2000 pages and parts, and 500 log lines; a counter is one event), the questions a `graph` run has asked so far, and its result. |
-| `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
-| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. With sources on, each result has a `source`. 404 unless `KVASIR_RUNS_KEEP_CALL_CONTENT` kept it. |
+| `GET /v1/runs/{id}/calls/{n}` | What call `n` sent and answered: `messages`, `response` and `reasoning`. 404 unless `runs.keep_call_content` kept it. |
+| `GET /v1/runs/{id}/searches/{n}` | What search `n` returned: `results`, each with `title`, `url` and `snippet`, before the run drops what it already read. With sources on, each result has a `source`. 404 unless `runs.keep_call_content` kept it. |
 | `GET /v1/runs/{id}/events` | Follow a run live. Streams. Opens and closes with a `snapshot`, and sends a `status` with the last 50 calls and the last 50 searches after each `progress` and every 2 seconds in between. |
 | `GET /v1/sites` | Each site in the page cache, with its pages, pieces, last fetch and engines, the one fetched from last first. With sources on, each has a `source`, as do the nodes of `GET /v1/sites/graph` and the citations of a result. |
 | `GET /v1/pages?site=` | The cached pages of a site, newest first; without `site`, the latest 200 of all. |
@@ -470,10 +486,10 @@ The same data is available as JSON.
 | `GET /v1/pages/recall?q=` | The cached pieces recall would take for the question `q`, with their similarity. Marks nothing read. 503 without an embedding model. |
 | `DELETE /v1/pages/{id}`, `DELETE /v1/sites/{domain}` | Remove a page, or every page of a site, with links and pieces. Cannot be undone. |
 | `GET /v1/favicons/{host}` | The icon of a site, fetched on first request and kept in `favicons.db`. 404 when the site has none, the host is not a public DNS name, or favicons are off. |
-| `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule` or `wikidata`) of a site; Wikidata is asked when nothing else decides it. 404 unless `KVASIR_SOURCES_ENABLED`. |
-| `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `KVASIR_SOURCES_ALLOW` or `KVASIR_SOURCES_DENY`. A mark takes effect for runs in flight. 404 unless `KVASIR_SOURCES_ENABLED`. |
-| `DELETE /v1/sources` | Forget the cached Wikidata answers. Marks stay. 404 unless `KVASIR_SOURCES_ENABLED`. |
-| `DELETE /v1/favicons` | Forget every icon, including the sites remembered as having none, and free the disk space. Use it to retry misses after changing `KVASIR_FAVICONS_PROVIDERS`. |
+| `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule` or `wikidata`) of a site; Wikidata is asked when nothing else decides it. 404 unless `sources.enabled`. |
+| `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `sources.allow` or `sources.deny`. A mark takes effect for runs in flight. 404 unless `sources.enabled`. |
+| `DELETE /v1/sources` | Forget the cached Wikidata answers. Marks stay. 404 unless `sources.enabled`. |
+| `DELETE /v1/favicons` | Forget every icon, including the sites remembered as having none, and free the disk space. Use it to retry misses after changing `favicons.providers`. |
 | `POST /v1/pages/{id}/refetch` | Fetch the page again whatever its age. 502 with the reason when it cannot be read. |
 | `POST /v1/tasks` | One short completion on the fast model. Body `{"messages": [...]}`, answers `{"content": "..."}`. |
 
@@ -498,120 +514,145 @@ a `cost` field in the response's `usage` object, either a number or split into `
 `completion_cost` as Bifrost reports it. A gateway that reports no cost, for a model dspy does not
 price, leaves it at zero, which is not the same as free.
 
-Runs are held in memory, capped at the `KVASIR_RUNS_MAX` most recent, and by default do not survive
-a restart. With `KVASIR_RUNS_STORE=sqlite` they are also written to `$KVASIR_DATA_DIR/kvasir.db`,
+Runs are held in memory, capped at the `runs.max` most recent, and by default do not survive
+a restart. With `runs.store` set to `sqlite` they are also written to `$KVASIR_DATA_DIR/kvasir.db`,
 once when they start and once when they end, and the list and detail routes read from it as well.
 A run still `queued` or `running` there at startup was cut short by the restart, and is marked
 `failed` with the error `interrupted by a restart`. Retention is applied at startup and after each
-run ends: older than `KVASIR_RUNS_TTL_DAYS`, or beyond the `KVASIR_RUNS_MAX` most recent, is deleted.
+run ends: older than `runs.ttl_days`, or beyond the `runs.max` most recent, is deleted.
 Only a run in this process's memory can be followed live; following a stored one sends its snapshot
 and ends. What calls sent and answered, and what searches returned, is kept only with
-`KVASIR_RUNS_KEEP_CALL_CONTENT=true`, in the same store as the run and for as long as it. Their timings,
+`runs.keep_call_content` set to `true`, in the same store as the run and for as long as it. Their timings,
 token counts, queries and result counts are kept either way.
 Memory is the default because a client such as Open WebUI keeps its own record of every
 answer, so the store is for debugging the service.
 
 ## Configuration
 
-Everything is an environment variable, or a key in a TOML file. The file is `$KVASIR_CONFIG`, or
-`kvasir.toml` in the working directory when that is unset. A variable that is set wins over the
-file. An unknown key, or a `KVASIR_CONFIG` that cannot be read, stops startup.
-[`kvasir.example.toml`](kvasir.example.toml) is a complete file for a local Ollama.
+Settings come from two places, and each setting has one:
 
-The file mirrors the settings: two top-level keys, a `[provider.<name>]` table per provider, and one
-table per section.
+- The environment holds the token, the providers, and what the process needs to start: where its
+  data lives, where it listens, its thread count and its logging. An unusable value stops startup.
+- `kvasir.db`, in the data directory, holds every other setting in its `settings` table, one row
+  per setting changed from its default. The row's key is the setting's name, such as
+  `model.fast`, and its value is JSON. A value the service cannot use is logged at startup and its
+  default used. A setting has no environment variable: a `KVASIR_` variable kvasir does not read is
+  named in a warning at startup.
 
-```toml
-data_dir = "data"
+### Store a setting
 
-[provider.local]
-api_base = "http://localhost:11434/v1"
+Until the API can edit settings, write the row with `sqlite3`, then restart kvasir:
 
-[model]
-fast = "local/gpt-oss:20b"
-strong = "local/deepseek-v4.1-flash:cloud"
-embedding = "local/nomic-embed-text:latest"
-
-[search]
-url = "http://localhost:8888"
-
-[runs]
-store = "sqlite"
+```bash
+sqlite3 "$KVASIR_DATA_DIR/kvasir.db" \
+  "INSERT OR REPLACE INTO settings VALUES ('research.max_searches', json('24'));"
 ```
 
-Each key has one variable, `KVASIR_<TABLE>_<KEY>` in upper case, and `KVASIR_<KEY>` for a top-level
-key. So `[model] fast` is `KVASIR_MODEL_FAST` and `[research] max_searches` is
-`KVASIR_RESEARCH_MAX_SEARCHES`.
+The image has no `sqlite3`. Write through its Python instead, into the running container, then
+stop it and run the same `podman run` again:
 
-Providers are the exception to the naming rule. `[provider.<name>]` takes `api_base` and an optional
-`api_key`, and its variables are `KVASIR_PROVIDER_<NAME>_API_BASE` and `KVASIR_PROVIDER_<NAME>_API_KEY`.
-They merge over the file's provider of the same name field by field, so the key can stay out of the
-file. A name is lowercase letters, digits, `_` and `-`. Every provider is an OpenAI-compatible
-endpoint. Without an `api_key`, a placeholder is sent, which Ollama ignores. A signed-in local
-Ollama also serves `:cloud` models through `localhost` with no key. A second provider, such as
-`https://ollama.com/v1`, takes its key from `KVASIR_PROVIDER_CLOUD_API_KEY`.
+```bash
+podman exec kvasir python -c '
+from pathlib import Path
+from kvasir.settings_store import SettingsStore
+SettingsStore(Path("/data/kvasir.db")).write({
+    "model.fast": "gateway/fast-model",
+    "model.strong": "gateway/strong-model",
+    "model.embedding": "gateway/embedding-model",
+    "search.url": "http://searxng.example",
+})'
+podman stop kvasir
+```
+
+In `write`, `None` restores a key's default.
+
+With `sqlite3`, use `json_quote('<text>')` for a text value, `json('<number>')` for a number, `json('true')` for a
+boolean, and `json_array('<a>', '<b>')` for a list. `DELETE FROM settings WHERE key = '<key>'`
+restores a default. kvasir creates the table at its first start; create it yourself before that,
+as in the [Quickstart](#quickstart).
+
+### First start
+
+With `model.fast`, `model.strong`, `model.embedding` or `search.url` unset, the service starts and
+logs which are missing. Until they are stored, `/readyz` answers 503 with
+`{"setup":"required","missing":[...]}`, and every route that starts a run, a task or a session
+step answers 409. A model whose provider is no longer in the environment counts as unset.
+
+### Providers and models
+
+`KVASIR_PROVIDER_<NAME>_API_BASE` declares a provider, and `KVASIR_PROVIDER_<NAME>_API_KEY` is its
+optional key. A name is lowercase letters, digits, `_` and `-`; the variable carries it in upper
+case. Every provider is an OpenAI-compatible endpoint. Without a key, a placeholder is sent, which
+Ollama ignores. A signed-in local Ollama also serves `:cloud` models through `localhost` with no
+key. A second provider, such as `https://ollama.com/v1`, takes its key from
+`KVASIR_PROVIDER_CLOUD_API_KEY`.
 
 A model is written `<provider>/<name>`. Only the first `/` splits, so the name may hold more:
-`cloud/org/model:tag`. kvasir calls the provider's endpoint with the name. A provider that is not
-configured stops startup, and a request that overrides `model_fast`, `model_strong` or `model_reason`
-with one gets 400. An override may name a different provider.
+`cloud/org/model:tag`. kvasir calls the provider's endpoint with the name. A request that overrides
+`model_fast`, `model_strong` or `model_reason` with an unknown provider gets 400. An override may
+name a different provider.
 
-The required keys are `model.fast`, `model.strong`, `model.embedding`, `search.url`, the
-`api_base` of every provider you declare, and `KVASIR_TOKEN`.
+### Environment
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `KVASIR_TOKEN` | required | The token every route but health, `POST /v1/login` and the page needs. See [Start a run](#start-a-run). |
-| `KVASIR_PROVIDER_<NAME>_API_BASE` | required | Provider base URL, such as `http://localhost:11434/v1`. |
+| `KVASIR_PROVIDER_<NAME>_API_BASE` | required per provider | Provider base URL, such as `http://localhost:11434/v1`. |
 | `KVASIR_PROVIDER_<NAME>_API_KEY` | unset | Provider credential. |
-| `KVASIR_MODEL_FAST` | required | Conversation simulation, question asking, polishing, and research intake. |
-| `KVASIR_MODEL_STRONG` | required | Outline and article generation, and the research outline, report and summary. |
-| `KVASIR_MODEL_EMBEDDING` | required | Embedding model. Used by both modes. |
-| `KVASIR_MODEL_REASON` | unset | Research: the judgements, such as whether the claims gathered answer a question, and the last word on a sentence the cheaper checks leave in doubt. Unset uses the strong model. |
-| `KVASIR_MODEL_CHECKER` | unset | Research: a grounding checker such as MiniCheck, which answers Yes or No. Unset leaves every check to the fast model. |
-| `KVASIR_MODEL_REASONING_EFFORT` | unset | Sent as `reasoning_effort` in every completion's body, except the reason model's. Unset sends nothing. |
-| `KVASIR_MODEL_REASON_EFFORT` | `medium` | Sent as `reasoning_effort` to the reason model instead of `KVASIR_MODEL_REASONING_EFFORT`. |
-| `KVASIR_MODEL_CONTEXT_TOKENS` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
-| `KVASIR_SEARCH_URL` | required | SearXNG base URL. |
-| `KVASIR_SEARCH_TOP_K` | `3` | Search results per query. |
-| `KVASIR_DATA_DIR` | `/data` | Writable directory for sessions, and for the run database. |
+| `KVASIR_DATA_DIR` | `/data` | Writable directory for `kvasir.db`, the caches and sessions. |
+| `KVASIR_HOST` | `0.0.0.0` | Address to listen on. |
+| `KVASIR_PORT` | `8080` | Port to listen on. |
 | `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. Intake calls run this wide; for Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
-| `KVASIR_RUNS_STORE` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `$KVASIR_DATA_DIR/kvasir.db`. |
-| `KVASIR_RUNS_MAX` | `100` | Runs kept, most recent first, in either store. |
-| `KVASIR_RUNS_TTL_DAYS` | `30` | Age past which a stored run is deleted. `sqlite` only. |
-| `KVASIR_RUNS_KEEP_CALL_CONTENT` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
-| `KVASIR_RUNS_MAX_CONCURRENT` | `1` | Concurrent runs. Beyond this, requests get 429. |
-| `KVASIR_SESSIONS_TTL_HOURS` | `168` | Session expiry, applied at startup. |
-| `KVASIR_STORM_MAX_CONV_TURN` | `3` | Questions per perspective. |
-| `KVASIR_STORM_MAX_PERSPECTIVE` | `3` | Perspectives to research. |
-| `KVASIR_RESEARCH_MAX_SEARCHES` | `16` | Research: searches in a run, before the 8 for empty cells. |
-| `KVASIR_RESEARCH_RESULTS_PER_QUERY` | `3` | Research: pages read per search by the ledger. The graph reads 5 unless a run sets `results_per_query`. |
-| `KVASIR_RESEARCH_MAX_ATTEMPTS` | `4` | Research: queries tried on one question before it is given up. |
-| `KVASIR_RESEARCH_FOLLOW_UPS` | `true` | Research: whether an answered question can add harder ones. `true` or `false`. |
-| `KVASIR_RESEARCH_MAX_DEPTH` | `2` | Research: levels of follow-ups below the first questions. |
-| `KVASIR_RESEARCH_MAX_ENTITIES` | `8` | Research: options a ranking or table compares, when the run chooses them. |
-| `KVASIR_RESEARCH_MAX_CRITERIA` | `5` | Research: criteria, when the run chooses them. |
-| `KVASIR_FETCH_CONTACT` | unset | Contact named in the user agent of page requests, as `kvasir/<version> (+https://github.com/brewcoua/kvasir; <contact>)`. Unset names none. |
-| `KVASIR_FETCH_HOST_INTERVAL_SECONDS` | `1.0` | Least time between the starts of two page requests to one host. At most 2 are in flight to a host regardless. |
-| `KVASIR_FETCH_RENDER` | `auto` | `auto` renders a page that needs JavaScript in Chromium, when the `browser` extra is installed; `off` never does. |
-| `KVASIR_FETCH_STEALTH` | `false` | Render through Patchright, which hides the signs of automation. Needs the `browser` extra. Getting past a challenge can break a site's terms. |
-| `KVASIR_FETCH_MAX_AGE_HOURS` | `48` | Hours a page cached in `pages.db` is served without asking its site; then it is revalidated with `If-None-Match` or `If-Modified-Since`. `0` fetches every page again. |
-| `KVASIR_FAVICONS_PROVIDERS` | `direct` | Where site icons come from, comma-separated and tried in order; the first icon found wins. `direct`, `duckduckgo`, `google` or `custom`. Empty turns favicons off and creates no `favicons.db`. See below for what each reveals. |
-| `KVASIR_FAVICONS_CUSTOM_URL` | empty | URL template for the `custom` provider, with `{domain}` where the site's host goes. Required to be an `http(s)` URL containing `{domain}` when `custom` is listed, or startup fails. |
-| `KVASIR_FAVICONS_TTL_DAYS` | `30` | Days a found icon is served before it is looked up again. |
-| `KVASIR_FAVICONS_MISS_TTL_DAYS` | `3` | Days a site found to have no icon is remembered before it is asked again. |
-| `KVASIR_SOURCES_ENABLED` | `false` | Classify the sites of search results by kind and trust tier. Off, nothing is classified, downloaded or sent to Wikidata. See [Source trust](#source-trust). |
-| `KVASIR_SOURCES_WIKIDATA` | `true` | Ask Wikidata about hosts that no rule, mark or list decides. `false` sends no domain anywhere. |
-| `KVASIR_SOURCES_ENDPOINT` | `https://query.wikidata.org/sparql` | SPARQL endpoint asked. |
-| `KVASIR_SOURCES_TTL_DAYS` | `30` | Days a Wikidata answer is kept, and a downloaded list is served before it is fetched again. |
-| `KVASIR_SOURCES_MISS_TTL_DAYS` | `7` | Days a host Wikidata does not know is remembered. |
-| `KVASIR_SOURCES_ALLOW` | empty | Comma-separated hosts, with their subdomains, always trusted (`high`). Beats any mark. |
-| `KVASIR_SOURCES_DENY` | empty | Comma-separated hosts, with their subdomains, never read (`avoid`). Beats `ALLOW` and any mark. |
-| `KVASIR_SOURCES_RSP` | `false` | Also tag hosts by Wikipedia's perennial sources list, fetched from `en.wikipedia.org` and refreshed with the lists. Needs `KVASIR_SOURCES_ENABLED`. |
-| `KVASIR_SOURCES_LISTS` | CISA `.gov` list | Comma-separated `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, uBlacklist files and CSVs with the host first are read. Empty uses none. |
 | `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
 | `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
-| `KVASIR_CONFIG` | `kvasir.toml` | Config file. Environment only. |
+
+### Stored settings
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `model.fast` | required | Conversation simulation, question asking, polishing, and research intake. |
+| `model.strong` | required | Outline and article generation, and the research outline, report and summary. |
+| `model.embedding` | required | Embedding model. Used by both modes. |
+| `model.reason` | unset | Research: the judgements, such as whether the claims gathered answer a question, and the last word on a sentence the cheaper checks leave in doubt. Unset uses the strong model. |
+| `model.checker` | unset | Research: a grounding checker such as MiniCheck, which answers Yes or No. Unset leaves every check to the fast model. |
+| `model.reasoning_effort` | unset | Sent as `reasoning_effort` in every completion's body, except the reason model's. Unset sends nothing. |
+| `model.reason_effort` | `medium` | Sent as `reasoning_effort` to the reason model instead of `model.reasoning_effort`. |
+| `model.context_tokens` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
+| `search.url` | required | SearXNG base URL. |
+| `search.top_k` | `3` | Search results per query. |
+| `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. |
+| `runs.max` | `100` | Runs kept, most recent first, in either store. |
+| `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. |
+| `runs.keep_call_content` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
+| `runs.max_concurrent` | `1` | Concurrent runs. Beyond this, requests get 429. |
+| `sessions.ttl_hours` | `168` | Session expiry, applied at startup. |
+| `storm.max_conv_turn` | `3` | Questions per perspective. |
+| `storm.max_perspective` | `3` | Perspectives to research. |
+| `research.max_searches` | `16` | Research: searches in a run, before the 8 for empty cells. |
+| `research.results_per_query` | `3` | Research: pages read per search by the ledger. The graph reads 5 unless a run sets `results_per_query`. |
+| `research.max_attempts` | `4` | Research: queries tried on one question before it is given up. |
+| `research.follow_ups` | `true` | Research: whether an answered question can add harder ones. `true` or `false`. |
+| `research.max_depth` | `2` | Research: levels of follow-ups below the first questions. |
+| `research.max_entities` | `8` | Research: options a ranking or table compares, when the run chooses them. |
+| `research.max_criteria` | `5` | Research: criteria, when the run chooses them. |
+| `fetch.contact` | unset | Contact named in the user agent of page requests, as `kvasir/<version> (+https://github.com/brewcoua/kvasir; <contact>)`. Unset names none. |
+| `fetch.host_interval_seconds` | `1.0` | Least time between the starts of two page requests to one host. At most 2 are in flight to a host regardless. |
+| `fetch.render` | `auto` | `auto` renders a page that needs JavaScript in Chromium, when the `browser` extra is installed; `off` never does. |
+| `fetch.stealth` | `false` | Render through Patchright, which hides the signs of automation. Needs the `browser` extra. Getting past a challenge can break a site's terms. |
+| `fetch.max_age_hours` | `48` | Hours a page cached in `pages.db` is served without asking its site; then it is revalidated with `If-None-Match` or `If-Modified-Since`. `0` fetches every page again. |
+| `favicons.providers` | `direct` | A list of where site icons come from, tried in order; the first icon found wins. `direct`, `duckduckgo`, `google` or `custom`. An empty list turns favicons off and creates no `favicons.db`. See below for what each reveals. |
+| `favicons.custom_url` | empty | URL template for the `custom` provider, with `{domain}` where the site's host goes. Required to be an `http(s)` URL containing `{domain}` when `custom` is listed, or `favicons` keeps its defaults. |
+| `favicons.ttl_days` | `30` | Days a found icon is served before it is looked up again. |
+| `favicons.miss_ttl_days` | `3` | Days a site found to have no icon is remembered before it is asked again. |
+| `sources.enabled` | `false` | Classify the sites of search results by kind and trust tier. Off, nothing is classified, downloaded or sent to Wikidata. See [Source trust](#source-trust). |
+| `sources.wikidata` | `true` | Ask Wikidata about hosts that no rule, mark or list decides. `false` sends no domain anywhere. |
+| `sources.endpoint` | `https://query.wikidata.org/sparql` | SPARQL endpoint asked. |
+| `sources.ttl_days` | `30` | Days a Wikidata answer is kept, and a downloaded list is served before it is fetched again. |
+| `sources.miss_ttl_days` | `7` | Days a host Wikidata does not know is remembered. |
+| `sources.allow` | empty | A list of hosts, with their subdomains, always trusted (`high`). Beats any mark. |
+| `sources.deny` | empty | A list of hosts, with their subdomains, never read (`avoid`). Beats `sources.allow` and any mark. |
+| `sources.rsp` | `false` | Also tag hosts by Wikipedia's perennial sources list, fetched from `en.wikipedia.org` and refreshed with the lists. Needs `sources.enabled`. |
+| `sources.lists` | CISA `.gov` list | A list of `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, uBlacklist files and CSVs with the host first are read. An empty list uses none. |
 
 Favicons are fetched by the server and served from `/v1/favicons/{host}`, so a browser never contacts
 the icon provider. What each provider learns:
@@ -628,38 +669,38 @@ site's real icon. A provider that answers 404 for a missing icon is fine.
 
 ### Source trust
 
-With `KVASIR_SOURCES_ENABLED=true`, each host resolves to a kind (government, academic, news and so
+With `sources.enabled` set to `true`, each host resolves to a kind (government, academic, news and so
 on), tags such as `community` or `ai_generated`, and a tier: `high`, `normal`, `unknown`, `low` or
-`avoid`. A host resolves in this order: the config's `ALLOW` and `DENY`, a mark, the bundled list
+`avoid`. A host resolves in this order: `sources.allow` and `sources.deny`, a mark, the bundled list
 (`src/kvasir/research/sources.toml`) and downloaded lists, suffix rules (`.gov`, `.edu`, `.int`,
 `europa.eu` and the like), the cache in `sources.db`, then Wikidata. Wikidata is asked for the
 domains of search results in one query per 50 hosts, so its operators see those domains; set
-`KVASIR_SOURCES_WIKIDATA=false` to avoid that. A host still unanswered after 5 seconds counts as
+`sources.wikidata` to `false` to avoid that. A host still unanswered after 5 seconds counts as
 `unknown` for that search and is known by the next. The default list is CISA's `.gov` list. The
 HUGE AI blocklist is not default: its last commit is from October 2025 and it targets AI-generated
-imagery. Add it to `KVASIR_SOURCES_LISTS` as `ai_generated=<url>` if you want it.
+imagery. Add it to `sources.lists` as `ai_generated=<url>` if you want it.
 
-With `KVASIR_SOURCES_RSP=true` as well, kvasir fetches Wikipedia's [perennial sources
+With `sources.rsp` set to `true` as well, kvasir fetches Wikipedia's [perennial sources
 list](https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources) (WP:RSP) from
 `en.wikipedia.org` through the MediaWiki API, nothing of it shipped, and refreshes it with the other
 lists. A site it names gets a tag from its status: `rsp_reliable` (generally reliable, tier `high`),
 `rsp_mixed` (no consensus, no effect), `rsp_unreliable` (generally unreliable, `low`) or
 `rsp_deprecated` (deprecated or blacklisted, `avoid`). The tag joins the kind the host resolves to,
-and does not replace it; a config `ALLOW` or `DENY` and a mark ignore it. A site in several rows,
+and does not replace it; `sources.allow`, `sources.deny` and a mark ignore it. A site in several rows,
 such as a newspaper and its blogs, takes the least reliable status; a row with no site, or only a
 part of one (`example.com/news`), is skipped. Wikipedia's own row is skipped too: the page calls it
 unreliable because an article citing an article is circular (WP:CIRCULAR), which a run citing it
 is not. Rows name publications, not domains, so only sites
 the page lists are tagged.
 
-Set `KVASIR_MODEL_REASONING_EFFORT` to `none` for a thinking model on Ollama. Its reasoning counts
+Set `model.reasoning_effort` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,
 so the answer is cut off before it starts. It goes in the request body rather than through litellm's
 own parameter, which litellm refuses for a model it does not know. The reason model is meant to
 think, so its roles have budgets of 2000 to 3000 tokens and their own effort,
-`KVASIR_MODEL_REASON_EFFORT`. Without `KVASIR_MODEL_REASON`, those roles run on the strong model at
+`model.reason_effort`. Without `model.reason`, those roles run on the strong model at
 that effort. With the reason model on a cloud provider, each sentence it is asked about and its
-quotes go to that provider, and `KVASIR_RUNS_KEEP_CALL_CONTENT` does not govern that.
+quotes go to that provider, and `runs.keep_call_content` does not govern that.
 
 Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
 inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
@@ -739,7 +780,7 @@ run started from the page replays a fixture the same way: `wal.json` for researc
 
 `<name>.calls.json` holds what a fixture's calls sent and answered, keyed by call id, and
 `<name>.searches.json` what its searches returned, keyed by search id. Only `wal` has the first and
-only `graph` the second, both recorded with `KVASIR_RUNS_KEEP_CALL_CONTENT=true`.
+only `graph` the second, both recorded with `runs.keep_call_content` set to `true`.
 
 A fixture is a run's detail as `GET /v1/runs/{id}` returns it. To add one from a run kept in the
 SQLite history:
@@ -749,7 +790,7 @@ curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/<run id>
 ```
 
 To include its calls' content, with the run kept by a service started with
-`KVASIR_RUNS_KEEP_CALL_CONTENT=true`:
+`runs.keep_call_content` set to `true`:
 
 ```bash
 run=<run id>

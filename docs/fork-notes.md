@@ -105,7 +105,7 @@ and required an `ENCODER_API_TYPE` environment variable.
 Both now use one `Encoder(model, api_key, api_base)`, a thin wrapper over `dspy.Embedder`:
 
 - No `ENCODER_API_TYPE`, no hardcoded model name, no Azure special case.
-- `KVASIR_MODEL_EMBEDDING` names its provider like the language models do, since it routes
+- `model.embedding` names its provider like the language models do, since it routes
   through the same dspy.
 - One request for a whole list, rather than one request per text across a thread pool.
 - A failed or short response raises `EmbeddingError`. Upstream printed per-text failures and carried

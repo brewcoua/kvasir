@@ -20,7 +20,7 @@ class SourcesError(Exception):
         self.status_code = status_code
 
 
-_LOCKED = "{} is set in the config, so a mark cannot change it"
+_LOCKED = "{} is in sources.allow or sources.deny, so a mark cannot change it"
 
 
 class Mark(BaseModel):
@@ -31,7 +31,7 @@ class Mark(BaseModel):
 def _sources(http: Request) -> Sources:
     sources: Sources | None = http.app.state.sources
     if sources is None:
-        raise SourcesError(404, "sources are off: set KVASIR_SOURCES_ENABLED=true")
+        raise SourcesError(404, "sources are off: set sources.enabled")
     return sources
 
 

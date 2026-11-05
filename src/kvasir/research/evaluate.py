@@ -33,7 +33,7 @@ import httpx
 from dspy.utils.exceptions import AdapterParseError  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
-from kvasir.config import Settings
+from kvasir.config import Settings, SetupRequired
 from kvasir.research import verify
 from kvasir.research.signatures import Verify
 from kvasir.runners import build_research_models
@@ -92,10 +92,15 @@ def frames(lines: Iterable[str]) -> Iterator[tuple[str, dict[str, Any]]]:
             yield event, json.loads(line[len("data: ") :])
 
 
-def research(url: str, question: Question, method: str, options: dict[str, Any]) -> dict[str, Any]:
+def research(
+    url: str, token: str, question: Question, method: str, options: dict[str, Any]
+) -> dict[str, Any]:
     """The run's result, or its error, as the service reports them."""
     body = {"method": method, "input": {"question": question.question}, "options": options}
-    with httpx.stream("POST", f"{url}/v1/runs", json=body, timeout=None) as response:
+    headers = {"Authorization": f"Bearer {token}"}
+    with httpx.stream(
+        "POST", f"{url}/v1/runs", json=body, headers=headers, timeout=None
+    ) as response:
         if response.status_code != 200:
             return {"error": f"{response.status_code}: {response.read().decode()}"}
         stage = ""
@@ -236,6 +241,12 @@ def main(argv: list[str] | None = None) -> None:
         "--options", type=json.loads, default={}, help="the method's options, as a JSON object"
     )
     args = parser.parse_args(argv)
+    # The service's own settings: its token, and the reason model to judge with.
+    settings = Settings.load()
+    try:
+        settings.ready()
+    except SetupRequired as exc:
+        sys.exit(f"set these settings first: {exc}")
 
     questions = [
         q for q in load_questions(args.questions) if args.only is None or q.id in args.only
@@ -247,10 +258,12 @@ def main(argv: list[str] | None = None) -> None:
             continue
         print(f"researching {question.id}", file=sys.stderr)
         path.write_text(
-            json.dumps(research(args.url, question, args.method, args.options), indent=1)
+            json.dumps(
+                research(args.url, settings.token, question, args.method, args.options), indent=1
+            )
         )
 
-    judge = build_research_models(Settings.from_env())["judge"]
+    judge = build_research_models(settings)["judge"]
     scores: list[Score] = []
     errors: dict[str, str] = {}
     for question in questions:

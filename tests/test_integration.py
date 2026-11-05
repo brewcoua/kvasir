@@ -5,21 +5,18 @@ credentials, spend tokens and take minutes. Run them with:
 
     uv run pytest -m integration
 
-Required environment, the same names the service itself reads:
-
-    KVASIR_PROVIDER_<NAME>_API_BASE (and _API_KEY) for the provider the models name,
-    KVASIR_MODEL_FAST, KVASIR_MODEL_STRONG, KVASIR_MODEL_EMBEDDING, KVASIR_SEARCH_URL
+They run on the service's own configuration: the environment it starts with, and the settings
+stored in kvasir.db under KVASIR_DATA_DIR. The models and the search URL must be set there.
 
 The SearXNG instance must have the JSON output format enabled. One serving HTML only produces an
 empty result set rather than an error, which surfaces here as an article with no citations.
 """
 
 import asyncio
-import os
 
 import pytest
 
-from kvasir.config import Settings, apply_environment
+from kvasir.config import ConfigError, Settings, apply_environment
 from kvasir.conversation import create, report, step
 from kvasir.methods.storm.method import run_article
 from kvasir.runs.progress import ProgressStream
@@ -28,23 +25,17 @@ from kvasir.sessions import SessionStore
 
 pytestmark = pytest.mark.integration
 
-REQUIRED = (
-    "KVASIR_MODEL_FAST",
-    "KVASIR_MODEL_STRONG",
-    "KVASIR_MODEL_EMBEDDING",
-    "KVASIR_SEARCH_URL",
-)
-
 TOPIC = "The Antikythera mechanism"
 
 
 @pytest.fixture(scope="module")
 def settings():
-    missing = [name for name in REQUIRED if not os.environ.get(name)]
-    if missing:
-        pytest.skip(f"not configured: {', '.join(missing)}")
-
-    resolved = Settings.from_env()
+    try:
+        resolved = Settings.load()
+    except ConfigError as exc:
+        pytest.skip(f"not configured: {exc}")
+    if resolved.missing:
+        pytest.skip(f"not configured: {', '.join(resolved.missing)}")
     apply_environment()
     return resolved
 

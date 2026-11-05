@@ -1,26 +1,39 @@
+import logging
 import os
+import sqlite3
 from pathlib import Path
 
 import pytest
 
-from kvasir.config import NO_API_KEY, ConfigError, Settings, apply_environment
+from kvasir.config import NO_API_KEY, ConfigError, Settings, SetupRequired, apply_environment
+from kvasir.settings_store import SettingsStore
 
-MINIMAL = {
+ENV = {
     "KVASIR_PROVIDER_LOCAL_API_BASE": "https://gateway.example/v1",
     "KVASIR_PROVIDER_LOCAL_API_KEY": "key",
-    "KVASIR_MODEL_FAST": "local/fast:cloud",
-    "KVASIR_MODEL_STRONG": "local/strong:cloud",
-    "KVASIR_MODEL_EMBEDDING": "local/embed:latest",
-    "KVASIR_SEARCH_URL": "http://searxng.example",
     "KVASIR_TOKEN": "token",
 }
-REQUIRED = [name for name in MINIMAL if "PROVIDER" not in name]
+STORED = {
+    "model.fast": "local/fast:cloud",
+    "model.strong": "local/strong:cloud",
+    "model.embedding": "local/embed:latest",
+    "search.url": "http://searxng.example",
+}
+REQUIRED = list(STORED)
+
+
+def strict(**stored):
+    """Settings over STORED, raising on any bad value rather than logging it."""
+    return Settings.load(
+        ENV, STORED | {k.replace("__", "."): v for k, v in stored.items()}, strict=True
+    )
 
 
 def test_defaults():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     assert str(settings.data_dir) == "/data"
+    assert (settings.host, settings.port) == ("0.0.0.0", 8080)
     assert settings.sessions_dir.name == "sessions"
     assert settings.sessions.ttl_hours == 168
     assert settings.runs.max_concurrent == 1
@@ -30,7 +43,7 @@ def test_defaults():
     assert settings.log.level == "INFO"
     assert settings.log.format == "json"
     assert settings.runs.store == "memory"
-    assert settings.runs_db.name == "kvasir.db"
+    assert settings.db.name == "kvasir.db"
     assert settings.runs.max == 100
     assert settings.runs.ttl_days == 30
     assert settings.runs.keep_call_content is False
@@ -45,42 +58,68 @@ def test_defaults():
     assert settings.research.max_depth == 2
     assert settings.research.max_entities == 8
     assert settings.research.max_criteria == 5
+    assert settings.missing == ()
 
 
-@pytest.mark.parametrize("name", REQUIRED)
-def test_each_required_variable_is_required(name):
-    env = MINIMAL | {name: ""}
-
-    with pytest.raises(ConfigError, match=name):
-        Settings.from_env(env)
+def test_the_token_is_required():
+    with pytest.raises(ConfigError, match="KVASIR_TOKEN"):
+        Settings.load({k: v for k, v in ENV.items() if k != "KVASIR_TOKEN"}, STORED)
 
 
-def test_all_missing_variables_are_reported_together():
-    with pytest.raises(ConfigError) as excinfo:
-        Settings.from_env({})
+def test_nothing_stored_is_a_service_waiting_for_its_setup():
+    settings = Settings.load(ENV, {})
 
-    for name in REQUIRED:
-        assert name in str(excinfo.value)
+    assert settings.missing == tuple(REQUIRED)
+    with pytest.raises(SetupRequired, match="model.fast, model.strong"):
+        settings.ready()
+
+
+@pytest.mark.parametrize("key", REQUIRED)
+def test_each_required_setting_is_reported_until_it_is_set(key):
+    settings = Settings.load(ENV, {k: v for k, v in STORED.items() if k != key})
+
+    assert settings.missing == (key,)
+
+
+def test_a_required_setting_stored_empty_is_still_missing():
+    assert Settings.load(ENV, STORED | {"model.fast": ""}).missing == ("model.fast",)
 
 
 def test_a_provider_needs_its_api_base():
-    env = {k: v for k, v in MINIMAL.items() if k != "KVASIR_PROVIDER_LOCAL_API_BASE"}
+    env = {k: v for k, v in ENV.items() if k != "KVASIR_PROVIDER_LOCAL_API_BASE"}
 
     with pytest.raises(ConfigError, match="KVASIR_PROVIDER_LOCAL_API_BASE"):
-        Settings.from_env(env)
+        Settings.load(env, STORED)
 
 
-def test_unprefixed_variables_are_no_longer_read():
-    env = MINIMAL | {"OPENAI_API_KEY": "other", "LOG_LEVEL": "debug", "LOG_FORMAT": "text"}
-    settings = Settings.from_env(env)
+def test_unprefixed_variables_are_not_read():
+    env = ENV | {"OPENAI_API_KEY": "other", "LOG_LEVEL": "debug", "LOG_FORMAT": "text"}
+    settings = Settings.load(env, STORED)
 
     assert settings.providers["local"].api_key == "key"
     assert settings.log.level == "INFO"
     assert settings.log.format == "json"
 
 
+def test_a_variable_for_a_stored_setting_is_named_and_ignored(caplog):
+    with caplog.at_level(logging.WARNING, "kvasir"):
+        settings = Settings.load(ENV | {"KVASIR_MODEL_FAST": "local/other"}, STORED)
+
+    assert settings.model.fast == STORED["model.fast"]
+    assert "KVASIR_MODEL_FAST" in caplog.text
+
+
+def test_nothing_stored_is_read_from_the_data_directory(tmp_path):
+    SettingsStore(tmp_path / "kvasir.db").write({"research.max_searches": 9})
+
+    settings = Settings.load(ENV | {"KVASIR_DATA_DIR": str(tmp_path)})
+
+    assert settings.research.max_searches == 9
+    assert settings.missing == tuple(REQUIRED)
+
+
 def test_a_model_resolves_against_its_provider():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     model = settings.resolve("local/deepseek-v4.1-flash:cloud")
 
@@ -90,13 +129,13 @@ def test_a_model_resolves_against_its_provider():
 
 
 def test_only_the_first_slash_splits_a_model_reference():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     assert settings.resolve("local/ollama/model:tag").model == "openai/ollama/model:tag"
 
 
 def test_resolve_names_an_unknown_provider_and_the_configured_ones():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     with pytest.raises(ConfigError, match="unknown provider 'cloud'; configured: local"):
         settings.resolve("cloud/model")
@@ -105,98 +144,144 @@ def test_resolve_names_an_unknown_provider_and_the_configured_ones():
 @pytest.mark.parametrize("ref", ["gpt-4o-mini", "local/", ""])
 def test_resolve_rejects_a_reference_without_provider_and_name(ref):
     with pytest.raises(ConfigError, match="must name a provider"):
-        Settings.from_env(MINIMAL).resolve(ref)
+        Settings.load(ENV, STORED).resolve(ref)
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "KVASIR_MODEL_FAST",
-        "KVASIR_MODEL_STRONG",
-        "KVASIR_MODEL_REASON",
-        "KVASIR_MODEL_CHECKER",
-        "KVASIR_MODEL_EMBEDDING",
-    ],
-)
-def test_a_model_naming_an_unknown_provider_fails_at_startup(name):
-    with pytest.raises(ConfigError, match=f"{name}: .*unknown provider 'typo'"):
-        Settings.from_env(MINIMAL | {name: "typo/model"})
+@pytest.mark.parametrize("name", ["fast", "strong", "reason", "checker", "embedding"])
+def test_a_model_naming_an_unknown_provider_is_refused(name):
+    with pytest.raises(ConfigError, match=f"model.{name}: .*unknown provider 'typo'"):
+        strict(**{f"model__{name}": "typo/model"})
 
 
-def test_a_model_without_a_provider_fails_at_startup():
-    with pytest.raises(ConfigError, match="KVASIR_MODEL_FAST: .*must name a provider"):
-        Settings.from_env(MINIMAL | {"KVASIR_MODEL_FAST": "gpt-4o-mini"})
+def test_a_stored_model_naming_an_unknown_provider_is_dropped(caplog):
+    with caplog.at_level(logging.WARNING, "kvasir"):
+        settings = Settings.load(ENV, STORED | {"model.fast": "typo/model", "model.checker": "x"})
+
+    assert settings.model.fast == ""
+    assert settings.model.checker is None
+    assert settings.missing == ("model.fast",)
+    assert "unknown provider 'typo'" in caplog.text
 
 
-def test_a_provider_may_come_from_the_environment_alone_and_its_name_may_hold_underscores():
-    env = {k: v for k, v in MINIMAL.items() if "PROVIDER" not in k} | {
+def test_a_provider_may_hold_underscores():
+    env = {k: v for k, v in ENV.items() if "PROVIDER" not in k} | {
         "KVASIR_PROVIDER_MY_CLOUD_API_BASE": "https://cloud.example/v1/",
-        "KVASIR_MODEL_FAST": "my_cloud/fast",
-        "KVASIR_MODEL_STRONG": "my_cloud/strong",
-        "KVASIR_MODEL_EMBEDDING": "my_cloud/embed",
     }
+    stored = {"model.fast": "my_cloud/fast", "model.strong": "my_cloud/strong"}
 
-    settings = Settings.from_env(env)
+    settings = Settings.load(env, STORED | stored | {"model.embedding": "my_cloud/embed"})
 
     assert list(settings.providers) == ["my_cloud"]
     assert settings.providers["my_cloud"].api_base == "https://cloud.example/v1"
 
 
-def test_a_provider_without_a_key_gets_the_placeholder():
-    env = {k: v for k, v in MINIMAL.items() if k != "KVASIR_PROVIDER_LOCAL_API_KEY"}
+def test_a_bad_provider_name_is_refused():
+    with pytest.raises(ConfigError, match="does not name a provider"):
+        Settings.load(ENV | {"KVASIR_PROVIDER_A.B_API_BASE": "http://x"}, STORED)
 
-    assert Settings.from_env(env).providers["local"].api_key == NO_API_KEY
+
+def test_a_provider_without_a_key_gets_the_placeholder():
+    env = {k: v for k, v in ENV.items() if k != "KVASIR_PROVIDER_LOCAL_API_KEY"}
+
+    assert Settings.load(env, STORED).providers["local"].api_key == NO_API_KEY
+
+
+def test_no_secret_is_in_the_settings_repr():
+    text = repr(Settings.load(ENV, STORED))
+
+    assert "token='" not in text
+    assert "'key'" not in text
 
 
 def test_trailing_slashes_are_stripped_from_urls():
-    settings = Settings.from_env(
-        MINIMAL
-        | {
-            "KVASIR_PROVIDER_LOCAL_API_BASE": "https://gateway.example/v1/",
-            "KVASIR_SEARCH_URL": "http://searxng.example/",
-        }
+    settings = Settings.load(
+        ENV | {"KVASIR_PROVIDER_LOCAL_API_BASE": "https://gateway.example/v1/"},
+        STORED | {"search.url": "http://searxng.example/"},
     )
 
     assert settings.providers["local"].api_base == "https://gateway.example/v1"
     assert settings.search.url == "http://searxng.example"
 
 
-@pytest.mark.parametrize("value", ["nope", "3.5", "0", "-1", ""])
+@pytest.mark.parametrize("value", ["nope", 3.5, 0, -1, True, "3"])
 def test_rejects_unusable_integers(value):
-    env = MINIMAL | {"KVASIR_STORM_MAX_CONV_TURN": value}
+    with pytest.raises(ConfigError, match="storm.max_conv_turn"):
+        strict(storm__max_conv_turn=value)
 
-    if value == "":
-        assert Settings.from_env(env).storm.max_conv_turn == 3
-    else:
-        with pytest.raises(ConfigError, match="KVASIR_STORM_MAX_CONV_TURN"):
-            Settings.from_env(env)
+
+def test_the_page_age_may_be_zero():
+    assert strict(fetch__max_age_hours=0).fetch.max_age_hours == 0
+
+
+def test_a_bad_stored_value_falls_back_to_its_default(caplog):
+    with caplog.at_level(logging.WARNING, "kvasir"):
+        settings = Settings.load(ENV, STORED | {"storm.max_conv_turn": "many"})
+
+    assert settings.storm.max_conv_turn == 3
+    assert "storm.max_conv_turn must be an integer" in caplog.text
+
+
+def test_an_unknown_stored_key_is_refused_or_ignored():
+    with pytest.raises(ConfigError, match="unknown setting model.fats"):
+        strict(model__fats="local/x")
+
+    assert Settings.load(ENV, STORED | {"model.fats": "local/x"}).model.fast == STORED["model.fast"]
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"), [("KVASIR_MAX_THREADS", "nope"), ("KVASIR_PORT", "0")]
+)
+def test_a_bad_variable_stops_the_start(variable, value):
+    with pytest.raises(ConfigError, match=variable):
+        Settings.load(ENV | {variable: value}, STORED)
 
 
 def test_top_level_settings_read_from_the_environment():
-    settings = Settings.from_env(
-        MINIMAL | {"KVASIR_DATA_DIR": "/srv/kvasir", "KVASIR_MAX_THREADS": "5"}
+    settings = Settings.load(
+        ENV
+        | {
+            "KVASIR_DATA_DIR": "/srv/kvasir",
+            "KVASIR_MAX_THREADS": "5",
+            "KVASIR_HOST": "127.0.0.1",
+            "KVASIR_PORT": "9000",
+        },
+        STORED,
     )
 
     assert settings.data_dir == Path("/srv/kvasir")
     assert settings.max_threads == 5
+    assert (settings.host, settings.port) == ("127.0.0.1", 9000)
 
 
 def test_log_level_is_upper_cased():
-    assert Settings.from_env(MINIMAL | {"KVASIR_LOG_LEVEL": "debug"}).log.level == "DEBUG"
+    assert Settings.load(ENV | {"KVASIR_LOG_LEVEL": "debug"}, STORED).log.level == "DEBUG"
 
 
 def test_log_format_is_checked():
-    assert Settings.from_env(MINIMAL | {"KVASIR_LOG_FORMAT": "TEXT"}).log.format == "text"
+    assert Settings.load(ENV | {"KVASIR_LOG_FORMAT": "TEXT"}, STORED).log.format == "text"
 
     with pytest.raises(ConfigError, match="KVASIR_LOG_FORMAT"):
-        Settings.from_env(MINIMAL | {"KVASIR_LOG_FORMAT": "logfmt"})
+        Settings.load(ENV | {"KVASIR_LOG_FORMAT": "logfmt"}, STORED)
 
 
 def test_run_store_is_checked():
-    assert Settings.from_env(MINIMAL | {"KVASIR_RUNS_STORE": "SQLite"}).runs.store == "sqlite"
+    assert strict(runs__store="SQLite").runs.store == "sqlite"
 
-    with pytest.raises(ConfigError, match="KVASIR_RUNS_STORE"):
-        Settings.from_env(MINIMAL | {"KVASIR_RUNS_STORE": "postgres"})
+    with pytest.raises(ConfigError, match="runs.store"):
+        strict(runs__store="postgres")
+
+
+def test_a_boolean_setting_must_be_a_boolean():
+    assert strict(research__follow_ups=False).research.follow_ups is False
+
+    for value in ("false", 0, None):
+        with pytest.raises(ConfigError, match="research.follow_ups must be true or false"):
+            strict(research__follow_ups=value)
+
+
+def test_an_optional_string_stored_empty_is_unset():
+    assert strict(model__reasoning_effort="").model.reasoning_effort is None
+    assert strict(model__reasoning_effort="none").model.reasoning_effort == "none"
 
 
 def test_apply_environment_disables_telemetry(monkeypatch):
@@ -222,7 +307,7 @@ def test_apply_environment_exports_no_credential(monkeypatch):
 
 
 def test_settings_are_frozen():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     with pytest.raises(AttributeError):
         settings.model = None  # type: ignore[misc]
@@ -232,204 +317,50 @@ def test_settings_are_frozen():
         settings.providers["other"] = None  # type: ignore[index]
 
 
-def _write(tmp_path, text):
-    path = tmp_path / "kvasir.toml"
-    path.write_text(text)
-    return str(path)
+def test_the_store_keeps_values_until_they_are_reset(tmp_path):
+    store = SettingsStore(tmp_path / "kvasir.db")
+    store.write({"research.max_searches": 9, "sources.deny": ["farm.example"]})
+    store.write({"research.max_searches": None, "model.reason": "local/r"})
 
-
-def test_the_config_file_stands_in_for_the_environment(tmp_path):
-    path = _write(
-        tmp_path,
-        """
-max_threads = 2
-
-[provider.local]
-api_base = "http://localhost:11434/v1"
-api_key = "file-key"
-
-[model]
-fast = "local/qwen3.8:27b"
-strong = "local/qwen3.8:27b"
-embedding = "local/embed"
-reasoning_effort = "none"
-
-[search]
-url = "http://localhost:8888"
-
-[log]
-format = "text"
-""",
-    )
-
-    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
-
-    assert settings.providers["local"].api_key == "file-key"
-    assert settings.model.strong == "local/qwen3.8:27b"
-    assert settings.max_threads == 2
-    assert settings.log.format == "text"
-    assert settings.model.reasoning_effort == "none"
-
-
-def test_a_set_variable_wins_over_the_file_and_an_empty_one_does_not(tmp_path):
-    path = _write(tmp_path, '[model]\nfast = "local/from-file"\n[search]\nurl = "http://file"\n')
-
-    env = MINIMAL | {"KVASIR_CONFIG": path, "KVASIR_SEARCH_URL": ""}
-    settings = Settings.from_env(env)
-
-    assert settings.model.fast == MINIMAL["KVASIR_MODEL_FAST"]
-    assert settings.search.url == "http://file"
-
-
-def test_an_environment_provider_merges_over_the_file_one_field_by_field(tmp_path):
-    path = _write(
-        tmp_path,
-        '[provider.local]\napi_base = "http://file/v1"\napi_key = "file-key"\n',
-    )
-    env = {k: v for k, v in MINIMAL.items() if "PROVIDER" not in k} | {
-        "KVASIR_CONFIG": path,
-        "KVASIR_PROVIDER_LOCAL_API_KEY": "env-key",
+    assert SettingsStore(tmp_path / "kvasir.db").load() == {
+        "sources.deny": '["farm.example"]',
+        "model.reason": '"local/r"',
     }
-
-    provider = Settings.from_env(env).providers["local"]
-
-    assert provider.api_key == "env-key"
-    assert provider.api_base == "http://file/v1"
-
-
-@pytest.mark.parametrize(("value", "expected"), [("false", False), ("NO", False), ("1", True)])
-def test_a_boolean_setting_reads_its_usual_spellings(value, expected):
-    env = MINIMAL | {"KVASIR_RESEARCH_FOLLOW_UPS": value}
-
-    assert Settings.from_env(env).research.follow_ups is expected
-
-
-def test_a_boolean_setting_rejects_anything_else():
-    with pytest.raises(ConfigError, match="KVASIR_RESEARCH_FOLLOW_UPS must be true or false"):
-        Settings.from_env(MINIMAL | {"KVASIR_RESEARCH_FOLLOW_UPS": "maybe"})
-
-
-def test_a_boolean_in_the_config_file_is_read(tmp_path):
-    path = _write(tmp_path, "[research]\nfollow_ups = false\nmax_searches = 8\n")
-
-    settings = Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path})
-
-    assert settings.research.follow_ups is False
-    assert settings.research.max_searches == 8
-
-
-@pytest.mark.parametrize(
-    ("text", "message"),
-    [
-        ('[model]\nfats = "local/x"\n', "unknown keys in config file .*: model.fats"),
-        ('[modle]\nfast = "local/x"\n', "unknown keys in config file .*: modle"),
-        ('model_fast = "local/x"\n', "unknown keys in config file .*: model_fast"),
-        ('[provider.local]\napi_url = "x"\n', "unknown keys .*: provider.local.api_url"),
-        ('[provider.Local]\napi_base = "x"\n', "provider 'Local' .*lowercase letters"),
-        ('provider = "local"\n', "provider in config file .* must be a table"),
-        ('[provider]\nlocal = "x"\n', "provider.local in config file .* must be a table"),
-        ('model = "local/x"\n', "model in config file .* must be a table"),
-        ("max_threads = [2]\n", "max_threads .* must be a string, a number or a boolean"),
-        ("[runs]\nmax = [2]\n", "runs.max .* must be a string, a number or a boolean"),
-        ("max_threads = true\n", "KVASIR_MAX_THREADS must be an integer, got 'true'"),
-        ("[model]\nfast = \n", "not valid TOML"),
-    ],
-)
-def test_an_unusable_config_file_is_rejected(tmp_path, text, message):
-    with pytest.raises(ConfigError, match=message):
-        Settings.from_env(MINIMAL | {"KVASIR_CONFIG": _write(tmp_path, text)})
-
-
-def test_a_missing_config_file_is_an_error_rather_than_ignored(tmp_path):
-    with pytest.raises(ConfigError, match="cannot read config file"):
-        Settings.from_env(MINIMAL | {"KVASIR_CONFIG": str(tmp_path / "absent.toml")})
-
-
-def test_kvasir_toml_is_found_in_the_working_directory(tmp_path, monkeypatch, default_config_file):
-    _write(tmp_path, '[search]\nurl = "http://from-cwd"\n')
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("KVASIR_SEARCH_URL", raising=False)
-    for name, value in MINIMAL.items():
-        if name != "KVASIR_SEARCH_URL":
-            monkeypatch.setenv(name, value)
-
-    assert Settings.from_env().search.url == "http://from-cwd"
-
-
-def test_the_example_file_loads():
-    example = Path(__file__).parent.parent / "kvasir.example.toml"
-
-    settings = Settings.from_env({"KVASIR_CONFIG": str(example), "KVASIR_TOKEN": "token"})
-
-    assert settings.resolve(settings.model.strong).api_key == NO_API_KEY
-    assert settings.runs.store == "sqlite"
 
 
 def test_fetch_settings_default_to_no_contact_and_a_second():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     assert settings.fetch.contact == ""
     assert settings.fetch.host_interval_seconds == 1.0
+    assert (settings.fetch.render, settings.fetch.stealth) == ("auto", False)
 
 
-def test_fetch_settings_read_from_the_environment():
-    settings = Settings.from_env(
-        MINIMAL
-        | {"KVASIR_FETCH_CONTACT": "ops@example.org", "KVASIR_FETCH_HOST_INTERVAL_SECONDS": "0.5"}
+def test_fetch_settings_are_read():
+    settings = strict(
+        fetch__contact="ops@example.org",
+        fetch__host_interval_seconds=0.5,
+        fetch__render="OFF",
+        fetch__stealth=True,
     )
 
     assert settings.fetch.contact == "ops@example.org"
     assert settings.fetch.host_interval_seconds == 0.5
-
-
-def test_fetch_render_and_stealth_default_and_read_from_the_environment():
-    settings = Settings.from_env(MINIMAL)
-    assert (settings.fetch.render, settings.fetch.stealth) == ("auto", False)
-
-    settings = Settings.from_env(
-        MINIMAL | {"KVASIR_FETCH_RENDER": "OFF", "KVASIR_FETCH_STEALTH": "true"}
-    )
     assert (settings.fetch.render, settings.fetch.stealth) == ("off", True)
+    assert strict(fetch__host_interval_seconds=2).fetch.host_interval_seconds == 2.0
 
-    with pytest.raises(ConfigError):
-        Settings.from_env(MINIMAL | {"KVASIR_FETCH_RENDER": "always"})
-
-
-def test_fetch_settings_read_from_the_config_file(tmp_path):
-    path = _write(
-        tmp_path,
-        """
-[provider.local]
-api_base = "http://localhost:11434/v1"
-
-[model]
-fast = "local/a"
-strong = "local/a"
-embedding = "local/a"
-
-[search]
-url = "http://localhost:8888"
-
-[fetch]
-contact = "ops@example.org"
-host_interval_seconds = 2.5
-""",
-    )
-
-    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
-
-    assert settings.fetch.contact == "ops@example.org"
-    assert settings.fetch.host_interval_seconds == 2.5
+    with pytest.raises(ConfigError, match="fetch.render"):
+        strict(fetch__render="always")
 
 
-@pytest.mark.parametrize("value", ["soon", "-1", "nan", "inf"])
+@pytest.mark.parametrize("value", ["soon", -1, float("nan"), float("inf"), True])
 def test_the_host_interval_must_be_a_finite_number_of_seconds(value):
-    with pytest.raises(ConfigError, match="KVASIR_FETCH_HOST_INTERVAL_SECONDS"):
-        Settings.from_env(MINIMAL | {"KVASIR_FETCH_HOST_INTERVAL_SECONDS": value})
+    with pytest.raises(ConfigError, match="fetch.host_interval_seconds"):
+        strict(fetch__host_interval_seconds=value)
 
 
 def test_favicon_settings_default_to_the_direct_provider():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     assert settings.favicons.providers == ("direct",)
     assert settings.favicons.custom_url == ""
@@ -437,14 +368,11 @@ def test_favicon_settings_default_to_the_direct_provider():
     assert settings.favicons_db == Path("/data/favicons.db")
 
 
-def test_favicon_providers_read_from_the_environment_in_order():
-    settings = Settings.from_env(
-        MINIMAL
-        | {
-            "KVASIR_FAVICONS_PROVIDERS": "Google, direct ,duckduckgo",
-            "KVASIR_FAVICONS_TTL_DAYS": "7",
-            "KVASIR_FAVICONS_MISS_TTL_DAYS": "1",
-        }
+def test_favicon_providers_are_read_in_order():
+    settings = strict(
+        favicons__providers=["Google", " direct ", "duckduckgo"],
+        favicons__ttl_days=7,
+        favicons__miss_ttl_days=1,
     )
 
     assert settings.favicons.providers == ("google", "direct", "duckduckgo")
@@ -452,78 +380,36 @@ def test_favicon_providers_read_from_the_environment_in_order():
 
 
 def test_an_empty_provider_list_turns_favicons_off():
-    assert Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_PROVIDERS": ""}).favicons.providers == ()
+    assert strict(favicons__providers=[]).favicons.providers == ()
 
 
-def test_favicon_providers_read_from_the_config_file(tmp_path):
-    path = _write(
-        tmp_path,
-        """
-[provider.local]
-api_base = "http://localhost:11434/v1"
-
-[model]
-fast = "local/a"
-strong = "local/a"
-embedding = "local/a"
-
-[search]
-url = "http://localhost:8888"
-
-[favicons]
-providers = ["custom", "direct"]
-custom_url = "https://icons.example/{domain}.png"
-""",
-    )
-
-    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
-
-    assert settings.favicons.providers == ("custom", "direct")
-    assert settings.favicons.custom_url == "https://icons.example/{domain}.png"
-
-
-def test_an_empty_array_in_the_config_file_turns_favicons_off(tmp_path):
-    path = _write(tmp_path, "[favicons]\nproviders = []\n")
-
-    settings = Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path})
-
-    assert settings.favicons.providers == ()
-
-
-def test_the_environment_empties_a_list_the_file_sets(tmp_path):
-    path = _write(tmp_path, '[favicons]\nproviders = ["google"]\n')
-
-    settings = Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path, "KVASIR_FAVICONS_PROVIDERS": ""})
-
-    assert settings.favicons.providers == ()
-
-
-def test_an_unknown_favicon_provider_is_rejected():
-    with pytest.raises(ConfigError, match="KVASIR_FAVICONS_PROVIDERS.*'bing'"):
-        Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_PROVIDERS": "direct,bing"})
-
-
-def test_a_favicon_provider_list_in_the_file_must_be_strings(tmp_path):
-    path = _write(tmp_path, "[favicons]\nproviders = [1]\n")
-
-    with pytest.raises(ConfigError, match="favicons.providers .* array of strings"):
-        Settings.from_env(MINIMAL | {"KVASIR_CONFIG": path})
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [(["direct", "bing"], "'bing'"), ("direct", "list of strings"), ([1], "list of strings")],
+)
+def test_a_bad_favicon_provider_list_is_rejected(value, message):
+    with pytest.raises(ConfigError, match=f"favicons.providers.*{message}"):
+        strict(favicons__providers=value)
 
 
 @pytest.mark.parametrize("url", ["", "https://icons.example/x.png", "ftp://{domain}/x", "{domain}"])
 def test_the_custom_provider_needs_a_url_template_with_a_domain(url):
-    env = MINIMAL | {"KVASIR_FAVICONS_PROVIDERS": "custom", "KVASIR_FAVICONS_CUSTOM_URL": url}
+    with pytest.raises(ConfigError, match="favicons.custom_url"):
+        strict(favicons__providers=["custom"], favicons__custom_url=url)
 
-    with pytest.raises(ConfigError, match="KVASIR_FAVICONS_CUSTOM_URL"):
-        Settings.from_env(env)
+
+def test_a_bad_stored_favicon_section_falls_back_to_its_defaults():
+    stored = STORED | {"favicons.providers": ["custom"], "favicons.ttl_days": 7}
+
+    assert Settings.load(ENV, stored).favicons.providers == ("direct",)
 
 
 def test_the_custom_url_is_not_checked_when_the_provider_is_unused():
-    Settings.from_env(MINIMAL | {"KVASIR_FAVICONS_CUSTOM_URL": "nonsense"})
+    strict(favicons__custom_url="nonsense")
 
 
 def test_source_settings_default_to_off_with_the_cisa_list():
-    settings = Settings.from_env(MINIMAL)
+    settings = Settings.load(ENV, STORED)
 
     assert settings.sources.enabled is False
     assert settings.sources.wikidata is True
@@ -534,16 +420,13 @@ def test_source_settings_default_to_off_with_the_cisa_list():
     assert settings.sources_db == Path("/data/sources.db")
 
 
-def test_source_lists_read_from_the_environment_keep_their_case():
-    settings = Settings.from_env(
-        MINIMAL
-        | {
-            "KVASIR_SOURCES_ENABLED": "true",
-            "KVASIR_SOURCES_RSP": "true",
-            "KVASIR_SOURCES_ALLOW": "example.org, Example.com",
-            "KVASIR_SOURCES_DENY": "farm.example",
-            "KVASIR_SOURCES_LISTS": "ai_generated=https://lists.example/Ai.txt",
-        }
+def test_source_lists_keep_their_case():
+    settings = strict(
+        sources__enabled=True,
+        sources__rsp=True,
+        sources__allow=["example.org", " Example.com"],
+        sources__deny=["farm.example"],
+        sources__lists=["ai_generated=https://lists.example/Ai.txt"],
     )
 
     assert settings.sources.enabled is True
@@ -554,60 +437,52 @@ def test_source_lists_read_from_the_environment_keep_their_case():
 
 
 def test_an_empty_source_list_setting_turns_the_default_lists_off():
-    assert Settings.from_env(MINIMAL | {"KVASIR_SOURCES_LISTS": ""}).sources.lists == ()
-
-
-def test_sources_read_from_the_config_file(tmp_path):
-    path = _write(
-        tmp_path,
-        """
-[provider.local]
-api_base = "http://localhost:11434/v1"
-
-[model]
-fast = "local/a"
-strong = "local/a"
-embedding = "local/a"
-
-[search]
-url = "http://localhost:8888"
-
-[sources]
-wikidata = false
-deny = ["farm.example"]
-""",
-    )
-
-    settings = Settings.from_env({"KVASIR_CONFIG": path, "KVASIR_TOKEN": "token"})
-
-    assert settings.sources.wikidata is False
-    assert settings.sources.deny == ("farm.example",)
+    assert strict(sources__lists=[]).sources.lists == ()
 
 
 @pytest.mark.parametrize(
-    ("name", "value"),
+    ("key", "value"),
     [
-        ("KVASIR_SOURCES_ENDPOINT", "nonsense"),
-        ("KVASIR_SOURCES_LISTS", "https://lists.example/a.txt"),
-        ("KVASIR_SOURCES_LISTS", "government=ftp://lists.example/a.txt"),
-        ("KVASIR_SOURCES_LISTS", "shiny=https://lists.example/a.txt"),
-        ("KVASIR_SOURCES_ALLOW", "10.0.0.1"),
-        ("KVASIR_SOURCES_DENY", "nonsense"),
+        ("endpoint", "nonsense"),
+        ("lists", ["https://lists.example/a.txt"]),
+        ("lists", ["government=ftp://lists.example/a.txt"]),
+        ("lists", ["shiny=https://lists.example/a.txt"]),
+        ("allow", ["10.0.0.1"]),
+        ("deny", ["nonsense"]),
     ],
 )
-def test_a_bad_source_setting_is_rejected(name, value):
-    with pytest.raises(ConfigError, match=name):
-        Settings.from_env(MINIMAL | {"KVASIR_SOURCES_ENABLED": "true", name: value})
+def test_a_bad_source_setting_is_rejected(key, value):
+    with pytest.raises(ConfigError, match=f"sources.{key}"):
+        strict(sources__enabled=True, **{f"sources__{key}": value})
 
 
 def test_source_settings_are_not_checked_while_sources_are_off():
-    assert (
-        Settings.from_env(MINIMAL | {"KVASIR_SOURCES_ENDPOINT": "nonsense"}).sources.enabled
-        is False
-    )
+    assert strict(sources__endpoint="nonsense").sources.enabled is False
 
 
 def test_a_source_host_may_end_in_a_dot():
-    env = MINIMAL | {"KVASIR_SOURCES_ENABLED": "true", "KVASIR_SOURCES_DENY": "farm.example."}
+    assert strict(sources__enabled=True, sources__deny=["farm.example."]).sources.deny == (
+        "farm.example.",
+    )
 
-    assert Settings.from_env(env).sources.deny == ("farm.example.",)
+
+def test_a_row_that_is_not_json_costs_only_its_field(tmp_path, caplog):
+    store = SettingsStore(tmp_path / "kvasir.db")
+    store.write({"research.max_searches": 9})
+    with sqlite3.connect(tmp_path / "kvasir.db") as db:
+        db.execute("INSERT INTO settings VALUES ('research.max_depth', '{broken')")
+
+    settings = Settings.load(ENV | {"KVASIR_DATA_DIR": str(tmp_path)})
+
+    assert settings.research.max_searches == 9
+    assert settings.research.max_depth == 2
+    assert "research.max_depth is not JSON" in caplog.text
+    with pytest.raises(ConfigError, match="research.max_depth"):
+        Settings.load(ENV | {"KVASIR_DATA_DIR": str(tmp_path)}, strict=True)
+
+
+def test_loading_creates_no_database(tmp_path):
+    settings = Settings.load(ENV | {"KVASIR_DATA_DIR": str(tmp_path / "absent")})
+
+    assert settings.missing == tuple(REQUIRED)
+    assert not (tmp_path / "absent").exists()

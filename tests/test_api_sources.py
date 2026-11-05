@@ -5,13 +5,12 @@ import contextlib
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import AUTH, article_run, stub_method
+from fakes import AUTH, ENVIRONMENT, STORED, article_run, store_settings, stub_method
 from kvasir.api.app import app
 from kvasir.config import Settings
 from kvasir.research.sources import _Match
 from kvasir.runners import build_sources
 from kvasir.schemas.results import ArticleResult, Citation
-from test_main import ENVIRONMENT
 from test_runs import parse
 
 
@@ -19,15 +18,18 @@ from test_runs import parse
 def make_client(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("KVASIR_SOURCES_WIKIDATA", "false")
-    monkeypatch.setenv("KVASIR_SOURCES_LISTS", "")
-    monkeypatch.setenv("KVASIR_SOURCES_ALLOW", "intranet.example")
-    monkeypatch.setenv("KVASIR_SOURCES_DENY", "farm.example")
+    data = tmp_path / "data"
+    monkeypatch.setenv("KVASIR_DATA_DIR", str(data))
+    sources = {
+        "sources.wikidata": False,
+        "sources.lists": [],
+        "sources.allow": ["intranet.example"],
+        "sources.deny": ["farm.example"],
+    }
 
     @contextlib.contextmanager
     def make(enabled=True):
-        monkeypatch.setenv("KVASIR_SOURCES_ENABLED", str(enabled).lower())
+        store_settings(data, STORED | sources | {"sources.enabled": enabled})
         with TestClient(app, headers=AUTH) as client:
             yield client
 
@@ -86,7 +88,7 @@ def test_a_host_the_config_sets_cannot_be_marked(client):
     for host in ("intranet.example", "sub.farm.example"):
         put = client.put(f"/v1/sources/{host}/mark", json={"value": "news"})
         assert put.status_code == 409
-        assert "config" in put.json()["message"]
+        assert "sources.allow" in put.json()["message"]
         assert client.delete(f"/v1/sources/{host}/mark").status_code == 409
 
 
@@ -166,7 +168,7 @@ def test_a_runs_citations_show_the_marks_of_now(client, monkeypatch):
 def test_a_mark_reaches_the_instance_runs_use(client):
     client.put("/v1/sources/example.org/mark", json={"value": "deny"})
 
-    runs = build_sources(Settings.from_env())
+    runs = build_sources(Settings.load())
     assert runs is app.state.sources
     assert runs.classify(["example.org"])["example.org"].tier == "avoid"
 

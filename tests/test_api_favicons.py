@@ -6,10 +6,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import AUTH
+from fakes import AUTH, ENVIRONMENT, STORED, store_settings
 from kvasir.api.app import app
 from kvasir.research import favicons, fetch
-from test_main import ENVIRONMENT
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"png" * 10
 GIF = b"GIF89a" + b"gif" * 10
@@ -48,6 +47,7 @@ def make_client(monkeypatch, data):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(data))
+    store_settings(data, STORED)
 
     @contextlib.contextmanager
     def make():
@@ -119,7 +119,7 @@ def test_an_outage_is_a_404_asked_again_soon_and_not_remembered(client, web):
 
 
 def test_no_providers_is_a_404_with_no_request_and_no_database(make_client, web, monkeypatch, data):
-    monkeypatch.setenv("KVASIR_FAVICONS_PROVIDERS", "")
+    store_settings(data, {"favicons.providers": []})
     web.routes[URL] = ok()
 
     with make_client() as client:

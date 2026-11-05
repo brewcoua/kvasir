@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from dspy.utils.dummies import DummyLM
 
 from kvasir.research import evaluate
@@ -96,3 +97,15 @@ def test_the_question_set_loads():
     assert len({q.id for q in questions}) == 20
     assert {q.output for q in questions} == {"report", "ranking", "table"}
     assert all(q.checks for q in questions)
+
+
+def test_the_cli_stops_before_researching_when_setup_is_incomplete(tmp_path, monkeypatch):
+    monkeypatch.setenv("KVASIR_TOKEN", "token")
+    monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
+    researched = []
+    monkeypatch.setattr(evaluate, "research", lambda *args: researched.append(args))
+
+    with pytest.raises(SystemExit, match="model.fast"):
+        evaluate.main([str(tmp_path / "out")])
+
+    assert researched == []

@@ -23,6 +23,7 @@ async def clarify_question(http: Request, request: ClarifyRequest) -> ClarifyRes
     whether to start one.
     """
     settings: Settings = http.app.state.settings
+    settings.ready()
     with retry_budget(TASK_RETRY_SECONDS):
         questions = await asyncio.to_thread(clarify, settings, request.question)
     return ClarifyResponse(questions=questions)
@@ -38,6 +39,7 @@ async def task(http: Request, request: TaskRequest) -> TaskResponse:
     are summarising. Deliberately not `streamed` — no run is registered and no slot is claimed.
     """
     settings: Settings = http.app.state.settings
+    settings.ready()
     model = build_task_model(settings)
     # Blocking, like every other way this service reaches the gateway. The budget is copied into
     # the thread with the rest of the context.

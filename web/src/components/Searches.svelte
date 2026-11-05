@@ -62,7 +62,7 @@
               <td colspan="7">
                 {#each search.failures as failure, f (f)}<p class="error">{failure}</p>{/each}
                 {#if !search.has_content}
-                  <p class="meta">Results not kept. Set KVASIR_KEEP_CALL_CONTENT=true to keep what searches return.</p>
+                  <p class="meta">Results not kept. Turn on runs.keep_call_content to keep what searches return.</p>
                 {:else if search.ended_at === null}
                   <p class="meta">Running. Its results show once it answers.</p>
                 {:else}

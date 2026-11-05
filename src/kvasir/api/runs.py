@@ -67,14 +67,14 @@ def run_detail(http: Request, run_id: str) -> RunDetail:
 
 @router.get("/v1/runs/{run_id}/calls/{call_id}")
 async def call_content(http: Request, run_id: str, call_id: int) -> LmCallContent:
-    """What one model call was sent and answered. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT."""
+    """What one model call was sent and answered. Kept only with runs.keep_call_content."""
     registry: RunRegistry = http.app.state.runs
     return registry.content(run_id, call_id)
 
 
 @router.get("/v1/runs/{run_id}/searches/{search_id}")
 def search_content(http: Request, run_id: str, search_id: int) -> SearchContent:
-    """What one search returned. Kept only with KVASIR_RUNS_KEEP_CALL_CONTENT."""
+    """What one search returned. Kept only with runs.keep_call_content."""
     registry: RunRegistry = http.app.state.runs
     content = registry.search_content(run_id, search_id)
     infos = describe_urls(http.app.state.sources, (result.url for result in content.results))

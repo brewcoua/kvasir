@@ -11,7 +11,7 @@
 </script>
 
 {#if source.origin === "config"}
-  <button type="button" class="action" disabled title="Set in the config (KVASIR_SOURCES_ALLOW or KVASIR_SOURCES_DENY), so it cannot be marked here">Locked</button>
+  <button type="button" class="action" disabled title="In sources.allow or sources.deny, so it cannot be marked here">Locked</button>
 {:else}
   <DropdownMenu.Root>
     <DropdownMenu.Trigger class="action" aria-label={`Mark ${domain}`} {disabled}>Mark</DropdownMenu.Trigger>

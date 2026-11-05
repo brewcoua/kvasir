@@ -46,7 +46,7 @@ export const PANES: { name: string; label: string; title: string; settings: Sett
     label: "Verification",
     title: "Verification",
     settings: [
-      { name: "ground", label: "Grounding checker", type: "checkbox", for: ["research", "graph"], hint: "Check each cited sentence against the claims it cites. Needs KVASIR_MODEL_CHECKER." },
+      { name: "ground", label: "Grounding checker", type: "checkbox", for: ["research", "graph"], hint: "Check each cited sentence against the claims it cites. Needs model.checker." },
       { name: "ground_intake", label: "Ground claims", type: "checkbox", for: ["research", "graph"], hint: "Also check each claim against its page as it is read. Slow when the checker cannot stay loaded beside the fast model." },
       { name: "corroborate", label: "Corroborate", type: "checkbox", for: ["research", "graph"], hint: "Look for other sites supporting each claim." },
       { name: "contradict", label: "Contradictions", type: "checkbox", for: ["research", "graph"], hint: "Look for other sites disagreeing with each claim." },

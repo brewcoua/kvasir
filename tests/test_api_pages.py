@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import AUTH, Vectors
+from fakes import AUTH, ENVIRONMENT, STORED, Vectors, store_settings
 from kvasir.api import pages
 from kvasir.api.app import app
 from kvasir.config import ConfigError
@@ -17,7 +17,6 @@ from kvasir.research.corpus import RECALL_MIN
 from kvasir.research.fetch import Link, Page, normalize
 from kvasir.research.pages import page_id
 from kvasir.schemas.results import ArticleResult, Citation
-from test_main import ENVIRONMENT
 
 FRESH = "Fresh is what this page says, at some length, so that it reads as an article.\nmore"
 A = "https://example.org/a"
@@ -35,6 +34,7 @@ def client(monkeypatch, tmp_path):
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
+    store_settings(tmp_path / "data", STORED)
     with TestClient(app, headers=AUTH) as client:
         yield client
 
@@ -334,10 +334,15 @@ def test_sites_carry_no_source_when_sources_are_off(client, store):
 def test_sites_and_graph_nodes_carry_their_source_when_sources_are_on(
     client, store, monkeypatch, tmp_path
 ):
-    monkeypatch.setenv("KVASIR_SOURCES_ENABLED", "true")
-    monkeypatch.setenv("KVASIR_SOURCES_WIKIDATA", "false")
-    monkeypatch.setenv("KVASIR_SOURCES_LISTS", "")
-    monkeypatch.setenv("KVASIR_SOURCES_DENY", "other.net")
+    store_settings(
+        tmp_path / "data",
+        {
+            "sources.enabled": True,
+            "sources.wikidata": False,
+            "sources.lists": [],
+            "sources.deny": ["other.net"],
+        },
+    )
     with TestClient(app, headers=AUTH) as sourced:
         fetch.cache().put(page("https://stats.gov/a", "Stats", NOW), None, None)
         listed = {site["domain"]: site["source"] for site in sourced.get("/v1/sites").json()}

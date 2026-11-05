@@ -7,7 +7,8 @@ handler installed later in the lifespan and printed as plain text next to everyt
 With `log_config=None` the uvicorn loggers keep propagating and land on that handler like any other.
 
 The lifespan still calls `logs.configure`, so the app is self-sufficient under a test client.
-Reading the settings twice costs nothing: `Settings.from_env` has no side effect.
+Only the environment is read here, which holds the logging and the address; the stored settings
+are the lifespan's.
 """
 
 from __future__ import annotations
@@ -17,14 +18,11 @@ import uvicorn
 from kvasir import logs
 from kvasir.config import Settings
 
-# Binds inside the container only. Nothing here is exposed to a network by itself.
-HOST = "0.0.0.0"
-PORT = 8080
-
 
 def main() -> None:
-    logs.configure(Settings.from_env())
-    uvicorn.run("kvasir.api.app:app", host=HOST, port=PORT, log_config=None)
+    settings = Settings.load(stored={})
+    logs.configure(settings)
+    uvicorn.run("kvasir.api.app:app", host=settings.host, port=settings.port, log_config=None)
 
 
 if __name__ == "__main__":

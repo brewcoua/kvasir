@@ -1,14 +1,18 @@
-"""Configuration parsing. The only place in the service that reads os.environ or the config file.
+"""Configuration parsing. The only place in the service that reads os.environ.
 
-Configuration is environment variables, optionally backed by a TOML file. The file mirrors the
-`Settings` dataclasses: top-level scalars, one table per section, and one `[provider.<name>]` table
-per model provider. A variable that is set wins over the file. Missing required values raise at
-startup rather than on the first request.
+Two sources, each setting in exactly one. The environment holds what a deployment fixes and what is
+secret: the token, the data directory, the address, thread width, logging and the model providers.
+Everything else is stored in `kvasir.db` (`kvasir.settings_store`) and edited through the API; a
+field with nothing stored has its default.
 
-Every setting has one variable name derived from its path: `KVASIR_<SECTION>_<KEY>`, or
-`KVASIR_<KEY>` for a top-level scalar, so `[research] max_searches` is KVASIR_RESEARCH_MAX_SEARCHES.
-A provider is `KVASIR_PROVIDER_<NAME>_API_BASE` and `KVASIR_PROVIDER_<NAME>_API_KEY`, which merge
-over the file's provider of the same name field by field, so a key can stay out of the file.
+An environment variable is `KVASIR_<KEY>` for a top-level field and `KVASIR_LOG_<KEY>` for logging.
+A provider is `KVASIR_PROVIDER_<NAME>_API_BASE` and `KVASIR_PROVIDER_<NAME>_API_KEY`. A stored field
+is keyed by its path, `<section>.<key>`, so `research.max_searches`.
+
+A bad environment stops the start. A bad stored value is logged and its default used instead, since
+the API that would fix it must still come up. `strict=True` raises instead, for checking a change
+before it is stored. The models and the search URL have no default: until they are stored the
+service runs, and `Settings.missing` names them.
 
 Every provider is an OpenAI-compatible endpoint. A model is written `<provider>/<name>` and
 `Settings.resolve` turns it into what dspy needs, with the endpoint and key given explicitly;
@@ -17,24 +21,26 @@ nothing exports them into the environment.
 
 from __future__ import annotations
 
+import json
+import logging
+import math
 import os
 import re
-import tomllib
 from collections.abc import Mapping
-from dataclasses import MISSING, Field, dataclass, field, fields
+from dataclasses import MISSING, Field, dataclass, field, fields, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
+from kvasir.settings_store import SettingsStore
 from kvasir.storm.runtime import (
     DEFAULT_CONTEXT_TOKENS,
     DEFAULT_HOST_INTERVAL_SECONDS,
     DEFAULT_MAX_THREADS,
 )
 
-# Read when KVASIR_CONFIG is unset, if it exists, so a local start needs no variable at all.
-DEFAULT_CONFIG_FILE = Path("kvasir.toml")
+logger = logging.getLogger("kvasir")
 
 # The OpenAI client refuses an empty key, and Ollama ignores whatever it is sent.
 NO_API_KEY = "none"
@@ -48,8 +54,16 @@ class ConfigError(Exception):
     """Configuration is missing or unusable. Raised before the server starts serving."""
 
 
+class SetupRequired(Exception):
+    """Something that calls a model or searches, asked for before the settings it needs."""
+
+
 def _choice(*options: str) -> dict[str, Any]:
     return {"norm": str.lower, "choices": options}
+
+
+# A stored field the service cannot run without. Its default, empty, means unset.
+_REQUIRED = {"required": True}
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +71,7 @@ class Provider:
     """An OpenAI-compatible endpoint models are served from."""
 
     api_base: str
-    api_key: str = NO_API_KEY
+    api_key: str = field(default=NO_API_KEY, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,19 +82,19 @@ class Model:
     # reaches the endpoint through its OpenAI client, which is what every provider speaks.
     model: str
     api_base: str
-    api_key: str
+    api_key: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ModelSettings:
-    """Models are `<provider>/<name>`, the provider being a `[provider.<name>]` table."""
+    """Models are `<provider>/<name>`, the provider being one named in the environment."""
 
-    fast: str
-    strong: str
+    fast: str = field(default="", metadata=_REQUIRED)
+    strong: str = field(default="", metadata=_REQUIRED)
     # The model for judgements, which are worth thinking about. Unset falls back to `strong`.
     reason: str | None = None
     # No default fits every provider, and an embedding model cannot be swapped for another's.
-    embedding: str
+    embedding: str = field(default="", metadata=_REQUIRED)
     # A grounding checker such as MiniCheck, or none. See `kvasir.research.ground`.
     checker: str | None = None
     # Sent only when set. Unset leaves the gateway's default, which for a thinking model
@@ -96,7 +110,7 @@ class ModelSettings:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SearchSettings:
-    url: str = field(metadata={"norm": lambda value: value.rstrip("/")})
+    url: str = field(default="", metadata=_REQUIRED | {"norm": lambda value: value.rstrip("/")})
     top_k: int = 3
 
 
@@ -160,7 +174,7 @@ class FetchSettings:
     stealth: bool = False
     # How long a cached page is served without asking its site, then it is revalidated. 0 fetches
     # every page again.
-    max_age_hours: int = 48
+    max_age_hours: int = field(default=48, metadata={"min": 0})
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -202,8 +216,8 @@ class SourceSettings:
     )
 
 
-# Keyed by the Settings field and the table name in the file.
-_SECTIONS: dict[str, Any] = {
+# The sections stored in kvasir.db, keyed by the Settings field.
+_STORED: dict[str, Any] = {
     "model": ModelSettings,
     "search": SearchSettings,
     "runs": RunSettings,
@@ -213,21 +227,24 @@ _SECTIONS: dict[str, Any] = {
     "fetch": FetchSettings,
     "favicons": FaviconSettings,
     "sources": SourceSettings,
-    "log": LogSettings,
 }
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Settings:
-    """Resolved configuration. Build with `Settings.from_env()`."""
+    """Resolved configuration. Build with `Settings.load()`."""
 
     data_dir: Path = Path("/data")
     # Every route but health, the login and the page needs it. See `kvasir.api.auth`.
     token: str = field(repr=False)
+    # Inside the container, which is where the port is published from.
+    host: str = "0.0.0.0"
+    port: int = 8080
     # How wide each of the pipeline's thread pools runs, and how many search or page
     # requests may be in flight at once across the whole process.
     max_threads: int = DEFAULT_MAX_THREADS
     providers: Mapping[str, Provider]
+    log: LogSettings
     model: ModelSettings
     search: SearchSettings
     runs: RunSettings
@@ -237,14 +254,14 @@ class Settings:
     fetch: FetchSettings
     favicons: FaviconSettings
     sources: SourceSettings
-    log: LogSettings
 
     @property
     def sessions_dir(self) -> Path:
         return self.data_dir / "sessions"
 
     @property
-    def runs_db(self) -> Path:
+    def db(self) -> Path:
+        """The stored settings, and the runs when `runs.store` is sqlite."""
         return self.data_dir / "kvasir.db"
 
     @property
@@ -258,6 +275,21 @@ class Settings:
     @property
     def sources_db(self) -> Path:
         return self.data_dir / "sources.db"
+
+    @property
+    def missing(self) -> tuple[str, ...]:
+        """The stored fields the service needs before it can run anything, still unset."""
+        return tuple(
+            f"{section}.{f.name}"
+            for section, section_cls in _STORED.items()
+            for f in fields(section_cls)
+            if f.metadata.get("required") and not getattr(getattr(self, section), f.name)
+        )
+
+    def ready(self) -> None:
+        """Raises SetupRequired while `missing` names anything."""
+        if self.missing:
+            raise SetupRequired(", ".join(self.missing))
 
     def resolve(self, ref: str) -> Model:
         """A `<provider>/<name>` reference as the model to call. Only the first `/` splits, since
@@ -274,44 +306,73 @@ class Settings:
         return Model(model=f"openai/{name}", api_base=endpoint.api_base, api_key=endpoint.api_key)
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
-        """Resolve from `env`, defaulting to os.environ, over the config file.
-
-        The file is KVASIR_CONFIG if set. `kvasir.toml` in the working directory is only picked up
-        for os.environ, so a mapping passed in is never mixed with whatever file sits nearby.
-        """
-        if env is None:
-            env = os.environ
-            path = env.get("KVASIR_CONFIG", "").strip() or (
-                DEFAULT_CONFIG_FILE if DEFAULT_CONFIG_FILE.is_file() else None
-            )
-        else:
-            path = env.get("KVASIR_CONFIG", "").strip() or None
-        # An empty list is a value, unlike an empty string anywhere else.
+    def load(
+        cls,
+        env: Mapping[str, str] | None = None,
+        stored: Mapping[str, Any] | None = None,
+        *,
+        strict: bool = False,
+    ) -> Settings:
+        """Resolve `env`, defaulting to os.environ, and `stored`, defaulting to what kvasir.db in
+        the data directory holds. `strict` raises on a bad stored value rather than dropping it."""
         env = {
             k: v.strip()
-            for k, v in env.items()
-            if k.startswith("KVASIR_") and (v.strip() or k in _LISTS)
+            for k, v in (os.environ if env is None else env).items()
+            if k.startswith("KVASIR_") and v.strip()
         }
-        if path is not None:
-            env = _read_file(Path(path)) | env
-
         raw_providers = _raw_providers(env)
         missing = [
             f"{_PROVIDER_PREFIX}{name.upper()}_API_BASE"
             for name, values in raw_providers.items()
             if "api_base" not in values
         ]
-        slots = [(None, f) for f in _TOP_LEVEL] + [
-            (section, f) for section, section_cls in _SECTIONS.items() for f in fields(section_cls)
-        ]
-        missing += [
-            _env_name(section, f.name)
-            for section, f in slots
-            if f.default is MISSING and _env_name(section, f.name) not in env
-        ]
+        missing += [name for f, name in _ENV_FIELDS if f.default is MISSING and name not in env]
         if missing:
             raise ConfigError(f"missing required environment variables: {', '.join(missing)}")
+        unread = sorted(
+            name for name in env if name not in _ENV_NAMES and not name.startswith(_PROVIDER_PREFIX)
+        )
+        if unread:
+            logger.warning(
+                "not read from the environment, set them in the settings instead: %s",
+                ", ".join(unread),
+            )
+
+        top = {f.name: _read_env(f, name, env) for f, name in _ENV_FIELDS if f.name in _TOP_LEVEL}
+        log = LogSettings(
+            **{f.name: _read_env(f, name, env) for f, name in _ENV_FIELDS if f.name not in top}
+        )
+
+        def problem(message: str) -> None:
+            if strict:
+                raise ConfigError(message)
+            logger.warning("stored setting ignored: %s", message)
+
+        if stored is None:
+            # Read without creating, so a CLI on another host does not leave a database behind.
+            path = top["data_dir"] / "kvasir.db"
+            rows = SettingsStore(path).load() if path.exists() else {}
+            stored = {}
+            for key, text in rows.items():
+                try:
+                    stored[key] = json.loads(text)
+                except ValueError:
+                    problem(f"{key} is not JSON: {text!r}")
+
+        known = {f"{section}.{f.name}" for section, c in _STORED.items() for f in fields(c)}
+        for key in sorted(set(stored) - known):
+            problem(f"unknown setting {key}")
+        sections = {}
+        for section, section_cls in _STORED.items():
+            values = {}
+            for f in fields(section_cls):
+                key = f"{section}.{f.name}"
+                if key in stored:
+                    try:
+                        values[f.name] = _parse(f, key, stored[key])
+                    except ConfigError as exc:
+                        problem(str(exc))
+            sections[section] = section_cls(**values)
 
         providers = {
             name: Provider(
@@ -320,54 +381,38 @@ class Settings:
             )
             for name, values in raw_providers.items()
         }
-        settings = cls(
-            providers=MappingProxyType(providers),
-            **{f.name: _read(f, _env_name(None, f.name), env) for f in _TOP_LEVEL},
-            **{
-                section: section_cls(
-                    **{
-                        f.name: _read(f, _env_name(section, f.name), env)
-                        for f in fields(section_cls)
-                    }
-                )
-                for section, section_cls in _SECTIONS.items()
-            },
-        )
+        settings = cls(providers=MappingProxyType(providers), log=log, **top, **sections)
 
-        # A typo in a provider name should stop the start, not the first request that uses it.
-        refs = {
-            "KVASIR_MODEL_FAST": settings.model.fast,
-            "KVASIR_MODEL_STRONG": settings.model.strong,
-            "KVASIR_MODEL_REASON": settings.model.reason,
-            "KVASIR_MODEL_CHECKER": settings.model.checker,
-            "KVASIR_MODEL_EMBEDDING": settings.model.embedding,
-        }
-        for name, ref in refs.items():
-            if ref is not None:
+        # A provider dropped from the environment leaves its models unset rather than failing the
+        # first run that uses one.
+        model = settings.model
+        for f in fields(ModelSettings):
+            ref = getattr(model, f.name)
+            if f.name in _MODEL_REFS and ref:
                 try:
                     settings.resolve(ref)
                 except ConfigError as exc:
-                    raise ConfigError(f"{name}: {exc}") from None
-        _check_favicons(settings.favicons)
-        _check_sources(settings.sources)
-        return settings
+                    problem(f"model.{f.name}: {exc}")
+                    default: Any = f.default
+                    model = replace(model, **{f.name: default})
+        for section, check in (("favicons", _check_favicons), ("sources", _check_sources)):
+            try:
+                check(getattr(settings, section))
+            except ConfigError as exc:
+                problem(str(exc))
+                sections[section] = _STORED[section]()
+        return replace(
+            settings, model=model, favicons=sections["favicons"], sources=sections["sources"]
+        )
 
 
-# The scalars that sit directly in the file, outside any table.
-_TOP_LEVEL = tuple(f for f in fields(Settings) if f.name != "providers" and f.name not in _SECTIONS)
-
-
-def _env_name(section: str | None, key: str) -> str:
-    return (f"KVASIR_{section}_{key}" if section else f"KVASIR_{key}").upper()
-
-
-# The variables that hold a list, which may be set to nothing.
-_LISTS = frozenset(
-    _env_name(section, f.name)
-    for section, section_cls in _SECTIONS.items()
-    for f in fields(section_cls)
-    if f.type == "tuple[str, ...]"
-)
+_MODEL_REFS = frozenset({"fast", "strong", "reason", "checker", "embedding"})
+_TOP_LEVEL = frozenset(f.name for f in fields(Settings)) - {"providers", "log"} - set(_STORED)
+# Each field read from the environment, with its variable.
+_ENV_FIELDS: tuple[tuple[Field[Any], str], ...] = tuple(
+    (f, f"KVASIR_{f.name}".upper()) for f in fields(Settings) if f.name in _TOP_LEVEL
+) + tuple((f, f"KVASIR_LOG_{f.name}".upper()) for f in fields(LogSettings))
+_ENV_NAMES = frozenset(name for _, name in _ENV_FIELDS)
 
 
 def _check_favicons(favicons: FaviconSettings) -> None:
@@ -380,7 +425,7 @@ def _check_favicons(favicons: FaviconSettings) -> None:
         or not url.netloc
     ):
         raise ConfigError(
-            "KVASIR_FAVICONS_CUSTOM_URL must be an http(s) URL containing {domain} "
+            "favicons.custom_url must be an http(s) URL containing {domain} "
             f"when the custom provider is used, got {favicons.custom_url!r}"
         )
 
@@ -395,21 +440,21 @@ def _check_sources(sources: SourceSettings) -> None:
     def check_url(name: str, url: str) -> None:
         parts = urlsplit(url)
         if parts.scheme not in ("http", "https") or not parts.netloc:
-            raise ConfigError(f"KVASIR_SOURCES_{name} must be an http(s) URL, got {url!r}")
+            raise ConfigError(f"sources.{name} must be an http(s) URL, got {url!r}")
 
-    check_url("ENDPOINT", sources.endpoint)
+    check_url("endpoint", sources.endpoint)
     for entry in sources.lists:
         label, _, url = entry.partition("=")
         if label not in LIST_LABELS:
             raise ConfigError(
-                f"KVASIR_SOURCES_LISTS entry {entry!r} must be <label>=<url> with a label of "
+                f"sources.lists entry {entry!r} must be <label>=<url> with a label of "
                 f"{', '.join(sorted(LIST_LABELS))}"
             )
-        check_url("LISTS", url)
-    for name, hosts in (("ALLOW", sources.allow), ("DENY", sources.deny)):
+        check_url("lists", url)
+    for name, hosts in (("allow", sources.allow), ("deny", sources.deny)):
         for host in hosts:
             if normalize_host(host.removesuffix(".")) is None:
-                raise ConfigError(f"KVASIR_SOURCES_{name} holds {host!r}, which is not a DNS name")
+                raise ConfigError(f"sources.{name} holds {host!r}, which is not a DNS name")
 
 
 def _raw_providers(env: Mapping[str, str]) -> dict[str, dict[str, str]]:
@@ -428,141 +473,71 @@ def _raw_providers(env: Mapping[str, str]) -> dict[str, dict[str, str]]:
     return found
 
 
-def _read_file(path: Path) -> dict[str, str]:
-    """The config file as the environment variables it stands for."""
-    try:
-        data = tomllib.loads(path.read_text())
-    except OSError as exc:
-        raise ConfigError(f"cannot read config file {path}: {exc.strerror}") from None
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"config file {path} is not valid TOML: {exc}") from None
-
-    def table(value: object, key: str) -> dict[str, Any]:
-        if not isinstance(value, dict):
-            raise ConfigError(f"{key} in config file {path} must be a table")
-        return value
-
-    def text(value: object, key: str) -> str:
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        if isinstance(value, str | int | float):
-            return str(value)
-        raise ConfigError(f"{key} in config file {path} must be a string, a number or a boolean")
-
-    def strings(value: object, key: str) -> list[str]:
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-            raise ConfigError(f"{key} in config file {path} must be an array of strings")
-        return value
-
-    provider_keys = {f.name for f in fields(Provider)}
-    top_level = {f.name for f in _TOP_LEVEL}
-    values: dict[str, str] = {}
-    unknown: list[str] = []
-    for key, value in data.items():
-        if key == "provider":
-            for name, body in table(value, key).items():
-                if not _PROVIDER_NAME.fullmatch(name):
-                    raise ConfigError(f"provider {name!r} in config file {path}: {_PROVIDER_RULE}")
-                for k, v in table(body, f"provider.{name}").items():
-                    if k in provider_keys:
-                        values[f"{_PROVIDER_PREFIX}{name}_{k}".upper()] = text(
-                            v, f"provider.{name}.{k}"
-                        )
-                    else:
-                        unknown.append(f"provider.{name}.{k}")
-        elif key in _SECTIONS:
-            known = {f.name: f for f in fields(_SECTIONS[key])}
-            for k, v in table(value, key).items():
-                if k in known:
-                    values[_env_name(key, k)] = (
-                        ",".join(strings(v, f"{key}.{k}"))
-                        if known[k].type == "tuple[str, ...]"
-                        else text(v, f"{key}.{k}")
-                    )
-                else:
-                    unknown.append(f"{key}.{k}")
-        elif key in top_level:
-            values[_env_name(None, key)] = text(value, key)
-        else:
-            unknown.append(key)
-    if unknown:
-        raise ConfigError(f"unknown keys in config file {path}: {', '.join(sorted(unknown))}")
-    return values
-
-
-def _read(f: Field[Any], name: str, env: Mapping[str, str]) -> Any:
+def _read_env(f: Field[Any], name: str, env: Mapping[str, str]) -> Any:
     """One field's value from `env`, by the type it is declared with. A required field that is
     absent was reported as missing before this is reached."""
-    default: Any = f.default
-    if f.type == "int":
-        return _positive_int(env, name, default)
-    if f.type == "bool":
-        return _bool(env, name, default)
-    if f.type == "float":
-        return _non_negative_float(env, name, default)
     if name not in env:
-        return default
-    if f.type == "tuple[str, ...]":
-        return _names(f, name, env[name])
-    value = env[name]
+        return f.default
+    raw = env[name]
+    if f.type == "int":
+        try:
+            value = int(raw)
+        except ValueError:
+            raise ConfigError(f"{name} must be an integer, got {raw!r}") from None
+        if value < 1:
+            raise ConfigError(f"{name} must be at least 1, got {value}")
+        return value
+    return Path(raw) if f.type == "Path" else _text(f, name, raw)
+
+
+def _text(f: Field[Any], name: str, value: str) -> str:
     if "norm" in f.metadata:
         value = f.metadata["norm"](value)
     if "choices" in f.metadata and value not in f.metadata["choices"]:
         options = " or ".join(f.metadata["choices"])
         raise ConfigError(f"{name} must be {options}, got {value!r}")
-    return Path(value) if f.type == "Path" else value
-
-
-def _names(f: Field[Any], name: str, raw: str) -> tuple[str, ...]:
-    """A comma-separated list, each item checked against the field's choices when it has any."""
-    if "choices" not in f.metadata:
-        return tuple(item.strip() for item in raw.split(",") if item.strip())
-    items = tuple(item.strip().lower() for item in raw.split(",") if item.strip())
-    unknown = [item for item in items if item not in f.metadata["choices"]]
-    if unknown:
-        options = ", ".join(f.metadata["choices"])
-        raise ConfigError(
-            f"{name} holds {', '.join(map(repr, unknown))}; each must be one of {options}"
-        )
-    return items
-
-
-def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
-    raw = env.get(name, "")
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        raise ConfigError(f"{name} must be an integer, got {raw!r}") from None
-    if value < 1:
-        raise ConfigError(f"{name} must be at least 1, got {value}")
     return value
 
 
-def _non_negative_float(env: Mapping[str, str], name: str, default: float) -> float:
-    raw = env.get(name, "")
-    if not raw:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        raise ConfigError(f"{name} must be a number, got {raw!r}") from None
-    # `nan` passes float() and fails every comparison, so it would pass a `< 0` check.
-    if not value >= 0 or value == float("inf"):
-        raise ConfigError(f"{name} must be a finite number, 0 or more, got {raw!r}")
-    return value
-
-
-def _bool(env: Mapping[str, str], name: str, default: bool) -> bool:
-    raw = env.get(name, "").lower()
-    if not raw:
-        return default
-    if raw in ("true", "1", "yes"):
-        return True
-    if raw in ("false", "0", "no"):
-        return False
-    raise ConfigError(f"{name} must be true or false, got {raw!r}")
+def _parse(f: Field[Any], key: str, value: Any) -> Any:
+    """One stored field's JSON value, checked against the type it is declared with."""
+    if f.type == "int":
+        least = f.metadata.get("min", 1)
+        # bool is an int to Python, and true is no count.
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ConfigError(f"{key} must be an integer, got {value!r}")
+        if value < least:
+            raise ConfigError(f"{key} must be at least {least}, got {value}")
+        return value
+    if f.type == "float":
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            raise ConfigError(f"{key} must be a number, got {value!r}")
+        if not math.isfinite(value) or value < 0:
+            raise ConfigError(f"{key} must be a finite number, 0 or more, got {value!r}")
+        return float(value)
+    if f.type == "bool":
+        if not isinstance(value, bool):
+            raise ConfigError(f"{key} must be true or false, got {value!r}")
+        return value
+    if f.type == "tuple[str, ...]":
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ConfigError(f"{key} must be a list of strings, got {value!r}")
+        items = [item.strip() for item in value if item.strip()]
+        if "choices" not in f.metadata:
+            return tuple(items)
+        items = [item.lower() for item in items]
+        unknown = [item for item in items if item not in f.metadata["choices"]]
+        if unknown:
+            options = ", ".join(f.metadata["choices"])
+            raise ConfigError(
+                f"{key} holds {', '.join(map(repr, unknown))}; each must be one of {options}"
+            )
+        return tuple(items)
+    if f.type == "str | None" and (value is None or value == ""):
+        return None
+    if not isinstance(value, str):
+        raise ConfigError(f"{key} must be a string, got {value!r}")
+    return _text(f, key, value.strip())
 
 
 def apply_environment() -> None:

@@ -69,7 +69,7 @@
             <tr class="content">
               <td colspan="9">
                 {#if !call.has_content || call.id == null}
-                  <p class="meta">Content not kept. Set KVASIR_KEEP_CALL_CONTENT=true to keep what calls send and answer.</p>
+                  <p class="meta">Content not kept. Turn on runs.keep_call_content to keep what calls send and answer.</p>
                 {:else if call.ended_at === null}
                   <p class="meta">Running. Its content shows once it answers.</p>
                 {:else}

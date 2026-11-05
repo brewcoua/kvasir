@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import AUTH, article_run, stub_method
+from fakes import AUTH, ENVIRONMENT, STORED, article_run, store_settings, stub_method
 from kvasir import conversation
 from kvasir.api import streaming
 from kvasir.api.app import app
@@ -25,16 +25,6 @@ from kvasir.schemas.results import (
     Turn,
 )
 
-ENVIRONMENT = {
-    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
-    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-    "KVASIR_MODEL_FAST": "gateway/ollama/fast:cloud",
-    "KVASIR_MODEL_STRONG": "gateway/ollama/strong:cloud",
-    "KVASIR_MODEL_EMBEDDING": "gateway/embed",
-    "KVASIR_SEARCH_URL": "http://searxng.example",
-    "KVASIR_TOKEN": "token",
-}
-
 RESULT = ArticleResult(
     article="# Discovery\n\nText [1].",
     outline="# Discovery",
@@ -45,10 +35,14 @@ RESULT = ArticleResult(
 
 @pytest.fixture
 def environment(monkeypatch, tmp_path):
+    """The data directory, with the settings every route needs stored in it."""
     for name, value in ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
     # Startup creates the sessions directory, and the default /data is not writable here.
-    monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
+    data = tmp_path / "data"
+    monkeypatch.setenv("KVASIR_DATA_DIR", str(data))
+    store_settings(data, STORED)
+    return data
 
 
 @pytest.fixture
@@ -90,8 +84,7 @@ def test_index_says_when_the_page_is_not_built(client, monkeypatch, tmp_path):
 
 
 def test_methods_report_the_configured_defaults(environment, monkeypatch):
-    monkeypatch.setenv("KVASIR_RESEARCH_MAX_SEARCHES", "9")
-    monkeypatch.setenv("KVASIR_RESEARCH_FOLLOW_UPS", "false")
+    store_settings(environment, {"research.max_searches": 9, "research.follow_ups": False})
 
     with TestClient(app, headers=AUTH) as client:
         methods = {method["name"]: method for method in client.get("/v1/methods").json()}
@@ -106,7 +99,7 @@ def test_methods_report_the_configured_defaults(environment, monkeypatch):
     assert ledger["corroborate"]["default"] is False
     assert ledger["max_age_hours"]["default"] == 48
     assert ledger["recall_past_runs"]["default"] is True
-    assert ledger["model_fast"]["default"] == ENVIRONMENT["KVASIR_MODEL_FAST"]
+    assert ledger["model_fast"]["default"] == STORED["model.fast"]
     assert storm["do_polish_article"]["default"] is True
     assert storm["search_top_k"]["default"] == 3
     assert methods["ledger"]["clarifies"] is True
@@ -141,12 +134,62 @@ def test_an_unknown_method_is_refused(client):
     assert client.post("/v1/runs", json=body).status_code == 422
 
 
-def test_startup_fails_loudly_on_missing_configuration(monkeypatch):
-    for name in ENVIRONMENT:
-        monkeypatch.delenv(name, raising=False)
-
-    with pytest.raises(Exception, match="KVASIR_SEARCH_URL"), TestClient(app, headers=AUTH):
+def test_startup_fails_loudly_on_missing_configuration():
+    with pytest.raises(Exception, match="KVASIR_TOKEN"), TestClient(app, headers=AUTH):
         pass
+
+
+@pytest.fixture
+def unconfigured(monkeypatch, tmp_path):
+    """A first start: the environment is set, nothing is stored."""
+    for name, value in ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
+    with TestClient(app, headers=AUTH) as client:
+        yield client
+
+
+def test_a_first_start_is_not_ready_and_says_what_to_set(unconfigured):
+    response = unconfigured.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "setup": "required",
+        "missing": ["model.fast", "model.strong", "model.embedding", "search.url"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/v1/runs", article_run("x")),
+        ("/v1/clarify", {"question": "x"}),
+        ("/v1/tasks", {"messages": [{"role": "user", "content": "x"}]}),
+        ("/v1/session", {"session_id": "s", "topic": "x"}),
+        ("/v1/session/s/step", {}),
+        ("/v1/session/s/report", None),
+    ],
+)
+def test_nothing_runs_before_the_setup(unconfigured, path, body):
+    response = unconfigured.post(path, json=body)
+
+    assert response.status_code == 409
+    assert response.json()["message"].startswith("set these settings first: model.fast")
+    assert unconfigured.get("/v1/runs").json() == []
+
+
+def test_a_first_start_still_lists_and_describes(unconfigured):
+    assert unconfigured.get("/v1/runs").status_code == 200
+    assert unconfigured.get("/v1/methods").status_code == 200
+
+
+def test_a_stored_model_whose_provider_is_gone_needs_setting_again(environment, monkeypatch):
+    store_settings(environment, {"model.strong": "gone/strong"})
+
+    with TestClient(app, headers=AUTH) as client:
+        response = client.get("/readyz")
+
+    assert response.json() == {"setup": "required", "missing": ["model.strong"]}
 
 
 @pytest.mark.parametrize(
@@ -178,7 +221,7 @@ def test_readyz_treats_an_unreachable_dependency_as_not_ready(client, monkeypatc
 def test_readyz_probes_each_provider_a_model_uses_once(environment, monkeypatch):
     monkeypatch.setenv("KVASIR_PROVIDER_OTHER_API_BASE", "https://other.example/v1")
     monkeypatch.setenv("KVASIR_PROVIDER_UNUSED_API_BASE", "https://unused.example/v1")
-    monkeypatch.setenv("KVASIR_MODEL_STRONG", "other/strong")
+    store_settings(environment, {"model.strong": "other/strong"})
     probed = []
 
     async def reachable(url, headers=None):
@@ -306,7 +349,7 @@ def test_a_task_is_answered_by_the_fast_model(client, monkeypatch):
     seen = {}
 
     def fake_model(settings):
-        assert settings.model.fast == ENVIRONMENT["KVASIR_MODEL_FAST"]
+        assert settings.model.fast == STORED["model.fast"]
 
         def call(messages):
             seen["messages"] = messages

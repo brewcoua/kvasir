@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 from dspy.utils.dummies import DummyLM
@@ -12,6 +15,7 @@ from kvasir.methods import METHODS
 from kvasir.research.claims import Claim
 from kvasir.research.fetch import Page
 from kvasir.research.sources import Source
+from kvasir.settings_store import SettingsStore
 
 # The token every test environment sets, as a client sends it.
 AUTH = {"Authorization": "Bearer token"}
@@ -124,17 +128,35 @@ class Tiers:
         return found
 
 
+# What a test deployment sets in the environment, and what it stores, for every test that needs a
+# working service but no particular setting.
+ENVIRONMENT = {
+    "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
+    "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
+    "KVASIR_TOKEN": "token",
+}
+STORED = {
+    "model.fast": "gateway/ollama/fast:cloud",
+    "model.strong": "gateway/ollama/strong:cloud",
+    "model.embedding": "gateway/embed",
+    "search.url": "http://searxng.example",
+}
+
+
+def store_settings(data_dir: Path, values: Mapping[str, Any]) -> None:
+    """Stores settings where the app reads them at startup."""
+    SettingsStore(data_dir / "kvasir.db").write(values)
+
+
 def research_settings() -> Settings:
-    return Settings.from_env(
+    return Settings.load(
+        ENVIRONMENT,
         {
-            "KVASIR_PROVIDER_GATEWAY_API_KEY": "key",
-            "KVASIR_PROVIDER_GATEWAY_API_BASE": "https://gateway.example/v1",
-            "KVASIR_MODEL_FAST": "gateway/fast",
-            "KVASIR_MODEL_STRONG": "gateway/strong",
-            "KVASIR_MODEL_EMBEDDING": "gateway/embed",
-            "KVASIR_SEARCH_URL": "http://searxng.example",
-            "KVASIR_TOKEN": "token",
-        }
+            "model.fast": "gateway/fast",
+            "model.strong": "gateway/strong",
+            "model.embedding": "gateway/embed",
+            "search.url": "http://searxng.example",
+        },
     )
 
 
