@@ -561,6 +561,11 @@ Differences from Python, all deliberate:
 - Each hop of `describe` is checked against the guard, which Python missed. A downloaded list is
   written to a temporary file, synced, then renamed.
 
+One hole remains. The browser's request check resolves a name and Chromium resolves it again, so a
+name that answers a public address first and a private one second gets through. The HTTP clients are
+closed by `GuardedResolver`. Python's browser had no check at all, so this is no worse than today.
+Closing it means sending browser traffic through a guarded proxy, which is not planned.
+
 `registrable` uses `psl` where Python used `tld`. They agreed on all 59 hosts of a hand-written list,
 private suffixes included, but were not compared on the real hosts.
 

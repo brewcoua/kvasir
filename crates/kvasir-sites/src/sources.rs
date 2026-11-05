@@ -284,6 +284,7 @@ pub struct Sources {
     backoff_until: Mutex<Option<Instant>>,
     bundled: HashMap<String, Source>,
     lists: Mutex<Option<Arc<Lists>>>,
+    first_load: tokio::sync::Mutex<()>,
     lists_checked: Mutex<Option<Instant>>,
     rsp_url: String,
     max_list_bytes: usize,
@@ -323,6 +324,7 @@ impl Sources {
             backoff_until: Mutex::new(None),
             bundled: bundled(),
             lists: Mutex::new(None),
+            first_load: tokio::sync::Mutex::new(()),
             lists_checked: Mutex::new(None),
             rsp_url: RSP_URL.to_owned(),
             max_list_bytes: MAX_LIST_BYTES,
@@ -477,10 +479,13 @@ impl Sources {
         if self.list_entries().is_empty() {
             return;
         }
+        // Held across the read, so callers at startup parse the lists once between them.
+        let first_load = self.first_load.lock().await;
         let loaded = self.lists.lock().unwrap_or_else(|e| e.into_inner()).is_some();
         if !loaded {
             self.load_lists().await;
         }
+        drop(first_load);
         {
             let mut checked = self.lists_checked.lock().unwrap_or_else(|e| e.into_inner());
             if checked.is_some_and(|at| at.elapsed() < LIST_CHECK) {
@@ -789,7 +794,10 @@ pub async fn describe_urls(
 /// the host. Comments, regexes and rules for part of a site are skipped.
 pub fn parse_list(text: &str) -> HashSet<String> {
     let mut hosts = HashSet::new();
-    for line in text.lines() {
+    // What Python's `splitlines` breaks on: some lists end lines in a lone `\r`.
+    let breaks =
+        ['\n', '\r', '\x0b', '\x0c', '\x1c', '\x1d', '\x1e', '\u{85}', '\u{2028}', '\u{2029}'];
+    for line in text.split(breaks) {
         // A comment after the host is cut; a hosts file has the address first and the host second.
         let line = COMMENT.split(line.trim()).next().unwrap_or("");
         let line = line.split(',').next().unwrap_or("").trim();

@@ -5,7 +5,7 @@
 //! but its first bytes. The content type served is the one those bytes show, and SVG is refused
 //! outright because it would run script when served from this origin.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
@@ -472,6 +472,7 @@ fn icon_links(html: &[u8], page_url: &str) -> Vec<String> {
     let base = soup.select("base[href]").attr("href");
     let base = base.and_then(|href| page.join(&href).ok()).unwrap_or(page);
     let mut found: Vec<(String, u128)> = Vec::new();
+    let mut seen = HashSet::new();
     for link in soup.select("link[href]").iter() {
         let rel = link.attr("rel").unwrap_or_default().to_lowercase();
         if !rel.split_whitespace().any(|token| ICON_RELS.contains(&token)) {
@@ -498,7 +499,7 @@ fn icon_links(html: &[u8], page_url: &str) -> Vec<String> {
             .max()
             .unwrap_or(0);
         let url = String::from(url);
-        if !found.iter().any(|(seen, _)| *seen == url) {
+        if seen.insert(url.clone()) {
             found.push((url, size));
         }
     }

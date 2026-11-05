@@ -628,6 +628,12 @@ fn lists_are_read_as_hosts_ublacklist_or_csv() {
     }
 }
 
+#[test]
+fn a_list_may_end_its_lines_in_a_lone_carriage_return() {
+    let got = parse_list("a.example\rb.example\r");
+    assert_eq!(got, HashSet::from(["a.example".to_owned(), "b.example".to_owned()]));
+}
+
 fn body(text: &str) -> ResponseTemplate {
     ResponseTemplate::new(200).set_body_string(text)
 }
