@@ -184,8 +184,9 @@ let findings = ctx.predict::<Intake>(Role::Intake, input).await?;
 - **Prompts** live in embedded data files, so editing one does not touch logic.
 - **No proc macro at first.** Add one only if 32 hand-written `impl`s prove to be the bigger cost.
 
-The client is a thin layer over `reqwest`: chat, embeddings and model listing. `async-openai` is
-checked in spike 2, but kvasir needs response headers and non-standard usage fields:
+The client is a thin layer over `reqwest`: chat, embeddings and model listing. Not `async-openai`:
+its `chat().create` returns the parsed body only, and kvasir needs response headers and
+non-standard usage fields (spike 2):
 
 - Cost, in order: the `x-litellm-response-cost` header, then `usage.cost`, or Bifrost's
   `prompt_cost` and `completion_cost`. Absent, 0.0. dspy's own `response_cost` for known models goes
@@ -425,6 +426,32 @@ matches the stored text at a median F1 of 1.000.
 - Both chosen crates are licensed `MIT OR Apache-2.0`.
 - These are the PDFs research has read so far, so they are real but not chosen for being difficult.
 
+#### Spike 2 result: pass
+
+Run on 2026-11-05. A scratch renderer read each signature as data (field names, type names,
+descriptions, JSON Schema text exported from pydantic) and rebuilt dspy 3.3's prompts.
+
+- **Rendering:** 32 of 32 signatures byte-equal to `ChatAdapter`, and 32 of 32 to `JSONAdapter`,
+  the fallback. The four `ChainOfThought` signatures carry `reasoning` first.
+- **Parsing:** 2,506 stored replies in `kvasir.db` `calls` matched a current signature by their
+  prompt, 2,484 in chat format and 22 in JSON. Of the rest, 1,960 stored calls have no system
+  message and 338 are from signatures that have changed since, so neither was used.
+
+| JSON repair | Same value as dspy | Both refuse | dspy only | Rust only | Different value |
+| --- | --- | --- | --- | --- | --- |
+| `dsrust-json-repair` 0.1.0-alpha.3, a port of `json_repair` 0.61.7 | 2,468 | 37 | 0 | 0 | 1 |
+| `llm_json` 1.0.3 | 2,449 | 37 | 19 | 0 | 1 |
+
+- The one different value is the spike's: `Section.subsections` has `default_factory=list`, which
+  the JSON Schema does not show, so the spike filled `null`. `#[serde(default)]` gives `[]`.
+- The two `mode="before"` validators, `moderate` to `medium` and an unknown priority to
+  `supporting`, were applied by hand and are needed.
+- Use `dsrust-json-repair`. It is an alpha by one author, pinned to an older `json_repair` than the
+  0.63.2 in `uv.lock`. Pin it exactly and keep these replies as a test.
+- dspy parses through `json_repair`, then `ast.literal_eval`, then pydantic's lax mode. The spike
+  matched lax coercion for the types the signatures use: strings, integers, booleans, literals, lists
+  and objects.
+
 ### Phase 2: foundation
 
 Build `kvasir-types`, `-config`, `-db`, `-llm`, `-testkit`, with CI: `cargo fmt --check`,
@@ -519,7 +546,6 @@ current method name, so a typed `kind` must still accept it. Test against copies
 - `rusqlite` `bundled` including FTS5 and JSON functions. Phase 2 opens the real `pages.db`.
 - `psl` private-suffix behaviour against `tld`.
 - `utoipa` 6: OpenAPI version emitted, tagged enum output, and `openapi-typescript` results.
-- `async-openai` access to headers and non-standard usage.
 - Crate choices marked production rest on release dates and download counts, not on use here.
 - Races other than `storm/lm.py:84` and the Co-STORM ones were read from code by a reviewer and not
   reproduced.
