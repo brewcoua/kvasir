@@ -571,6 +571,13 @@ def test_a_list_with_an_unknown_label_is_ignored(store, tmp_path, monkeypatch, w
     assert one(svc, "forkful.ai").kind == "unknown"
 
 
+def test_a_list_not_downloaded_yet_is_skipped_without_a_warning(store, tmp_path, caplog):
+    svc = service(store, tmp_path, lists=("government=https://lists.example/gov.csv",), rsp=True)
+
+    assert (svc._load_lists(), svc._load_rsp()) == ({}, {})
+    assert not caplog.records
+
+
 def test_a_list_over_the_size_cap_or_not_utf8_is_skipped_without_raising(
     store, tmp_path, monkeypatch, wdqs
 ):

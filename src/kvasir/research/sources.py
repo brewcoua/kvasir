@@ -409,6 +409,9 @@ class Sources:
                 continue
             try:
                 text = self._list_path(url).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                # Not downloaded yet: the first refresh runs after the first load.
+                continue
             except (OSError, ValueError) as exc:
                 logger.warning("source list %s unreadable: %s", label, exc)
                 continue
@@ -422,6 +425,8 @@ class Sources:
         try:
             text = self._list_path(RSP_URL).read_text(encoding="utf-8")
             return {host: frozenset({tag}) for host, tag in parse_rsp(text).items()}
+        except FileNotFoundError:
+            return {}
         except (OSError, ValueError, LookupError, TypeError) as exc:
             logger.warning("perennial sources list unreadable: %s", exc)
             return {}
