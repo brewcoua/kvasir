@@ -6,6 +6,10 @@ all-features = true
 
 [advisories]
 yanked = "deny"
+ignore = [
+  # Unmaintained, not vulnerable. Only pdf_oxide uses it, in the child process that reads PDFs.
+  "RUSTSEC-2026-0192",
+]
 
 [licenses]
 confidence-threshold = 0.9

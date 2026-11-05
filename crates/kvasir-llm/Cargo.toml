@@ -10,6 +10,7 @@ publish.workspace = true
 backon.workspace = true
 dsrust-json-repair.workspace = true
 kvasir-config.workspace = true
+kvasir-types.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -5,6 +5,7 @@
 //! follows dspy's lenient reading: JSON is repaired as `json_repair` repairs it, and values are
 //! coerced as pydantic's lax mode coerces them.
 
+use kvasir_types::python_lines;
 use serde_json::{Map, Value};
 
 use crate::Message;
@@ -198,30 +199,6 @@ fn header(line: &str) -> Option<(&str, &str)> {
     let (name, rest) = rest.split_at(end);
     let rest = rest.strip_prefix(" ## ]]")?;
     (!name.is_empty()).then_some((name, rest))
-}
-
-/// Python's `str.splitlines`, which breaks on more than `\n`, and on `\r\n` once.
-fn python_lines(text: &str) -> Vec<&str> {
-    const BREAKS: [char; 10] = [
-        '\n', '\r', '\u{0b}', '\u{0c}', '\u{1c}', '\u{1d}', '\u{1e}', '\u{85}', '\u{2028}',
-        '\u{2029}',
-    ];
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((i, c)) = chars.next() {
-        if BREAKS.contains(&c) {
-            lines.push(&text[start..i]);
-            start = i + c.len_utf8();
-            if c == '\r' && chars.next_if(|&(_, next)| next == '\n').is_some() {
-                start += 1;
-            }
-        }
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
 }
 
 fn parse_json(outputs: &[Field], reply: &str) -> Option<Map<String, Value>> {
