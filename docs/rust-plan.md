@@ -297,10 +297,9 @@ Versions are from crates.io on 2026-11-05. `Cargo.lock` is committed, and Renova
 | Retries | `backon` 1.6 | backoff | Production |
 | Serialisation | `serde` 1.0, `serde_json` 1.0 | pydantic | Production |
 | Parsing HTML | `dom_query` 0.29 | bs4 | Production |
-| Markdown | `htmd` 0.5 | trafilatura output | Likely fine; spike 1 |
-| Extraction | `dom_smoothie` 0.19 or `rs-trafilatura` 0.2 | trafilatura | Usable / risky; spike 1 |
+| Extraction and markdown | `rs-trafilatura` 0.2 | trafilatura | Passed spike 1. Weak on a few pages, so pin it and keep a corpus test. |
 | URLs | `url` 2.5, `psl` 2.1 | courlan, tld | Production |
-| PDF | `pdf_oxide` 0.3, `pdf-extract` 0.12 or `pdfium-render` 0.9 | pypdf | Unproven; spike 1, in a child process |
+| PDF | `pdf_oxide` 0.3 | pypdf | Passed spike 1, in a child process |
 | Browser | `chromiumoxide` 0.9 | playwright, patchright | Usable; spike 3 |
 | SQLite | `rusqlite` 0.41, bundled; `rusqlite_migration` 2.6 | sqlite3 | Production |
 | Atomic files | `tempfile` 3 | `os.replace` | Production |
@@ -391,6 +390,40 @@ Throwaway code in a scratch crate. Each spike reports numbers here before phase 
 
 Gate: all three pass, or the plan changes here. Stop and reconsider the rewrite if extraction fails
 and a port is not worth it.
+
+#### Spike 1 result: pass, `rs-trafilatura` and `pdf_oxide`
+
+Run on 2026-11-05 over 221 HTML pages and 20 PDFs refetched from `pages.db`. HTML went through the
+same `_INTERACTIVE` clean-up Python does before trafilatura. Five pages were skipped by `robots.txt`
+or the public-address check. Python's output on the same HTML is the fairer reference, since it
+matches the stored text at a median F1 of 1.000.
+
+| HTML | F1 against stored, median | F1 against Python, median | F1 against Python, 10th percentile | Pages below 0.5 | `must` missed | `must_not` present | Time for 221 pages |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `rs-trafilatura` 0.2.2 | 0.976 | 0.976 | 0.751 | 12 | 0 of 15 | 1 of 23 | 3.24 s |
+| `dom_smoothie` 0.19 with `htmd` 0.5 | 0.918 | 0.918 | 0.661 | 13 | 1 of 15 | 2 of 23 | 0.76 s |
+
+- Removing `#siteSub` with the other interactive selectors takes the one `must_not` miss to 0 of 23.
+- The pages below 0.5 differ both ways. On `zylos.ai/research` Python kept 370 characters and Rust
+  170,000. On a GitHub issue Rust kept 6,165 characters to Python's 55,168. Phase 3 should compare
+  these by reading them and keep a corpus test.
+- Headings, which `split` depends on: 3,425 against Python's 3,616, with 24 pages losing all of theirs.
+- This ran without Python's fallback for text under `MIN_TEXT`. Port the fallback too.
+
+| PDF, one process per file | Failed | F1 against pypdf, median | Lowest | Time for 20 files | Peak memory |
+| --- | --- | --- | --- | --- | --- |
+| `pdf_oxide` 0.3.78 | 0 | 0.989 | 0.743 | 2.0 s | 69 MB |
+| `pdf-extract` 0.12 | 1, a panic in `adobe-cmap-parser` | 0.989 | 0.810 | 1.3 s | 72 MB |
+| pypdf, for reference | 0 | | | 9.8 s | not measured |
+
+- The lowest `pdf_oxide` score is pypdf's fault: it spaces out letters on that file. The next, 0.78, is
+  `pdf_oxide`'s: it interleaves overlapping text in places ("The n aiew r-source heat pum"). Expect
+  this on a minority of files.
+- Forty damaged copies (truncated, or with bytes flipped) gave 38 results and 2 clean errors. None
+  hung, and the slowest took 2.0 s.
+- `pdfium-render` was not tried: it needs a native library, and `pdf_oxide` passes without one.
+- Both chosen crates are licensed `MIT OR Apache-2.0`.
+- These are the PDFs research has read so far, so they are real but not chosen for being difficult.
 
 ### Phase 2: foundation
 
@@ -487,8 +520,6 @@ current method name, so a typed `kind` must still accept it. Test against copies
 - `psl` private-suffix behaviour against `tld`.
 - `utoipa` 6: OpenAPI version emitted, tagged enum output, and `openapi-typescript` results.
 - `async-openai` access to headers and non-standard usage.
-- Licences of `rs-trafilatura` and `pdf_oxide`. `cargo-deny` checks them when added.
-- `dom_smoothie`, `rs-trafilatura` and `pdf_oxide` quality. Their claims are self-reported or absent.
 - Crate choices marked production rest on release dates and download counts, not on use here.
 - Races other than `storm/lm.py:84` and the Co-STORM ones were read from code by a reviewer and not
   reproduced.
