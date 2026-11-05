@@ -1,10 +1,7 @@
-"""Construction of the two upstream runners from settings.
+"""Construction of the STORM runner and the research models from settings.
 
-Every language model role is set explicitly. The convenience initialiser
-`CollaborativeStormLMConfigs.init()` hardcodes `api_base=None` and cannot be pointed at a provider,
-so it is never called.
-
-See docs/fork-notes.md for the signatures these rely on.
+Every language model role is set explicitly. See docs/fork-notes.md for the signatures these rely
+on.
 """
 
 from __future__ import annotations
@@ -12,20 +9,13 @@ from __future__ import annotations
 import threading
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 from kvasir.config import Settings, SourceSettings
 from kvasir.research.corroborate import domain
 from kvasir.research.read import answer_tokens
 from kvasir.research.sources import Sources, SourceStore
-from kvasir.storm.collaborative_storm.engine import (
-    CollaborativeStormLMConfigs,
-    CoStormRunner,
-    RunnerArgument,
-)
 from kvasir.storm.encoder import Encoder
 from kvasir.storm.lm import GatewayModel
-from kvasir.storm.logging_wrapper import LoggingWrapper
 from kvasir.storm.rm import SearXNG
 from kvasir.storm.storm_wiki.engine import (
     STORMWikiLMConfigs,
@@ -60,15 +50,6 @@ WRITE_PROMPT_TOKENS = 4000
 
 # A checker answers Yes or No.
 CHECKER_MAX_TOKENS = 10
-
-_COSTORM_ROLES = {
-    "question_answering": ("strong", 1000),
-    "discourse_manage": ("fast", 500),
-    "utterance_polishing": ("fast", 2000),
-    "warmstart_outline_gen": ("strong", 500),
-    "question_asking": ("fast", 300),
-    "knowledge_base": ("strong", 1000),
-}
 
 
 # The deep research pipeline's steps, on three tiers. Extraction and planning are many small calls
@@ -205,12 +186,10 @@ def build_research_tools(settings: Settings) -> tuple[Encoder, SearXNG]:
 
 
 def _encoder(settings: Settings) -> Encoder:
-    """The embedding model, for both modes.
+    """The embedding model, which ranks snippets against each section's query.
 
-    Co-STORM embeds to build its mind map; STORM embeds to rank snippets against each section's
-    query. Upstream used two unrelated encoders for those, one hardcoded to `text-embedding-3-small`
-    and one a local sentence-transformer, and neither took a configured provider. Both are one
-    `dspy.Embedder` now, so the name routes exactly as a language model's does.
+    Upstream's encoder took no configured provider. This one is a `dspy.Embedder`, so the name
+    routes exactly as a language model's does.
     """
     resolved = settings.resolve(settings.model.embedding)
     return Encoder(model=resolved.model, api_key=resolved.api_key, api_base=resolved.api_base)
@@ -268,54 +247,6 @@ def build_storm_runner(
         max_thread_num=settings.max_threads,
     )
     return STORMWikiRunner(arguments, lm_configs, _retriever(settings, top_k), _encoder(settings))
-
-
-def _costorm_lm_config(settings: Settings) -> CollaborativeStormLMConfigs:
-    lm_config = CollaborativeStormLMConfigs()
-    for role, (tier, max_tokens) in _COSTORM_ROLES.items():
-        getattr(lm_config, f"set_{role}_lm")(_language_model(settings, role, tier, max_tokens))
-    return lm_config
-
-
-def build_costorm_runner(
-    settings: Settings,
-    topic: str,
-    *,
-    model_fast: str | None = None,
-    model_strong: str | None = None,
-) -> CoStormRunner:
-    """Build a Co-STORM runner for `topic`. Call `warm_start()` on it before stepping."""
-    settings = _with_model_overrides(settings, model_fast, model_strong)
-
-    lm_config = _costorm_lm_config(settings)
-    runner = CoStormRunner(
-        lm_config=lm_config,
-        runner_argument=RunnerArgument(
-            topic=topic,
-            retrieve_top_k=settings.search.top_k,
-            max_search_thread=settings.max_threads,
-            max_thread_num=settings.max_threads,
-        ),
-        logging_wrapper=LoggingWrapper(lm_config),
-        encoder=_encoder(settings),
-        rm=_retriever(settings, settings.search.top_k),
-    )
-    return runner
-
-
-def load_costorm_runner(settings: Settings, state: dict[str, Any]) -> CoStormRunner:
-    """Restore a Co-STORM runner from `to_dict()` output.
-
-    The models, encoder and retriever come from current settings rather than from the file, so a
-    configuration change takes effect on the next turn of an existing session. The runner arguments
-    are the exception: they are restored, since they shaped the conversation already in the file.
-    """
-    return CoStormRunner.from_dict(
-        state,
-        lm_config=_costorm_lm_config(settings),
-        encoder=_encoder(settings),
-        rm=_retriever(settings, settings.search.top_k),
-    )
 
 
 def _with_model_overrides(

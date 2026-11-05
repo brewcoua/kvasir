@@ -14,6 +14,8 @@ January 2025, so this tree is not tracking a moving base.
 ## What was taken, and what was left
 
 The whole package was vendored. `examples/`, `frontend/`, `setup.py` and upstream's CI were not.
+`collaborative_storm/`, `dataclass.py`, `logging_wrapper.py` and the `Agent` interface went with
+Co-STORM, which kvasir no longer offers.
 Upstream uses only relative imports internally, so no import inside the tree was rewritten.
 
 Upstream's dependencies are declared directly in `pyproject.toml` rather than pulled in through a
@@ -97,7 +99,7 @@ why the container needs a writable `/tmp`. Nothing reads that cache: `GatewayMod
 
 ## Embeddings go through `dspy.Embedder`
 
-Upstream had two unrelated embedding paths. `Encoder` (Co-STORM) hardcoded `text-embedding-3-small`
+Upstream had two unrelated embedding paths. `Encoder` hardcoded `text-embedding-3-small`
 and required an `ENCODER_API_TYPE` environment variable.
 `StormInformationTable.prepare_table_for_retrieval` (plain STORM) instead loaded a local
 `SentenceTransformer("paraphrase-MiniLM-L6-v2")` from HuggingFace and scored with scikit-learn.
@@ -132,9 +134,7 @@ pytorch-cpu index and the baked HuggingFace weights from the image.
 
 Upstream nested three thread pools. Section writing fans out to retrieval, which fans out to page
 fetches, and each level was sized independently at ten by default, so the worst case was their
-product. Co-STORM was worse in one place and unbounded in another:
-`collaborative_storm/modules/article_generation.py` hardcoded `max_workers=5`, and
-`warmstart_hierarchical_chat.py` passed no `max_workers` at all.
+product.
 
 `runtime.max_threads()` now sizes every pool, from `KVASIR_MAX_THREADS`, and outbound search
 requests take a permit from one process-wide `BoundedSemaphore` through `runtime.fetch_slot`.
@@ -162,12 +162,8 @@ through logging would put a coloured transcript in the service's logs.
 Related changes:
 
 - `Engine.summary()` returns a dict instead of printing it.
-- `logging_wrapper.log_pipeline_stage` caught every exception, printed it, and fell through, so a
-  failed Co-STORM stage looked successful to the caller. It logs and re-raises.
-- `logging_wrapper` formatted every Co-STORM timestamp in Pacific time through a `CALIFORNIA_TZ`
-  constant. It uses UTC, which is what removed `pytz`.
 
-`runtime.ContextThreadPoolExecutor` replaces `ThreadPoolExecutor` at all seven pool sites in the
+`runtime.ContextThreadPoolExecutor` replaces `ThreadPoolExecutor` at every pool site in the
 tree. It copies the submitting thread's context into each task, so the run identity that
 `kvasir.logs` puts in contextvars survives the fan-out, which is where most of a run happens.
 
@@ -188,22 +184,15 @@ caller to remember.
 
 ## Credentials are not serialised
 
-A model keeps `api_key` in its `kwargs`, and upstream wrote that dict out whole in two places:
+A model keeps `api_key` in its `kwargs`, and upstream wrote that dict out whole in
+`LMConfigs.log()`, which `STORMWikiRunner.post_run` writes to `run_config.json` in the output
+directory. It now drops keys beginning with `api_`, which is the filter `GatewayModel.__call__`
+already applied to its own call history.
 
-- `LMConfigs.log()`, which `STORMWikiRunner.post_run` writes to `run_config.json` in the output
-  directory.
-- `CollaborativeStormLMConfigs.to_dict()`, which is part of `CoStormRunner.to_dict()` and so of
-  every serialised Co-STORM session. A session file held the gateway key once per role, for as long
-  as the session was kept.
+Session files from a version with Co-STORM may still contain the key. Delete
+`$KVASIR_DATA_DIR/sessions`, and rotate the credential if any such file predates this change.
 
-Both now drop keys beginning with `api_`, which is the filter `GatewayModel.__call__` already
-applied to its own call history. Nothing reads the serialised configuration back: since the
-`from_dict` change above, how to reach a model is current configuration rather than saved state.
-
-Session files written before this change still contain the key. Delete them, or rotate the
-credential.
-
-`post_run` also no longer fails the run when it cannot write either file. Both are a record of the
+`post_run` also no longer fails the run when it cannot write its files. They are a record of the
 run rather than part of its output, and they are written after the article is finished, so a model
 wrapper carrying something unserialisable in its `kwargs` used to fail a run that had already
 succeeded.
@@ -240,35 +229,10 @@ succeeded.
   table's `(0, 0)` embedding failed the similarity product and with it the run. It returns no
   information, and the section is written without any.
 
-## Co-STORM session restore
-
-`CoStormRunner.from_dict` carried its own `# FIXME`. It discarded the serialised language model
-configuration, re-ran `CollaborativeStormLMConfigs.init()` from `OPENAI_API_TYPE`, and passed no
-`rm`. `init()` was the method that hardcoded `api_base=None` against `gpt-4o-2024-05-13`, so a
-restored session billed an OpenAI account directly and retrieved through `BingSearch`. None of that
-surfaced as an error. `init()` and its STORM counterpart `init_openai_model()` are now deleted:
-nothing could point either at a gateway, and every role is set explicitly by `kvasir.runners`.
-
-`from_dict` now takes `lm_config`, `encoder` and `rm` and uses them. How to reach a model is current
-configuration, not saved state, so `kvasir.runners.load_costorm_runner` passes what the current
-settings say. Only conversation state comes from the file. `runner_argument` is restored, since it
-shaped the conversation already in the file.
-
-`rm` is required rather than defaulted to `BingSearch`, in `CoStormRunner.__init__`, in `from_dict`,
-and in `collaborative_storm_utils._get_answer_question_module_instance`, which held a second copy of
-the same fallback. All three call sites of that one already passed a retriever.
-
 ## Upstream behaviour kvasir relies on
 
 These are unchanged, and are the parts of upstream's shape that kvasir's own code is written
 against.
-
-### There are two unrelated `BaseCallbackHandler` classes
-
-`storm_wiki.modules.callback.BaseCallbackHandler` and
-`collaborative_storm.modules.callback.BaseCallbackHandler` share a name and nothing else. They have
-different methods and neither inherits from the other. Import the one matching the engine being
-observed. `src/kvasir/runs/progress.py` subclasses both.
 
 ### Read the output directory off the runner
 

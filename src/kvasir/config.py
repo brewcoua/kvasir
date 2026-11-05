@@ -193,13 +193,6 @@ class RunSettings:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SessionSettings:
-    ttl_hours: int = field(
-        default=168, metadata=_help("Session expiry, applied at startup.", **_RESTART)
-    )
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class ResearchSettings:
     """The deep research pipeline's defaults, which a request overrides one by one. Searches
     are the budget: each costs about nine page reads."""
@@ -363,7 +356,6 @@ _STORED: dict[str, Any] = {
     "model": ModelSettings,
     "search": SearchSettings,
     "runs": RunSettings,
-    "sessions": SessionSettings,
     "research": ResearchSettings,
     "storm": StormSettings,
     "fetch": FetchSettings,
@@ -390,16 +382,11 @@ class Settings:
     model: ModelSettings
     search: SearchSettings
     runs: RunSettings
-    sessions: SessionSettings
     research: ResearchSettings
     storm: StormSettings
     fetch: FetchSettings
     favicons: FaviconSettings
     sources: SourceSettings
-
-    @property
-    def sessions_dir(self) -> Path:
-        return self.data_dir / "sessions"
 
     @property
     def db(self) -> Path:

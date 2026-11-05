@@ -6,22 +6,21 @@ x-release-please-start-version
 version: 0.4.0
 x-release-please-end
 license: MIT
-description: Cited research, STORM and Co-STORM, as three models backed by a kvasir service.
+description: Cited research and STORM, as two models backed by a kvasir service.
 """
 
 # Import this into Open WebUI under Admin, Functions, Import From Link, with the id `kvasir`. It
 # is read once and not reconciled from git, so repeat it after changing this file.
 #
-# One function, three models. Open WebUI namespaces a pipe as <function id>.<pipe id>, so the ids
-# below become `kvasir.storm`, `kvasir.co-storm` and `kvasir.research`.
+# One function, two models. Open WebUI namespaces a pipe as <function id>.<pipe id>, so the ids
+# below become `kvasir.storm` and `kvasir.research`.
 #
 # Research answers a question with a cited report. Its first reply may be clarifying questions;
 # the next message answers them, or says `go`, and starts the run. The pipe keeps no state, so it
 # finds those questions by reading the chat back.
 #
 # STORM ignores conversation history: it researches a topic from scratch, so only the last user
-# message is used and a follow-up starts a new run. Co-STORM keys its session by the chat id, so
-# one chat is one round table, and understands `next` and `report`.
+# message is used and a follow-up starts a new run.
 #
 # A run takes minutes to tens of minutes. Progress is written live into a reasoning block, which
 # Open WebUI renders collapsed and times itself, so the message says what is happening rather than
@@ -42,10 +41,7 @@ from pydantic import BaseModel, Field
 
 HEARTBEAT_SECONDS = 15
 STORM = "storm"
-CO_STORM = "co-storm"
 RESEARCH = "research"
-ADVANCE = "next"
-REPORT = "report"
 SKIP = "go"
 # The first line of a clarifying reply, which the next message looks for to know it answers one.
 CLARIFY_OPENER = "Before researching this, a few questions:"
@@ -68,12 +64,6 @@ class Pipe:
             description=(
                 "Total timeout for one STORM or research run. A run takes minutes to tens of "
                 "minutes, so this is deliberately far longer than a normal HTTP client default."
-            ),
-        )
-        SESSION_TIMEOUT_SECONDS: int = Field(
-            default=1800,
-            description=(
-                "Total timeout for one Co-STORM call. Warm start is the slow one, taking minutes."
             ),
         )
         MODEL_FAST: str = Field(
@@ -101,13 +91,6 @@ class Pipe:
         )
         POLISH: bool = Field(
             default=True, description="Run the polishing stage. Slower, better prose."
-        )
-        ADVANCE_AFTER_WARM_START: bool = Field(
-            default=True,
-            description=(
-                "Co-STORM: take one agent turn immediately after warm start, so the first reply "
-                "has something to read rather than only a list of experts."
-            ),
         )
         CONFIRM_RERUN: bool = Field(
             default=True,
@@ -166,7 +149,6 @@ class Pipe:
     def pipes(self) -> list[dict[str, str]]:
         return [
             {"id": STORM, "name": "STORM"},
-            {"id": CO_STORM, "name": "Co-STORM"},
             {"id": RESEARCH, "name": "Research"},
         ]
 
@@ -175,7 +157,6 @@ class Pipe:
         body: dict[str, Any],
         __event_emitter__: Emit = None,
         __event_call__: Emit = None,
-        __metadata__: dict[str, Any] | None = None,
         __user__: dict[str, Any] | None = None,
         __task__: str | None = None,
     ) -> AsyncIterator[str]:
@@ -193,22 +174,16 @@ class Pipe:
         think = _Reasoning()
 
         message = _last_user_message(body)
-        prompt = {
-            STORM: "a topic to research",
-            CO_STORM: "a topic for the round table",
-            RESEARCH: "a question to research",
-        }.get(kind, "a topic to research")
+        prompt = "a question to research" if kind == RESEARCH else "a topic to research"
         if not message:
             message = await _ask(__event_call__, f"Send {prompt}.")
         if not message:
-            yield f"Send {'a topic' if kind == CO_STORM else prompt}."
+            yield f"Send {prompt}."
             return
 
         heartbeat = asyncio.create_task(status.beat())
         try:
-            if kind == CO_STORM:
-                work = self._costorm(body, message, options, chat, status, think, __metadata__)
-            elif kind == RESEARCH:
+            if kind == RESEARCH:
                 work = self._research(body, message, options, chat, status, think)
             else:
                 work = self._storm(body, message, options, chat, status, think, __event_call__)
@@ -373,135 +348,6 @@ class Pipe:
                 raise _ServiceError(response.status, await response.text())
             return list((await response.json()).get("questions") or [])
 
-    # -- Co-STORM ------------------------------------------------------------------------------
-
-    async def _costorm(
-        self,
-        body: dict[str, Any],
-        message: str,
-        options: "_Options",
-        chat: "_Chat",
-        status: "_Status",
-        think: "_Reasoning",
-        metadata: dict[str, Any] | None,
-    ) -> AsyncIterator[str]:
-        session_id = (metadata or {}).get("chat_id") or body.get("chat_id")
-        if not session_id:
-            yield "Open WebUI did not supply a chat id, so this conversation cannot be tracked."
-            return
-        session_id = str(session_id)
-
-        timeout = aiohttp.ClientTimeout(total=self.valves.SESSION_TIMEOUT_SECONDS)
-        async with self._session(timeout) as http:
-            if not await self._exists(http, session_id):
-                if message.strip().lstrip("/").lower() in (ADVANCE, REPORT):
-                    yield "No round table in this chat yet. Send a topic to start one."
-                    return
-                start = self._start(http, session_id, message, options, chat, status, think)
-                async for chunk in start:
-                    yield chunk
-                return
-
-            command = message.strip().lstrip("/").lower()
-            out: dict[str, Any] = {}
-            yield think.start()
-
-            if command == REPORT:
-                await status.say("Generating the report")
-                path = f"/v1/session/{session_id}/report"
-                async for line in self._call(http, "POST", path, {}, think, status, out):
-                    yield line
-                yield think.close()
-                yield out["result"]["report"]
-                await chat.sources(out["result"].get("citations"))
-                yield await self._spent(http, out.get("run_id"), options)
-                return
-
-            if command == ADVANCE:
-                await status.say("Advancing the round table")
-            else:
-                await status.say("Taking your turn")
-                async for line in self._step(http, session_id, message, think, status, out):
-                    yield line
-                # A user turn is recorded rather than answered, so the answer needs a second step.
-                yield think.line("turn", f"recorded as {out['result'].get('utterance_type')}")
-                await status.say("Waiting for a response")
-
-            async for line in self._step(http, session_id, "", think, status, out):
-                yield line
-            yield think.close()
-
-            yield _turn(out["result"])
-            await chat.sources(out["result"].get("citations"))
-            yield await self._spent(http, out.get("run_id"), options)
-
-    async def _start(
-        self,
-        http: aiohttp.ClientSession,
-        session_id: str,
-        topic: str,
-        options: "_Options",
-        chat: "_Chat",
-        status: "_Status",
-        think: "_Reasoning",
-    ) -> AsyncIterator[str]:
-        request: dict[str, Any] = {"session_id": session_id, "topic": topic}
-        if self.valves.MODEL_FAST:
-            request["model_fast"] = self.valves.MODEL_FAST
-        if self.valves.MODEL_STRONG:
-            request["model_strong"] = self.valves.MODEL_STRONG
-
-        await status.say(f"Warm starting on {topic}")
-        out: dict[str, Any] = {}
-        yield think.start()
-        async for line in self._call(http, "POST", "/v1/session", request, think, status, out):
-            yield line
-
-        info = out["result"]
-        experts = ", ".join(info.get("experts") or []) or "none yet"
-
-        if not self.valves.ADVANCE_AFTER_WARM_START:
-            yield think.close()
-            yield f"Round table on **{info.get('topic', topic)}**.\n\nExperts: {experts}.\n\n"
-            yield f"Say `{ADVANCE}` to advance, `{REPORT}` for a report, or just talk."
-            yield await self._spent(http, out.get("run_id"), options)
-            return
-
-        await status.say("Taking the first turn")
-        turn: dict[str, Any] = {}
-        async for line in self._step(http, session_id, "", think, status, turn):
-            yield line
-        yield think.close()
-
-        yield f"Round table on **{info.get('topic', topic)}**.\n\nExperts: {experts}.\n\n---\n\n"
-        yield _turn(turn["result"])
-        await chat.sources(turn["result"].get("citations"))
-        yield await self._spent(http, turn.get("run_id"), options)
-
-    async def _step(
-        self,
-        http: aiohttp.ClientSession,
-        session_id: str,
-        utterance: str,
-        think: "_Reasoning",
-        status: "_Status",
-        out: dict[str, Any],
-    ) -> AsyncIterator[str]:
-        async for line in self._call(
-            http,
-            "POST",
-            f"/v1/session/{session_id}/step",
-            {"utterance": utterance},
-            think,
-            status,
-            out,
-        ):
-            yield line
-
-    async def _exists(self, http: aiohttp.ClientSession, session_id: str) -> bool:
-        async with http.get(self._url(f"/v1/session/{session_id}")) as response:
-            return response.status == 200
-
     # -- Shared --------------------------------------------------------------------------------
 
     async def _call(
@@ -515,8 +361,6 @@ class Pipe:
         out: dict[str, Any],
     ) -> AsyncIterator[str]:
         """Run one streaming call, yielding reasoning lines and leaving its result in `out`."""
-        # Tracked separately from `out`, which carries the previous call's result on a second step.
-        answered = False
         async with http.request(method, self._url(path), json=payload) as response:
             if response.status != 200:
                 raise _ServiceError(response.status, await response.text())
@@ -531,9 +375,8 @@ class Pipe:
                     raise _ServiceError(200, data["message"])
                 elif event == "done":
                     out["result"] = data
-                    answered = True
 
-        if not answered:
+        if "result" not in out:
             raise _ServiceError(200, "the call ended without a result")
 
     async def _spent(
@@ -724,17 +567,6 @@ async def _events(response: aiohttp.ClientResponse) -> AsyncIterator[tuple[str, 
             event = line.removeprefix("event: ")
         elif line.startswith("data: "):
             yield event, json.loads(line.removeprefix("data: "))
-
-
-def _turn(turn: dict[str, Any]) -> str:
-    role = turn.get("role") or "Round table"
-    description = (turn.get("role_description") or "").strip()
-    header = f"**{role}**" + (f" _{description}_" if description else "")
-
-    parts = [header, "", turn.get("utterance", "")]
-    if turn.get("mind_map_reorganised"):
-        parts.append("\n_The mind map was reorganised._")
-    return "\n".join(parts).strip()
 
 
 def _spent(run: dict[str, Any]) -> str:

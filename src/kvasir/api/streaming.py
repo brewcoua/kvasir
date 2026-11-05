@@ -18,7 +18,6 @@ from kvasir.runs.progress import ProgressStream
 from kvasir.runs.run import Run
 from kvasir.schemas.results import RunResult
 from kvasir.schemas.runs import Error, RunStarted
-from kvasir.sessions import SessionNotFound
 
 logger = logging.getLogger("kvasir")
 
@@ -113,8 +112,6 @@ async def events(
 
         result = await worker
         yield frame("done", await asyncio.to_thread(with_sources, sources, result))
-    except SessionNotFound as exc:
-        yield frame("error", Error(message=f"no session {exc}"))
     except Exception as exc:
         # Raised on the event loop rather than in the run's thread, so the run is named explicitly.
         logger.exception(

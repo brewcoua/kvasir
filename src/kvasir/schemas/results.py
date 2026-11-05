@@ -175,33 +175,5 @@ class ResearchResult(BaseModel):
     duration_seconds: float
 
 
-class Turn(BaseModel):
-    """One conversation turn, as the `done` event of a step."""
-
-    role: str
-    role_description: str
-    utterance: str
-    utterance_type: str
-    citations: list[Citation]
-    mind_map_reorganised: bool
-
-
-class Report(BaseModel):
-    """Payload of `POST /v1/session/{id}/report`."""
-
-    report: str
-    citations: list[Citation]
-
-
-class SessionInfo(BaseModel):
-    """Payload of `GET /v1/session/{id}`."""
-
-    session_id: str
-    topic: str
-    turn_count: int
-    experts: list[str]
-    updated_at: float
-
-
 # What a run can produce, as its `done` event and its detail carry it.
-RunResult = ArticleResult | ResearchResult | Turn | Report | SessionInfo
+RunResult = ArticleResult | ResearchResult

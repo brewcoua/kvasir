@@ -26,7 +26,7 @@ from kvasir.runs.run import (
     record_questions,
 )
 from kvasir.runs.store import INTERRUPTED, SECONDS_PER_DAY, RunStore
-from kvasir.schemas.results import ArticleResult, Report, ResearchQuestion, ResearchResult
+from kvasir.schemas.results import ArticleResult, ResearchQuestion, ResearchResult
 from kvasir.schemas.runs import Progress
 from kvasir.storm import runtime
 from kvasir.storm.runtime import ContextThreadPoolExecutor
@@ -215,15 +215,15 @@ def test_watching_a_finished_run_does_not_hang(client, monkeypatch):
 
 
 def test_a_reentered_stage_sums_its_spans():
-    """Co-STORM alternates stages, so first entry to last exit would overstate both."""
-    run = Run(id="r", kind="costorm", topic="t")
-    for stage, at in (("turn", 0.0), ("mind_map", 10.0), ("turn", 12.0), ("mind_map", 20.0)):
+    """First entry to last exit would overstate stages that alternate."""
+    run = Run(id="r", kind="ledger", topic="t")
+    for stage, at in (("search", 0.0), ("write", 10.0), ("search", 12.0), ("write", 20.0)):
         run.record_progress(Progress(stage=stage, detail=stage, at=at))
 
     stages = {stage.name: stage for stage in run.status().stages}
-    assert stages["turn"].seconds == 18.0
-    assert len(stages["turn"].spans) == 2
-    assert stages["mind_map"].spans[0].ended_at == 12.0
+    assert stages["search"].seconds == 18.0
+    assert len(stages["search"].spans) == 2
+    assert stages["write"].spans[0].ended_at == 12.0
 
 
 def test_calls_show_in_flight_then_finished_or_failed():
@@ -611,11 +611,11 @@ def test_call_content_is_not_kept_by_default(client, monkeypatch):
         ResearchResult(
             report="r", assumptions=["a"], citations=[], claims=[], duration_seconds=1.0
         ),
-        Report(report="r", citations=[]),
+        ArticleResult(article="a", outline="o", citations=[], duration_seconds=1.0),
     ],
 )
 def test_a_stored_result_keeps_its_type(tmp_path, result):
-    """`RunResult` is an untagged union, and these two share their `report` field."""
+    """`RunResult` is an untagged union."""
     store = RunStore(tmp_path / "kvasir.db", ttl_days=30, limit=10)
     run = RunRegistry(10, store).start("research", "t")
     run.set_result(result)

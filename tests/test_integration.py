@@ -17,11 +17,9 @@ import asyncio
 import pytest
 
 from kvasir.config import ConfigError, Settings, apply_environment
-from kvasir.conversation import create, report, step
 from kvasir.methods.storm.method import run_article
 from kvasir.runs.progress import ProgressStream
-from kvasir.schemas.requests import Input, SessionRequest, StormOptions
-from kvasir.sessions import SessionStore
+from kvasir.schemas.requests import Input, StormOptions
 
 pytestmark = pytest.mark.integration
 
@@ -58,35 +56,6 @@ async def test_a_short_storm_run_produces_a_cited_article(settings, stream):
     assert result.citations, "no citations, which usually means SearXNG is not serving JSON"
     assert result.citations[0].url.startswith("http")
     assert result.duration_seconds > 0
-
-
-@pytest.mark.asyncio
-async def test_a_costorm_session_survives_being_reloaded(settings, tmp_path, stream):
-    """The whole session design rests on state surviving a restart, so nothing is kept in memory.
-
-    Each call below loads the session from disk and saves it back, which is exactly what a restart
-    between requests would do.
-    """
-    store = SessionStore(tmp_path / "sessions", ttl_hours=1)
-    request = SessionRequest(session_id="integration-1", topic=TOPIC)
-
-    info = await _in_thread(create, settings, store, request, stream)
-    assert info.experts, "warm start produced no experts"
-
-    agent_turn = await _in_thread(step, settings, store, "integration-1", "", stream)
-    assert agent_turn.utterance.strip(), "the agent turn is empty"
-
-    user_turn = await _in_thread(
-        step, settings, store, "integration-1", "How was it dated?", stream
-    )
-    assert user_turn.utterance.strip()
-
-    # A fresh store, standing in for a process that restarted between turns.
-    reloaded = SessionStore(tmp_path / "sessions", ttl_hours=1)
-    final = await _in_thread(report, settings, reloaded, "integration-1", stream)
-
-    assert final.report.strip(), "the report is empty"
-    assert "#" in final.report, "the report carries no markdown headings"
 
 
 async def _in_thread(function, *args):

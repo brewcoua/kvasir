@@ -4,7 +4,7 @@ name = "kvasir"
 # static version here also lands in uv.lock, which then drifts on every release PR and breaks
 # `uv sync --locked`; with a dynamic version uv omits the field entirely.
 dynamic = ["version"]
-description = "A self-hostable HTTP service for Stanford STORM and Co-STORM, with an Open WebUI client"
+description = "A self-hostable HTTP service for deep research and Stanford STORM, with an Open WebUI client"
 readme = "README.md"
 requires-python = "==3.11.*"
 license = { text = "MIT OR Apache-2.0" }

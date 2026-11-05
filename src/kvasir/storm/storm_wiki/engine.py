@@ -112,8 +112,7 @@ class STORMWikiRunner(Engine):
         self.args = args
         self.lm_configs = lm_configs
         # Article generation ranks snippets by embedding similarity. Upstream loaded a local
-        # sentence-transformer for it, unrelated to the encoder Co-STORM uses and to anything the
-        # caller configured; both modes share this one now.
+        # sentence-transformer for it, unrelated to anything the caller configured.
         self.encoder = encoder
 
         self.retriever = Retriever(rm=rm, max_thread=self.args.max_thread_num)

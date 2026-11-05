@@ -1,8 +1,8 @@
 # Open WebUI function
 
-One Pipe function, `pipe.py`, that drives a [kvasir](../README.md) service and exposes three models:
+One Pipe function, `pipe.py`, that drives a [kvasir](../README.md) service and exposes two models:
 **Research** answers a question with a cited report, **STORM** researches a topic and returns a
-cited article, **Co-STORM** holds a round-table conversation.
+cited article.
 
 ## Install
 
@@ -28,13 +28,13 @@ Open WebUI keeps functions in its own database. It reads this file once, at impo
    gh attestation verify pipe.py --repo brewcoua/kvasir
    ```
 4. On the create page, set the id to `kvasir`. The id prefixes every model, so this is what makes
-   them `kvasir.research`, `kvasir.storm` and `kvasir.co-storm`. The name and description come from the file's
+   them `kvasir.research` and `kvasir.storm`. The name and description come from the file's
    header, so leave them.
 5. Save, then set `KVASIR_TOKEN` under the function's valves to the service's `KVASIR_TOKEN`, and
    `KVASIR_URL` unless the default `http://kvasir:8080` already resolves.
 6. Enable the function.
 
-Verify: **Research**, **STORM** and **Co-STORM** appear in the model picker. Send a short topic to STORM. Within
+Verify: **Research** and **STORM** appear in the model picker. Send a short topic to STORM. Within
 a few seconds the status line should read `research: identifying perspectives` and a collapsible
 block below it should start filling with stage lines. If neither appears, the service is
 unreachable, and the chat will say so rather than hang.
@@ -102,30 +102,6 @@ confirmation first. Turn that off with `CONFIRM_RERUN`.
 
 Sending an empty message opens an input dialog asking for a topic.
 
-## Co-STORM
-
-One Open WebUI chat is one round table: the session is keyed by the chat id, so it survives a
-restart of the service, and a new chat starts a new round table.
-
-The first message is the topic and runs warm start, which takes minutes. Afterwards:
-
-| Message | Effect |
-| --- | --- |
-| `next` | Advance the round table without speaking. |
-| `report` | Generate the report so far. |
-| anything else | Said to the round table, and answered. |
-
-Matching ignores case and strips one leading `/`, so `/next` and `next` both work.
-
-`/next` needs a little setup, and `next` needs none. Open WebUI refuses to send a message whose
-leading `/token` is not a registered command, and registering one is a **Prompt** under
-**Workspace**, not part of this function. To use the slash form, create a Prompt with command
-`next` whose content is `/next`, and another for `report`. Both are optional.
-
-Saying something costs two calls to the service: upstream records your utterance and returns
-without answering it, so the function immediately asks for a response as well. Both appear as one
-reply, under one reasoning block.
-
 ## Valves
 
 | Valve | Default | Effect |
@@ -133,14 +109,12 @@ reply, under one reasoning block.
 | `KVASIR_URL` | `http://kvasir:8080` | Base URL of the service. |
 | `KVASIR_TOKEN` | empty | The service's `KVASIR_TOKEN`, sent with every request. |
 | `RESEARCH_TIMEOUT_SECONDS` | `3600` | Total timeout for one STORM or research run. |
-| `SESSION_TIMEOUT_SECONDS` | `1800` | Total timeout for one Co-STORM call. Warm start is the slow one. |
 | `MODEL_FAST` | empty | Overrides the service's fast model. Empty leaves it to the service. |
 | `MODEL_STRONG` | empty | Overrides the service's strong model. |
 | `SEARCH_TOP_K` | `0` | Search results per query. `0` leaves it to the service. |
 | `MAX_CONV_TURN` | `0` | Questions per perspective. `0` leaves it to the service. |
 | `MAX_PERSPECTIVE` | `0` | Perspectives to research. `0` leaves it to the service. |
 | `POLISH` | `true` | Run the polishing stage. Slower, better prose. |
-| `ADVANCE_AFTER_WARM_START` | `true` | Take one agent turn straight after warm start, so the first reply has something to read rather than only a list of experts. |
 | `CONFIRM_RERUN` | `true` | Ask before researching again in a chat that already holds an article. |
 | `SHOW_USAGE` | `true` | Append what the run spent. |
 | `CLARIFY` | `true` | Research: ask what a new question leaves open before starting. |
@@ -156,8 +130,8 @@ Users can override five of these for themselves, under the function's user valve
 `SEARCH_TOP_K`, `MAX_CONV_TURN` and `MAX_PERSPECTIVE`, where `0` defers to the admin valve, and
 `POLISH` and `SHOW_USAGE`, where `default` defers and `on` or `off` decides.
 
-The embedding model and session lifetime are service configuration, set through
-`model.embedding` and `sessions.ttl_hours`, and are not valves here.
+The embedding model is service configuration, set through `model.embedding`, and is not a valve
+here.
 
 ## Common failures
 
@@ -167,6 +141,5 @@ The embedding model and session lifetime are service configuration, set through
 | `kvasir returned 401` | `KVASIR_TOKEN` is unset or differs from the service's. | Set the valve to the service's `KVASIR_TOKEN`. |
 | `kvasir returned 429` | Another run is in progress. | Wait, or raise `runs.max_concurrent` on the service. |
 | An article with no references | SearXNG is not serving JSON. | Add `json` to `search.formats` in its `settings.yml`. |
-| `Open WebUI did not supply a chat id` | Co-STORM was called outside a normal chat. | Start a new chat. |
 | Progress appears as plain text rather than a collapsible block | Reasoning tag detection is off for this model. | Set **Reasoning Tags** to **Default** or **Enabled** under the model's advanced parameters. |
 | A confirmation dialog never appears | The browser tab is closed, or `WEBSOCKET_EVENT_CALLER_TIMEOUT` elapsed. | Neither blocks the run: it proceeds as if confirmed. |

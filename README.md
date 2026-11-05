@@ -1,13 +1,11 @@
 # kvasir
 
-A self-hostable HTTP service for Stanford STORM and Co-STORM, with an Open WebUI client.
+A self-hostable HTTP service for deep research and Stanford STORM, with an Open WebUI client.
 
 [STORM](https://github.com/stanford-oval/storm) turns a topic into a Wikipedia-style article with
-citations by simulating multi-perspective research conversations. Co-STORM is its interactive
-sibling, a turn-based round table between you and several agents that accumulates a shared mind
-map.
+citations by simulating multi-perspective research conversations.
 
-Alongside them, kvasir runs its own deep research pipeline, built for a small local model: it
+Alongside it, kvasir runs its own deep research pipeline, built for a small local model: it
 answers a question with a report whose every citation points to a quote read on the page. See
 [Research a question](#research-a-question).
 
@@ -29,7 +27,7 @@ How the service fits together, from a request to its result, is in
 - A [SearXNG](https://docs.searxng.org/) instance **with the JSON output format enabled**. One
   serving HTML only fails as an empty result set rather than an error, which looks like a topic
   with no sources. Add `json` to `search.formats` in its `settings.yml`.
-- A writable data directory, for Co-STORM sessions.
+- A writable data directory, for `kvasir.db` and the caches.
 
 No paid search credential is needed, and no database, cache or queue.
 
@@ -398,25 +396,6 @@ not know the event name ignores it.
 Options: `search_top_k`, `max_conv_turn`, `max_perspective`, `do_polish_article`, `model_fast`,
 `model_strong`. Each falls back to the configured default.
 
-## Hold a round table
-
-Sessions are keyed by an id you supply, so a client can key them by its own conversation id.
-
-| Request | Effect |
-| --- | --- |
-| `POST /v1/session` | Create and warm start. Streams. Body: `session_id`, `topic`. 409 if the id is taken. |
-| `POST /v1/session/{id}/step` | One turn. Body `{"utterance": "..."}` speaks, `{}` advances the round table. Streams. |
-| `POST /v1/session/{id}/report` | The report so far, with citations. Streams. |
-| `GET /v1/session/{id}` | Topic, turn count and experts. |
-| `DELETE /v1/session/{id}` | Remove it. |
-
-An utterance is recorded rather than answered, so getting a reply to something you said takes a
-second step with an empty body. The Pipe does this for you.
-
-Sessions are one JSON file each under `$KVASIR_DATA_DIR/sessions`, written to a temporary sibling
-and renamed, so a crash mid-write leaves the previous session readable. Expired sessions are swept
-once at startup, with no scheduler and no background task.
-
 ## Watch what is running
 
 `GET /` serves the runs page. New, Runs and Knowledge in its header lead to its views, and each view has its
@@ -504,7 +483,7 @@ so a 429 is visible as a run rather than only as a status code.
 
 Usage is split three ways: `by_model`, `by_role` and `by_stage`. A call counts toward the stage the
 run was in when the call finished, and calls made before the first progress event count as
-`unstaged`. Co-STORM can change stage while a call is in flight, so its stage split is approximate.
+`unstaged`. A run can change stage while a call is in flight, so the stage split is approximate.
 `reasoning_tokens` is part of `completion_tokens`, not added to it, and stays zero when the gateway
 does not report it. A stage entered more than once has one span per entry, and its `seconds` sums
 them. A usage row's `seconds` sums the time its successful calls took, from request to answer:
@@ -558,8 +537,7 @@ Both answer with the same list as `GET`. A change applies at once. Most settings
 run starts, but `fetch.*`, `model.context_tokens` and `runs.max_concurrent` also reach runs
 already going. A
 setting listed with `"restart": true` is read only at startup, and `restart_required` names those
-changed since: `runs.store`, `runs.max`, `runs.ttl_days`, `runs.keep_call_content` and
-`sessions.ttl_hours`. A change is checked with every other stored setting first, and nothing is
+changed since: `runs.store`, `runs.max`, `runs.ttl_days` and `runs.keep_call_content`. A change is checked with every other stored setting first, and nothing is
 written when one is unusable: the answer is 422 with a `message` naming it. `DELETE` also removes a
 key this version does not know, which otherwise blocks every `PATCH`.
 
@@ -569,8 +547,7 @@ A nullable text setting, such as `model.reason_effort`, is turned off by storing
 
 With `model.fast`, `model.strong`, `model.embedding` or `search.url` unset, the service starts and
 logs which are missing, and the page opens on a setup form asking for them. Until they are stored, `/readyz` answers 503 with
-`{"setup":"required","missing":[...]}`, and every route that starts a run, a task or a session
-step answers 409. A model whose provider is no longer in the environment counts as unset.
+`{"setup":"required","missing":[...]}`, and every route that starts a run or a task answers 409. A model whose provider is no longer in the environment counts as unset.
 
 ### Providers and models
 
@@ -609,7 +586,7 @@ name a different provider.
 | `KVASIR_TOKEN` | required | The token every route but health, `POST /v1/login` and the page needs. See [Start a run](#start-a-run). |
 | `KVASIR_PROVIDER_<NAME>_API_BASE` | required per provider | Provider base URL, such as `http://localhost:11434/v1`. |
 | `KVASIR_PROVIDER_<NAME>_API_KEY` | unset | Provider credential. |
-| `KVASIR_DATA_DIR` | `/data` | Writable directory for `kvasir.db`, the caches and sessions. |
+| `KVASIR_DATA_DIR` | `/data` | Writable directory for `kvasir.db` and the caches. |
 | `KVASIR_HOST` | `0.0.0.0` | Address to listen on. |
 | `KVASIR_PORT` | `8080` | Port to listen on. |
 | `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. Intake calls run this wide; for Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
@@ -635,7 +612,6 @@ name a different provider.
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |
 | `runs.keep_call_content` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. Read at startup. |
 | `runs.max_concurrent` | `1` | Concurrent runs. Beyond this, requests get 429. |
-| `sessions.ttl_hours` | `168` | Session expiry, applied at startup, and read only then. |
 | `storm.max_conv_turn` | `3` | Questions per perspective. |
 | `storm.max_perspective` | `3` | Perspectives to research. |
 | `research.max_searches` | `16` | Research: searches in a run, before the 8 for empty cells. |
@@ -739,8 +715,8 @@ by stage, by role and by model, which is enough to decide whether the defaults s
 
 ## Open WebUI
 
-One Pipe function lives under [`owui/`](owui/), exposing research, STORM and Co-STORM
-as three models. Research asks its clarifying questions as a first reply. It writes a run's progress into the message as it happens, turns sources into citations,
+One Pipe function lives under [`owui/`](owui/), exposing research and STORM
+as two models. Research asks its clarifying questions as a first reply. It writes a run's progress into the message as it happens, turns sources into citations,
 and reports what the run spent. Open WebUI's own title, tag and follow-up generation is routed to
 `POST /v1/tasks`, so naming a chat does not cost a run. Installation instructions and a valve
 reference are in [`owui/README.md`](owui/README.md).
@@ -864,7 +840,7 @@ result.
 Dual MIT and Apache-2.0, at your option. See [LICENSE-MIT](LICENSE-MIT) and
 [LICENSE-APACHE](LICENSE-APACHE).
 
-STORM and Co-STORM are the work of [Stanford OVAL](https://github.com/stanford-oval/storm). Their
+STORM is the work of [Stanford OVAL](https://github.com/stanford-oval/storm). Their
 `knowledge_storm` package is vendored and modified under `src/kvasir/storm`, which stays MIT only,
 as upstream is. See [`src/kvasir/storm/NOTICE`](src/kvasir/storm/NOTICE) for the fork point and
 [`docs/fork-notes.md`](docs/fork-notes.md) for what was changed.

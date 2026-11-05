@@ -193,8 +193,7 @@ class Run:
             if event.stage != self.stage:
                 if self.stage is not None:
                     self._stages[self.stage].leave(now)
-                # Re-entering a stage adds a span to the one already there: Co-STORM alternates
-                # between two stages for the length of a session.
+                # Re-entering a stage adds a span to the one already there.
                 self._stages.setdefault(event.stage, _Stage()).enter(now)
                 self.stage = event.stage
             if live is not None:
@@ -226,8 +225,8 @@ class Run:
         reasoning_tokens: int = 0,
     ) -> None:
         with self._lock:
-            # Attributed to the stage the run is in now. Co-STORM can switch stages while a call is
-            # in flight, so its split is close rather than exact.
+            # Attributed to the stage the run is in now. A stage can change while a call is in
+            # flight, so the split is close rather than exact.
             for usage in (
                 self._by_model.setdefault(model, Usage()),
                 self._by_role.setdefault(role or "unattributed", Usage()),

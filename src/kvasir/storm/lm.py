@@ -69,7 +69,7 @@ class GatewayModel(dspy.LM):
 
     `api_key` and `api_base` are passed through to `dspy.LM`, which keeps them in `kwargs`. That is
     also what `LMConfigs.to_dict` and `LMConfigs.log` serialise, and both strip keys beginning with
-    `api_` to keep credentials out of session files and run configuration.
+    `api_` to keep credentials out of run configuration.
     """
 
     def __init__(self, model: str, role: str | None = None, **kwargs: Any):

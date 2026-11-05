@@ -24,7 +24,6 @@ from kvasir.api import (
     pages,
     providers,
     runs,
-    sessions,
     settings,
     sources,
     tasks,
@@ -38,7 +37,6 @@ from kvasir.runs.registry import (
     SearchContentNotFound,
 )
 from kvasir.runs.store import RunStore
-from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.settings_store import SettingsStore
 from kvasir.storm.runtime import configure_concurrency
 
@@ -62,7 +60,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # What the settings read only at startup were, to report a change waiting for a restart.
     app.state.started = settings
     apply(app, settings)
-    app.state.sessions = SessionStore(settings.sessions_dir, settings.sessions.ttl_hours)
     store = (
         RunStore(settings.db, settings.runs.ttl_days, settings.runs.max)
         if settings.runs.store == "sqlite"
@@ -70,7 +67,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.runs = RunRegistry(settings.runs.max, store, settings.runs.keep_call_content)
     # Once, here. Expiry needs no scheduler and no background task.
-    app.state.sessions.sweep()
     if store is not None:
         store.sweep()
     logger.info(
@@ -86,7 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
 app.include_router(auth.router)
-for module in (runs, methods, pages, favicons, sources, tasks, sessions, settings, providers):
+for module in (runs, methods, pages, favicons, sources, tasks, settings, providers):
     app.include_router(module.router, dependencies=[Depends(auth.require_token)])
 
 
@@ -191,13 +187,3 @@ async def _pages_error(request: Request, exc: pages.PagesError) -> JSONResponse:
 @app.exception_handler(sources.SourcesError)
 async def _sources_error(request: Request, exc: sources.SourcesError) -> JSONResponse:
     return JSONResponse({"message": str(exc)}, status_code=exc.status_code)
-
-
-@app.exception_handler(SessionNotFound)
-async def _session_not_found(request: Request, exc: SessionNotFound) -> JSONResponse:
-    return JSONResponse({"message": f"no session {exc}"}, status_code=404)
-
-
-@app.exception_handler(SessionIdError)
-async def _bad_session_id(request: Request, exc: SessionIdError) -> JSONResponse:
-    return JSONResponse({"message": str(exc)}, status_code=400)

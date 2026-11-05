@@ -20,15 +20,6 @@ from dspy.utils.dummies import DummyLM
 
 import kvasir.storm
 import kvasir.storm.interface  # noqa: F401  imported first: the fork's modules import circularly
-from kvasir.storm.collaborative_storm.modules.costorm_expert_utterance_generator import (
-    GenExpertActionPlanning,
-)
-from kvasir.storm.collaborative_storm.modules.expert_generation import GenerateExpertGeneral
-from kvasir.storm.collaborative_storm.modules.information_insertion_module import (
-    ExpandSection,
-    InsertInformation,
-    InsertInformationCandidateChoice,
-)
 from kvasir.storm.storm_wiki.modules.knowledge_curation import QuestionToQuery
 from kvasir.storm.storm_wiki.modules.persona_generator import FindRelatedTopic, GenPersona
 
@@ -72,55 +63,11 @@ def test_every_signature_formats_into_a_prompt(signature: type[dspy.Signature]) 
             ["https://example.org/a"],
         ),
         (
-            GenerateExpertGeneral,
-            {"topic": "t", "background_info": "b", "topN": "2"},
-            {"experts": ["role: description"]},
-            "experts",
-            ["role: description"],
-        ),
-        (
             QuestionToQuery,
             {"topic": "t", "question": "q"},
             {"queries": ["first query", "second query"]},
             "queries",
             ["first query", "second query"],
-        ),
-        (
-            ExpandSection,
-            {"section": "s", "info": "i"},
-            {"subsections": ["one", "two"]},
-            "subsections",
-            ["one", "two"],
-        ),
-        # Upstream picked these out of prose with substring scans and regexes, and raised
-        # "Undefined" when the model phrased its answer differently.
-        (
-            InsertInformation,
-            {"intent": "i", "structure": "s"},
-            {"reasoning": "r", "action": "step", "node_name": "node2"},
-            "action",
-            "step",
-        ),
-        (
-            InsertInformationCandidateChoice,
-            {"intent": "i", "choices": "1: a"},
-            {"best_placement": 2},
-            "best_placement",
-            2,
-        ),
-        (
-            InsertInformationCandidateChoice,
-            {"intent": "i", "choices": "1: a"},
-            {"best_placement": None},
-            "best_placement",
-            None,
-        ),
-        (
-            GenExpertActionPlanning,
-            {"topic": "t", "expert": "e", "summary": "s", "last_utterance": "l"},
-            {"action_type": "Potential Answer", "description": "d"},
-            "action_type",
-            "Potential Answer",
         ),
     ],
     ids=lambda value: value if isinstance(value, str) else "",

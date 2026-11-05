@@ -191,8 +191,8 @@ class RunSpan(BaseModel):
 class RunStage(BaseModel):
     """Time spent in one stage.
 
-    A stage can be entered more than once, as Co-STORM alternates between two, so `seconds` sums
-    the spans rather than measuring from the first entry to the last exit.
+    A stage can be entered more than once, so `seconds` sums the spans rather than measuring from
+    the first entry to the last exit.
     """
 
     name: str

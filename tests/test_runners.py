@@ -1,6 +1,5 @@
 """No network. Building a runner makes no request; only running one does."""
 
-import json
 from dataclasses import replace
 
 import pytest
@@ -8,11 +7,9 @@ import pytest
 from kvasir.config import ConfigError, Provider, Settings
 from kvasir.runners import (
     WRITE_PROMPT_TOKENS,
-    build_costorm_runner,
     build_research_models,
     build_storm_runner,
     check_model_overrides,
-    load_costorm_runner,
 )
 
 ENV = {
@@ -35,15 +32,6 @@ STORM_ROLES = (
     "article_polish_lm",
 )
 
-COSTORM_ROLES = (
-    "question_answering_lm",
-    "discourse_manage_lm",
-    "utterance_polishing_lm",
-    "warmstart_outline_gen_lm",
-    "question_asking_lm",
-    "knowledge_base_lm",
-)
-
 
 @pytest.fixture
 def settings():
@@ -53,11 +41,6 @@ def settings():
 @pytest.fixture
 def storm(settings, tmp_path):
     return build_storm_runner(settings, tmp_path)
-
-
-@pytest.fixture
-def costorm(settings):
-    return build_costorm_runner(settings, "a narrow topic")
 
 
 def _models(configs, roles):
@@ -72,36 +55,10 @@ def test_every_storm_role_reaches_the_gateway(storm, role):
     assert model.kwargs["api_base"] == "https://gateway.example/v1"
 
 
-@pytest.mark.parametrize("role", COSTORM_ROLES)
-def test_every_costorm_role_reaches_the_gateway(costorm, role):
-    model = getattr(costorm.lm_config, role)
-
-    assert model is not None
-    assert model.kwargs["api_base"] == "https://gateway.example/v1"
-
-
-def test_model_names_are_not_rewritten(storm, costorm):
+def test_model_names_are_not_rewritten(storm):
     used = {model.model for model in _models(storm.lm_configs, STORM_ROLES)}
-    used |= {model.model for model in _models(costorm.lm_config, COSTORM_ROLES)}
 
     assert used == {"openai/ollama/fast:cloud", "openai/ollama/strong:cloud"}
-
-
-def test_both_tiers_are_actually_used(storm, costorm):
-    for configs, roles in ((storm.lm_configs, STORM_ROLES), (costorm.lm_config, COSTORM_ROLES)):
-        tiers = {model.model for model in _models(configs, roles)}
-        assert len(tiers) == 2, f"expected both tiers in {roles}"
-
-
-def test_costorm_uses_searxng_rather_than_the_paid_default(costorm):
-    # Upstream fell back to BingSearch when rm was omitted, which needs a paid key.
-    assert type(costorm.rm).__name__ == "SearXNG"
-    assert costorm.rm.searxng_api_url == "http://searxng.example"
-
-
-def test_costorm_encoder_uses_the_configured_embedding_model(costorm):
-    # Encoder hardcodes text-embedding-3-small, which a prefix-routing gateway will not serve.
-    assert costorm.encoder.embedding_model_name == "openai/ollama/embed:cloud"
 
 
 def test_storm_writes_where_it_is_told(storm, tmp_path):
@@ -236,49 +193,6 @@ def test_an_override_naming_an_unknown_provider_is_refused(settings):
     check_model_overrides(settings, "gateway/x", None, "gateway/y")
 
 
-def test_a_restored_session_still_reaches_the_gateway(settings):
-    """The regression this guards is silent and expensive.
-
-    Upstream's from_dict called CollaborativeStormLMConfigs.init(), which hardcodes api_base=None
-    against gpt-4o-2024-05-13, and passed no retriever so BingSearch was used. A session restored
-    that way would bill an OpenAI account directly and fail on a paid search key, with nothing in
-    the response to say so.
-    """
-
-    original = build_costorm_runner(settings, "a narrow topic")
-    restored = load_costorm_runner(settings, original.to_dict())
-
-    for role in COSTORM_ROLES:
-        model = getattr(restored.lm_config, role)
-        assert model.kwargs["api_base"] == "https://gateway.example/v1", role
-        assert model.model in {"openai/ollama/fast:cloud", "openai/ollama/strong:cloud"}, role
-
-    assert type(restored.rm).__name__ == "SearXNG"
-    assert restored.encoder.embedding_model_name == "openai/ollama/embed:cloud"
-    # The knowledge base captures the model by value at construction, so restoring it with the
-    # wrong config would leave this one pointing at api.openai.com even if lm_config were fixed.
-    assert restored.knowledge_base.gen_summary_module.engine is restored.lm_config.knowledge_base_lm
-
-
-def test_a_restored_session_keeps_its_topic_and_history(settings):
-    original = build_costorm_runner(settings, "a narrow topic")
-    state = original.to_dict()
-    restored = load_costorm_runner(settings, state)
-
-    assert restored.runner_argument.topic == "a narrow topic"
-    assert len(restored.conversation_history) == len(original.conversation_history)
-    assert restored.to_dict()["runner_argument"]["topic"] == "a narrow topic"
-
-
-def test_a_session_file_carries_no_credential(settings):
-    """Sessions persist under the data directory for their TTL, so a key there outlives the run."""
-    state = build_costorm_runner(settings, "a narrow topic").to_dict()
-
-    assert ENV["KVASIR_PROVIDER_GATEWAY_API_KEY"] not in json.dumps(state)
-    for role in COSTORM_ROLES:
-        assert not [key for key in state["lm_config"][role] if key.startswith("api_")]
-
-
 def test_reasoning_effort_is_not_sent_unless_set(storm):
     for role in STORM_ROLES:
         assert "extra_body" not in getattr(storm.lm_configs, role).kwargs, role
@@ -287,7 +201,6 @@ def test_reasoning_effort_is_not_sent_unless_set(storm):
 def test_reasoning_effort_reaches_every_role_in_the_body(tmp_path):
     settings = Settings.load(ENV, STORED | {"model.reasoning_effort": "none"})
     storm = build_storm_runner(settings, tmp_path)
-    costorm = build_costorm_runner(settings, "a narrow topic")
 
-    for model in _models(storm.lm_configs, STORM_ROLES) + _models(costorm.lm_config, COSTORM_ROLES):
+    for model in _models(storm.lm_configs, STORM_ROLES):
         assert model.kwargs["extra_body"] == {"reasoning_effort": "none"}

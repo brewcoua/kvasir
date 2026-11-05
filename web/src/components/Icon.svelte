@@ -26,9 +26,6 @@
     assess: "M2 12a6 6 0 1 1 12 0M8 12l2.5-3.5",
     outline: "M3 4h10M5.5 7h7.5M5.5 10h7.5M3 13h10",
     polish: "M8 2c.5 3 1.5 4.5 5 6-3.5 1.5-4.5 3-5 6-.5-3-1.5-4.5-5-6 3.5-1.5 4.5-3 5-6z",
-    warm_start: "M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z",
-    turn: "M2.5 3.5h11v7h-6l-3 3v-3h-2z",
-    mind_map: "M6.7 7.2L4.7 5.5M9.3 7.2l2-1.7M6.7 8.8l-2 1.7M9.3 8.8l2 1.7",
   };
 
   export type IconName = keyof typeof PATHS;
@@ -51,8 +48,6 @@
       <circle cx="8" cy="8" r="6" />
     {:else if name === "event"}
       <circle cx="8" cy="8" r="2.2" />
-    {:else if name === "mind_map"}
-      <circle cx="8" cy="8" r="1.7" /><circle cx="3.5" cy="4.5" r="1.3" /><circle cx="12.5" cy="4.5" r="1.3" /><circle cx="3.5" cy="11.5" r="1.3" /><circle cx="12.5" cy="11.5" r="1.3" />
     {/if}
   </g>
 </svg>

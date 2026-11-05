@@ -3,7 +3,7 @@
 The Pipe is pasted into Open WebUI by hand and cannot be imported as a package, so it is loaded
 from its path. Running it against uvicorn rather than a mock is the point: SSE parsing and chunk
 boundaries are exactly what a mocked transport would fail to exercise. Only the two engines are
-faked; session persistence, routing, the run registry and SSE framing are all real.
+faked; routing, the run registry and SSE framing are all real.
 """
 
 import importlib.util
@@ -15,16 +15,12 @@ import pytest
 import uvicorn
 
 from fakes import ENVIRONMENT, STORED, store_settings, stub_method
-from kvasir import conversation
 from kvasir.api.app import app
 from kvasir.schemas.results import (
     ArticleResult,
     Citation,
     RemovedSentence,
-    Report,
     ResearchResult,
-    SessionInfo,
-    Turn,
 )
 
 PIPE_PATH = Path(__file__).parents[1] / "owui" / "pipe.py"
@@ -39,23 +35,6 @@ RESULT = ArticleResult(
     duration_seconds=125.0,
 )
 
-INFO = SessionInfo(
-    session_id="chat-1",
-    topic="The Kvasir stone",
-    turn_count=0,
-    experts=["Petrologist", "Local historian"],
-    updated_at=1.0,
-)
-
-AGENT_TURN = Turn(
-    role="Petrologist",
-    role_description="studies rock provenance",
-    utterance="The source outcrop lies four hundred kilometres north [1].",
-    utterance_type="Support",
-    citations=[Citation(index=1, url="https://example.org/a", title="Provenance", snippet="s")],
-    mind_map_reorganised=True,
-)
-
 RESEARCH = ResearchResult(
     report="# The Kvasir stone\n\nIt was catalogued in 1783 [1].",
     assumptions=["Taken to mean the runestone, not the mead."],
@@ -65,15 +44,6 @@ RESEARCH = ResearchResult(
         RemovedSentence(section="Origin", sentence="It is Roman [4].", reason="no quote says so")
     ],
     duration_seconds=300.0,
-)
-
-USER_TURN = Turn(
-    role="Guest",
-    role_description="",
-    utterance="How was it dated?",
-    utterance_type="Original Question",
-    citations=[],
-    mind_map_reorganised=False,
 )
 
 
@@ -87,7 +57,7 @@ def load_pipe():
 @pytest.fixture
 def service(monkeypatch, tmp_path):
     """A real kvasir on a real port, with both engines faked."""
-    # Startup creates the sessions directory, and the default /data is not writable here.
+    # Startup creates the database, and the default /data is not writable here.
     monkeypatch.setenv("KVASIR_DATA_DIR", str(tmp_path / "data"))
     store_settings(tmp_path / "data", STORED)
     for name, value in ENVIRONMENT.items():
@@ -118,40 +88,6 @@ def service(monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def engine(service, monkeypatch):
-    """Fakes the Co-STORM engine, recording the calls the pipe makes."""
-    calls = []
-
-    def create(settings, store, request, stream):
-        stream.publish("warm_start", "gathering background")
-        store.save(
-            request.session_id,
-            {
-                "runner_argument": {"topic": request.topic},
-                "conversation_history": [],
-                "experts": [{"role_name": name} for name in INFO.experts],
-            },
-        )
-        calls.append(("create", request.topic))
-        return INFO
-
-    def step(settings, store, session_id, utterance, stream):
-        stream.publish("turn", "searching for sources")
-        calls.append(("step", utterance))
-        return USER_TURN if utterance else AGENT_TURN
-
-    def report(settings, store, session_id, stream):
-        stream.publish("article", "writing the report")
-        calls.append(("report", session_id))
-        return Report(report="# Report\n\nFindings.", citations=AGENT_TURN.citations)
-
-    monkeypatch.setattr(conversation, "create", create)
-    monkeypatch.setattr(conversation, "step", step)
-    monkeypatch.setattr(conversation, "report", report)
-    return calls
-
-
-@pytest.fixture
 def pipe(service):
     instance = load_pipe().Pipe()
     instance.valves.KVASIR_URL = service
@@ -176,9 +112,9 @@ class Events:
         return [data["description"] for data in self.of("status")]
 
 
-async def run(pipe, body, events=None, metadata=None, call=None, user=None, task=None):
+async def run(pipe, body, events=None, call=None, user=None, task=None):
     chunks = []
-    async for chunk in pipe.pipe(body, events, call, metadata, user, task):
+    async for chunk in pipe.pipe(body, events, call, user, task):
         chunks.append(chunk)
     return "".join(chunks)
 
@@ -186,12 +122,6 @@ async def run(pipe, body, events=None, metadata=None, call=None, user=None, task
 def storm(text):
     return {"model": "kvasir.storm", "messages": [{"role": "user", "content": text}]}
 
-
-def costorm(text):
-    return {"model": "kvasir.co-storm", "messages": [{"role": "user", "content": text}]}
-
-
-METADATA = {"chat_id": "chat-1"}
 
 # Open WebUI's own title prompt, trimmed. The shape is what matters: a long instruction addressed
 # to the model, with the real conversation buried in it, arriving as an ordinary user message.
@@ -207,10 +137,9 @@ USER: The Kvasir stone
 </chat_history>"""
 
 
-def test_it_exposes_the_three_models():
+def test_it_exposes_the_two_models():
     assert load_pipe().Pipe().pipes() == [
         {"id": "storm", "name": "STORM"},
-        {"id": "co-storm", "name": "Co-STORM"},
         {"id": "research", "name": "Research"},
     ]
 
@@ -457,129 +386,6 @@ async def test_a_user_valve_overrides_the_admin_one(pipe, monkeypatch):
 
     assert sent["options"].search_top_k == 9
     assert sent["options"].do_polish_article is False
-
-
-# -- Co-STORM ----------------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_the_first_message_warm_starts_and_takes_a_turn(pipe, engine):
-    events = Events()
-
-    answer = await run(pipe, costorm("The Kvasir stone"), events, METADATA)
-
-    assert engine[0] == ("create", "The Kvasir stone")
-    assert engine[1] == ("step", "")
-    assert "Round table on **The Kvasir stone**" in answer
-    assert "Petrologist, Local historian" in answer
-    assert "four hundred kilometres north" in answer
-    assert "_The mind map was reorganised._" in answer
-    # Both calls share one reasoning block rather than opening a second.
-    assert answer.count("<think>") == 1
-    assert "- gathering background" in answer
-    assert [data["source"]["name"] for data in events.of("source")] == ["[1] Provenance"]
-
-
-@pytest.mark.asyncio
-async def test_warm_start_can_stop_without_taking_a_turn(pipe, engine):
-    pipe.valves.ADVANCE_AFTER_WARM_START = False
-
-    answer = await run(pipe, costorm("The Kvasir stone"), None, METADATA)
-
-    assert [name for name, _ in engine] == ["create"]
-    assert "Say `next` to advance" in answer
-
-
-@pytest.mark.asyncio
-async def test_the_session_is_keyed_by_chat_id_and_reused(pipe, engine):
-    await run(pipe, costorm("The Kvasir stone"), None, METADATA)
-    engine.clear()
-
-    await run(pipe, costorm("next"), None, METADATA)
-
-    # No second create: the existing session was found on disk.
-    assert [name for name, _ in engine] == ["step"]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("command", ["next", "NEXT", " next ", "/next"])
-async def test_advance_takes_an_agent_turn_without_speaking(pipe, engine, command):
-    await run(pipe, costorm("The Kvasir stone"), None, METADATA)
-    engine.clear()
-
-    answer = await run(pipe, costorm(command), None, METADATA)
-
-    assert engine == [("step", "")]
-    assert "Petrologist" in answer
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("command", ["report", "/report", "Report"])
-async def test_report_returns_the_markdown_with_sources(pipe, engine, command):
-    await run(pipe, costorm("The Kvasir stone"), None, METADATA)
-    engine.clear()
-    events = Events()
-
-    answer = await run(pipe, costorm(command), events, METADATA)
-
-    assert [name for name, _ in engine] == ["report"]
-    reasoning, body = answer.split("</think>", 1)
-    assert "- writing the report" in reasoning
-    assert body.lstrip().startswith("# Report")
-    assert [data["source"]["name"] for data in events.of("source")] == ["[1] Provenance"]
-    # The report is a run like any other now, so it carries a run id and a usage footer.
-    assert "<summary>Run " in body
-
-
-@pytest.mark.asyncio
-async def test_speaking_records_the_turn_then_asks_for_a_response(pipe, engine):
-    await run(pipe, costorm("The Kvasir stone"), None, METADATA)
-    engine.clear()
-
-    answer = await run(pipe, costorm("How was it dated?"), None, METADATA)
-
-    # A user turn is recorded rather than answered, so a second step produces the reply.
-    assert engine == [("step", "How was it dated?"), ("step", "")]
-    reasoning, body = answer.split("</think>", 1)
-    assert "recorded as Original Question" in reasoning
-    assert "four hundred kilometres north" in body
-
-
-@pytest.mark.asyncio
-async def test_a_failing_call_is_reported_not_raised(pipe, engine, monkeypatch):
-    def failing(settings, store, request, stream):
-        raise RuntimeError("searxng returned nothing")
-
-    monkeypatch.setattr(conversation, "create", failing)
-
-    assert "searxng returned nothing" in await run(pipe, costorm("x"), None, METADATA)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("command", ["next", "report"])
-async def test_a_command_before_the_round_table_exists_asks_for_a_topic(pipe, engine, command):
-    events = Events()
-
-    answer = await run(pipe, costorm(command), events, METADATA)
-
-    assert engine == []
-    assert answer.startswith("No round table in this chat yet")
-    # Nothing ran, so nothing claims to have finished.
-    assert events.of("notification") == []
-
-
-@pytest.mark.asyncio
-async def test_a_missing_chat_id_is_reported(pipe, engine):
-    answer = await run(pipe, costorm("The Kvasir stone"), None, {})
-
-    assert "did not supply a chat id" in answer
-
-
-@pytest.mark.asyncio
-async def test_an_empty_message_asks_for_a_topic(pipe, engine):
-    body = {"model": "kvasir.co-storm", "messages": []}
-
-    assert await run(pipe, body, None, METADATA) == "Send a topic."
 
 
 # -- Research ----------------------------------------------------------------------------------

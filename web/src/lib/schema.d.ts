@@ -461,84 +461,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Session
-         * @description Create a session and warm start it. Streams, because warm start is a miniature STORM run.
-         */
-        post: operations["create_session_v1_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/session/{session_id}/step": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Step Session
-         * @description Take one turn. With an utterance the user speaks, without one an agent does.
-         */
-        post: operations["step_session_v1_session__session_id__step_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/session/{session_id}/report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Session Report
-         * @description Streams, because generating a report spends tokens and takes a slot like any other run.
-         */
-        post: operations["session_report_v1_session__session_id__report_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/session/{session_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Session Info */
-        get: operations["session_info_v1_session__session_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Session */
-        delete: operations["delete_session_v1_session__session_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/settings": {
         parameters: {
             query?: never;
@@ -1212,16 +1134,6 @@ export interface components {
             stage: "citation" | "checker" | "verify" | "escalate" | "rewrite";
         };
         /**
-         * Report
-         * @description Payload of `POST /v1/session/{id}/report`.
-         */
-        Report: {
-            /** Report */
-            report: string;
-            /** Citations */
-            citations: components["schemas"]["Citation"][];
-        };
-        /**
          * ResearchClaim
          * @description One piece of evidence, with the verbatim quote it was read from.
          */
@@ -1421,7 +1333,7 @@ export interface components {
             /** Events */
             events: components["schemas"]["Progress"][];
             /** Result */
-            result: components["schemas"]["ArticleResult"] | components["schemas"]["ResearchResult"] | components["schemas"]["Turn"] | components["schemas"]["Report"] | components["schemas"]["SessionInfo"] | null;
+            result: components["schemas"]["ArticleResult"] | components["schemas"]["ResearchResult"] | null;
         };
         /**
          * RunSpan
@@ -1437,8 +1349,8 @@ export interface components {
          * RunStage
          * @description Time spent in one stage.
          *
-         *     A stage can be entered more than once, as Co-STORM alternates between two, so `seconds` sums
-         *     the spans rather than measuring from the first entry to the last exit.
+         *     A stage can be entered more than once, so `seconds` sums the spans rather than measuring from
+         *     the first entry to the last exit.
          */
         RunStage: {
             /** Name */
@@ -1553,36 +1465,6 @@ export interface components {
             /** Snippet */
             snippet: string;
             source?: components["schemas"]["SourceInfo"] | null;
-        };
-        /**
-         * SessionInfo
-         * @description Payload of `GET /v1/session/{id}`.
-         */
-        SessionInfo: {
-            /** Session Id */
-            session_id: string;
-            /** Topic */
-            topic: string;
-            /** Turn Count */
-            turn_count: number;
-            /** Experts */
-            experts: string[];
-            /** Updated At */
-            updated_at: number;
-        };
-        /**
-         * SessionRequest
-         * @description Body of `POST /v1/session`. The id is the caller's, so Open WebUI can key it by chat id.
-         */
-        SessionRequest: {
-            /** Session Id */
-            session_id: string;
-            /** Topic */
-            topic: string;
-            /** Model Fast */
-            model_fast?: string | null;
-            /** Model Strong */
-            model_strong?: string | null;
         };
         /** SettingInfo */
         SettingInfo: {
@@ -1717,17 +1599,6 @@ export interface components {
             searches: number;
         };
         /**
-         * StepRequest
-         * @description Body of `POST /v1/session/{id}/step`. An empty utterance advances the round table.
-         */
-        StepRequest: {
-            /**
-             * Utterance
-             * @default
-             */
-            utterance: string;
-        };
-        /**
          * StormOptions
          * @description Options of the `storm` method. Each falls back to the configured default when omitted.
          */
@@ -1780,24 +1651,6 @@ export interface components {
         TaskResponse: {
             /** Content */
             content: string;
-        };
-        /**
-         * Turn
-         * @description One conversation turn, as the `done` event of a step.
-         */
-        Turn: {
-            /** Role */
-            role: string;
-            /** Role Description */
-            role_description: string;
-            /** Utterance */
-            utterance: string;
-            /** Utterance Type */
-            utterance_type: string;
-            /** Citations */
-            citations: components["schemas"]["Citation"][];
-            /** Mind Map Reorganised */
-            mind_map_reorganised: boolean;
         };
         /**
          * UnverifiedSentence
@@ -2546,165 +2399,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaskResponse"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_session_v1_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    step_session_v1_session__session_id__step_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StepRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    session_report_v1_session__session_id__report_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    session_info_v1_session__session_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_session_v1_session__session_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -8,8 +8,8 @@ are started, streamed, accounted for or stored. The research pipeline has its ow
 
 ## The pieces
 
-kvasir is one Python process. It holds no state that a restart must recover except Co-STORM
-sessions, and optionally a run history. Every model and embedding call goes to an
+kvasir is one Python process. It holds no state that a restart must recover except, optionally, a
+run history. Every model and embedding call goes to an
 OpenAI-compatible provider, and every search goes to one SearXNG instance.
 
 Solid arrows are requests kvasir makes or serves. Dotted arrows are files it writes.
@@ -23,14 +23,14 @@ flowchart LR
     subgraph kvasir["kvasir process"]
         api["FastAPI routes<br/>api/"]
         registry["RunRegistry<br/>runs/"]
-        storm["STORM / Co-STORM<br/>storm/"]
+        storm["STORM<br/>storm/"]
         deep["Research methods<br/>methods/, research/"]
     end
 
     gateway["OpenAI-compatible<br/>providers"]
     searxng["SearXNG"]
     web["Web pages<br/>and PDFs"]
-    data[("/data<br/>sessions/*.json<br/>kvasir.db")]
+    data[("/data<br/>kvasir.db")]
 
     owui --> api
     browser --> api
@@ -49,15 +49,13 @@ flowchart LR
 
 | Module | Holds |
 | --- | --- |
-| `api/` | The app and its routers: runs, tasks and Co-STORM sessions. `api/streaming.py` holds `streamed`, which turns blocking work into an SSE response. |
+| `api/` | The app and its routers: runs and tasks. `api/streaming.py` holds `streamed`, which turns blocking work into an SSE response. |
 | `__main__.py` | The entry point. Configures logging before uvicorn starts. |
 | `config.py` | `Settings`, loaded from the environment and the `settings` table of `kvasir.db`. |
 | `runners.py` | Builds every model, the encoder and the retriever from settings, one model per role. |
 | `schemas/` | The request, result and run models the API serves. |
 | `runs/progress.py` | `ProgressStream`, and the callback handlers that turn STORM's callbacks into progress events. |
 | `runs/` | `Run` (`run.py`) and `RunRegistry` (`registry.py`): state, stages, usage and live followers for each run. `store.py` is the optional SQLite history. |
-| `sessions.py` | Co-STORM session files. |
-| `conversation.py` | Drives one Co-STORM operation. |
 | `research/` | The steps every research method shares: search, reading, verification, writing, rendering. See [`research.md`](research.md). |
 | `methods/` | The methods `POST /v1/runs` runs, listed in `METHODS`. Each is a `Method` (`methods/base.py`): its options, stages, configured defaults and run. `methods/ledger/` is the research pipeline, `methods/graph/` explores the questions findings raise over the same steps, `methods/storm/` drives STORM. See [`methods-plan.md`](methods-plan.md). |
 | `storm/` | The vendored, modified `knowledge_storm`. See [`fork-notes.md`](fork-notes.md). |
@@ -70,9 +68,8 @@ flowchart LR
 | `POST /v1/runs` with `ledger` | `methods.ledger.method.run_research` | `ledger` | A report answering a question, ranking or comparing options when asked. |
 | `POST /v1/runs` with `graph` | `methods.graph.method.run_graph` | `graph` | A report answering a question, one section per branch explored. |
 | `POST /v1/runs` with `storm` | STORM, `methods.storm.method.run_article` | `storm` | A Wikipedia-style article about a topic. |
-| `POST /v1/session` and its sub-routes | Co-STORM, `conversation.*` | `costorm` | A turn-based round table, and a report from it. |
 
-STORM and Co-STORM are upstream's work, kept close to upstream. The research pipeline is kvasir's
+STORM is upstream's work, kept close to upstream. The research pipeline is kvasir's
 own, written because STORM takes no instructions, does not compare or rank, and its prompts ask for
 an encyclopedia page. It lives outside the fork so it is typed, linted and checked by `mypy` like
 the rest of the service.
@@ -211,8 +208,8 @@ cannot deadlock against the pools above.
 
 ## Models and accounting
 
-`runners.py` builds one `GatewayModel` per role, from three tables: `_STORM_ROLES`,
-`_COSTORM_ROLES` and `_RESEARCH_ROLES`. Each entry names a tier, fast, strong or reason, and a
+`runners.py` builds one `GatewayModel` per role, from two tables: `_STORM_ROLES` and
+`_RESEARCH_ROLES`. Each entry names a tier, fast, strong or reason, and a
 token budget. The rule for tiers: the fast model handles many small calls (simulating conversation,
 asking questions, extracting claims, a first check of each sentence), the strong model writes what
 a reader sees, and the reason model makes the judgements that steer a run and has the last word on a
@@ -257,7 +254,6 @@ fails at once. The retry budget is a contextvar, so `/v1/tasks` and `/v1/clarify
 | Runs | Memory, in `RunRegistry` | The `runs.max` most recent, until restart | Runs are observation, not state: nothing resumes from one. |
 | Run history | `$KVASIR_DATA_DIR/kvasir.db`, with `runs.store` set to `sqlite` | `runs.ttl_days` and `runs.max` | For debugging the service. A client such as Open WebUI keeps its own record of every answer. |
 | Model call content and search results | With its run, in memory and in `kvasir.db`, with `runs.keep_call_content` set to `true` | As long as its run | Prompts and answers can hold what a user asked, so keeping them is opt-in. Search results follow the same setting. |
-| Co-STORM sessions | `$KVASIR_DATA_DIR/sessions/<id>.json` | `sessions.ttl_hours`, swept at startup | A round table spans many requests and must survive a restart. |
 | STORM scratch | A temporary directory under `/tmp` | One run | STORM writes its output as files; `methods/storm/method.py` reads them back and removes the directory. |
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
 | Pages read | `$KVASIR_DATA_DIR/pages.db`: each page's text and links, and its pieces with their vectors | Served for `fetch.max_age_hours`, then revalidated; kept until deleted from the Knowledge page | A page read once is not downloaded again, and a later run can answer from it with no search. Public page content only: no brief, question or claim. One cache serves every user of the service. |
@@ -275,13 +271,6 @@ schedule, with the same user agent.
 The SQLite store writes a run twice: when it starts, so a restart mid-run leaves a trace, and when
 it ends. A run in progress is always read from memory. At startup, `RunStore.sweep` marks any run
 still `queued` or `running` as `failed` with `interrupted by a restart`.
-
-A session file is written to a sibling `.json.tmp`, flushed, fsynced and renamed, so a crash
-mid-write leaves the previous session readable. Session ids come from the caller, so they are
-checked against `[A-Za-z0-9][A-Za-z0-9_-]{0,127}` before reaching the filesystem. Nothing holds a
-Co-STORM runner between requests: each operation loads the session, does one thing and saves it.
-The models, encoder and retriever come from current settings, not from the file, so a config change
-reaches the next turn of an existing session.
 
 `pages.db` is a SQLite file of its own in WAL mode, so deleting it loses nothing else. Each call
 opens its own connection, and writers from several runs wait for each other up to 30 seconds. A
@@ -301,13 +290,13 @@ keeps the marks. The routes answer 404 when it is off. They use the `Sources` in
 it when they answer, so a mark applies to a run already stored. Every one of these reads what is
 known at once and never waits for Wikidata; a lookup the cache lacks finishes in the background.
 
-Expiry, of sessions and of stored runs, happens once at startup and, for runs, after each run ends.
+Expiry of stored runs happens once at startup and after each run ends.
 There is no scheduler and no background task.
 
 ## Open WebUI
 
-`owui/pipe.py` is one Pipe function exposing three models: `kvasir.research`, `kvasir.storm` and
-`kvasir.co-storm`. It keeps no state of its own: it uses only aiohttp, pydantic and the standard
+`owui/pipe.py` is one Pipe function exposing two models: `kvasir.research` and `kvasir.storm`. It
+keeps no state of its own: it uses only aiohttp, pydantic and the standard
 library, which Open WebUI already ships, and finds everything it needs by reading the chat back.
 
 ```mermaid
@@ -343,7 +332,6 @@ sequenceDiagram
   message running for many minutes says what it is doing.
 - STORM ignores conversation history. A follow-up starts a new run, so the pipe asks first when
   `CONFIRM_RERUN` is on.
-- Co-STORM keys its session by the chat id, so one chat is one round table.
 
 The valve reference is in [`owui/README.md`](../owui/README.md).
 

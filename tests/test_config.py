@@ -34,8 +34,6 @@ def test_defaults():
 
     assert str(settings.data_dir) == "/data"
     assert (settings.host, settings.port) == ("0.0.0.0", 8080)
-    assert settings.sessions_dir.name == "sessions"
-    assert settings.sessions.ttl_hours == 168
     assert settings.runs.max_concurrent == 1
     assert (
         settings.search.top_k == settings.storm.max_conv_turn == settings.storm.max_perspective == 3

@@ -164,18 +164,3 @@ class MethodInfo(BaseModel):
     stages: list[str]
     # The options' JSON Schema, with the configured defaults as each property's `default`.
     options: dict[str, Any]
-
-
-class SessionRequest(BaseModel):
-    """Body of `POST /v1/session`. The id is the caller's, so Open WebUI can key it by chat id."""
-
-    session_id: str = Field(min_length=1)
-    topic: str = Field(min_length=1)
-    model_fast: str | None = None
-    model_strong: str | None = None
-
-
-class StepRequest(BaseModel):
-    """Body of `POST /v1/session/{id}/step`. An empty utterance advances the round table."""
-
-    utterance: str = ""

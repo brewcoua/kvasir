@@ -74,7 +74,6 @@ export async function request<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DEL
 export function resultText(result: RunResult): string {
   if ("article" in result) return result.article;
   if ("report" in result) return result.report;
-  if ("utterance" in result) return result.utterance;
   return JSON.stringify(result, null, 2);
 }
 

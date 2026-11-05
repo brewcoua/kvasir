@@ -324,9 +324,6 @@ const STAGE_ICONS: Record<string, IconName> = {
   outline: "outline",
   article: "page",
   polish: "polish",
-  warm_start: "warm_start",
-  turn: "turn",
-  mind_map: "mind_map",
 };
 const OUTCOME_ICONS = { removed: "close", rewritten: "brief", unverified: "question" } as const;
 const KIND_ICONS: Partial<Record<StepKind, IconName>> = { question: "question", attempt: "search", recall: "page", repair: "verify", page: "page", section: "write", split: "split" };

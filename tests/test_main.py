@@ -10,20 +10,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fakes import AUTH, ENVIRONMENT, STORED, article_run, store_settings, stub_method
-from kvasir import conversation
 from kvasir.api import streaming
 from kvasir.api.app import app
 from kvasir.methods import METHODS
 from kvasir.runs.registry import RunRegistry
 from kvasir.schemas.requests import RunRequest
-from kvasir.schemas.results import (
-    ArticleResult,
-    Citation,
-    Report,
-    ResearchResult,
-    SessionInfo,
-    Turn,
-)
+from kvasir.schemas.results import ArticleResult, Citation, ResearchResult
 
 RESULT = ArticleResult(
     article="# Discovery\n\nText [1].",
@@ -165,9 +157,6 @@ def test_a_first_start_is_not_ready_and_says_what_to_set(unconfigured):
         ("/v1/runs", article_run("x")),
         ("/v1/clarify", {"question": "x"}),
         ("/v1/tasks", {"messages": [{"role": "user", "content": "x"}]}),
-        ("/v1/session", {"session_id": "s", "topic": "x"}),
-        ("/v1/session/s/step", {}),
-        ("/v1/session/s/report", None),
     ],
 )
 def test_nothing_runs_before_the_setup(unconfigured, path, body):
@@ -241,15 +230,8 @@ def test_readyz_probes_each_provider_a_model_uses_once(environment, monkeypatch)
     ]
 
 
-@pytest.mark.parametrize(
-    ("path", "body"),
-    [
-        ("/v1/runs", article_run("x", model_strong="nope/x")),
-        ("/v1/session", {"session_id": "chat-1", "topic": "x", "model_fast": "nope/x"}),
-    ],
-)
-def test_a_model_override_naming_an_unknown_provider_is_a_client_error(client, path, body):
-    response = client.post(path, json=body)
+def test_a_model_override_naming_an_unknown_provider_is_a_client_error(client):
+    response = client.post("/v1/runs", json=article_run("x", model_strong="nope/x"))
 
     assert response.status_code == 400
     assert "unknown provider 'nope'" in response.json()["message"]
@@ -448,138 +430,3 @@ async def test_a_client_that_leaves_before_the_work_starts_frees_the_slot(enviro
     await events.aclose()
 
     assert slots.acquire(blocking=False)
-
-
-@pytest.fixture
-def sessions(client):
-    """The store the running app is actually using, under the temporary data directory."""
-    return app.state.sessions
-
-
-TURN = Turn(
-    role="Petrologist",
-    role_description="studies rock provenance",
-    utterance="The source outcrop is northern [1].",
-    utterance_type="Support",
-    citations=[Citation(index=1, url="https://example.org/a", title="A", snippet="s")],
-    mind_map_reorganised=True,
-)
-
-INFO = SessionInfo(
-    session_id="chat-1",
-    topic="The Kvasir stone",
-    turn_count=2,
-    experts=["Petrologist"],
-    updated_at=1.0,
-)
-
-
-def test_creating_a_session_streams_warm_start_progress(client, sessions, monkeypatch):
-    def fake_create(settings, store, request, stream):
-        stream.publish("warm_start", "gathering background")
-        return INFO
-
-    monkeypatch.setattr(conversation, "create", fake_create)
-    events = parse(client.post("/v1/session", json={"session_id": "chat-1", "topic": "x"}).text)
-
-    assert [name for name, _ in events] == ["run", "progress", "done"]
-    assert events[1][1]["stage"] == "warm_start"
-    assert events[-1][1]["experts"] == ["Petrologist"]
-
-
-def test_creating_a_session_twice_is_refused(client, sessions, monkeypatch):
-    monkeypatch.setattr(conversation, "create", lambda *args: INFO)
-    sessions.save("chat-1", {"runner_argument": {"topic": "x"}, "conversation_history": []})
-
-    response = client.post("/v1/session", json={"session_id": "chat-1", "topic": "x"})
-
-    assert response.status_code == 409
-
-
-def test_an_unsafe_session_id_is_rejected_before_touching_the_filesystem(client, sessions):
-    response = client.post("/v1/session", json={"session_id": "../escape", "topic": "x"})
-
-    assert response.status_code == 400
-    assert "session id must be" in response.json()["message"]
-
-
-def test_stepping_streams_progress_then_the_turn(client, sessions, monkeypatch):
-    def fake_step(settings, store, session_id, utterance, stream):
-        stream.publish("turn", "searching for sources")
-        return TURN
-
-    monkeypatch.setattr(conversation, "step", fake_step)
-    events = parse(client.post("/v1/session/chat-1/step", json={"utterance": "why?"}).text)
-
-    assert [name for name, _ in events] == ["run", "progress", "done"]
-    turn = events[-1][1]
-    assert turn["role"] == "Petrologist"
-    assert turn["mind_map_reorganised"] is True
-    assert turn["citations"][0]["index"] == 1
-
-
-def test_stepping_without_an_utterance_advances_the_round_table(client, sessions, monkeypatch):
-    seen = {}
-
-    def fake_step(settings, store, session_id, utterance, stream):
-        seen["utterance"] = utterance
-        return TURN
-
-    monkeypatch.setattr(conversation, "step", fake_step)
-    client.post("/v1/session/chat-1/step", json={})
-
-    assert seen["utterance"] == ""
-
-
-def test_stepping_a_missing_session_reports_it_in_the_stream(client, sessions):
-    events = parse(client.post("/v1/session/absent/step", json={}).text)
-
-    assert [name for name, _ in events] == ["run", "error"]
-    assert "no session absent" in events[-1][1]["message"]
-
-
-def test_report_streams_markdown_and_citations(client, sessions, monkeypatch):
-    def report(settings, store, session_id, stream):
-        stream.publish("article", "writing the report")
-        return Report(report="# Report", citations=TURN.citations)
-
-    monkeypatch.setattr(conversation, "report", report)
-
-    events = parse(client.post("/v1/session/chat-1/report").text)
-
-    assert events[0][0] == "run"
-    assert ("article", "writing the report") in [
-        (data["stage"], data["detail"]) for name, data in events if name == "progress"
-    ]
-    assert events[-1][0] == "done"
-    assert events[-1][1]["report"] == "# Report"
-    assert events[-1][1]["citations"][0]["url"] == "https://example.org/a"
-
-
-def test_session_metadata_is_read_from_disk(client, sessions):
-    sessions.save(
-        "chat-1",
-        {
-            "runner_argument": {"topic": "The Kvasir stone"},
-            "conversation_history": [{}, {}],
-            "experts": [{"role_name": "Petrologist"}],
-        },
-    )
-
-    body = client.get("/v1/session/chat-1").json()
-
-    assert body["topic"] == "The Kvasir stone"
-    assert body["turn_count"] == 2
-    assert body["experts"] == ["Petrologist"]
-
-
-def test_a_missing_session_is_404(client, sessions):
-    assert client.get("/v1/session/absent").status_code == 404
-    assert client.delete("/v1/session/absent").status_code == 404
-
-
-def test_deleting_a_session_removes_it(client, sessions):
-    sessions.save("chat-1", {"runner_argument": {"topic": "x"}, "conversation_history": []})
-
-    assert client.delete("/v1/session/chat-1").status_code == 204
-    assert not sessions.exists("chat-1")

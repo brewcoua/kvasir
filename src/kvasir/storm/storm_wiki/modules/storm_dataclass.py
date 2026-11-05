@@ -109,9 +109,8 @@ class StormInformationTable(InformationTable):
         """Embed every collected snippet so `retrieve_information` can rank them.
 
         Upstream loaded a local `SentenceTransformer("paraphrase-MiniLM-L6-v2")` here, which pulled
-        torch and the model weights into every deployment for this one purpose, and embedded
-        against a model unrelated to the one Co-STORM uses. The caller passes the same gateway
-        `Encoder` instead.
+        torch and the model weights into every deployment for this one purpose. The caller passes
+        the gateway `Encoder` instead.
         """
         self.encoder = encoder
         self.collected_urls = []

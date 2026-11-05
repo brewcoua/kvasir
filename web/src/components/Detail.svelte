@@ -20,7 +20,7 @@
   const usage = $derived(run.usage);
   const live = $derived(run.ended_at === null);
 
-  // Planned stages in order, then any the plan did not name, so Co-STORM shows what it saw. A
+  // Planned stages in order, then any the plan did not name, so a run shows what it saw. A
   // planned stage not reached yet has an empty track.
   const rows = $derived.by(() => {
     const start = run.started_at ?? 0;
