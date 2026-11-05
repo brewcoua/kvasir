@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,12 +17,9 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from kvasir import logs
-from kvasir.api import auth, favicons, methods, pages, runs, sessions, sources, tasks
+from kvasir.api import auth, favicons, methods, pages, runs, sessions, settings, sources, tasks
+from kvasir.api.settings import apply
 from kvasir.config import Settings, SetupRequired, apply_environment
-from kvasir.research import fetch
-from kvasir.research.favicons import Favicons, FaviconStore
-from kvasir.research.pages import PageStore
-from kvasir.runners import build_sources
 from kvasir.runs.registry import (
     CallContentNotFound,
     RunNotFound,
@@ -33,7 +29,7 @@ from kvasir.runs.registry import (
 from kvasir.runs.store import RunStore
 from kvasir.sessions import SessionIdError, SessionNotFound, SessionStore
 from kvasir.settings_store import SettingsStore
-from kvasir.storm.runtime import configure_concurrency, configure_context, configure_fetch
+from kvasir.storm.runtime import configure_concurrency
 
 READINESS_TIMEOUT_SECONDS = 5.0
 # Built from web/ by `pnpm build`, which the image does and a checkout has to.
@@ -50,28 +46,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     SettingsStore(settings.db)  # Created at the first start, whatever runs.store is.
     apply_environment()
     configure_concurrency(settings.max_threads)
-    configure_context(settings.model.context_tokens)
-    configure_fetch(
-        settings.fetch.contact,
-        settings.fetch.host_interval_seconds,
-        settings.fetch.render,
-        settings.fetch.stealth,
-    )
-    fetch.configure_cache(PageStore(settings.pages_db), settings.fetch.max_age_hours)
     logs.configure(settings)
 
-    app.state.settings = settings
-    # The database file is not made when favicons are off.
-    app.state.favicons = (
-        Favicons(settings.favicons, FaviconStore(settings.favicons_db))
-        if settings.favicons.providers
-        else None
-    )
-    # The runs' own instance, so a mark takes effect for a run in flight. None when off.
-    app.state.sources = build_sources(settings)
-    # A run holds a thread for minutes, so saturation is rejected rather than queued. Acquiring
-    # without blocking keeps this usable from the event loop.
-    app.state.run_slots = threading.BoundedSemaphore(settings.runs.max_concurrent)
+    # What the settings read only at startup were, to report a change waiting for a restart.
+    app.state.started = settings
+    apply(app, settings)
     app.state.sessions = SessionStore(settings.sessions_dir, settings.sessions.ttl_hours)
     store = (
         RunStore(settings.db, settings.runs.ttl_days, settings.runs.max)
@@ -96,7 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="kvasir", lifespan=lifespan)
 app.include_router(auth.router)
-for module in (runs, methods, pages, favicons, sources, tasks, sessions):
+for module in (runs, methods, pages, favicons, sources, tasks, sessions, settings):
     app.include_router(module.router, dependencies=[Depends(auth.require_token)])
 
 

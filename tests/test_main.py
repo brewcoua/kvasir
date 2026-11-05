@@ -334,7 +334,7 @@ def test_research_rejects_an_empty_question(client):
 def test_clarify_answers_without_a_run_or_a_slot(client, monkeypatch):
     monkeypatch.setattr("kvasir.api.tasks.clarify", lambda settings, question: ["Which region?"])
     # Held for the whole call, as for a task: clarifying must work while a run is in flight.
-    assert app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire()
 
     try:
         response = client.post("/v1/clarify", json={"question": "best makers"})
@@ -373,7 +373,7 @@ def test_a_task_takes_no_run_and_no_slot(client, monkeypatch):
     # Standing in for the run this task is describing: with one slot, a task routed through
     # /v1/runs would be refused by it. Held for the whole call, so a slot taken and released
     # would not go unnoticed either.
-    assert app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire()
 
     try:
         response = client.post("/v1/tasks", json={"messages": [{"role": "user", "content": "x"}]})
@@ -399,7 +399,7 @@ def test_saturation_returns_429_rather_than_queueing(client, monkeypatch):
     stub_method(monkeypatch, "storm", lambda *args: RESULT)
     # Standing in for a run already in flight. TestClient buffers a streaming response, so an
     # actual concurrent request cannot be held open here.
-    assert app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire()
 
     try:
         response = client.post("/v1/runs", json=article_run("second"))

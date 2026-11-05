@@ -62,8 +62,15 @@ def _choice(*options: str) -> dict[str, Any]:
     return {"norm": str.lower, "choices": options}
 
 
+def _help(text: str, **extra: Any) -> dict[str, Any]:
+    """A stored field's metadata: `text` is what the settings page shows under it."""
+    return {"help": text} | extra
+
+
 # A stored field the service cannot run without. Its default, empty, means unset.
 _REQUIRED = {"required": True}
+# A stored field read once at startup, so a change applies at the next.
+_RESTART = {"restart": True}
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,47 +96,107 @@ class Model:
 class ModelSettings:
     """Models are `<provider>/<name>`, the provider being one named in the environment."""
 
-    fast: str = field(default="", metadata=_REQUIRED)
-    strong: str = field(default="", metadata=_REQUIRED)
+    fast: str = field(
+        default="",
+        metadata=_help(
+            "Conversation simulation, question asking, polishing, and research intake.",
+            **_REQUIRED,
+        ),
+    )
+    strong: str = field(
+        default="",
+        metadata=_help(
+            "Outline and article generation, and the research outline, report and summary.",
+            **_REQUIRED,
+        ),
+    )
     # The model for judgements, which are worth thinking about. Unset falls back to `strong`.
-    reason: str | None = None
+    reason: str | None = field(
+        default=None,
+        metadata=_help(
+            "Research judgements, and the last word on a doubtful sentence. Unset uses the strong "
+            "model."
+        ),
+    )
     # No default fits every provider, and an embedding model cannot be swapped for another's.
-    embedding: str = field(default="", metadata=_REQUIRED)
+    embedding: str = field(
+        default="", metadata=_help("Embedding model, for both modes.", **_REQUIRED)
+    )
     # A grounding checker such as MiniCheck, or none. See `kvasir.research.ground`.
-    checker: str | None = None
+    checker: str | None = field(
+        default=None,
+        metadata=_help(
+            "A grounding checker such as MiniCheck. Unset leaves every check to the fast model."
+        ),
+    )
     # Sent only when set. Unset leaves the gateway's default, which for a thinking model
     # served by Ollama spends each role's token budget on reasoning before any answer.
-    reasoning_effort: str | None = None
+    reasoning_effort: str | None = field(
+        default=None,
+        metadata=_help(
+            "Sent as reasoning_effort with every call but the reason model's. none stops a "
+            "thinking model on Ollama spending its budget on reasoning."
+        ),
+    )
     # Sent to the reason tier instead of `reasoning_effort`: that tier is meant to think, and its
     # token budgets leave room for it.
-    reason_effort: str | None = "medium"
+    reason_effort: str | None = field(
+        default="medium", metadata=_help("Sent as reasoning_effort to the reason model.")
+    )
     # The context window the models are served with, such as Ollama's `num_ctx`. It sizes
     # how much of a page one intake call reads, the room left for its answer, and a section's.
-    context_tokens: int = DEFAULT_CONTEXT_TOKENS
+    context_tokens: int = field(
+        default=DEFAULT_CONTEXT_TOKENS,
+        metadata=_help(
+            "The context window the models are served with, such as Ollama's num_ctx, not the "
+            "model's maximum."
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SearchSettings:
-    url: str = field(default="", metadata=_REQUIRED | {"norm": lambda value: value.rstrip("/")})
-    top_k: int = 3
+    url: str = field(
+        default="",
+        metadata=_help("SearXNG base URL.", norm=lambda value: value.rstrip("/"), **_REQUIRED),
+    )
+    top_k: int = field(default=3, metadata=_help("Search results per query."))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RunSettings:
     # Memory by default: a client such as Open WebUI keeps its own record of every answer,
     # so history across restarts is for debugging the service itself.
-    store: str = field(default="memory", metadata=_choice("memory", "sqlite"))
-    max: int = 100
-    ttl_days: int = 30
+    store: str = field(
+        default="memory",
+        metadata=_help(
+            "sqlite keeps runs across restarts.", **_choice("memory", "sqlite"), **_RESTART
+        ),
+    )
+    max: int = field(default=100, metadata=_help("Runs kept, most recent first.", **_RESTART))
+    ttl_days: int = field(
+        default=30,
+        metadata=_help("Age past which a stored run is deleted. sqlite only.", **_RESTART),
+    )
     # Off by default: prompts carry the pages read and the user's question, which some
     # deployments must not retain. Timing and tokens are kept either way.
-    keep_call_content: bool = False
-    max_concurrent: int = 1
+    keep_call_content: bool = field(
+        default=False,
+        metadata=_help(
+            "Keep each model call's messages and answer, and each search's results, with its run.",
+            **_RESTART,
+        ),
+    )
+    max_concurrent: int = field(
+        default=1, metadata=_help("Concurrent runs. Beyond this, a request gets 429.")
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SessionSettings:
-    ttl_hours: int = 168
+    ttl_hours: int = field(
+        default=168, metadata=_help("Session expiry, applied at startup.", **_RESTART)
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -137,19 +204,31 @@ class ResearchSettings:
     """The deep research pipeline's defaults, which a request overrides one by one. Searches
     are the budget: each costs about nine page reads."""
 
-    max_searches: int = 16
-    results_per_query: int = 3
-    max_attempts: int = 4
-    follow_ups: bool = True
-    max_depth: int = 2
-    max_entities: int = 8
-    max_criteria: int = 5
+    max_searches: int = field(
+        default=16, metadata=_help("Searches in a run, before the 8 for empty cells.")
+    )
+    results_per_query: int = field(
+        default=3, metadata=_help("Pages read per search by the ledger.")
+    )
+    max_attempts: int = field(
+        default=4, metadata=_help("Queries tried on one question before it is given up.")
+    )
+    follow_ups: bool = field(
+        default=True, metadata=_help("Whether an answered question can add harder ones.")
+    )
+    max_depth: int = field(
+        default=2, metadata=_help("Levels of follow-ups below the first questions.")
+    )
+    max_entities: int = field(
+        default=8, metadata=_help("Options a ranking or table compares, when the run chooses them.")
+    )
+    max_criteria: int = field(default=5, metadata=_help("Criteria, when the run chooses them."))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class StormSettings:
-    max_conv_turn: int = 3
-    max_perspective: int = 3
+    max_conv_turn: int = field(default=3, metadata=_help("Questions per perspective."))
+    max_perspective: int = field(default=3, metadata=_help("Perspectives to research."))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -164,17 +243,40 @@ class LogSettings:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FetchSettings:
     # Named in the user agent so a site can reach whoever runs this. Empty names no one.
-    contact: str = ""
+    contact: str = field(
+        default="", metadata=_help("Contact named in the user agent of page requests.")
+    )
     # Between the starts of two requests to one host. 0 turns the wait off.
-    host_interval_seconds: float = DEFAULT_HOST_INTERVAL_SECONDS
+    host_interval_seconds: float = field(
+        default=DEFAULT_HOST_INTERVAL_SECONDS,
+        metadata=_help("Least time between the starts of two page requests to one host."),
+    )
     # Whether a page that needs JavaScript is rendered in a browser. Needs the browser extra.
-    render: str = field(default="auto", metadata=_choice("auto", "off"))
+    render: str = field(
+        default="auto",
+        metadata=_help(
+            "auto renders a page that needs JavaScript, with the browser extra installed.",
+            **_choice("auto", "off"),
+        ),
+    )
     # Renders through Patchright, which hides the signs of automation. Getting past a challenge can
     # break a site's terms, so it is the operator's call and off by default.
-    stealth: bool = False
+    stealth: bool = field(
+        default=False,
+        metadata=_help(
+            "Render through Patchright, which hides the signs of automation. Getting past a "
+            "challenge can break a site's terms."
+        ),
+    )
     # How long a cached page is served without asking its site, then it is revalidated. 0 fetches
     # every page again.
-    max_age_hours: int = field(default=48, metadata={"min": 0})
+    max_age_hours: int = field(
+        default=48,
+        metadata=_help(
+            "Hours a cached page is served without asking its site. 0 fetches every page again.",
+            min=0,
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -182,37 +284,77 @@ class FaviconSettings:
     # Tried in order, the first icon found wins. Empty turns favicons off. `direct` asks the site
     # itself; the others hand the site's name to a third party.
     providers: tuple[str, ...] = field(
-        default=("direct",), metadata=_choice("direct", "duckduckgo", "google", "custom")
+        default=("direct",),
+        metadata=_help(
+            "Where site icons come from, tried in order. Empty turns favicons off. All but direct "
+            "learn each site looked up.",
+            **_choice("direct", "duckduckgo", "google", "custom"),
+        ),
     )
     # Used by the `custom` provider: a URL with `{domain}` where the site's host goes.
-    custom_url: str = ""
+    custom_url: str = field(
+        default="",
+        metadata=_help("URL for the custom provider, with {domain} where the site's host goes."),
+    )
     # How long a found icon is served, and how long a failed lookup is remembered.
-    ttl_days: int = 30
-    miss_ttl_days: int = 3
+    ttl_days: int = field(
+        default=30, metadata=_help("Days a found icon is served before it is looked up again.")
+    )
+    miss_ttl_days: int = field(default=3, metadata=_help("Days a site with no icon is remembered."))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceSettings:
     # Off by default: classifying a site asks Wikidata about the domains of search results.
-    enabled: bool = False
+    enabled: bool = field(
+        default=False,
+        metadata=_help("Classify the sites of search results by kind and trust tier."),
+    )
     # Whether Wikidata is asked about hosts no rule, mark or list decides.
-    wikidata: bool = True
-    endpoint: str = "https://query.wikidata.org/sparql"
+    wikidata: bool = field(
+        default=True,
+        metadata=_help(
+            "Ask Wikidata about hosts no rule, mark or list decides. Off sends no domain anywhere."
+        ),
+    )
+    endpoint: str = field(
+        default="https://query.wikidata.org/sparql", metadata=_help("SPARQL endpoint asked.")
+    )
     # How long a Wikidata answer is kept, and how long a host it does not know is remembered. Also
     # the age at which a downloaded list is fetched again.
-    ttl_days: int = 30
-    miss_ttl_days: int = 7
+    ttl_days: int = field(
+        default=30,
+        metadata=_help(
+            "Days a Wikidata answer is kept, and a downloaded list served before it is fetched "
+            "again."
+        ),
+    )
+    miss_ttl_days: int = field(
+        default=7, metadata=_help("Days a host Wikidata does not know is remembered.")
+    )
     # Whether Wikipedia's perennial sources list (WP:RSP) tags hosts `rsp_reliable`, `rsp_mixed`,
     # `rsp_unreliable` or `rsp_deprecated`. Fetched with the lists; needs `enabled`.
-    rsp: bool = False
+    rsp: bool = field(
+        default=False, metadata=_help("Also tag hosts by Wikipedia's perennial sources list.")
+    )
     # Hosts, and their subdomains, that are always trusted or never read. They beat any mark.
-    allow: tuple[str, ...] = ()
-    deny: tuple[str, ...] = ()
+    allow: tuple[str, ...] = field(
+        default=(), metadata=_help("Hosts, with their subdomains, always trusted. Beats any mark.")
+    )
+    deny: tuple[str, ...] = field(
+        default=(),
+        metadata=_help(
+            "Hosts, with their subdomains, never read. Beats sources.allow and any mark."
+        ),
+    )
     # Lists fetched into data_dir, each as `<label>=<url>`. The label is a kind (`government`) or a
     # tag (`ai_generated`) given to every host on the list. Hosts files, uBlacklist and CSV with
     # the host first are read.
-    lists: tuple[str, ...] = (
-        "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv",
+    lists: tuple[str, ...] = field(
+        default=(
+            "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv",
+        ),
+        metadata=_help("Lists to download, each as <label>=<url>, the label a kind or a tag."),
     )
 
 
@@ -280,11 +422,13 @@ class Settings:
     def missing(self) -> tuple[str, ...]:
         """The stored fields the service needs before it can run anything, still unset."""
         return tuple(
-            f"{section}.{f.name}"
-            for section, section_cls in _STORED.items()
-            for f in fields(section_cls)
-            if f.metadata.get("required") and not getattr(getattr(self, section), f.name)
+            key for key, f in STORED_FIELDS if f.metadata.get("required") and not self.value(key)
         )
+
+    def value(self, key: str) -> Any:
+        """The stored field `key`, such as `research.max_searches`."""
+        section, _, name = key.partition(".")
+        return getattr(getattr(self, section), name)
 
     def ready(self) -> None:
         """Raises SetupRequired while `missing` names anything."""
@@ -342,26 +486,32 @@ class Settings:
         log = LogSettings(
             **{f.name: _read_env(f, name, env) for f, name in _ENV_FIELDS if f.name not in top}
         )
-
-        def problem(message: str) -> None:
-            if strict:
-                raise ConfigError(message)
-            logger.warning("stored setting ignored: %s", message)
+        providers = {
+            name: Provider(
+                api_base=values["api_base"].rstrip("/"),
+                api_key=values.get("api_key", NO_API_KEY),
+            )
+            for name, values in raw_providers.items()
+        }
+        defaults = {section: section_cls() for section, section_cls in _STORED.items()}
+        base = cls(providers=MappingProxyType(providers), log=log, **top, **defaults)
 
         if stored is None:
             # Read without creating, so a CLI on another host does not leave a database behind.
-            path = top["data_dir"] / "kvasir.db"
-            rows = SettingsStore(path).load() if path.exists() else {}
+            rows = SettingsStore(base.db).load() if base.db.exists() else {}
             stored = {}
             for key, text in rows.items():
                 try:
                     stored[key] = json.loads(text)
                 except ValueError:
-                    problem(f"{key} is not JSON: {text!r}")
+                    _problem(f"{key} is not JSON: {text!r}", strict)
+        return base.with_stored(stored, strict=strict)
 
-        known = {f"{section}.{f.name}" for section, c in _STORED.items() for f in fields(c)}
-        for key in sorted(set(stored) - known):
-            problem(f"unknown setting {key}")
+    def with_stored(self, stored: Mapping[str, Any], *, strict: bool = False) -> Settings:
+        """These settings' environment with `stored` in place of every stored field. A field not in
+        `stored` has its default."""
+        for key in sorted(set(stored) - {key for key, _ in STORED_FIELDS}):
+            _problem(f"unknown setting {key}", strict)
         sections = {}
         for section, section_cls in _STORED.items():
             values = {}
@@ -371,48 +521,56 @@ class Settings:
                     try:
                         values[f.name] = _parse(f, key, stored[key])
                     except ConfigError as exc:
-                        problem(str(exc))
+                        _problem(str(exc), strict)
             sections[section] = section_cls(**values)
-
-        providers = {
-            name: Provider(
-                api_base=values["api_base"].rstrip("/"),
-                api_key=values.get("api_key", NO_API_KEY),
-            )
-            for name, values in raw_providers.items()
-        }
-        settings = cls(providers=MappingProxyType(providers), log=log, **top, **sections)
+        settings = replace(self, **sections)
 
         # A provider dropped from the environment leaves its models unset rather than failing the
         # first run that uses one.
         model = settings.model
         for f in fields(ModelSettings):
             ref = getattr(model, f.name)
-            if f.name in _MODEL_REFS and ref:
+            if f"model.{f.name}" in MODEL_KEYS and ref:
                 try:
                     settings.resolve(ref)
                 except ConfigError as exc:
-                    problem(f"model.{f.name}: {exc}")
+                    _problem(f"model.{f.name}: {exc}", strict)
                     default: Any = f.default
                     model = replace(model, **{f.name: default})
         for section, check in (("favicons", _check_favicons), ("sources", _check_sources)):
             try:
                 check(getattr(settings, section))
             except ConfigError as exc:
-                problem(str(exc))
+                _problem(str(exc), strict)
                 sections[section] = _STORED[section]()
         return replace(
             settings, model=model, favicons=sections["favicons"], sources=sections["sources"]
         )
 
 
-_MODEL_REFS = frozenset({"fast", "strong", "reason", "checker", "embedding"})
+def _problem(message: str, strict: bool) -> None:
+    """A stored value that cannot be used: an error when `strict`, otherwise logged and dropped."""
+    if strict:
+        raise ConfigError(message)
+    logger.warning("stored setting ignored: %s", message)
+
+
+# The stored fields that name a model as `<provider>/<name>`.
+MODEL_KEYS = frozenset(
+    f"model.{name}" for name in ("fast", "strong", "reason", "checker", "embedding")
+)
 _TOP_LEVEL = frozenset(f.name for f in fields(Settings)) - {"providers", "log"} - set(_STORED)
 # Each field read from the environment, with its variable.
 _ENV_FIELDS: tuple[tuple[Field[Any], str], ...] = tuple(
     (f, f"KVASIR_{f.name}".upper()) for f in fields(Settings) if f.name in _TOP_LEVEL
 ) + tuple((f, f"KVASIR_LOG_{f.name}".upper()) for f in fields(LogSettings))
 _ENV_NAMES = frozenset(name for _, name in _ENV_FIELDS)
+# Every stored field, by its key.
+STORED_FIELDS: tuple[tuple[str, Field[Any]], ...] = tuple(
+    (f"{section}.{f.name}", f)
+    for section, section_cls in _STORED.items()
+    for f in fields(section_cls)
+)
 
 
 def _check_favicons(favicons: FaviconSettings) -> None:

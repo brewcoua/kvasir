@@ -26,6 +26,8 @@ PAGE = b"""<!DOCTYPE html><html><head><title>t</title></head><body>
 @pytest.fixture(autouse=True)
 def _no_wait(monkeypatch):
     runtime.configure_fetch("", 0)
+    # No host remembered from another test, whose times came from another clock.
+    monkeypatch.setattr(runtime, "_hosts", {})
     monkeypatch.setattr(browser, "_unavailable", None)
     yield
     runtime.configure_fetch("", runtime.DEFAULT_HOST_INTERVAL_SECONDS)

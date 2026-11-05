@@ -100,14 +100,13 @@ def configure_fetch(
     """Set the contact named in the user agent, the time between requests to one host, whether
     pages are rendered ("auto" or "off") and whether the browser is the stealth one.
 
-    Forgets what each host was last asked, so call it between runs, like `configure_concurrency`.
+    Safe while runs fetch: what each host was last asked, and any wait it asked for, is kept.
     """
     global _fetch_contact, _fetch_render, _fetch_stealth, _host_interval
     _fetch_contact = contact
     _fetch_render = render
     _fetch_stealth = stealth
     _host_interval = host_interval_seconds
-    _hosts.clear()
 
 
 def fetch_contact() -> str:

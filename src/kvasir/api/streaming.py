@@ -23,6 +23,28 @@ from kvasir.sessions import SessionNotFound
 logger = logging.getLogger("kvasir")
 
 
+class RunSlots:
+    """How many runs may go at once. Unlike a semaphore its `limit` can change while runs hold
+    slots: a lower one refuses new runs until enough have finished."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self._taken = 0
+        self._lock = threading.Lock()
+
+    def acquire(self) -> bool:
+        """Takes a slot if one is free. Never waits."""
+        with self._lock:
+            if self._taken >= self.limit:
+                return False
+            self._taken += 1
+            return True
+
+    def release(self) -> None:
+        with self._lock:
+            self._taken -= 1
+
+
 def streamed(
     state: State,
     work: Callable[[ProgressStream], RunResult],
@@ -40,7 +62,7 @@ def streamed(
     # Registered before the slot is claimed, so a refusal is a run that shows up as rejected rather
     # than a 429 with nothing behind it. Saturation is the case where the registry earns its keep.
     run = state.runs.start(kind, topic, planned_stages)
-    if not state.run_slots.acquire(blocking=False):
+    if not state.run_slots.acquire():
         run.reject()
         logger.warning("rejected %s: every run slot is busy", description)
         return JSONResponse({"message": "all run slots are busy, retry later"}, status_code=429)
@@ -56,7 +78,7 @@ async def events(
     work: Callable[[ProgressStream], RunResult],
     description: str,
     record: Run,
-    run_slots: threading.BoundedSemaphore,
+    run_slots: RunSlots,
     sources: Sources | None = None,
 ) -> AsyncIterator[str]:
     stream = ProgressStream()

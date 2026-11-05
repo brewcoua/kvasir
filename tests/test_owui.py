@@ -364,7 +364,7 @@ async def test_a_failed_run_closes_the_reasoning_block(pipe, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_it_reports_saturation_rather_than_hanging(pipe):
-    assert app.state.run_slots.acquire(blocking=False)
+    assert app.state.run_slots.acquire()
     try:
         answer = await run(pipe, storm("x"))
     finally:

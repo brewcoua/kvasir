@@ -539,6 +539,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings
+         * @description Every stored setting, with its value, its default and what it accepts.
+         */
+        get: operations["get_settings_v1_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Settings
+         * @description Set each key to its value, or back to its default with null. Nothing is written unless every
+         *     stored setting is valid afterwards; 422 names the first that is not.
+         */
+        patch: operations["patch_settings_v1_settings_patch"];
+        trace?: never;
+    };
+    "/v1/settings/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset Setting
+         * @description Set `key` back to its default. Also removes a key this version does not know.
+         */
+        delete: operations["reset_setting_v1_settings__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1480,6 +1525,40 @@ export interface components {
             model_fast?: string | null;
             /** Model Strong */
             model_strong?: string | null;
+        };
+        /** SettingInfo */
+        SettingInfo: {
+            /** Key */
+            key: string;
+            /** Type */
+            type: string;
+            /** Help */
+            help: string;
+            /** Value */
+            value: unknown;
+            /** Default */
+            default: unknown;
+            /** Stored */
+            stored: boolean;
+            /** Required */
+            required: boolean;
+            /** Nullable */
+            nullable: boolean;
+            /** Restart */
+            restart: boolean;
+            /** Minimum */
+            minimum?: number | null;
+            /** Choices */
+            choices?: string[] | null;
+        };
+        /** SettingsView */
+        SettingsView: {
+            /** Fields */
+            fields: components["schemas"]["SettingInfo"][];
+            /** Missing */
+            missing: string[];
+            /** Restart Required */
+            restart_required: string[];
         };
         /**
          * Site
@@ -2568,6 +2647,90 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_settings_v1_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsView"];
+                };
+            };
+        };
+    };
+    patch_settings_v1_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_setting_v1_settings__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsView"];
+                };
             };
             /** @description Validation Error */
             422: {

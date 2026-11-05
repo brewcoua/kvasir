@@ -80,23 +80,7 @@ for SearXNG only.
 
    Without it the API works, and `GET /` answers 503 with the command to run.
 
-4. Store the models and the search URL, which live in `data/kvasir.db`:
-
-   ```bash
-   mkdir -p data && sqlite3 data/kvasir.db \
-     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      INSERT OR REPLACE INTO settings VALUES
-        ('model.fast', json_quote('local/gpt-oss:20b')),
-        ('model.strong', json_quote('local/deepseek-v4.1-flash:cloud')),
-        ('model.embedding', json_quote('local/nomic-embed-text:latest')),
-        ('model.reasoning_effort', json_quote('none')),
-        ('search.url', json_quote('http://localhost:8888'));"
-   ```
-
-   `reasoning_effort` `none` keeps a thinking model from spending each role's token budget on
-   reasoning. See [Configuration](#configuration) for every setting.
-
-5. Start kvasir:
+4. Start kvasir:
 
    ```bash
    export KVASIR_TOKEN="$(openssl rand -hex 32)"
@@ -109,6 +93,22 @@ for SearXNG only.
    the examples below send `$KVASIR_TOKEN`. Ollama answers one request at a time by default, so
    `KVASIR_MAX_THREADS=2` keeps intake calls from only queueing; start Ollama with
    `OLLAMA_NUM_PARALLEL=2` for them to run side by side.
+
+5. From another shell with the same `KVASIR_TOKEN`, store the models and the search URL:
+
+   ```bash
+   curl -s -X PATCH localhost:8080/v1/settings \
+     -H "Authorization: Bearer $KVASIR_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"model.fast": "local/gpt-oss:20b",
+          "model.strong": "local/deepseek-v4.1-flash:cloud",
+          "model.embedding": "local/nomic-embed-text:latest",
+          "model.reasoning_effort": "none",
+          "search.url": "http://localhost:8888"}' | jq '.missing // .message'
+   ```
+
+   It prints `[]` once nothing required is unset, or the `message` naming a value it refused. `reasoning_effort` `none` keeps a thinking model
+   from spending each role's token budget on reasoning. See [Configuration](#configuration) for
+   every setting.
 
 6. Check both dependencies are reachable:
 
@@ -131,7 +131,7 @@ Secure, and a browser sends it over plain HTTP too.
 ## Run it
 
 ```bash
-podman run --rm --name kvasir \
+podman run --rm \
   --read-only --tmpfs /tmp --user 65532:65532 \
   -p 8080:8080 -v kvasir-data:/data \
   -e KVASIR_PROVIDER_GATEWAY_API_BASE=https://gateway.example/v1 \
@@ -151,7 +151,7 @@ $ curl -s localhost:8080/readyz
 
 `/readyz` returns 503 if SearXNG or a provider is unreachable, and names which one. It probes only
 the providers a model refers to. On a first start it answers 503 with the settings still to
-store, listed as `missing`: store them as in [Store a setting](#store-a-setting) and restart. A
+store, listed as `missing`: store them as in [Store a setting](#store-a-setting). A
 missing or unusable environment variable makes the container exit at startup, rather than starting
 and failing on the first request.
 
@@ -322,7 +322,7 @@ To use MiniCheck on Ollama, pull it, then point the checker at it through the `l
 ollama pull bespoke-minicheck
 ```
 
-Then store `model.checker` as `local/bespoke-minicheck`, as in [Store a
+Then set `model.checker` to `local/bespoke-minicheck`, as in [Store a
 setting](#store-a-setting).
 
 Bespoke-MiniCheck-7B is licensed CC BY-NC 4.0. Whether Ollama keeps it loaded next to the main
@@ -533,43 +533,34 @@ Settings come from two places, and each setting has one:
 
 - The environment holds the token, the providers, and what the process needs to start: where its
   data lives, where it listens, its thread count and its logging. An unusable value stops startup.
-- `kvasir.db`, in the data directory, holds every other setting in its `settings` table, one row
-  per setting changed from its default. The row's key is the setting's name, such as
-  `model.fast`, and its value is JSON. A value the service cannot use is logged at startup and its
-  default used. A setting has no environment variable: a `KVASIR_` variable kvasir does not read is
+- `kvasir.db`, in the data directory, holds every other setting, edited through the API. Only a
+  setting changed from its default is stored. A stored value the service cannot use is logged at
+  startup and its default used. A setting has no environment variable: a `KVASIR_` variable kvasir does not read is
   named in a warning at startup.
 
 ### Store a setting
 
-Until the API can edit settings, write the row with `sqlite3`, then restart kvasir:
+`GET /v1/settings` lists every stored setting with its value, its default, its type and what it
+accepts. `PATCH /v1/settings` sets the keys it is sent, and `null` sets one back to its default:
 
 ```bash
-sqlite3 "$KVASIR_DATA_DIR/kvasir.db" \
-  "INSERT OR REPLACE INTO settings VALUES ('research.max_searches', json('24'));"
+curl -s -X PATCH localhost:8080/v1/settings \
+  -H "Authorization: Bearer $KVASIR_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"research.max_searches": 24, "sources.allow": ["example.org"]}'
+curl -s -X DELETE localhost:8080/v1/settings/research.max_searches \
+  -H "Authorization: Bearer $KVASIR_TOKEN"
 ```
 
-The image has no `sqlite3`. Write through its Python instead, into the running container, then
-stop it and run the same `podman run` again:
+Both answer with the same list as `GET`. A change applies at once. Most settings are read when a
+run starts, but `fetch.*`, `model.context_tokens` and `runs.max_concurrent` also reach runs
+already going. A
+setting listed with `"restart": true` is read only at startup, and `restart_required` names those
+changed since: `runs.store`, `runs.max`, `runs.ttl_days`, `runs.keep_call_content` and
+`sessions.ttl_hours`. A change is checked with every other stored setting first, and nothing is
+written when one is unusable: the answer is 422 with a `message` naming it. `DELETE` also removes a
+key this version does not know, which otherwise blocks every `PATCH`.
 
-```bash
-podman exec kvasir python -c '
-from pathlib import Path
-from kvasir.settings_store import SettingsStore
-SettingsStore(Path("/data/kvasir.db")).write({
-    "model.fast": "gateway/fast-model",
-    "model.strong": "gateway/strong-model",
-    "model.embedding": "gateway/embedding-model",
-    "search.url": "http://searxng.example",
-})'
-podman stop kvasir
-```
-
-In `write`, `None` restores a key's default.
-
-With `sqlite3`, use `json_quote('<text>')` for a text value, `json('<number>')` for a number, `json('true')` for a
-boolean, and `json_array('<a>', '<b>')` for a list. `DELETE FROM settings WHERE key = '<key>'`
-restores a default. kvasir creates the table at its first start; create it yourself before that,
-as in the [Quickstart](#quickstart).
+A nullable text setting, such as `model.reason_effort`, is turned off by storing `""`.
 
 ### First start
 
@@ -620,12 +611,12 @@ name a different provider.
 | `model.context_tokens` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
 | `search.url` | required | SearXNG base URL. |
 | `search.top_k` | `3` | Search results per query. |
-| `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. |
-| `runs.max` | `100` | Runs kept, most recent first, in either store. |
-| `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. |
-| `runs.keep_call_content` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. |
+| `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
+| `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
+| `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |
+| `runs.keep_call_content` | `false` | Keep each model call's messages and answer, and each search's results, with its run, to read on the runs page. `true` or `false`. Read at startup. |
 | `runs.max_concurrent` | `1` | Concurrent runs. Beyond this, requests get 429. |
-| `sessions.ttl_hours` | `168` | Session expiry, applied at startup. |
+| `sessions.ttl_hours` | `168` | Session expiry, applied at startup, and read only then. |
 | `storm.max_conv_turn` | `3` | Questions per perspective. |
 | `storm.max_perspective` | `3` | Perspectives to research. |
 | `research.max_searches` | `16` | Research: searches in a run, before the 8 for empty cells. |

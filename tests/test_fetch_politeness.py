@@ -40,6 +40,8 @@ def clock(monkeypatch):
     monkeypatch.setattr(runtime, "_monotonic", clock.monotonic)
     monkeypatch.setattr(runtime, "_sleep", clock.sleep)
     runtime.configure_fetch("", 1.0)
+    # No host remembered from another test, whose times came from another clock.
+    monkeypatch.setattr(runtime, "_hosts", {})
     yield clock
     runtime.configure_fetch("", runtime.DEFAULT_HOST_INTERVAL_SECONDS)
 

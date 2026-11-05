@@ -1,6 +1,6 @@
 # Settings in the database: plan
 
-Status: written 2026-11-05. Phases 1 and 2 built 2026-11-05.
+Status: written 2026-11-05. Phases 1 to 3 built 2026-11-05.
 
 Configuration is environment variables over an optional `kvasir.toml`, read once at startup into a
 frozen `Settings`. Every new option means a new key in the file, the README and the example file,
