@@ -1749,6 +1749,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "kvasir-sites"
+version = "0.0.0"
+dependencies = [
+ "dom_query",
+ "kvasir-config",
+ "kvasir-db",
+ "kvasir-extract",
+ "kvasir-fetch",
+ "kvasir-types",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "url",
+ "wiremock",
+]
+
+[[package]]
 name = "kvasir-testkit"
 version = "0.0.0"
 dependencies = [
@@ -1761,6 +1785,8 @@ name = "kvasir-types"
 version = "0.0.0"
 dependencies = [
  "idna",
+ "psl",
+ "serde",
 ]
 
 [[package]]
@@ -2234,6 +2260,21 @@ checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "psl"
+version = "2.1.247"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcf03dc0cd8c65e109a7848e3b4adf06236a181d937af94bff66966e3876b1aa"
+dependencies = [
+ "psl-types",
+]
+
+[[package]]
+name = "psl-types"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33cb294fe86a74cbcf50d4445b37da762029549ebeea341421c7c70370f86cac"
 
 [[package]]
 name = "pxfm"

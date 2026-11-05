@@ -83,7 +83,7 @@ pub struct Unusable {
 
 /// Fails when static `html` is a challenge, a block page or an empty shell.
 pub fn check_page(url: &str, html: &str) -> Result<(), Unusable> {
-    if deepest(html) > MAX_DEPTH {
+    if too_deep(html) {
         return Err(Unusable {
             message: format!("{url}: nested over {MAX_DEPTH} elements deep"),
             reason: Reason::Nested,
@@ -138,6 +138,11 @@ pub fn check_page(url: &str, html: &str) -> Result<(), Unusable> {
 }
 
 /// How deep the tags of `html` nest, counted from its text so nothing is parsed first.
+/// Whether `html` nests too deep to be parsed in any reasonable time.
+pub fn too_deep(html: &str) -> bool {
+    deepest(html) > MAX_DEPTH
+}
+
 fn deepest(html: &str) -> usize {
     let (mut depth, mut deepest) = (0usize, 0);
     for tag in TAG_NAME.captures_iter(html) {

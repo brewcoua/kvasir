@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 idna.workspace = true
+psl.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true
