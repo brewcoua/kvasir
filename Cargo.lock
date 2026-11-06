@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1766,7 +1766,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-api"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "arc-swap",
  "axum",
@@ -1805,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-browser"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "chromiumoxide",
  "futures",
@@ -1821,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-config"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "kvasir-db",
  "kvasir-types",
@@ -1834,7 +1834,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-db"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "rusqlite",
  "tempfile",
@@ -1845,7 +1845,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-extract"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "dom_query",
  "idna",
@@ -1864,7 +1864,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-fetch"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "arc-swap",
  "encoding_rs",
@@ -1886,7 +1886,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-graph"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "indexmap",
  "kvasir-config",
@@ -1906,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-ledger"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "indexmap",
  "kvasir-config",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-llm"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "backon",
  "dsrust-json-repair",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-research"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "dom_query",
@@ -1977,7 +1977,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-run"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "indexmap",
  "kvasir-config",
@@ -1995,7 +1995,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-sites"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "dom_query",
  "kvasir-config",
@@ -2021,7 +2021,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-storm"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "dom_query",
  "fancy-regex",
@@ -2048,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-testkit"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "kvasir-config",
  "kvasir-llm",
@@ -2058,7 +2058,7 @@ dependencies = [
 
 [[package]]
 name = "kvasir-types"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "idna",
  "indexmap",
