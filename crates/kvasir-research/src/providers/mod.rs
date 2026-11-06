@@ -89,6 +89,10 @@ fn keyless_failure(response: &reqwest::Response) -> Option<Failure> {
 
 /// The text of a snippet of HTML or JATS, on one line.
 fn plain_text(markup: &str) -> String {
+    // These part words. Another tag may fall inside one, as in `<i>a</i>b`.
+    static BREAK: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"</?(?:jats:)?(?:p|br|div|li|sec|title)\b[^>]*>").expect("the pattern is valid")
+    });
     static TAG: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"<[^>]*>").expect("the pattern is valid"));
     // One pass, so `&amp;lt;` comes out as the text `&lt;` and not as a bracket.
@@ -96,7 +100,8 @@ fn plain_text(markup: &str) -> String {
         Regex::new(r"&(amp|lt|gt|quot|apos|nbsp|#[0-9]+|#[xX][0-9a-fA-F]+);")
             .expect("the pattern is valid")
     });
-    let text = TAG.replace_all(markup, " ");
+    let text = BREAK.replace_all(markup, " ");
+    let text = TAG.replace_all(&text, "");
     let text = ENTITY.replace_all(&text, |entity: &Captures<'_>| {
         let name = &entity[1];
         let code = match name.strip_prefix('#') {
@@ -438,10 +443,11 @@ mod tests {
     fn markup_comes_out_as_text() {
         assert_eq!(
             plain_text(
-                "<span class=\"m\">Foo</span>\n  bar &amp; baz&#39;s &#x3B1;&nbsp;&lt;b&gt;"
+                "<span class=\"m\">Fo</span>o\n  bar &amp; baz&#39;s &#x3B1;&nbsp;&lt;b&gt;"
             ),
             "Foo bar & baz's \u{3b1} <b>"
         );
+        assert_eq!(plain_text("<jats:title>T</jats:title><jats:p>Text</jats:p>"), "T Text");
         assert_eq!(plain_text("&amp;lt; &#xFFFFFFF; &unknown;"), "&lt; &#xFFFFFFF; &unknown;");
     }
 

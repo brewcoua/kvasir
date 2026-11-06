@@ -471,7 +471,7 @@ mod europe_pmc {
         assert_eq!(
             rows,
             [
-                row("https://doi.org/10.1/a", "A title .", "An abstract ."),
+                row("https://doi.org/10.1/a", "A title.", "An abstract."),
                 row("https://europepmc.org/article/PPR/2", "No DOI", ""),
             ]
         );
