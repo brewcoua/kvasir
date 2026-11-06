@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use kvasir_research::providers::{Brave, Failure, Provider, Row, Tavily};
+use kvasir_research::providers::{Brave, Exa, Failure, Provider, Row, Tavily};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -119,5 +119,49 @@ mod tavily {
         let server = answering(limited).await;
         let retry_after = Some(Duration::from_secs(7));
         assert_eq!(at(&server).query("q").await, Err(Failure::RateLimited { retry_after }));
+    }
+}
+
+mod exa {
+    use super::*;
+    use wiremock::matchers::body_json;
+
+    fn at(server: &MockServer) -> Exa {
+        Exa::at(&format!("{}/s", server.uri()), "the-key")
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"results": [
+            {"url": "https://a.org", "title": "A", "highlights": ["one", "two"]},
+            {"url": "https://b.org", "title": null},
+        ]});
+        let sent =
+            json!({"query": "the query", "numResults": 20, "contents": {"highlights": true}});
+        Mock::given(method("POST"))
+            .and(path("/s"))
+            .and(header("x-api-key", "the-key"))
+            .and(body_json(sent))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(rows, [row("https://a.org", "A", "one two"), row("https://b.org", "", "")]);
+    }
+
+    #[tokio::test]
+    async fn failures_are_told_apart() {
+        for (status, want) in [
+            (401, Failure::Unauthorized),
+            (402, Failure::QuotaExhausted),
+            (429, Failure::RateLimited { retry_after: None }),
+        ] {
+            let server = answering(ResponseTemplate::new(status)).await;
+            assert_eq!(at(&server).query("q").await, Err(want), "{status}");
+        }
     }
 }

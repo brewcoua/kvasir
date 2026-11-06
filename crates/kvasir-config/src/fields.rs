@@ -208,6 +208,9 @@ pub const FIELDS: &[Field] = &[
     field("search.tavily.enabled", Kind::Bool, "Search through the Tavily API."),
     field("search.tavily.api_key", Kind::Secret, "Tavily API key."),
     field("search.tavily.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.exa.enabled", Kind::Bool, "Search through the Exa API."),
+    field("search.exa.api_key", Kind::Secret, "Exa API key."),
+    field("search.exa.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

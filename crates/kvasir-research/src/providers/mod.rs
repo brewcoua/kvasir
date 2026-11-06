@@ -11,6 +11,7 @@
 //! failure says, and the others carry the query.
 
 mod brave;
+mod exa;
 mod searxng;
 mod tavily;
 
@@ -30,6 +31,7 @@ use serde::Serialize;
 use tokio::time::Instant;
 
 pub use brave::Brave;
+pub use exa::Exa;
 pub use searxng::SearXng;
 pub use tavily::Tavily;
 
@@ -238,6 +240,9 @@ impl Providers {
         }
         if let Some(key) = settings.tavily.usable_key() {
             providers.push((Box::new(Tavily::new(key)), settings.tavily.weight));
+        }
+        if let Some(key) = settings.exa.usable_key() {
+            providers.push((Box::new(Exa::new(key)), settings.exa.weight));
         }
         Self::new(providers, web)
     }
