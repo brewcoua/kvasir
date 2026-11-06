@@ -1,12 +1,16 @@
 //! The order a host resolves in, and what is asked of Wikidata and kept.
 
+use std::time::SystemTime;
+
 use kvasir_db::rusqlite::Connection;
 use kvasir_fetch::{Guard, Options, system_lookup};
 use tempfile::TempDir;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
+use super::wikidata::{INTERNATIONAL, MAX_BACKOFF, NAMESPACE};
 use super::*;
+use crate::SECONDS_PER_DAY;
 
 const WAIT: Duration = Duration::from_secs(5);
 const NEWSPAPER: &str = "Q11032";

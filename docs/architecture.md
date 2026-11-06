@@ -251,7 +251,7 @@ asked for once more in JSON, then fails the call. `/v1/tasks` and `/v1/clarify` 
 | Site icons | `$KVASIR_DATA_DIR/favicons.db`: one row per host, with the image and the provider that gave it | `favicons.ttl_days` for an icon, `favicons.miss_ttl_days` for a site with none; emptied by `DELETE /v1/favicons`. File not created when `favicons.providers` is empty | An icon is public and cheap to refetch, but a site should be asked once a month, not per page view. A separate file so flushing the page cache keeps them. |
 | Source trust | `$KVASIR_DATA_DIR/sources.db`: `sources`, Wikidata's answer per host, and `marks`, the kinds and `allow`/`deny` a user set; downloaded lists, and with `sources.rsp` the perennial sources page as the API's JSON, beside it as `sources-<hash>.txt`. Not created unless `sources.enabled` | `sources.ttl_days` for an answer and a list, `sources.miss_ttl_days` for a host Wikidata does not know; marks never expire | A host is classified once a month, not per search. Marks are the user's, so they sit apart from the cache that may be dropped. |
 
-With `sources.enabled` set to `true`, the server also contacts, from `crates/kvasir-sites/src/sources.rs`: the Wikidata
+With `sources.enabled` set to `true`, the server also contacts, from `crates/kvasir-sites/src/sources/` (`wikidata.rs` and `lists.rs`): the Wikidata
 Query Service (`sources.endpoint`), which learns the domains of the search results a run
 considers, at most 50 a query, with a user agent naming this service; and the URLs in
 `sources.lists`, fetched at most once per `sources.ttl_days`. With `sources.rsp` set to `true`, it also fetches
