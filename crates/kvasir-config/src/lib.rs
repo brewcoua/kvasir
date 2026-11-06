@@ -15,9 +15,9 @@ pub use fields::{FIELDS, Field, Kind, MODEL_KEYS, field_for};
 pub use load::decode;
 use repr::text as quote;
 pub use sections::{
-    FaviconProvider, FaviconSettings, FetchSettings, KeyedSettings, LogFormat, LogSettings,
-    ModelSettings, OpenSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings,
-    SearxngSettings, Secret, SourceSettings, StormSettings,
+    CrossrefSettings, FaviconProvider, FaviconSettings, FetchSettings, KeyedSettings, LogFormat,
+    LogSettings, ModelSettings, OpenSettings, Render, ResearchSettings, RunSettings, RunStore,
+    SearchSettings, SearxngSettings, Secret, SourceSettings, StormSettings,
 };
 
 /// Listed by [`Settings::missing`] when no web search provider is enabled with its key or URL. It

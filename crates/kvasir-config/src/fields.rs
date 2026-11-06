@@ -218,6 +218,13 @@ pub const FIELDS: &[Field] = &[
     field("search.wikipedia.weight", Kind::Float, "Its weight when results are fused."),
     field("search.arxiv.enabled", Kind::Bool, "Search arXiv's preprints."),
     field("search.arxiv.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.crossref.enabled", Kind::Bool, "Search Crossref's scholarly works."),
+    field(
+        "search.crossref.mailto",
+        Kind::OptionalText,
+        "Address for Crossref's polite pool, which has a higher limit.",
+    ),
+    field("search.crossref.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

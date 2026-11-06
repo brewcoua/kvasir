@@ -12,6 +12,7 @@
 
 mod arxiv;
 mod brave;
+mod crossref;
 mod exa;
 mod mojeek;
 mod searxng;
@@ -37,6 +38,7 @@ use tokio::time::Instant;
 
 pub use arxiv::Arxiv;
 pub use brave::Brave;
+pub use crossref::Crossref;
 pub use exa::Exa;
 pub use mojeek::Mojeek;
 pub use searxng::SearXng;
@@ -314,6 +316,10 @@ impl Providers {
         }
         if settings.arxiv.enabled {
             providers.push((Box::new(Arxiv::default()), settings.arxiv.weight));
+        }
+        if settings.crossref.enabled {
+            let mailto = settings.crossref.mailto.as_deref();
+            providers.push((Box::new(Crossref::new(mailto)), settings.crossref.weight));
         }
         Self::new(providers, web)
     }

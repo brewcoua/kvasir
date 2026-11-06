@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Brave, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia,
+    Arxiv, Brave, Crossref, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -376,5 +376,60 @@ mod arxiv {
         let server = answering(ResponseTemplate::new(200).set_body_string(feed)).await;
 
         assert_eq!(at(&server).query("q").await, Err(Failure::Other("incorrect id format".into())));
+    }
+}
+
+mod crossref {
+    use super::*;
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"message": {"items": [
+            {
+                "URL": "https://doi.org/10.1/a",
+                "title": ["The title"],
+                "abstract": "<jats:p>An &amp; abstract</jats:p>",
+                "publisher": "P",
+            },
+            {"URL": "https://doi.org/10.1/b"},
+        ]}});
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(query_param("query", "the query"))
+            .and(query_param("rows", "20"))
+            .and(query_param("mailto", "ops@example.org"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let crossref = Crossref::at(&format!("{}/s", server.uri()), Some("ops@example.org"));
+
+        let rows = crossref.query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [
+                row("https://doi.org/10.1/a", "The title", "An & abstract"),
+                row("https://doi.org/10.1/b", "", ""),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_rests_it() {
+        let server = answering(ResponseTemplate::new(429).append_header("Retry-After", "7")).await;
+        let crossref = Crossref::at(&format!("{}/s", server.uri()), None);
+
+        assert_eq!(
+            crossref.query("q").await,
+            Err(Failure::RateLimited { retry_after: Some(Duration::from_secs(7)) })
+        );
+    }
+
+    #[test]
+    fn a_mailto_shortens_its_interval() {
+        assert_eq!(Crossref::new(None).interval(), Duration::from_secs(1));
+        assert_eq!(Crossref::new(Some("a@b.c")).interval(), Duration::from_millis(334));
     }
 }

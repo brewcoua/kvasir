@@ -113,6 +113,21 @@ impl Default for OpenSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CrossrefSettings {
+    pub enabled: bool,
+    /// Moves its requests to the polite pool.
+    pub mailto: Option<String>,
+    /// In the fusion of the providers' results.
+    pub weight: f64,
+}
+
+impl Default for CrossrefSettings {
+    fn default() -> Self {
+        Self { enabled: false, mailto: None, weight: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SearchSettings {
     pub top_k: usize,
     pub searxng: SearxngSettings,
@@ -122,6 +137,7 @@ pub struct SearchSettings {
     pub mojeek: KeyedSettings,
     pub wikipedia: OpenSettings,
     pub arxiv: OpenSettings,
+    pub crossref: CrossrefSettings,
 }
 
 impl SearchSettings {
@@ -145,6 +161,7 @@ impl Default for SearchSettings {
             mojeek: KeyedSettings::default(),
             wikipedia: OpenSettings::default(),
             arxiv: OpenSettings::default(),
+            crossref: CrossrefSettings::default(),
         }
     }
 }

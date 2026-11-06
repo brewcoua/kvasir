@@ -654,6 +654,9 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `search.wikipedia.weight` | `1.0` | Its weight when results are fused. |
 | `search.arxiv.enabled` | `false` | Search arXiv's preprints. |
 | `search.arxiv.weight` | `1.0` | Its weight when results are fused. |
+| `search.crossref.enabled` | `false` | Search Crossref's scholarly works. |
+| `search.crossref.mailto` | unset | Address for Crossref's polite pool, which has a higher limit. |
+| `search.crossref.weight` | `1.0` | Its weight when results are fused. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |
