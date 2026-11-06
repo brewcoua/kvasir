@@ -1,8 +1,12 @@
 //! The kvasir binary.
 //!
 //! - `kvasir serve` runs the service, configured by `KVASIR_*` variables and `kvasir.db`.
+//! - `kvasir eval <out>` researches `eval/questions.toml` through a running service and scores
+//!   each result; see `eval.rs`.
 //! - `kvasir openapi` prints the OpenAPI document the web client's types are generated from.
 //! - `kvasir pdf-text` reads a PDF on stdin and writes its text; the service runs it as a child.
+
+mod eval;
 
 use std::net::SocketAddr;
 use std::process::ExitCode;
@@ -13,7 +17,7 @@ use kvasir_config::{LogFormat, Settings};
 use kvasir_fetch::Guard;
 use tracing_subscriber::EnvFilter;
 
-const USAGE: &str = "usage: kvasir serve | kvasir openapi | kvasir pdf-text";
+const USAGE: &str = "usage: kvasir serve | kvasir eval <out> | kvasir openapi | kvasir pdf-text";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -22,6 +26,7 @@ fn main() -> ExitCode {
         ["serve"] => exit(serve(Guard::Public)),
         // For the contract tests, whose fake providers and sites listen on this machine.
         ["serve", "--allow-loopback"] => exit(serve(Guard::Loopback)),
+        ["eval", rest @ ..] => exit(eval::main(rest)),
         ["openapi"] => {
             println!("{}", kvasir_api::document());
             ExitCode::SUCCESS
