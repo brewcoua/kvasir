@@ -12,6 +12,7 @@
 
 mod brave;
 mod exa;
+mod mojeek;
 mod searxng;
 mod tavily;
 
@@ -32,6 +33,7 @@ use tokio::time::Instant;
 
 pub use brave::Brave;
 pub use exa::Exa;
+pub use mojeek::Mojeek;
 pub use searxng::SearXng;
 pub use tavily::Tavily;
 
@@ -243,6 +245,9 @@ impl Providers {
         }
         if let Some(key) = settings.exa.usable_key() {
             providers.push((Box::new(Exa::new(key)), settings.exa.weight));
+        }
+        if let Some(key) = settings.mojeek.usable_key() {
+            providers.push((Box::new(Mojeek::new(key)), settings.mojeek.weight));
         }
         Self::new(providers, web)
     }

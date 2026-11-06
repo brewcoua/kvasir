@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use kvasir_research::providers::{Brave, Exa, Failure, Provider, Row, Tavily};
+use kvasir_research::providers::{Brave, Exa, Failure, Mojeek, Provider, Row, Tavily};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -163,5 +163,64 @@ mod exa {
             let server = answering(ResponseTemplate::new(status)).await;
             assert_eq!(at(&server).query("q").await, Err(want), "{status}");
         }
+    }
+}
+
+mod mojeek {
+    use super::*;
+
+    fn at(server: &MockServer) -> Mojeek {
+        Mojeek::at(&format!("{}/s", server.uri()), "the-key")
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"response": {"status": "OK", "results": [
+            {"url": "https://a.org", "title": "A", "desc": "about a", "score": 3},
+        ]}});
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(query_param("fmt", "json"))
+            .and(query_param("api_key", "the-key"))
+            .and(query_param("q", "the query"))
+            .and(query_param("t", "20"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(rows, [row("https://a.org", "A", "about a")]);
+    }
+
+    #[tokio::test]
+    async fn an_error_comes_in_the_status() {
+        let status = |text: &str| {
+            ResponseTemplate::new(200).set_body_json(json!({"response": {"status": text}}))
+        };
+
+        let server = answering(status("ERROR: Daily Limit Reached.")).await;
+        assert_eq!(at(&server).query("q").await, Err(Failure::QuotaExhausted));
+
+        let server = answering(status("ERROR: Something else.")).await;
+        assert_eq!(
+            at(&server).query("q").await,
+            Err(Failure::Other("ERROR: Something else.".into()))
+        );
+    }
+
+    /// The key is in the URL, which a transport error would otherwise print.
+    #[tokio::test]
+    async fn a_failed_request_does_not_print_the_key() {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/s", free.local_addr().unwrap());
+        drop(free);
+
+        let failure = Mojeek::at(&url, "the-key").query("q").await.unwrap_err();
+
+        assert!(matches!(failure, Failure::Other(_)));
+        assert!(!failure.to_string().contains("the-key"), "{failure}");
     }
 }

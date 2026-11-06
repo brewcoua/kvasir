@@ -105,13 +105,14 @@ pub struct SearchSettings {
     pub brave: KeyedSettings,
     pub tavily: KeyedSettings,
     pub exa: KeyedSettings,
+    pub mojeek: KeyedSettings,
 }
 
 impl SearchSettings {
     /// Whether a provider that searches the whole web can be asked.
     pub fn has_web_provider(&self) -> bool {
         (self.searxng.enabled && !self.searxng.url.is_empty())
-            || [&self.brave, &self.tavily, &self.exa]
+            || [&self.brave, &self.tavily, &self.exa, &self.mojeek]
                 .iter()
                 .any(|provider| provider.usable_key().is_some())
     }
@@ -125,6 +126,7 @@ impl Default for SearchSettings {
             brave: KeyedSettings::default(),
             tavily: KeyedSettings::default(),
             exa: KeyedSettings::default(),
+            mojeek: KeyedSettings::default(),
         }
     }
 }

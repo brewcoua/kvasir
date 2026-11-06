@@ -211,6 +211,9 @@ pub const FIELDS: &[Field] = &[
     field("search.exa.enabled", Kind::Bool, "Search through the Exa API."),
     field("search.exa.api_key", Kind::Secret, "Exa API key."),
     field("search.exa.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.mojeek.enabled", Kind::Bool, "Search through the Mojeek API."),
+    field("search.mojeek.api_key", Kind::Secret, "Mojeek API key."),
+    field("search.mojeek.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },
