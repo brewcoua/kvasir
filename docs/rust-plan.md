@@ -693,6 +693,9 @@ starts read-only, as today's does.
   `docs/storm.md` replaces `docs/fork-notes.md`. `owui/README.md` needed no change.
 - **`kvasir eval`:** one question (`antikythera`, `max_searches` 4) researched through the Rust
   service and scored with the judge: 2 of 3 checks, 23 of 31 cited sentences supported.
+- **Deferred:** the full comparison on `eval/questions.toml`, Rust against Python. At about 25
+  minutes a question it takes most of a day per side, so the eval part of the gate is open. Python
+  runs from a checkout of `20dc20a`, the last commit with `src/`.
 
 ### Phase 7: after cutover
 
