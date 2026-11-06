@@ -256,7 +256,7 @@ than a dependency.
 | Conversations | `AskQuestion`, `AskQuestionWithPersona`, `QuestionToQuery`, `AnswerQuestion` | One conversation per persona, side by side |
 | Outline | `WritePageOutline`, `WritePageOutlineFromConv` | Draft, then refined from the conversations |
 | Article | `WriteSection` | Sections side by side, snippets picked by embedding |
-| Polish | `WriteLeadSection`, `PolishPage` | Optional |
+| Polish | `WriteLeadSection` | Optional |
 
 Gone with the fork:
 
@@ -601,8 +601,6 @@ Differences from Python, all deliberate:
   published (`Run::follow`), where Python took it when the follower got to the event.
 - Followers are unbounded channels, as Python's queues were.
 - `FORWARDED_ALLOW_IPS` takes `*` or addresses; uvicorn's CIDR ranges are not read.
-- A storm run fails with `NotImplementedError: storm is not ported yet` until phase 5;
-  `/v1/methods` lists storm already.
 - An unexpected failure answers `{"message": "Internal Server Error"}` with 500, where Starlette
   sent the text alone.
 - JSON logs are `tracing-subscriber`'s format, not Python's.
@@ -615,6 +613,42 @@ Build `kvasir-storm`.
 
 Gate: contract tests pass for `storm`. Correctness tests are ported. A live article from a local model
 is read side by side with Python's.
+
+#### Phase 5 result: pass on contract and tests, live read pending
+
+Done on 2026-11-06.
+
+- **Contract:** `tests/contract/` against `kvasir serve --allow-loopback`: 103 of 103 pass.
+- **Signatures:** the ten STORM signatures match `tests/golden/signatures.json`.
+- **Correctness:** `crates/kvasir-storm/tests/storm.rs` ports `test_storm_correctness.py`,
+  `test_storm_concurrency.py` and `test_storm.py`: sibling queries survive a failed one, a failed
+  answer ends the conversation without a canned apology, an empty table retrieves nothing, a run that
+  finds nothing still writes an article, retrieval stays within `max_threads`, the guard on the URLs a
+  model chose and on each redirect hop, and a target's `Debug` shows no key. The SearXNG redirect,
+  score and unresponsive-engine tests are in `crates/kvasir-research/tests/search.rs`. The file
+  handoff tests have nothing left to test: no file is written.
+- **Workspace:** fmt, clippy, `cargo nextest run` (437 passed, 6 skipped) and `cargo deny` pass.
+  `kvasir-storm` is MIT and carries `LICENSE` and `NOTICE`.
+- **Live read:** not done yet.
+
+Kept from upstream, though they look wrong:
+
+- `search_top_k` changes nothing. Python's SearXNG retriever and `TopicExpert` never read it, so the
+  Rust port accepts the option and ignores it too.
+- When a section of `n` sources cites a number above `n`, every citation numbered `n` or more is
+  removed, so the citation of the last source goes too (`without_citations_from`).
+
+Differences from Python, all deliberate:
+
+- Citations come from the numbering of the article returned. Python read `url_to_info.json`, written
+  from the draft, which no longer matched once polishing renumbered.
+- `PolishPage` is not ported: it ran only with `remove_duplicate`, which nothing set.
+- An outline heading at the topic's level goes under the topic, where upstream emptied its stack and
+  failed.
+- Conversations and sections are collected in persona and outline order, not in completion order.
+- A source's snippets keep the order they were found in, not `set` order.
+- A section's queries are embedded in one call.
+- The request for a related page's contents sends the service's user agent.
 
 ### Phase 6: parity and cutover
 

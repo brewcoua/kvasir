@@ -233,3 +233,90 @@ async fn searches_that_all_fail_end_the_run() {
 
     assert_eq!(failed.to_string(), "2 searches in a row failed: google: timeout");
 }
+
+mod searxng {
+    use std::time::Duration;
+
+    use kvasir_fetch::{Guard, Options, Web, system_lookup};
+    use kvasir_research::search::SearXng;
+    use serde_json::json;
+    use wiremock::matchers::{path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+    use kvasir_research::Search;
+
+    fn web() -> Arc<Web> {
+        let options = Options {
+            contact: String::new(),
+            host_interval: Duration::ZERO,
+            render: false,
+            stealth: false,
+            max_age_hours: 48,
+        };
+        Arc::new(Web::new(options, 8, Guard::Public, system_lookup()))
+    }
+
+    async fn ask(url: &str) -> (Vec<Hit>, Vec<String>) {
+        SearXng::new(url, web()).search("a", &HashSet::new(), &ctx()).await
+    }
+
+    /// SearXNG answers its base URL with a 308 to /search; not following it read an HTML page as
+    /// an empty answer, and the run collected nothing.
+    #[tokio::test]
+    async fn the_redirect_to_search_is_followed_and_each_score_passed_on() {
+        let server = MockServer::start().await;
+        let to = format!("{}/search?q=a&format=json", server.uri());
+        let moved = ResponseTemplate::new(308).insert_header("location", to.as_str());
+        Mock::given(path("/")).respond_with(moved).mount(&server).await;
+        let results = json!({"results": [
+            {"url": "https://a.org/x", "content": "about x", "score": 2.5},
+            {"url": "https://a.org/y"},
+        ]});
+        Mock::given(path("/search"))
+            .and(query_param("format", "json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(results))
+            .mount(&server)
+            .await;
+
+        let (hits, failures) = ask(&server.uri()).await;
+
+        let found: Vec<(&str, f64)> =
+            hits.iter().map(|hit| (hit.url.as_str(), hit.score)).collect();
+        assert_eq!(found, [("https://a.org/x", 2.5), ("https://a.org/y", 0.0)]);
+        assert_eq!(hits[0].snippets, ["about x"]);
+        assert!(failures.is_empty());
+    }
+
+    /// A rate-limited engine answers with no results, which reads as a topic nothing covers.
+    #[tokio::test]
+    async fn an_empty_answer_says_which_engines_failed() {
+        let server = MockServer::start().await;
+        let answer = json!({
+            "results": [],
+            "unresponsive_engines": [["brave", "Suspended: too many requests"]],
+        });
+        Mock::given(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .mount(&server)
+            .await;
+
+        let (hits, failures) = ask(&server.uri()).await;
+
+        assert!(hits.is_empty());
+        assert_eq!(failures, ["brave: Suspended: too many requests"]);
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_instance_is_a_failure_rather_than_an_empty_answer() {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", free.local_addr().unwrap());
+        drop(free);
+
+        let (hits, failures) = ask(&url).await;
+
+        assert!(hits.is_empty());
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].starts_with("request: "), "{}", failures[0]);
+    }
+}

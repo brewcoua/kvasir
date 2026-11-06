@@ -21,6 +21,7 @@ kvasir-llm = { path = "crates/kvasir-llm" }
 kvasir-research = { path = "crates/kvasir-research" }
 kvasir-run = { path = "crates/kvasir-run" }
 kvasir-sites = { path = "crates/kvasir-sites" }
+kvasir-storm = { path = "crates/kvasir-storm" }
 kvasir-testkit = { path = "crates/kvasir-testkit" }
 kvasir-types = { path = "crates/kvasir-types" }
 

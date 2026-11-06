@@ -404,8 +404,8 @@ pub enum RunError {
     Config(#[from] kvasir_config::ConfigError),
     #[error("ResearchError: {0}")]
     Research(#[from] kvasir_research::ResearchError),
-    #[error("NotImplementedError: {0}")]
-    NotPorted(&'static str),
+    #[error("StormError: {0}")]
+    Storm(#[from] kvasir_storm::StormError),
 }
 
 /// Runs `request` to its result with the settings and services of `live`, reporting into `ctx`.
@@ -445,7 +445,13 @@ pub async fn run(
                 kvasir_graph::research(&tools, &settings.research, ctx, input, options, &today);
             Ok(RunResult::Research(result.await?))
         }
-        RunRequest::Storm { .. } => Err(RunError::NotPorted("storm is not ported yet")),
+        RunRequest::Storm { input, options } => {
+            let targets = kvasir_storm::targets(settings, fast, strong)?;
+            let tools = settings::tools(app, live, targets, None)?;
+            let result =
+                kvasir_storm::run(&tools, &app.web, &settings.storm, ctx, input, options).await?;
+            Ok(RunResult::Article(result))
+        }
     }
 }
 

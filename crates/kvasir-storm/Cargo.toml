@@ -1,0 +1,36 @@
+[package]
+name = "kvasir-storm"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+# Upstream's licence, which a translation keeps.
+license = "MIT"
+publish.workspace = true
+
+[dependencies]
+dom_query.workspace = true
+fancy-regex.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+kvasir-config.workspace = true
+kvasir-fetch.workspace = true
+kvasir-llm.workspace = true
+kvasir-research.workspace = true
+kvasir-run.workspace = true
+kvasir-sites.workspace = true
+kvasir-types.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+kvasir-testkit.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util"] }
+wiremock.workspace = true
+
+[lints]
+workspace = true

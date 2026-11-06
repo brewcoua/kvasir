@@ -26,6 +26,7 @@ kvasir-llm.workspace = true
 kvasir-research.workspace = true
 kvasir-run.workspace = true
 kvasir-sites.workspace = true
+kvasir-storm.workspace = true
 kvasir-types.workspace = true
 reqwest.workspace = true
 rust-embed.workspace = true

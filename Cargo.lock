@@ -1764,6 +1764,7 @@ dependencies = [
  "kvasir-research",
  "kvasir-run",
  "kvasir-sites",
+ "kvasir-storm",
  "kvasir-testkit",
  "kvasir-types",
  "reqwest",
@@ -1983,6 +1984,33 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tracing",
+ "url",
+ "wiremock",
+]
+
+[[package]]
+name = "kvasir-storm"
+version = "0.0.0"
+dependencies = [
+ "dom_query",
+ "fancy-regex",
+ "futures",
+ "indexmap",
+ "kvasir-config",
+ "kvasir-fetch",
+ "kvasir-llm",
+ "kvasir-research",
+ "kvasir-run",
+ "kvasir-sites",
+ "kvasir-testkit",
+ "kvasir-types",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
  "tracing",
  "url",
  "wiremock",
