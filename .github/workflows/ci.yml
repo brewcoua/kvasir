@@ -60,11 +60,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          version: "0.11.32"
-          enable-cache: true
-
       # The version is package.json's packageManager field.
       - uses: pnpm/action-setup@v6.1.0
         with:
