@@ -24,6 +24,7 @@ GUARDED = [
     ("PATCH", "/v1/settings"),
     ("DELETE", "/v1/settings/x"),
     ("GET", "/v1/providers"),
+    ("GET", "/v1/search/challenges"),
     ("GET", "/v1/providers/x/models"),
     ("GET", "/v1/pages"),
     ("DELETE", "/v1/pages"),

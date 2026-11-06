@@ -6,7 +6,11 @@ use std::pin::Pin;
 #[cfg(feature = "chromium")]
 mod chromium;
 #[cfg(feature = "chromium")]
+mod tab;
+#[cfg(feature = "chromium")]
 pub use chromium::{Allow, Chromium};
+#[cfg(feature = "chromium")]
+pub use tab::{Input, Tab};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 

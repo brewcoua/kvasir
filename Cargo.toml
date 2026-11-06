@@ -62,6 +62,7 @@ tempfile = "3"
 thiserror = "2"
 toml = "1"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-tungstenite = "0.29"
 tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }

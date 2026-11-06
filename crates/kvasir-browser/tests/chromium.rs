@@ -92,3 +92,74 @@ async fn runtime_enable_cannot_be_noticed() {
     let took: f64 = took.split('<').next().unwrap().parse().unwrap();
     assert!(took < 50.0, "{took} ms");
 }
+
+mod tab {
+    use std::time::Duration;
+
+    use futures::StreamExt;
+    use kvasir_browser::{Input, Tab};
+    use tokio::time::timeout;
+
+    use super::*;
+
+    const BLOCK: &str = r#"<body style="margin:0">
+        <button id="b" style="width:400px;height:400px"
+          onclick="document.cookie='won=yes; path=/'; document.title='cleared'">Solve</button>
+        <input id="t" autofocus>
+        </body>"#;
+
+    fn stay_on(host: String) -> Arc<dyn Fn(&str) -> bool + Send + Sync> {
+        Arc::new(move |url| url.starts_with(&host))
+    }
+
+    fn click(x: f64, y: f64) -> [Input; 2] {
+        let press = serde_json::json!({"type": "mouse", "action": "press", "x": x, "y": y, "pressed": true});
+        let release = serde_json::json!({"type": "mouse", "action": "release", "x": x, "y": y});
+        [serde_json::from_value(press).unwrap(), serde_json::from_value(release).unwrap()]
+    }
+
+    #[tokio::test]
+    #[ignore = "needs Chromium"]
+    async fn a_person_sees_the_tab_drives_it_and_its_cookies_are_read() {
+        let server = serve("/block", BLOCK.to_owned()).await;
+        let tab = Tab::open(&format!("{}/block", server.uri()), only_ip(), stay_on(server.uri()))
+            .await
+            .unwrap();
+        assert!(tab.loaded().await.unwrap().unwrap().1.contains("Solve"));
+
+        let mut frames = Box::pin(tab.frames().await.unwrap());
+        let frame = timeout(Duration::from_secs(10), frames.next()).await.unwrap().unwrap();
+        // A JPEG in base64 starts with the encoding of its magic number.
+        assert!(frame.starts_with("/9j/"), "{}", &frame[..8]);
+
+        for event in click(100.0, 100.0) {
+            tab.input(event).await.unwrap();
+        }
+        let typed = serde_json::json!({"type": "text", "text": "typed"});
+        tab.input(serde_json::from_value(typed).unwrap()).await.unwrap();
+
+        assert_eq!(tab.cookies().await.unwrap(), "won=yes");
+        let (url, html) = tab.loaded().await.unwrap().unwrap();
+        assert_eq!(url, format!("{}/block", server.uri()));
+        assert!(html.contains("<title>cleared</title>"), "{html}");
+
+        drop(frames);
+        tab.close().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "needs Chromium"]
+    async fn the_tab_cannot_leave_the_site() {
+        let other = serve("/elsewhere", "<p>Elsewhere</p>".to_owned()).await;
+        let leave = format!("{}/elsewhere", other.uri());
+        let body = format!("<script>setTimeout(() => location.href = '{leave}', 300)</script>");
+        let server = serve("/block", body).await;
+        let tab = Tab::open(&format!("{}/block", server.uri()), only_ip(), stay_on(server.uri()))
+            .await
+            .unwrap();
+
+        timeout(Duration::from_secs(10), tab.left()).await.expect("it told");
+        assert!(other.received_requests().await.unwrap().is_empty());
+        tab.close().await;
+    }
+}

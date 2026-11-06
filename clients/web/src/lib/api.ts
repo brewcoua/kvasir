@@ -3,6 +3,7 @@ import type { components } from "./schema";
 
 type Schemas = components["schemas"];
 export type RunSummary = Schemas["RunSummary"];
+export type ChallengeInfo = Schemas["ChallengeInfo"];
 export type RunDetail = Schemas["RunDetail"];
 // The `status` event: a detail without its events and result. Not in the schema, being SSE only.
 export type RunStatus = Omit<RunDetail, "events" | "result">;

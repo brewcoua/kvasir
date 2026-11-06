@@ -50,6 +50,12 @@ export interface components {
              */
             rank?: number | null;
         };
+        ChallengeInfo: {
+            provider: string;
+            url: string;
+            /** Format: double */
+            expires_in: number;
+        };
         /** @description One source, numbered as the article's `[n]` markers reference it. */
         Citation: {
             /** Format: uint64 */

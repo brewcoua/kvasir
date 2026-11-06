@@ -10,6 +10,7 @@ use schemars::generate::SchemaSettings;
 use schemars::{JsonSchema, SchemaGenerator};
 use serde_json::{Value, json};
 
+use crate::challenges::ChallengeInfo;
 use crate::methods::Method;
 use crate::providers::{ModelInfo, ProviderInfo};
 use crate::settings::{SettingInfo, SettingsView};
@@ -124,6 +125,7 @@ pub fn document() -> Value {
     add::<SettingsView>(&mut generator);
     add::<SettingInfo>(&mut generator);
     add::<ProviderInfo>(&mut generator);
+    add::<ChallengeInfo>(&mut generator);
     add::<ModelInfo>(&mut generator);
     add::<auth::Login>(&mut generator);
     add::<sources::Mark>(&mut generator);

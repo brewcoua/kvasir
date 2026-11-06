@@ -27,7 +27,7 @@ mod startpage;
 mod tavily;
 mod wikipedia;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -64,8 +64,10 @@ use crate::search::{Hit, RRF_K, Search};
 
 /// How long a provider rests after a rate limit that does not say.
 const RATE_LIMIT_COOL_DOWN: Duration = Duration::from_secs(60);
-/// How long a provider rests after a CAPTCHA, which nothing can solve yet.
+/// How long a provider rests after a CAPTCHA, unless a person clears it sooner.
 const CAPTCHA_COOL_DOWN: Duration = Duration::from_secs(60 * 60);
+/// How long a person has to clear one, after which the next CAPTCHA opens a new challenge.
+const CHALLENGE_LIFE: Duration = Duration::from_secs(10 * 60);
 const DAY: u64 = 24 * 60 * 60;
 /// How long a provider has to answer.
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -184,7 +186,68 @@ pub trait Provider: Send + Sync {
         None
     }
 
+    /// Where a person can clear a CAPTCHA this provider answered `query` with, if they can.
+    fn clearance(&self, _query: &str) -> Option<Clearance> {
+        None
+    }
+
     fn query<'a>(&'a self, query: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>>;
+}
+
+/// A page a person can clear a provider's block on.
+pub struct Clearance {
+    pub url: String,
+    /// Whether the page at this address, with this HTML, is still the block.
+    pub blocked: fn(&str, &str) -> bool,
+}
+
+/// A provider's block, waiting for a person to clear it in a browser on this machine.
+#[derive(Clone)]
+pub struct Challenge {
+    pub provider: &'static str,
+    pub url: String,
+    blocked: fn(&str, &str) -> bool,
+    expires: Instant,
+}
+
+impl Challenge {
+    /// The time left to clear it.
+    pub fn remaining(&self) -> Duration {
+        self.expires.saturating_duration_since(Instant::now())
+    }
+
+    /// Whether `url` is on the engine's site, as anywhere else the tab must not go.
+    pub fn within(&self, url: &str) -> bool {
+        site(url).is_some_and(|site| Some(&site) == self::site(&self.url).as_ref())
+    }
+
+    /// Whether this page on the engine's site is no longer the block.
+    pub fn cleared(&self, url: &str, html: &str) -> bool {
+        self.within(url) && !(self.blocked)(url, html)
+    }
+}
+
+/// A URL's registrable domain, or its host where it has none, such as an IP address.
+fn site(url: &str) -> Option<String> {
+    let url = url::Url::parse(url).ok()?;
+    let host = url.host_str()?;
+    Some(psl::domain_str(host).unwrap_or(host).to_owned())
+}
+
+/// The cookies people won clearing blocks, as a `Cookie` header, by provider. Outlives a rebuild of
+/// [`Providers`], so a settings change does not bring the block back.
+#[derive(Default)]
+pub struct Cookies(Mutex<HashMap<String, String>>);
+
+impl Cookies {
+    pub fn get(&self, provider: &str) -> Option<String> {
+        self.0.lock().expect("this lock is not held across a panic").get(provider).cloned()
+    }
+
+    pub fn set(&self, provider: &str, cookies: String) {
+        let mut all = self.0.lock().expect("this lock is not held across a panic");
+        all.insert(provider.to_owned(), cookies);
+    }
 }
 
 /// How a provider stands, as `/readyz` shows it.
@@ -296,11 +359,17 @@ fn until_next_utc_day(now: SystemTime) -> Duration {
 pub struct Providers {
     entries: Vec<Entry>,
     web: Arc<Web>,
+    cookies: Arc<Cookies>,
+    challenges: Mutex<Vec<Challenge>>,
 }
 
 impl Providers {
     /// Each provider with its weight in the fusion.
-    pub fn new(providers: Vec<(Box<dyn Provider>, f64)>, web: Arc<Web>) -> Self {
+    pub fn new(
+        providers: Vec<(Box<dyn Provider>, f64)>,
+        web: Arc<Web>,
+        cookies: Arc<Cookies>,
+    ) -> Self {
         let entries = providers
             .into_iter()
             .map(|(provider, weight)| Entry {
@@ -310,10 +379,10 @@ impl Providers {
                 in_flight: Semaphore::new(1),
             })
             .collect();
-        Self { entries, web }
+        Self { entries, web, cookies, challenges: Mutex::default() }
     }
 
-    pub fn from_settings(settings: &SearchSettings, web: Arc<Web>) -> Self {
+    pub fn from_settings(settings: &SearchSettings, web: Arc<Web>, cookies: Arc<Cookies>) -> Self {
         let mut providers: Vec<(Box<dyn Provider>, f64)> = Vec::new();
         if settings.searxng.enabled && !settings.searxng.url.is_empty() {
             providers
@@ -352,18 +421,22 @@ impl Providers {
             providers.push((Box::new(OpenAlex::new(key)), settings.openalex.weight));
         }
         if settings.duckduckgo.enabled {
-            providers.push((Box::new(DuckDuckGo::default()), settings.duckduckgo.weight));
+            providers.push((
+                Box::new(DuckDuckGo::new(Arc::clone(&cookies))),
+                settings.duckduckgo.weight,
+            ));
         }
         if settings.bing.enabled {
             providers.push((Box::new(Bing::default()), settings.bing.weight));
         }
         if settings.startpage.enabled {
-            providers.push((Box::new(Startpage::default()), settings.startpage.weight));
+            providers
+                .push((Box::new(Startpage::new(Arc::clone(&cookies))), settings.startpage.weight));
         }
         if settings.mojeek_html.enabled {
             providers.push((Box::new(MojeekHtml::default()), settings.mojeek_html.weight));
         }
-        Self::new(providers, web)
+        Self::new(providers, web, cookies)
     }
 
     /// Each provider's state, as far as it is known without asking it.
@@ -376,6 +449,41 @@ impl Providers {
                 probe: entry.provider.probe().map(str::to_owned),
             })
             .collect()
+    }
+
+    /// The blocks waiting for a person.
+    pub fn challenges(&self) -> Vec<Challenge> {
+        let mut challenges = self.challenges.lock().expect("this lock is not held across a panic");
+        challenges.retain(|challenge| !challenge.remaining().is_zero());
+        challenges.clone()
+    }
+
+    /// Ends `provider`'s block with the cookies that cleared it.
+    pub fn cleared(&self, provider: &str, cookies: String) {
+        if !cookies.is_empty() {
+            self.cookies.set(provider, cookies);
+        }
+        let mut challenges = self.challenges.lock().expect("this lock is not held across a panic");
+        challenges.retain(|challenge| challenge.provider != provider);
+        drop(challenges);
+        if let Some(entry) = self.entries.iter().find(|entry| entry.provider.name() == provider) {
+            let mut gate = entry.gate.lock().expect("a gate is not held across a panic");
+            gate.cooling_until = None;
+        }
+    }
+
+    /// Lists a challenge for a provider that has none open.
+    fn challenge(&self, provider: &'static str, clearance: Clearance) {
+        let mut challenges = self.challenges.lock().expect("this lock is not held across a panic");
+        challenges.retain(|challenge| !challenge.remaining().is_zero());
+        if challenges.iter().all(|challenge| challenge.provider != provider) {
+            challenges.push(Challenge {
+                provider,
+                url: clearance.url,
+                blocked: clearance.blocked,
+                expires: Instant::now() + CHALLENGE_LIFE,
+            });
+        }
     }
 
     /// `entry`'s rows for `query`, reported to `ctx`, or why it has none.
@@ -404,6 +512,11 @@ impl Providers {
             Err(failure) => {
                 tracing::error!("{name} failed on query {query}: {failure}");
                 entry.failed(&failure);
+                if failure == Failure::Captcha
+                    && let Some(clearance) = entry.provider.clearance(query)
+                {
+                    self.challenge(name, clearance);
+                }
                 let why = format!("{name}: {failure}");
                 ctx.search_ended(search, Vec::new(), vec![why.clone()]);
                 Err(why)

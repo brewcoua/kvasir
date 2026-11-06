@@ -26,6 +26,10 @@ INSERT OR IGNORE INTO settings SELECT 'search.searxng.enabled', 'true' FROM sett
 INSERT OR IGNORE INTO settings SELECT 'search.searxng.url', value FROM settings WHERE key = 'search.url';
 DELETE FROM settings WHERE key = 'search.url';
 ",
+    // What a person won clearing a search provider's block, as a `Cookie` header.
+    "
+CREATE TABLE search_cookies (provider TEXT PRIMARY KEY, cookies TEXT NOT NULL);
+",
 ];
 
 /// `pages.db`: pages read, their links, and their pieces with vectors and a full-text index.

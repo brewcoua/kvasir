@@ -219,3 +219,43 @@ async function field(request: APIRequestContext, key: string) {
   const view = await (await request.get("/v1/settings", { headers: AUTH })).json();
   return view.fields.find((f: { key: string }) => f.key === key);
 }
+
+test("a person clears a search block from the page", async ({ page, request }) => {
+  await settings(request, SET_UP);
+  let challenges = [{ provider: "DuckDuckGo", url: "https://html.duckduckgo.com/html/?q=", expires_in: 600 }];
+  await page.route("**/v1/search/challenges", (route) => route.fulfill({ json: challenges }));
+  const sent: Record<string, unknown>[] = [];
+  await page.routeWebSocket("**/v1/search/challenges/DuckDuckGo/live", (socket) => {
+    socket.send(JSON.stringify({ frame: "/9j/4AAQ" }));
+    socket.onMessage((message) => {
+      const input = JSON.parse(String(message));
+      sent.push(input);
+      if (input.type === "text") {
+        challenges = [];
+        socket.send(JSON.stringify({ state: "cleared" }));
+      }
+    });
+  });
+
+  await logIn(page);
+  await page.getByRole("button", { name: "Solve DuckDuckGo" }).click();
+  const tab = page.getByRole("application", { name: "DuckDuckGo's page" });
+  await expect(tab.locator("img")).toHaveAttribute("src", "data:image/jpeg;base64,/9j/4AAQ");
+
+  await tab.click();
+  await page.keyboard.press("a");
+  await tab.evaluate((element) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text", "pasted");
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true }));
+  });
+
+  await expect(page.getByRole("application")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Solve DuckDuckGo" })).toHaveCount(0);
+  // The middle of the picture, whatever size it is shown at, is the middle of the tab.
+  const press = sent.find((input) => input.action === "press")!;
+  expect(press.x).toBeCloseTo(640, -1);
+  expect(press.y).toBeCloseTo(360, -1);
+  expect(sent.filter((input) => input.type === "key" && input.down)).toEqual([{ type: "key", down: true, key: "a", code: "KeyA", key_code: 65, text: "a" }]);
+  expect(sent.at(-1)).toEqual({ type: "text", text: "pasted" });
+});

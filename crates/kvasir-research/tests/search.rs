@@ -245,7 +245,9 @@ mod providers {
     use kvasir_fetch::{Guard, Options, Web, system_lookup};
     use kvasir_llm::BoxFuture;
     use kvasir_research::Search;
-    use kvasir_research::providers::{Failure, Provider, Providers, Row, State};
+    use kvasir_research::providers::{
+        Clearance, Cookies, Failure, Provider, Providers, Row, State,
+    };
     use serde_json::json;
     use wiremock::matchers::{path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -318,6 +320,7 @@ mod providers {
                 (Stub::boxed("two", vec![Ok(vec![row("c", ""), row("b", "from two")])]), 1.0),
             ],
             web(),
+            Arc::default(),
         );
 
         let (hits, failures) = ask(&providers).await;
@@ -337,6 +340,7 @@ mod providers {
                     (Stub::boxed("two", vec![Ok(vec![row("b", "")])]), two),
                 ],
                 web(),
+                Arc::default(),
             )
         };
 
@@ -352,6 +356,7 @@ mod providers {
                 (Stub::boxed("up", vec![Ok(vec![row("a", "")])]), 1.0),
             ],
             web(),
+            Arc::default(),
         );
 
         let (hits, failures) = ask(&providers).await;
@@ -362,7 +367,7 @@ mod providers {
 
     #[tokio::test]
     async fn no_provider_is_a_failure_rather_than_an_empty_answer() {
-        let (hits, failures) = ask(&Providers::new(Vec::new(), web())).await;
+        let (hits, failures) = ask(&Providers::new(Vec::new(), web(), Arc::default())).await;
 
         assert!(hits.is_empty());
         assert_eq!(failures, ["no search provider is enabled"]);
@@ -374,6 +379,7 @@ mod providers {
         let providers = Providers::new(
             vec![(Stub::boxed("p", vec![Err(limited), Ok(vec![row("a", "")])]), 1.0)],
             web(),
+            Arc::default(),
         );
 
         assert_eq!(ask(&providers).await.1, ["p: rate limited"]);
@@ -387,6 +393,7 @@ mod providers {
         let providers = Providers::new(
             vec![(Stub::boxed("p", vec![Err(Failure::QuotaExhausted)]), 1.0)],
             web(),
+            Arc::default(),
         );
 
         assert_eq!(ask(&providers).await.1, ["p: out of quota"]);
@@ -405,6 +412,7 @@ mod providers {
                 (Stub::boxed("fine", Vec::new()), 1.0),
             ],
             web(),
+            Arc::default(),
         );
         assert!(providers.statuses().iter().all(|status| status.state == State::Ok));
 
@@ -420,8 +428,11 @@ mod providers {
 
     #[tokio::test(start_paused = true)]
     async fn a_refused_key_stays_refused() {
-        let providers =
-            Providers::new(vec![(Stub::boxed("p", vec![Err(Failure::Unauthorized)]), 1.0)], web());
+        let providers = Providers::new(
+            vec![(Stub::boxed("p", vec![Err(Failure::Unauthorized)]), 1.0)],
+            web(),
+            Arc::default(),
+        );
 
         assert_eq!(ask(&providers).await.1, ["p: refused its API key"]);
         tokio::time::advance(Duration::from_secs(7 * 24 * 60 * 60)).await;
@@ -437,7 +448,7 @@ mod providers {
             answers: Mutex::default(),
             calls: Arc::clone(&calls),
         };
-        let providers = Providers::new(vec![(Box::new(slow), 1.0)], web());
+        let providers = Providers::new(vec![(Box::new(slow), 1.0)], web(), Arc::default());
 
         assert!(ask(&providers).await.1.is_empty());
         assert_eq!(ask(&providers).await.1, ["slow: waiting on its rate limit"]);
@@ -473,7 +484,7 @@ mod providers {
     async fn a_limited_provider_answers_one_query_at_a_time() {
         let calls = Arc::new(Mutex::new(0));
         let slow = Slow { calls: Arc::clone(&calls) };
-        let providers = Providers::new(vec![(Box::new(slow), 1.0)], web());
+        let providers = Providers::new(vec![(Box::new(slow), 1.0)], web(), Arc::default());
 
         let (first, second) = tokio::join!(ask(&providers), async {
             // Past the interval, with the first still out.
@@ -501,11 +512,61 @@ mod providers {
             ..SearchSettings::default()
         };
 
-        let providers = Providers::from_settings(&settings, web());
+        let providers = Providers::from_settings(&settings, web(), Arc::default());
 
         let names: Vec<&str> = providers.statuses().iter().map(|status| status.name).collect();
         assert_eq!(names, ["Wikipedia", "arXiv", "Crossref", "Europe PMC", "Semantic Scholar"]);
         assert!(!settings.has_web_provider());
+    }
+
+    /// Answers with a CAPTCHA and offers a page on a.org to clear it.
+    struct Blocked;
+
+    impl Provider for Blocked {
+        fn name(&self) -> &'static str {
+            "blocked"
+        }
+
+        fn clearance(&self, query: &str) -> Option<Clearance> {
+            Some(Clearance {
+                url: format!("https://www.a.org/?q={query}"),
+                blocked: |_, html| html.contains("captcha"),
+            })
+        }
+
+        fn query<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>> {
+            Box::pin(async { Err(Failure::Captcha) })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_captcha_opens_one_challenge_which_a_person_can_clear() {
+        let cookies = Arc::new(Cookies::default());
+        let providers = Providers::new(vec![(Box::new(Blocked), 1.0)], web(), Arc::clone(&cookies));
+
+        ask(&providers).await;
+        tokio::time::advance(Duration::from_secs(11 * 60)).await;
+        assert!(providers.challenges().is_empty(), "it has expired");
+        tokio::time::advance(Duration::from_secs(60 * 60)).await;
+        ask(&providers).await;
+        ask(&providers).await;
+
+        let challenges = providers.challenges();
+        assert_eq!(challenges.len(), 1);
+        let challenge = &challenges[0];
+        assert_eq!(challenge.url, "https://www.a.org/?q=a");
+        assert!(challenge.within("https://sorry.a.org/x"));
+        assert!(!challenge.within("https://a.org.evil.example/"));
+        assert!(!challenge.within("chrome-error://chromewebdata/"));
+        assert!(!challenge.cleared("https://www.a.org/", "a captcha"));
+        assert!(!challenge.cleared("https://elsewhere.org/", "no block"));
+        assert!(challenge.cleared("https://www.a.org/", "no block"));
+
+        assert!(matches!(providers.statuses()[0].state, State::CoolingDown { .. }));
+        providers.cleared("blocked", "won=1".into());
+        assert_eq!(providers.statuses()[0].state, State::Ok);
+        assert!(providers.challenges().is_empty());
+        assert_eq!(cookies.get("blocked").as_deref(), Some("won=1"));
     }
 
     async fn searxng(url: &str) -> (Vec<Hit>, Vec<String>) {
@@ -513,7 +574,7 @@ mod providers {
             searxng: SearxngSettings { enabled: true, url: url.into(), weight: 1.0 },
             ..SearchSettings::default()
         };
-        ask(&Providers::from_settings(&settings, web())).await
+        ask(&Providers::from_settings(&settings, web(), Arc::default())).await
     }
 
     #[tokio::test]
@@ -523,7 +584,7 @@ mod providers {
             ..SearchSettings::default()
         };
 
-        let (_, failures) = ask(&Providers::from_settings(&settings, web())).await;
+        let (_, failures) = ask(&Providers::from_settings(&settings, web(), Arc::default())).await;
 
         assert_eq!(failures, ["no search provider is enabled"]);
     }

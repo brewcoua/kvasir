@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Bing, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, MojeekHtml,
+    Arxiv, Bing, Brave, Cookies, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, MojeekHtml,
     OpenAlex, Provider, Row, SemanticScholar, Startpage, Tavily, Wikipedia,
 };
 use serde_json::json;
@@ -620,7 +620,7 @@ mod duckduckgo {
     use super::*;
 
     fn at(server: &MockServer) -> DuckDuckGo {
-        DuckDuckGo::at(&format!("{}/s", server.uri()))
+        DuckDuckGo::at(&format!("{}/s", server.uri()), Arc::default())
     }
 
     fn page(body: &str) -> ResponseTemplate {
@@ -683,6 +683,23 @@ mod duckduckgo {
 
         let server = answering(ResponseTemplate::new(303)).await;
         assert!(matches!(at(&server).query("q").await, Err(Failure::Other(_))));
+    }
+
+    #[tokio::test]
+    async fn the_cookies_a_person_won_are_sent() {
+        let server = MockServer::start().await;
+        Mock::given(path("/s"))
+            .and(header("cookie", "won=1"))
+            .respond_with(page(r#"<div id="links"></div>"#))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let cookies = Arc::new(Cookies::default());
+        cookies.set("DuckDuckGo", "won=1".into());
+
+        let ddg = DuckDuckGo::at(&format!("{}/s", server.uri()), cookies);
+
+        assert_eq!(ddg.query("q").await, Ok(Vec::new()));
     }
 
     /// An empty list here would look like a topic with no sources.
@@ -805,7 +822,7 @@ mod startpage {
             .expect(2)
             .mount(&server)
             .await;
-        let startpage = Startpage::at(&server.uri());
+        let startpage = Startpage::at(&server.uri(), Arc::default());
 
         let rows = startpage.query("the query").await.unwrap();
         startpage.query("the query").await.unwrap();
@@ -879,9 +896,24 @@ mod startpage {
             .mount(&server)
             .await;
 
-        let rows = Startpage::at(&server.uri()).query("q").await.unwrap();
+        let rows = Startpage::at(&server.uri(), Arc::default()).query("q").await.unwrap();
 
         assert_eq!(rows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_person_is_sent_where_it_sent_the_client() {
+        let server = MockServer::start().await;
+        let captcha = ResponseTemplate::new(302).append_header("Location", "/sp/captcha?id=1");
+        Mock::given(path("/")).respond_with(captcha).mount(&server).await;
+        let startpage = Startpage::at(&server.uri(), Arc::default());
+
+        assert_eq!(startpage.query("q").await, Err(Failure::Captcha));
+
+        let clearance = startpage.clearance("q").unwrap();
+        assert_eq!(clearance.url, format!("{}/sp/captcha?id=1", server.uri()));
+        assert!((clearance.blocked)(&clearance.url, ""));
+        assert!(!(clearance.blocked)(&format!("{}/sp/search", server.uri()), ""));
     }
 
     #[tokio::test]
@@ -889,7 +921,10 @@ mod startpage {
         let server = MockServer::start().await;
         Mock::given(path("/")).respond_with(challenge(5)).mount(&server).await;
 
-        assert_eq!(Startpage::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+        assert_eq!(
+            Startpage::at(&server.uri(), Arc::default()).query("q").await,
+            Err(Failure::Captcha)
+        );
     }
 
     #[tokio::test]
@@ -898,14 +933,20 @@ mod startpage {
         let captcha = ResponseTemplate::new(302)
             .append_header("Location", "https://www.startpage.com/sp/captcha?x=1");
         Mock::given(path("/")).respond_with(captcha).mount(&server).await;
-        assert_eq!(Startpage::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+        assert_eq!(
+            Startpage::at(&server.uri(), Arc::default()).query("q").await,
+            Err(Failure::Captcha)
+        );
 
         let server = MockServer::start().await;
         Mock::given(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_string("<p>No form</p>"))
             .mount(&server)
             .await;
-        assert_eq!(Startpage::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+        assert_eq!(
+            Startpage::at(&server.uri(), Arc::default()).query("q").await,
+            Err(Failure::Captcha)
+        );
 
         let server = MockServer::start().await;
         home(&server, 1).await;
@@ -914,7 +955,7 @@ mod startpage {
             .mount(&server)
             .await;
         assert_eq!(
-            Startpage::at(&server.uri()).query("q").await,
+            Startpage::at(&server.uri(), Arc::default()).query("q").await,
             Err(Failure::Other("no results in the page".into()))
         );
     }

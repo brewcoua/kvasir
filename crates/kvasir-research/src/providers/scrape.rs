@@ -3,10 +3,12 @@
 
 use std::time::Duration;
 
-use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, HeaderMap, HeaderValue, SET_COOKIE, USER_AGENT};
+use reqwest::header::{
+    ACCEPT, ACCEPT_LANGUAGE, COOKIE, HeaderMap, HeaderValue, SET_COOKIE, USER_AGENT,
+};
 use reqwest::redirect::Policy;
 
-use super::TIMEOUT;
+use super::{Cookies, TIMEOUT};
 
 /// As SearXNG's own list has it. These engines refuse what does not look like a browser.
 const BROWSER: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0";
@@ -30,6 +32,18 @@ pub(super) fn client() -> reqwest::Client {
         .timeout(TIMEOUT)
         .build()
         .expect("the TLS backend starts")
+}
+
+/// `request` with what a person won clearing `provider`'s block, if they did.
+pub(super) fn with_cookies(
+    request: reqwest::RequestBuilder,
+    cookies: &Cookies,
+    provider: &str,
+) -> reqwest::RequestBuilder {
+    match cookies.get(provider) {
+        Some(won) => request.header(COOKIE, won),
+        None => request,
+    }
 }
 
 /// A form's fields as the body of a POST.

@@ -832,6 +832,38 @@ header .icon {
   background: var(--panel);
   color: var(--text);
 }
+.challenges {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.challenges p {
+  margin: 0;
+}
+.settings.challenge {
+  width: min(70rem, calc(100vw - 2rem));
+  height: auto;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+.challenge > .meta,
+.challenge > .error {
+  margin: 0.5rem 1rem;
+}
+.challenge .tab {
+  aspect-ratio: 16 / 9;
+  background: var(--line);
+  cursor: default;
+}
+.challenge .tab img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
 .overlay {
   position: fixed;
   inset: 0;

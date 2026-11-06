@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { defaultsOf, json, type Defaults, type MethodInfo, type RunSummary, type SettingsView } from "./lib/api";
+  import { defaultsOf, json, type ChallengeInfo, type Defaults, type MethodInfo, type RunSummary, type SettingsView } from "./lib/api";
   import { go, route } from "./lib/route.svelte";
+  import Challenges from "./components/Challenges.svelte";
   import Icon from "./components/Icon.svelte";
   import Login from "./components/Login.svelte";
   import RunList from "./components/RunList.svelte";
@@ -16,6 +17,7 @@
   const LIST_INTERVAL_MS = 3000;
 
   let runs: RunSummary[] = $state([]);
+  let challenges: ChallengeInfo[] = $state([]);
   let summary = $state("loading…");
   let settingsOpen = $state(false);
   let defaults: Partial<Defaults> = $state({});
@@ -33,6 +35,13 @@
     } catch (error) {
       summary = String(error);
     }
+  }
+
+  function refreshChallenges() {
+    json<ChallengeInfo[]>("/v1/search/challenges").then(
+      (found) => (challenges = found),
+      (error) => console.warn("no challenges:", error),
+    );
   }
 
   // Again after the setup, since a model's default is empty until it is set.
@@ -68,7 +77,8 @@
       go(route.current, true);
       refresh();
       loadDefaults();
-      timer = setInterval(refresh, LIST_INTERVAL_MS);
+      refreshChallenges();
+      timer = setInterval(() => (refresh(), refreshChallenges()), LIST_INTERVAL_MS);
     });
     return () => clearInterval(timer);
   });
@@ -93,6 +103,8 @@
       <Icon name="sliders" />
     </button>
   </header>
+
+  <Challenges {challenges} onchange={refreshChallenges} />
 
   <main>
     {#if route.current.page === "run"}

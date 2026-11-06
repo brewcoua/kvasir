@@ -313,6 +313,7 @@ export function mock(): Plugin {
           return send(response, 200, all.sort((a, b) => b.created_at - a.created_at));
         }
         if (request.method === "GET" && path === "/v1/methods") return send(response, 200, METHODS);
+        if (request.method === "GET" && path === "/v1/search/challenges") return send(response, 200, []);
         // Set up already. The setup page and the service settings are tested against the service.
         if (request.method === "GET" && path === "/v1/settings") {
           return send(response, 200, { fields: [], missing: [], restart_required: [] });

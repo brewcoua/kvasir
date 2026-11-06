@@ -8,7 +8,7 @@ publish.workspace = true
 
 [features]
 # Renders pages that need JavaScript in a Chromium the image provides.
-chromium = ["kvasir-browser/chromium"]
+chromium = ["axum/ws", "kvasir-browser/chromium"]
 
 [dependencies]
 arc-swap.workspace = true
@@ -43,6 +43,7 @@ url.workspace = true
 http-body-util.workspace = true
 kvasir-testkit.workspace = true
 tempfile.workspace = true
+tokio-tungstenite.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tower.workspace = true
 wiremock.workspace = true

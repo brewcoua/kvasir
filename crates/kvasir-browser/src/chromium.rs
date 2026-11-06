@@ -29,7 +29,7 @@ use url::Url;
 
 use crate::{BoxFuture, Render, RenderError, Rendered};
 
-const LOAD_TIMEOUT: Duration = Duration::from_secs(15);
+pub(crate) const LOAD_TIMEOUT: Duration = Duration::from_secs(15);
 // Pages that keep a connection open never go idle, so the wait for it is short and a timeout is
 // not an error.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -61,7 +61,7 @@ const AD_HOSTS: [&str; 13] = [
 // Flags without the ones that name automation: `--enable-automation`, and those Patchright drops.
 // Site isolation is off because cross-origin frames would otherwise attach as targets of their own,
 // where neither the request filter below nor `Runtime.disable` reaches.
-const STEALTH_ARGS: [&str; 16] = [
+pub(crate) const STEALTH_ARGS: [&str; 16] = [
     "--disable-blink-features=AutomationControlled",
     "--disable-background-networking",
     "--disable-background-timer-throttling",
@@ -281,7 +281,7 @@ impl Chromium {
 }
 
 /// Stops a task when dropped.
-struct Abort(JoinHandle<()>);
+pub(crate) struct Abort(pub(crate) JoinHandle<()>);
 
 impl Drop for Abort {
     fn drop(&mut self) {

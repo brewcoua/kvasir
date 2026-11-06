@@ -8,7 +8,7 @@
 //!
 //! Either may answer with Anubis, a proof-of-work, which is solved here for a cookie.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use dom_query::Document;
@@ -20,9 +20,13 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::time::Instant;
 
-use super::{Failure, Provider, Row, keyless_failure, other, plain_text, scrape};
+use super::{
+    Clearance, Cookies, Failure, Provider, Row, keyless_failure, other, plain_text, scrape,
+};
 
+const NAME: &str = "Startpage";
 const BASE: &str = "https://www.startpage.com";
+const CAPTCHA_PATH: &str = "/sp/captcha";
 const TOKEN_LIFE: Duration = Duration::from_secs(3600);
 const AUTH_LIFE: Duration = Duration::from_secs(240);
 const AUTH_COOKIE: &str = "spchal-auth";
@@ -68,12 +72,9 @@ pub struct Startpage {
     client: reqwest::Client,
     token: Kept,
     auth: Kept,
-}
-
-impl Default for Startpage {
-    fn default() -> Self {
-        Self::at(BASE)
-    }
+    cookies: Arc<Cookies>,
+    /// Where it last sent a client it blocks, for a person to go.
+    captcha: Mutex<Option<String>>,
 }
 
 /// A page and the cookies that came with it.
@@ -89,28 +90,32 @@ impl Page {
 }
 
 impl Startpage {
+    pub fn new(cookies: Arc<Cookies>) -> Self {
+        Self::at(BASE, cookies)
+    }
+
     /// Only a test picks another address.
-    pub fn at(base: &str) -> Self {
+    pub fn at(base: &str, cookies: Arc<Cookies>) -> Self {
         Self {
             base: base.to_owned(),
             client: scrape::client(),
             token: Kept::default(),
             auth: Kept::default(),
+            cookies,
+            captcha: Mutex::default(),
         }
     }
 
     /// A challenge may come with any status, so it goes before the status is read.
-    async fn page(request: RequestBuilder) -> Result<Page, Failure> {
+    async fn page(&self, request: RequestBuilder) -> Result<Page, Failure> {
         let response = request.send().await.map_err(|e| other("request", e))?;
         if let Some(failure) = keyless_failure(&response) {
             return Err(failure);
         }
-        let to_captcha = response
-            .headers()
-            .get(LOCATION)
-            .and_then(|location| location.to_str().ok())
-            .is_some_and(|location| location.contains("/sp/captcha"));
-        if to_captcha {
+        let to = response.headers().get(LOCATION).and_then(|location| location.to_str().ok());
+        if let Some(to) = to.filter(|to| to.contains(CAPTCHA_PATH)) {
+            *self.captcha.lock().expect("this lock is not held across a panic") =
+                Some(to.to_owned());
             return Err(Failure::Captcha);
         }
         let status = response.status();
@@ -161,16 +166,30 @@ impl Startpage {
         from: &str,
         build: impl Fn(String) -> RequestBuilder,
     ) -> Result<String, Failure> {
-        let page = Self::page(build(cookie_header(fresh(&self.auth).as_deref()))).await?;
+        let page = self.page(build(self.cookie_header(fresh(&self.auth).as_deref()))).await?;
         if !page.challenged() {
             return Ok(page.body);
         }
         let auth = self.pass(&page, from).await?;
-        let page = Self::page(build(cookie_header(Some(&auth)))).await?;
+        let page = self.page(build(self.cookie_header(Some(&auth)))).await?;
         if page.challenged() {
             return Err(Failure::Captcha);
         }
         Ok(page.body)
+    }
+
+    /// Its preferences, which a search needs to look like the form's, the auth cookie, and what a
+    /// person won.
+    fn cookie_header(&self, auth: Option<&str>) -> String {
+        let preferences = PREFERENCES
+            .iter()
+            .map(|(name, value)| format!("{name}EEE{value}"))
+            .collect::<Vec<_>>()
+            .join("N1N");
+        let mut cookies = vec![format!("preferences={preferences}")];
+        cookies.extend(auth.map(|auth| format!("{AUTH_COOKIE}={auth}")));
+        cookies.extend(self.cookies.get(NAME));
+        cookies.join("; ")
     }
 
     async fn token(&self) -> Result<String, Failure> {
@@ -217,19 +236,6 @@ impl Startpage {
                 .body(form.clone())
         };
         read(&self.through_challenge(&url, build).await?)
-    }
-}
-
-/// Its preferences, which a search needs to look like the form's, and the auth cookie.
-fn cookie_header(auth: Option<&str>) -> String {
-    let preferences = PREFERENCES
-        .iter()
-        .map(|(name, value)| format!("{name}EEE{value}"))
-        .collect::<Vec<_>>()
-        .join("N1N");
-    match auth {
-        Some(auth) => format!("preferences={preferences}; {AUTH_COOKIE}={auth}"),
-        None => format!("preferences={preferences}"),
     }
 }
 
@@ -311,7 +317,14 @@ fn work(data: &str, difficulty: u32) -> Option<(u64, String)> {
 
 impl Provider for Startpage {
     fn name(&self) -> &'static str {
-        "Startpage"
+        NAME
+    }
+
+    fn clearance(&self, _query: &str) -> Option<Clearance> {
+        let captcha = self.captcha.lock().expect("this lock is not held across a panic").take();
+        let base = url::Url::parse(&self.base).ok()?;
+        let url = base.join(captcha.as_deref().unwrap_or(CAPTCHA_PATH)).ok()?;
+        Some(Clearance { url: url.into(), blocked: |url, _| url.contains(CAPTCHA_PATH) })
     }
 
     fn interval(&self) -> Duration {

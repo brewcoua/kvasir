@@ -471,6 +471,8 @@ The same data is available as JSON.
 | `GET /v1/pages/recall?q=` | The cached pieces recall would take for the question `q`, with their similarity. Marks nothing read. 503 without an embedding model. |
 | `DELETE /v1/pages/{id}`, `DELETE /v1/sites/{domain}` | Remove a page, or every page of a site, with links and pieces. Cannot be undone. |
 | `GET /v1/favicons/{host}` | The icon of a site, fetched on first request and kept in `favicons.db`. 404 when the site has none, the host is not a public DNS name, or favicons are off. |
+| `GET /v1/search/challenges` | The blocks a person can clear: each with its `provider`, `url` and `expires_in` in seconds. Empty without the `chromium` feature. |
+| `GET /v1/search/challenges/{provider}/live` | A WebSocket on a browser tab on the challenge. Sends `frame` (base64 JPEG) as the page changes and at the end `state`, one of `cleared`, `expired`, `left` or `failed`. Takes mouse, key and text input as JSON. 403 from another site's page. Needs the `chromium` feature. |
 | `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule` or `wikidata`) of a site; Wikidata is asked when nothing else decides it. 404 unless `sources.enabled`. |
 | `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `sources.allow` or `sources.deny`. A mark takes effect for runs in flight. 404 unless `sources.enabled`. |
 | `DELETE /v1/sources` | Forget the cached Wikidata answers. Marks stay. 404 unless `sources.enabled`. |

@@ -18,7 +18,7 @@ use kvasir_config::{FIELDS, Field, Kind, Render, Settings};
 use kvasir_db::DbError;
 use kvasir_fetch::Web;
 use kvasir_llm::Target;
-use kvasir_research::providers::Providers;
+use kvasir_research::providers::{Cookies, Providers};
 use kvasir_research::{Classify, Encoder, Pages, Search, Tools};
 use kvasir_sites::favicons::{FaviconStore, Favicons};
 use kvasir_sites::sources::{SourceStore, Sources};
@@ -165,7 +165,7 @@ async fn change(app: &App, changes: Map<String, Value>) -> Result<Json<SettingsV
     stored
         .extend(changes.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), v.clone())));
     let changed = live.settings.with_stored(&stored, true, &mut Vec::new())?;
-    let next = build(&changed, Some(&live), &app.web)?;
+    let next = build(&changed, Some(&live), &app.web, &app.search_cookies)?;
     // As parsed, so the row says what GET shows. A null text field is stored as "", since no row
     // would mean its default instead.
     let rows = changes
@@ -187,6 +187,7 @@ pub fn build(
     settings: &Settings,
     previous: Option<&Live>,
     web: &Arc<Web>,
+    cookies: &Arc<Cookies>,
 ) -> Result<Live, DbError> {
     let favicons = match previous {
         Some(previous) if previous.settings.favicons == settings.favicons => {
@@ -214,7 +215,11 @@ pub fn build(
         Some(previous) if previous.settings.search == settings.search => {
             Arc::clone(&previous.search)
         }
-        _ => Arc::new(Providers::from_settings(&settings.search, Arc::clone(web))),
+        _ => Arc::new(Providers::from_settings(
+            &settings.search,
+            Arc::clone(web),
+            Arc::clone(cookies),
+        )),
     };
     Ok(Live { settings: Arc::new(settings.clone()), favicons, sources, search })
 }

@@ -33,6 +33,26 @@ pub async fn write(db: &Db, changes: Vec<(String, Option<Value>)>) -> Result<(),
     .await
 }
 
+/// The `search_cookies` table: each provider and the cookies a person won for it.
+pub async fn search_cookies(db: &Db) -> Result<Vec<(String, String)>, DbError> {
+    db.call(|c| {
+        let mut stmt = c.prepare("SELECT provider, cookies FROM search_cookies")?;
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect()
+    })
+    .await
+}
+
+pub async fn set_search_cookies(db: &Db, provider: String, cookies: String) -> Result<(), DbError> {
+    db.call(move |c| {
+        c.execute(
+            "INSERT OR REPLACE INTO search_cookies VALUES (?1, ?2)",
+            params![provider, cookies],
+        )
+        .map(|_| ())
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

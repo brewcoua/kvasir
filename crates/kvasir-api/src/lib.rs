@@ -2,6 +2,7 @@
 
 mod auth;
 mod body;
+mod challenges;
 mod methods;
 mod openapi;
 mod page;
@@ -27,7 +28,7 @@ use kvasir_config::{ConfigError, Settings, SetupRequired};
 use kvasir_db::{Db, DbError};
 use kvasir_fetch::{Guard, PageStore, Web};
 use kvasir_llm::Llm;
-use kvasir_research::providers::{Providers, State as SearchState};
+use kvasir_research::providers::{Cookies, Providers, State as SearchState};
 use kvasir_run::{NotFound, RunRegistry, RunStore, Slots};
 use kvasir_sites::favicons::Favicons;
 use kvasir_sites::sources::Sources;
@@ -87,6 +88,8 @@ pub struct App {
     pub(crate) probe: reqwest::Client,
     pub(crate) models: HashMap<String, providers::Cache>,
     pub(crate) proxies: Proxies,
+    /// What people won clearing search providers' blocks, as `kvasir.db` keeps it.
+    pub(crate) search_cookies: Arc<Cookies>,
 }
 
 impl App {
@@ -134,7 +137,11 @@ pub async fn open(
         kvasir_fetch::system_lookup(),
     ));
     web.set_cache(Some(PageStore::open(&settings.pages_db(), &settings.secret_key)?));
-    let live = settings::build(&settings, None, &web)?;
+    let search_cookies = Arc::new(Cookies::default());
+    for (provider, cookies) in kvasir_config::store::search_cookies(&db).await? {
+        search_cookies.set(&provider, cookies);
+    }
+    let live = settings::build(&settings, None, &web, &search_cookies)?;
     settings::configure(&web, &settings, None);
     let store = match settings.runs.store {
         kvasir_config::RunStore::Sqlite => Some(RunStore::open(
@@ -180,6 +187,7 @@ pub async fn open(
         llm,
         probe: reqwest::Client::builder().timeout(PROBE_TIMEOUT).build()?,
         proxies,
+        search_cookies,
     }))
 }
 
@@ -192,6 +200,7 @@ pub fn router(app: Arc<App>) -> Router {
         .merge(tasks::routes())
         .merge(settings::routes())
         .merge(providers::routes())
+        .merge(challenges::routes())
         .route_layer(middleware::from_fn_with_state(Arc::clone(&app), auth::require_token));
     Router::new()
         .route("/healthz", get(healthz))

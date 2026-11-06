@@ -1,6 +1,6 @@
 # Search providers: plan
 
-Status: written 2026-11-06. Phases 1 to 7 built. Needs [encryption-plan.md](encryption-plan.md), built,
+Status: written 2026-11-06. Phases 1 to 8 built. Needs [encryption-plan.md](encryption-plan.md), built,
 since this plan stores API keys in `kvasir.db`.
 
 Every search goes to one SearXNG instance (`SearXng`, `kvasir-research/src/search.rs:86`). That
