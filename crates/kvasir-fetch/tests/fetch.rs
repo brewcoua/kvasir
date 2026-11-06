@@ -278,3 +278,13 @@ async fn a_robots_txt_redirect_is_followed_at_most_five_times() {
     assert!(!web().allowed(&format!("{}/a", server.uri())).await);
     assert_eq!(server.received_requests().await.unwrap().len(), 6);
 }
+
+#[test]
+fn the_user_agent_names_the_release() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.release-please-manifest.json");
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+
+    assert_eq!(manifest["."], env!("CARGO_PKG_VERSION"));
+    assert!(web().user_agent().starts_with(&format!("kvasir/{} ", env!("CARGO_PKG_VERSION"))));
+}

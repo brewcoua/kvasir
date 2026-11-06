@@ -1,6 +1,6 @@
 [package]
 name = "kvasir-storm"
-version = "0.0.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 # Upstream's licence, which a translation keeps.
