@@ -617,7 +617,8 @@ const UBLACKLIST: &str = "### a comment\n*://*.otter.ai/*\n*://krisp.ai/*\n/pint
     *://example.org/some/path/*\n";
 const CISA: &str = "Domain name,Domain type,Organization name\n29palms.gov,City,City of Twentynine \
     Palms\nAbbeville.GOV,City,\"Abbeville, LA\"\n";
-const ADBLOCK: &str = "! Title: x\ndomain.example##a[href*=\"y\"]\n";
+const ADBLOCK: &str = "! Title: x\ndomain.example##a[href*=\"y\"]\n||Ads.example^\n||b.example^$all\n\
+    ||c.example^$document\n||d.example^$third-party\n||e.example/path^\n";
 
 #[test]
 fn lists_are_read_as_hosts_ublacklist_or_csv() {
@@ -625,9 +626,9 @@ fn lists_are_read_as_hosts_ublacklist_or_csv() {
         (HOSTS_FILE, &["cgdream.ai", "forkful.ai", "tryleap.ai"][..]),
         (UBLACKLIST, &["krisp.ai", "otter.ai"]),
         (CISA, &["29palms.gov", "abbeville.gov"]),
-        (ADBLOCK, &[]),
+        (ADBLOCK, &["ads.example", "b.example", "c.example"]),
     ] {
-        let mut got: Vec<String> = parse_list(text).into_iter().collect();
+        let mut got: Vec<String> = parse_list(text).hosts.into_iter().collect();
         got.sort();
         assert_eq!(got, want);
     }
@@ -635,8 +636,82 @@ fn lists_are_read_as_hosts_ublacklist_or_csv() {
 
 #[test]
 fn a_list_may_end_its_lines_in_a_lone_carriage_return() {
-    let got = parse_list("a.example\rb.example\r");
+    let got = parse_list("a.example\rb.example\r").hosts;
     assert_eq!(got, HashSet::from(["a.example".to_owned(), "b.example".to_owned()]));
+}
+
+#[test]
+fn a_list_counts_the_rules_it_cannot_use() {
+    for (text, skipped) in
+        [(HOSTS_FILE, 1), (UBLACKLIST, 2), (ADBLOCK, 3), ("# only\n! comments\n", 0)]
+    {
+        assert_eq!(parse_list(text).skipped, skipped, "{text}");
+    }
+}
+
+#[test]
+fn a_host_set_finds_exactly_its_hosts() {
+    let set = lists::HostSet::new(["b.example", "a.example", "c.example"].map(str::to_owned));
+
+    for host in ["a.example", "b.example", "c.example"] {
+        assert!(set.contains(host), "{host}");
+    }
+    for host in ["", "a", "a.example.", "aa.example", "d.example", "example"] {
+        assert!(!set.contains(host), "{host}");
+    }
+    assert!(!lists::HostSet::default().contains("a.example"));
+}
+
+#[test]
+fn site_names_stop_at_the_registrable_domain() {
+    assert_eq!(
+        site_names("a.b.example.co.uk"),
+        ["a.b.example.co.uk", "b.example.co.uk", "example.co.uk"]
+    );
+    assert_eq!(site_names("someone.github.io"), ["someone.github.io"]);
+    assert_eq!(site_names("a.b.not-a-suffix"), ["a.b.not-a-suffix"]);
+}
+
+#[tokio::test]
+async fn a_list_entry_covers_its_subdomains_but_not_those_of_a_public_suffix() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let url = setting.list("/farms.txt", body("blog.farm.org\ngithub.io\nco.uk\n")).await;
+    let sources = setting
+        .with(SourceSettings { lists: vec![format!("content_farm={url}")], ..setting.settings() });
+    sources.refresh_lists().await;
+
+    assert_eq!(one(&sources, "a.b.blog.farm.org", WAIT).await.tier(), Tier::Avoid);
+    assert_eq!(one(&sources, "github.io", WAIT).await.tier(), Tier::Avoid);
+    for host in ["farm.org", "someone.github.io", "bbc.co.uk"] {
+        assert_ne!(one(&sources, host, WAIT).await.tier(), Tier::Avoid, "{host}");
+    }
+}
+
+#[tokio::test]
+async fn lists_naming_one_host_all_count() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let ai = setting.list("/ai.txt", body("both.gov\n")).await;
+    let farm = setting.list("/farm.txt", body("both.gov\n")).await;
+    let gov = setting.list("/gov.csv", body("both.gov\n")).await;
+    let news = setting.list("/news.txt", body("both.gov\n")).await;
+    let sources = setting.with(SourceSettings {
+        lists: vec![
+            format!("ai_generated={ai}"),
+            format!("news={news}"),
+            format!("government={gov}"),
+            format!("content_farm={farm}"),
+        ],
+        ..setting.settings()
+    });
+    sources.refresh_lists().await;
+
+    let found = one(&sources, "both.gov", WAIT).await;
+
+    assert_eq!(found.kind, "government");
+    assert_eq!(tags(&found), ["ai_generated", "content_farm"]);
+    assert_eq!(found.origin, "list");
 }
 
 fn body(text: &str) -> ResponseTemplate {
@@ -726,7 +801,7 @@ async fn a_list_not_downloaded_yet_is_skipped() {
 
     let lists = sources.read_lists();
 
-    assert!(lists.index.is_empty() && lists.rsp.is_empty());
+    assert!(lists.listed.is_empty() && lists.rsp.is_empty());
 }
 
 #[tokio::test]

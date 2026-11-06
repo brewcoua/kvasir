@@ -1,5 +1,6 @@
 //! The downloaded host lists: fetched on a TTL, kept on disk, and parsed into an index.
 
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -22,9 +23,81 @@ pub(super) static COMMENT: LazyLock<Regex> =
 /// What the downloaded lists say, as last read from disk.
 #[derive(Default)]
 pub(super) struct Lists {
-    pub(super) index: HashMap<String, Source>,
+    pub(super) listed: Vec<Listed>,
     pub(super) rsp: HashMap<String, String>,
     pub(super) popular: HashSet<String>,
+}
+
+/// One downloaded list: what it says of a site, and its hosts.
+pub(super) struct Listed {
+    pub(super) source: Source,
+    pub(super) hosts: HostSet,
+}
+
+/// Sorted hosts in one string. A fraction of a `HashSet<String>`'s memory, for a slower lookup that
+/// a search cannot notice: lists run to tens of thousands of hosts, and a site is asked about once.
+#[derive(Default)]
+pub(super) struct HostSet {
+    text: String,
+    ends: Vec<u32>,
+}
+
+impl HostSet {
+    pub(super) fn new(hosts: impl IntoIterator<Item = String>) -> Self {
+        let mut hosts: Vec<String> = hosts.into_iter().collect();
+        hosts.sort_unstable();
+        let mut set = Self {
+            text: String::with_capacity(hosts.iter().map(String::len).sum()),
+            ends: Vec::with_capacity(hosts.len()),
+        };
+        for host in hosts {
+            set.text.push_str(&host);
+            // A list is under `MAX_LIST_BYTES`, so its text fits.
+            set.ends.push(set.text.len() as u32);
+        }
+        set
+    }
+
+    fn get(&self, at: usize) -> &str {
+        let start = at.checked_sub(1).map_or(0, |before| self.ends[before] as usize);
+        &self.text[start..self.ends[at] as usize]
+    }
+
+    pub(super) fn contains(&self, host: &str) -> bool {
+        let (mut low, mut high) = (0, self.ends.len());
+        while low < high {
+            let middle = low + (high - low) / 2;
+            match self.get(middle).cmp(host) {
+                Ordering::Less => low = middle + 1,
+                Ordering::Greater => high = middle,
+                Ordering::Equal => return true,
+            }
+        }
+        false
+    }
+}
+
+impl Lists {
+    /// What every list naming one of `names` says, taken together: all their tags, and the best kind.
+    pub(super) fn find(&self, names: &[&str]) -> Option<Source> {
+        let priority = |kind: &str| KINDS.iter().position(|known| *known == kind);
+        let mut found: Option<Source> = None;
+        for list in &self.listed {
+            if !names.iter().any(|name| list.hosts.contains(name)) {
+                continue;
+            }
+            match &mut found {
+                None => found = Some(list.source.clone()),
+                Some(found) => {
+                    found.tags.extend(list.source.tags.iter().cloned());
+                    if priority(&list.source.kind) < priority(&found.kind) {
+                        found.kind.clone_from(&list.source.kind);
+                    }
+                }
+            }
+        }
+        found
+    }
 }
 
 impl Sources {
@@ -126,10 +199,10 @@ impl Sources {
     }
 
     pub(super) fn read_lists(&self) -> Lists {
-        let mut index = HashMap::new();
+        let mut listed = Vec::new();
         for entry in &self.settings.lists {
             let (label, url) = entry.split_once('=').unwrap_or((entry, ""));
-            let template = if LIST_TAGS.contains(&label) {
+            let source = if LIST_TAGS.contains(&label) {
                 Source::new("", "unknown", &[label], "list")
             } else if KINDS[..KINDS.len() - 1].contains(&label) {
                 Source::new("", label, &[], "list")
@@ -139,16 +212,19 @@ impl Sources {
             };
             match std::fs::read_to_string(self.list_path(url)) {
                 Ok(text) => {
-                    for host in parse_list(&text) {
-                        index.insert(host, template.clone());
-                    }
+                    let Parsed { hosts, skipped } = parse_list(&text);
+                    tracing::info!(
+                        "source list {label}: {} hosts, {skipped} rules skipped",
+                        hosts.len()
+                    );
+                    listed.push(Listed { source, hosts: HostSet::new(hosts) });
                 }
                 // Not downloaded yet: the first refresh runs after the first load.
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                 Err(e) => tracing::warn!("source list {label} unreadable: {e}"),
             }
         }
-        Lists { index, rsp: self.read_rsp(), popular: self.read_popular() }
+        Lists { listed, rsp: self.read_rsp(), popular: self.read_popular() }
     }
 
     pub(super) fn read_rsp(&self) -> HashMap<String, String> {
@@ -186,10 +262,18 @@ impl Sources {
     }
 }
 
-/// The hosts in a hosts file, a uBlacklist (`*://*.example.com/*`) or a CSV whose first column is
-/// the host. Comments, regexes and rules for part of a site are skipped.
-pub fn parse_list(text: &str) -> HashSet<String> {
-    let mut hosts = HashSet::new();
+/// What a list holds.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Parsed {
+    pub hosts: HashSet<String>,
+    /// Lines that are not a comment or a whole site: regexes, and rules for part of one.
+    pub skipped: usize,
+}
+
+/// The hosts in a hosts file, a uBlacklist (`*://*.example.com/*`), an AdBlock list
+/// (`||example.com^`) or a CSV whose first column is the host.
+pub fn parse_list(text: &str) -> Parsed {
+    let mut parsed = Parsed::default();
     // What Python's `splitlines` breaks on: some lists end lines in a lone `\r`.
     let breaks =
         ['\n', '\r', '\x0b', '\x0c', '\x1c', '\x1d', '\x1e', '\u{85}', '\u{2028}', '\u{2029}'];
@@ -197,7 +281,20 @@ pub fn parse_list(text: &str) -> HashSet<String> {
         // A comment after the host is cut; a hosts file has the address first and the host second.
         let line = COMMENT.split(line.trim()).next().unwrap_or("");
         let line = line.split(',').next().unwrap_or("").trim();
-        if line.is_empty() || line.starts_with(['#', '!', '/']) {
+        if line.is_empty() || line.starts_with(['#', '!']) {
+            continue;
+        }
+        if let Some(rule) = line.strip_prefix("||") {
+            // Other options narrow the rule to some requests, so it does not speak for the site.
+            let name = ["^", "^$document", "^$all"].iter().find_map(|end| rule.strip_suffix(end));
+            match name.and_then(normalize) {
+                Some(host) => drop(parsed.hosts.insert(host)),
+                None => parsed.skipped += 1,
+            }
+            continue;
+        }
+        if line.starts_with('/') {
+            parsed.skipped += 1;
             continue;
         }
         let words: Vec<&str> = line.split_whitespace().collect();
@@ -205,14 +302,12 @@ pub fn parse_list(text: &str) -> HashSet<String> {
         let token = token.strip_prefix("*://").unwrap_or(token);
         let token = token.strip_prefix("*.").unwrap_or(token);
         let (name, path) = token.split_once('/').unwrap_or((token, ""));
-        if !matches!(path, "" | "*") {
-            continue;
-        }
-        if let Some(host) = normalize(name) {
-            hosts.insert(host);
+        match normalize(name).filter(|_| matches!(path, "" | "*")) {
+            Some(host) => drop(parsed.hosts.insert(host)),
+            None => parsed.skipped += 1,
         }
     }
-    hosts
+    parsed
 }
 
 /// Writes a list so that a reader never sees half of it, and it survives a crash once renamed.

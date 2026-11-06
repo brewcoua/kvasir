@@ -29,7 +29,7 @@ use tokio::time::{Instant, timeout_at};
 use url::Url;
 
 use lists::Lists;
-pub use lists::parse_list;
+pub use lists::{Parsed, parse_list};
 use rsp::RSP_URL;
 pub use rsp::parse_rsp;
 pub use store::SourceStore;
@@ -330,9 +330,9 @@ impl Sources {
                 });
             }
         }
-        let lists = self.current_lists();
-        let listed = |name: &str| self.bundled.get(name).or_else(|| lists.index.get(name)).cloned();
-        let found = listed(key).or_else(|| listed(registrable(key)))?;
+        let names = site_names(key);
+        let bundled = names.iter().find_map(|name| self.bundled.get(*name)).cloned();
+        let found = bundled.or_else(|| self.current_lists().find(&names))?;
         Some(Source { host: key.to_owned(), ..found })
     }
 
@@ -414,6 +414,15 @@ fn chain(host: &str) -> Vec<&str> {
     if dots.len() > 1 {
         names.extend(dots[..dots.len() - 1].iter().map(|at| &host[at + 1..]));
     }
+    names
+}
+
+/// `host` and its parents down to its registrable domain. A list naming a suffix others register
+/// under, such as `ru.com`, speaks for that name and not for every site below it.
+fn site_names(host: &str) -> Vec<&str> {
+    let domain = registrable(host);
+    let mut names = chain(host);
+    names.truncate(names.iter().position(|name| *name == domain).map_or(1, |at| at + 1));
     names
 }
 
