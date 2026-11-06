@@ -10,11 +10,12 @@ answers a question with a report whose every citation points to a quote read on 
 [Research a question](#research-a-question).
 
 Upstream ships a Python library and a Streamlit demo labelled for local development, but no server
-and no container image. This repository supplies the missing middle: a small FastAPI service, a
-`linux/amd64` image on GHCR, and an Open WebUI Pipe function.
+and no container image. This repository supplies the missing middle: a small HTTP service, a
+`linux/amd64` image on GHCR, and an Open WebUI Pipe function. The service is one Rust binary.
 
-`knowledge_storm` is vendored as `src/kvasir/storm` and modified, rather than depended on. See
-[`docs/fork-notes.md`](docs/fork-notes.md) for what diverges and why.
+STORM is translated into Rust in [`crates/kvasir-storm`](crates/kvasir-storm), keeping upstream's
+prompts and algorithm. See [`docs/storm.md`](docs/storm.md) for what it must keep doing and where it
+differs from upstream.
 
 How the service fits together, from a request to its result, is in
 [`docs/architecture.md`](docs/architecture.md).
@@ -33,9 +34,9 @@ No paid search credential is needed, and no database, cache or queue.
 
 ## Quickstart
 
-Run kvasir from a checkout with [uv](https://docs.astral.sh/uv/), against a local
-[Ollama](https://ollama.com/) and a throwaway SearXNG. This needs uv, Ollama, and podman or docker
-for SearXNG only.
+Run kvasir from a checkout, against a local [Ollama](https://ollama.com/) and a throwaway SearXNG.
+This needs [rustup](https://rustup.rs/), which installs the compiler `rust-toolchain.toml` pins on
+first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for SearXNG only.
 
 1. Pull the models the quickstart stores:
 
@@ -70,13 +71,14 @@ for SearXNG only.
 
    Remove it with `podman rm -f searxng`.
 
-3. Build the runs page. This needs Node 26 and pnpm:
+3. Build the runs page:
 
    ```bash
    (cd web && pnpm install && pnpm build)
    ```
 
-   Without it the API works, and `GET /` answers 503 with the command to run.
+   Without it the API works, and `GET /` answers 503 with the command to run. A release build
+   embeds the page, so build the page first, and build kvasir again after changing it.
 
 4. Start kvasir:
 
@@ -84,7 +86,7 @@ for SearXNG only.
    export KVASIR_TOKEN="$(openssl rand -hex 32)"
    export KVASIR_DATA_DIR=data KVASIR_LOG_FORMAT=text KVASIR_MAX_THREADS=2
    export KVASIR_PROVIDER_LOCAL_API_BASE=http://localhost:11434/v1
-   uv run python -m kvasir
+   cargo run --release -- serve
    ```
 
    Every `/v1` route needs the token, and the runs page asks for it once. Keep the shell open:
@@ -124,15 +126,16 @@ kvasir binds `0.0.0.0:8080` unless `KVASIR_HOST` and `KVASIR_PORT` say otherwise
 guards every route but `/healthz`, `/readyz`, `POST /v1/login` and the page itself, and nothing
 limits how often it may be guessed: use a long random one.
 
-Behind a proxy that ends TLS, set `FORWARDED_ALLOW_IPS` to the proxy's address. uvicorn then reads
-`X-Forwarded-Proto`, and the login cookie is marked Secure. Without it, the cookie is not marked
-Secure, and a browser sends it over plain HTTP too.
+Behind a proxy that ends TLS, set `FORWARDED_ALLOW_IPS` to the proxy's address, several separated
+by commas, or `*`. kvasir then believes the `X-Forwarded-Proto` those addresses send, and marks the
+login cookie Secure. Unset, only `127.0.0.1` is believed. Without a believed `https`, the cookie is
+not marked Secure, and a browser sends it over plain HTTP too.
 
 ## Run it
 
 ```bash
 podman run --rm \
-  --read-only --tmpfs /tmp --user 65532:65532 \
+  --read-only --user 65532:65532 \
   -p 8080:8080 -v kvasir-data:/data \
   -e KVASIR_PROVIDER_GATEWAY_API_BASE=https://gateway.example/v1 \
   -e KVASIR_PROVIDER_GATEWAY_API_KEY=... \
@@ -164,26 +167,22 @@ stage took, and what it has spent.
 ### Pages that need JavaScript
 
 The default image reads pages over plain HTTP. Some pages are empty until their scripts run, or
-show a challenge first. To read those, build the `browser` target, which adds Chromium through
-Playwright and Patchright:
+show a challenge first. To read those, build the `browser` target, which adds Chromium:
 
 ```bash
 podman build --target browser -t kvasir:browser .
 ```
 
-Run it as above, with `--init --ipc=host` added: Chromium otherwise runs out of shared memory. With
-`fetch.render` set to `auto`, the default, a page that comes back as a challenge, a block, an empty
-shell, a 403 or a 503 is then loaded in Chromium. Outside the image, install the extra with
-`uv sync --extra browser` and then `uv run playwright install chromium`.
-
-The `browser` target has not been built or run yet; treat it as unverified.
+Run it as above, with `--tmpfs /tmp --init --ipc=host` added: Chromium keeps its profile under
+`/tmp`, and otherwise runs out of shared memory. With `fetch.render` set to `auto`, the default, a
+page that comes back as a challenge, a block, an empty shell, a 403 or a 503 is then loaded in
+Chromium. Outside the image, build with `cargo build --release --features chromium`. kvasir finds
+Chromium at the path in `CHROME`, or under its usual names on the `PATH`.
 
 ### Runtime requirements
 
-The image runs as uid 65532 under a read-only root filesystem. Only `/data` and `/tmp` need to be
-writable. `/tmp` is required, not optional: dspy creates a disk cache directory while it is being
-imported, whether or not caching is on, and `src/kvasir/storm/__init__.py` points `DSPY_CACHEDIR`
-there. A run's scratch directory also lives under `/tmp`.
+The image runs as uid 65532 under a read-only root filesystem. Only `/data` needs to be writable,
+and `/tmp` too in the `browser` target, for Chromium's profile and crash reports.
 
 ## Start a run
 
@@ -489,11 +488,10 @@ does not report it. A stage entered more than once has one span per entry, and i
 them. A usage row's `seconds` sums the time its successful calls took, from request to answer:
 nothing is streamed, so it includes the time the model spent reading the prompt.
 
-Cost comes from what the call reports. Three shapes are read, in order: the cost dspy itself
-computes for a model it recognises, a LiteLLM proxy's `x-litellm-response-cost` response header, and
-a `cost` field in the response's `usage` object, either a number or split into `prompt_cost` and
-`completion_cost` as Bifrost reports it. A gateway that reports no cost, for a model dspy does not
-price, leaves it at zero, which is not the same as free.
+Cost comes from what the call reports: a LiteLLM proxy's `x-litellm-response-cost` response header,
+or else a `cost` field in the response's `usage` object, either a number or split into
+`prompt_cost` and `completion_cost` as Bifrost reports it. A gateway that reports neither leaves it
+at zero, which is not the same as free.
 
 Runs are held in memory, capped at the `runs.max` most recent, and by default do not survive
 a restart. With `runs.store` set to `sqlite` they are also written to `$KVASIR_DATA_DIR/kvasir.db`,
@@ -589,8 +587,8 @@ name a different provider.
 | `KVASIR_DATA_DIR` | `/data` | Writable directory for `kvasir.db` and the caches. |
 | `KVASIR_HOST` | `0.0.0.0` | Address to listen on. |
 | `KVASIR_PORT` | `8080` | Port to listen on. |
-| `KVASIR_MAX_THREADS` | `10` | Width of each thread pool, and the cap on outbound search and page requests. Intake calls run this wide; for Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
-| `KVASIR_LOG_LEVEL` | `INFO` | Standard logging level. |
+| `KVASIR_MAX_THREADS` | `10` | How many intake calls, page reads, STORM conversations and sections run at once, and the cap on outbound search and page requests. For Ollama, set `OLLAMA_NUM_PARALLEL` to match. |
+| `KVASIR_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. Another value stops startup. |
 | `KVASIR_LOG_FORMAT` | `json` | `json` or `text`. `text` is for reading logs by eye. |
 
 ### Stored settings
@@ -623,8 +621,8 @@ name a different provider.
 | `research.max_criteria` | `5` | Research: criteria, when the run chooses them. |
 | `fetch.contact` | unset | Contact named in the user agent of page requests, as `kvasir/<version> (+https://github.com/brewcoua/kvasir; <contact>)`. Unset names none. |
 | `fetch.host_interval_seconds` | `1.0` | Least time between the starts of two page requests to one host. At most 2 are in flight to a host regardless. |
-| `fetch.render` | `auto` | `auto` renders a page that needs JavaScript in Chromium, when the `browser` extra is installed; `off` never does. |
-| `fetch.stealth` | `false` | Render through Patchright, which hides the signs of automation. Needs the `browser` extra. Getting past a challenge can break a site's terms. |
+| `fetch.render` | `auto` | `auto` renders a page that needs JavaScript in Chromium, in a build with Chromium such as the image's `browser` target; `off` never does. |
+| `fetch.stealth` | `false` | Start Chromium without the launch flags that name automation. Getting past a challenge can break a site's terms. |
 | `fetch.max_age_hours` | `48` | Hours a page cached in `pages.db` is served without asking its site; then it is revalidated with `If-None-Match` or `If-Modified-Since`. `0` fetches every page again. |
 | `favicons.providers` | `direct` | A list of where site icons come from, tried in order; the first icon found wins. `direct`, `duckduckgo`, `google` or `custom`. An empty list turns favicons off and creates no `favicons.db`. See below for what each reveals. |
 | `favicons.custom_url` | empty | URL template for the `custom` provider, with `{domain}` where the site's host goes. Required to be an `http(s)` URL containing `{domain}` when `custom` is listed, or `favicons` keeps its defaults. |
@@ -658,7 +656,7 @@ site's real icon. A provider that answers 404 for a missing icon is fine.
 With `sources.enabled` set to `true`, each host resolves to a kind (government, academic, news and so
 on), tags such as `community` or `ai_generated`, and a tier: `high`, `normal`, `unknown`, `low` or
 `avoid`. A host resolves in this order: `sources.allow` and `sources.deny`, a mark, the bundled list
-(`src/kvasir/research/sources.toml`) and downloaded lists, suffix rules (`.gov`, `.edu`, `.int`,
+(`crates/kvasir-sites/src/sources.toml`) and downloaded lists, suffix rules (`.gov`, `.edu`, `.int`,
 `europa.eu` and the like), the cache in `sources.db`, then Wikidata. Wikidata is asked for the
 domains of search results in one query per 50 hosts, so its operators see those domains; set
 `sources.wikidata` to `false` to avoid that. A host still unanswered after 5 seconds counts as
@@ -681,22 +679,17 @@ the page lists are tagged.
 
 Set `model.reasoning_effort` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,
-so the answer is cut off before it starts. It goes in the request body rather than through litellm's
-own parameter, which litellm refuses for a model it does not know. The reason model is meant to
+so the answer is cut off before it starts. The reason model is meant to
 think, so its roles have budgets of 2000 to 3000 tokens and their own effort,
 `model.reason_effort`. Without `model.reason`, those roles run on the strong model at
 that effort. With the reason model on a cloud provider, each sentence it is asked about and its
 quotes go to that provider, and `runs.keep_call_content` does not govern that.
 
-Each log line is one JSON object carrying `run_id`, `run_kind` and `stage`, including lines from
-inside the pipeline's thread pools. That is what makes concurrent runs separable in a log.
+Each log line is one JSON object. A line logged during a run carries its `run_id` and `run_kind`,
+and a line about its progress the `stage`, which is what makes concurrent runs separable in a log.
+Each request is logged too, with its method, path and status, but not its query.
 
-Every line, including uvicorn's access log. Start the service as `python -m kvasir` rather than
-`uvicorn kvasir.api.app:app` to get that: the module configures logging first and tells uvicorn to
-install none of its own, which is what stops the access log printing as plain text. The image does
-this already.
-
-Each provider's base URL and key are passed explicitly to its models and to the encoder; neither is
+Each provider's base URL and key are passed explicitly to its model and embedding calls; neither is
 exported into the environment, so there is no path by which a default reaches `api.openai.com`.
 
 Saturation returns 429 rather than queueing, because a queued run would outlast any sensible client
@@ -723,37 +716,48 @@ reference are in [`owui/README.md`](owui/README.md).
 
 ## Development
 
+The service is the Cargo workspace in [`crates/`](crates/). Its tests need no network and no
+credentials:
+
 ```bash
-uv sync
-uv run pytest              # no network, no credentials
-uv run ruff check .
-uv run mypy
-uv run pytest -m integration   # needs a real provider and SearXNG
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo nextest run --locked      # or cargo test --locked
+cargo deny check
 ```
 
-[`docs/fork-notes.md`](docs/fork-notes.md) records every divergence from upstream, what it fixes,
-and how to rebase onto a later upstream. Read it before changing anything under `src/kvasir/storm`.
+A few tests are ignored by default because they need something outside the repository: a real
+Chromium (`cargo test -p kvasir-browser --features chromium -- --ignored`), or a real provider, as
+the top of `crates/kvasir-llm/tests/live.rs` shows.
 
-That directory is excluded from `ruff format --check`, from the strict lint rules and from `mypy`,
-until the unused retrievers and deprecated model wrappers are trimmed. Trimming them is a separate
-pass.
+[`tests/contract/`](tests/contract/) drives the built binary over HTTP, with fakes for the
+providers, SearXNG and the sites, and the Open WebUI pipe against it. It needs
+[uv](https://docs.astral.sh/uv/):
 
-`dspy` is pinned at 3.3.0. The fork was written against 2.4.9, whose template engine is gone: the
-signatures now carry types and descriptions rather than prompt prefixes, and dspy's adapters turn
-them into prompts and parse the answers back. Where upstream picked structure out of prose with
-regexes, the output field states its type instead.
+```bash
+cargo build --bin kvasir
+uv run pytest
+uv run ruff check . && uv run ruff format --check . && uv run mypy
+```
+
+`KVASIR_CONTRACT_COMMAND` runs it against another build instead of `target/debug/kvasir`.
+
+Each prompt is pinned byte for byte by `tests/golden/signatures.json`, as dspy 3.3.0 rendered it
+for the Python service this replaced. A change to a prompt changes that file in the same commit.
+[`docs/storm.md`](docs/storm.md) records what STORM must keep doing and where it differs from
+upstream. Read it before changing `crates/kvasir-storm`.
 
 ### Work on the runs page
 
-The page is a Svelte app in `web/`, built with Vite into `src/kvasir/static/`, which is not
-committed. It needs Node 26 and pnpm.
+The page is a Svelte app in `web/`, built with Vite into `web/dist/`, which is not committed. It
+needs Node 26 and pnpm.
 
 ```bash
 cd web
 pnpm install
 pnpm dev:mock   # the page on localhost:5173, its API answered from web/fixtures/
 pnpm dev        # the same, with /v1 proxied to a kvasir on localhost:8080
-pnpm build      # into src/kvasir/static/, where the service serves it
+pnpm build      # into web/dist/, which the service serves and a release build embeds
 ```
 
 `pnpm dev:mock` needs no gateway, search engine or run. Each file in `web/fixtures/` is a run named
@@ -812,8 +816,11 @@ tables. Each lists the output type its wording asks for and a few checks a reade
 would need answered. To evaluate, start the service, then run:
 
 ```bash
-uv run python -m kvasir.research.evaluate data/eval/baseline
+cargo run --release -- eval data/eval/baseline
 ```
+
+It reads the token, the providers and the judge's model from the same `KVASIR_*` variables and
+`kvasir.db` as the service, so run it with the service's environment, from the repository root.
 
 It researches each question through the service at `http://localhost:8080` (`--url` to change),
 without clarifications, and saves each result as `<id>.json`. `--method` picks the method, `ledger`
@@ -842,6 +849,6 @@ Dual MIT and Apache-2.0, at your option. See [LICENSE-MIT](LICENSE-MIT) and
 [LICENSE-APACHE](LICENSE-APACHE).
 
 STORM is the work of [Stanford OVAL](https://github.com/stanford-oval/storm). Their
-`knowledge_storm` package is vendored and modified under `src/kvasir/storm`, which stays MIT only,
-as upstream is. See [`src/kvasir/storm/NOTICE`](src/kvasir/storm/NOTICE) for the fork point and
-[`docs/fork-notes.md`](docs/fork-notes.md) for what was changed.
+`knowledge_storm` package is translated into Rust in `crates/kvasir-storm`, which stays MIT only, as
+upstream is. See [`crates/kvasir-storm/NOTICE`](crates/kvasir-storm/NOTICE) for the commit it was
+translated from and [`docs/storm.md`](docs/storm.md) for what was changed.

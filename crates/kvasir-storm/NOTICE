@@ -5,7 +5,7 @@ This crate is a translation of Stanford OVAL's STORM into Rust.
     From:     fb951af7744dab086e34962e9bc6fe878e145f83 (2025-09-30)
     Licence:  MIT, see LICENSE in this directory
 
-The algorithm and the prompts are upstream's, with the changes recorded in docs/fork-notes.md at
+The algorithm and the prompts are upstream's, with the changes recorded in docs/storm.md at
 the root of this repository. The framework around them is not translated.
 
 The rest of kvasir is licensed MIT OR Apache-2.0; this crate is MIT only, as upstream is.
