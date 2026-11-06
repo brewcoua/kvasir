@@ -614,7 +614,7 @@ Build `kvasir-storm`.
 Gate: contract tests pass for `storm`. Correctness tests are ported. A live article from a local model
 is read side by side with Python's.
 
-#### Phase 5 result: pass on contract and tests, live read pending
+#### Phase 5 result: pass
 
 Done on 2026-11-06.
 
@@ -629,7 +629,12 @@ Done on 2026-11-06.
   handoff tests have nothing left to test: no file is written.
 - **Workspace:** fmt, clippy, `cargo nextest run` (437 passed, 6 skipped) and `cargo deny` pass.
   `kvasir-storm` is MIT and carries `LICENSE` and `NOTICE`.
-- **Live read:** not done yet.
+- **Live read:** "The Rök runestone" on `gpt-oss:20b-16k`, two editors of two turns each, against
+  the same SearXNG. Both wrote a cited article with the lead first. The Rust run's outline opened
+  with "Rök Runestone", which is not the topic as asked, so it was kept as the one section, as
+  upstream keeps it. A second Rust run on "Rök runestone" wrote 8 sections citing 37 sources,
+  numbered 1 to 37 without a gap. With `reasoning_effort` unset, both failed alike at
+  `FindRelatedTopic`: the model spent its 500 tokens thinking.
 
 Kept from upstream, though they look wrong:
 
@@ -656,7 +661,10 @@ Differences from Python, all deliberate:
    exact, and model variance is large, so compare distributions and read the worst reports.
 2. Run a soak: several concurrent runs through a provider outage, then a restart mid-run.
 3. Replace `Dockerfile` (web, cargo build, slim image; `--target browser` adds Chromium),
-   `ci.yml`, `release-please-config.json` (`release-type` becomes `rust`), and `renovate.json`.
+   `ci.yml`, `release-please-config.json`, and `renovate.json`. The release is
+   `[workspace.package] version`, which every crate inherits. release-please's `rust` type refuses
+   inherited versions and a virtual root manifest, so the `simple` type bumps the root
+   `Cargo.toml` and each workspace crate in `Cargo.lock` through `toml` extra files.
 4. Remove `src/`, `pyproject.toml`, `uv.lock`, and Python tests other than the pipe's and contract.
 5. Rewrite `docs/architecture.md`, `docs/research.md`, the README, `owui/README.md`. Replace
    `docs/fork-notes.md` with STORM's behaviour requirements and credit.
