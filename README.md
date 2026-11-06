@@ -727,7 +727,7 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `sources.rsp` | `false` | Also tag hosts by Wikipedia's perennial sources list, fetched from `en.wikipedia.org` and refreshed with the lists. Needs `sources.enabled`. |
 | `sources.survey` | `false` | Tag sites nothing else decides as `likely_farm`, from their own sitemaps and the Tranco list, in the background. Needs `sources.enabled`. |
 | `sources.guard_rank` | `10000` | A list with its guard on spares sites this high on the Tranco list. `0` spares none for their rank. See [Lists](#lists). |
-| `sources.lists` | CISA `.gov` list | A list of `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, adblock and uBlacklist files and CSVs with the host first are read. An empty list uses none. The [Lists](#lists) page shows them but changes them only here. |
+| `sources.lists` | none | A list of `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, adblock and uBlacklist files and CSVs with the host first are read. An empty list uses none. The [Lists](#lists) page shows them but changes them only here. |
 
 Favicons are fetched by the server and served from `/v1/favicons/{host}`, so a browser never contacts
 the icon provider. What each provider learns:
@@ -753,7 +753,7 @@ bundled list (`crates/kvasir-sites/src/sources.toml`), then other lists, suffix 
 `.int`, `europa.eu` and the like), the cache in `sources.db`, then Wikidata. Wikidata is asked for the
 domains of search results in one query per 50 hosts, so its operators see those domains; set
 `sources.wikidata` to `false` to avoid that. A host still unanswered after 5 seconds counts as
-`unknown` for that search and is known by the next. The default list is CISA's `.gov` list.
+`unknown` for that search and is known by the next. CISA's `.gov` list is in the catalog, on until you turn it off.
 
 With `sources.rsp` set to `true` as well, kvasir fetches Wikipedia's [perennial sources
 list](https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources) (WP:RSP) from

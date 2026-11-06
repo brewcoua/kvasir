@@ -74,9 +74,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -180,9 +178,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -278,9 +274,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -380,9 +374,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -478,9 +470,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -627,9 +617,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -742,9 +730,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -844,9 +830,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -963,9 +947,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1080,9 +1062,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1221,9 +1201,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1324,9 +1302,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1450,9 +1426,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1576,9 +1550,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1702,9 +1674,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1828,9 +1798,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -1933,9 +1901,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2038,9 +2004,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2143,9 +2107,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2248,9 +2210,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2374,9 +2334,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2479,9 +2437,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2584,9 +2540,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2689,9 +2643,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2794,9 +2746,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -2899,9 +2849,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3004,9 +2952,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3130,9 +3076,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3256,9 +3200,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3382,9 +3324,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3488,9 +3428,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3594,9 +3532,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3720,9 +3656,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3849,9 +3783,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -3961,9 +3893,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4070,9 +4000,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4196,9 +4124,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4329,9 +4255,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4438,9 +4362,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4544,9 +4466,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4647,9 +4567,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4752,9 +4670,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4886,9 +4802,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -4991,9 +4905,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5096,9 +5008,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5222,9 +5132,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5352,9 +5260,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5482,9 +5388,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5611,9 +5515,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5717,9 +5619,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5823,9 +5723,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -5928,9 +5826,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6033,9 +5929,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6138,9 +6032,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6243,9 +6135,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6368,9 +6258,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6472,9 +6360,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6577,9 +6463,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6701,9 +6585,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6804,9 +6686,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -6912,9 +6792,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7038,9 +6916,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7164,9 +7040,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7292,9 +7166,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7400,9 +7272,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7508,9 +7378,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7640,9 +7508,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7774,9 +7640,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -7908,9 +7772,7 @@
     "enabled": false,
     "endpoint": "nope",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -8018,9 +7880,7 @@
     "enabled": false,
     "endpoint": "nope",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -8360,9 +8220,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -8490,9 +8348,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -8622,9 +8478,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -8754,9 +8608,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -8886,9 +8738,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -9018,9 +8868,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -9153,9 +9001,7 @@
     "enabled": true,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -9265,9 +9111,7 @@
     "enabled": true,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -9374,9 +9218,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,
@@ -9506,9 +9348,7 @@
     "enabled": false,
     "endpoint": "https://query.wikidata.org/sparql",
     "guard_rank": 10000,
-    "lists": [
-     "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-    ],
+    "lists": [],
     "miss_ttl_days": 7,
     "rsp": false,
     "survey": false,

@@ -68,6 +68,14 @@ describe("Lists", () => {
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
+  it("names the kind a list gives its sites, and offers no other effect for it", async () => {
+    answer.mockResolvedValue([list({ group: "Official", name: "US .gov domains", effect: "kind:government" })]);
+    render(Lists);
+    await fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(screen.getByText(/Marks its sites as government/)).toBeTruthy();
+    expect(screen.getAllByLabelText("Effect")).toHaveLength(1);
+  });
+
   it("explains a site by the lists naming it", async () => {
     answer.mockImplementation(async (_method, path) =>
       path.endsWith("/explain")

@@ -82,6 +82,15 @@ impl Respond for Wdqs {
     }
 }
 
+/// The one list on as it ships is on the real web, where no test here goes.
+fn turn_off_shipped_list(dir: &std::path::Path) {
+    kvasir_db::Key::for_tests()
+        .connect(dir.join("sources.db"))
+        .unwrap()
+        .execute("INSERT INTO lists VALUES ('dotgov', '{\"enabled\":false}')", [])
+        .unwrap();
+}
+
 struct Setting {
     server: MockServer,
     store: SourceStore,
@@ -93,6 +102,7 @@ impl Setting {
         let dir = TempDir::new().unwrap();
         let store = SourceStore::open(&dir.path().join("sources.db"), &kvasir_db::Key::for_tests())
             .unwrap();
+        turn_off_shipped_list(dir.path());
         Self { server: MockServer::start().await, store, dir }
     }
 
@@ -232,6 +242,25 @@ async fn iso_is_standards_though_it_reaches_international_organization() {
         ("standards", "Q15028", "ISO")
     );
     assert!(found.tags.contains("official"));
+}
+
+#[tokio::test]
+async fn a_catalog_style_list_can_give_its_sites_a_kind() {
+    let setting = Setting::new().await;
+    let sources = setting.service();
+    sources
+        .add_list(ListChange {
+            name: Some("Official".to_owned()),
+            entries: Some(vec!["agency.example".to_owned()]),
+            effect: Some("kind:government".to_owned()),
+            ..<_>::default()
+        })
+        .await
+        .unwrap();
+
+    let found = one(&sources, "agency.example", WAIT).await;
+
+    assert_eq!((found.kind.as_str(), found.origin.as_str()), ("government", "list"));
 }
 
 #[tokio::test]
@@ -1410,6 +1439,7 @@ mod survey {
         let dir = TempDir::new().unwrap();
         let key = kvasir_db::Key::for_tests();
         let store = SourceStore::open(&dir.path().join("sources.db"), &key).unwrap();
+        super::turn_off_shipped_list(dir.path());
         let mut config = SourceSettings {
             enabled: true,
             wikidata: false,

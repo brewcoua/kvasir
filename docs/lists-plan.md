@@ -57,8 +57,9 @@ trusting it fully. Marks gain the same value. `exempt` also cancels the bundled 
 Wikidata tag or an RSP verdict, which `allow` overrides.
 
 `sources.lists` stays as operator config, next to `allow` and `deny`. Removing it would make strict
-settings reads fail on stored rows, and it needs no status or editing beyond what it has. CISA stays
-there as its default rather than moving to the catalog. Its entries are not guarded.
+settings reads fail on stored rows, and it needs no status or editing beyond what it has. Its entries
+are not guarded. CISA's `.gov` list is in the catalog, the only entry on as it ships and the only one
+that raises a site, so it can be turned off like any other list.
 
 ## How a host resolves
 

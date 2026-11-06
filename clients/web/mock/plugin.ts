@@ -306,7 +306,8 @@ const LISTS = (): SourceListInfo[] =>
     sourceList("seo-garbage", "seo-garbage", "SEO and farms", { tag: "seo_spam", enabled: true, hosts: 412, skipped: 3, fetched_at: 1_700_000_000 }),
     sourceList("spamdexing", "SpamdexingSites", "SEO and farms", { tag: "seo_spam", licence: "BSD-3-Clause" }),
     sourceList("ublacklist-ai", "ublacklist-ai", "AI", { effect: "demote", tag: "ai_slop", error: "status 404" }),
-    sourceList("config-0", "government", "Config", { effect: "kind:government", guard: false, licence: "", hosts: 12000 }),
+    sourceList("dotgov", "US .gov domains", "Official", { effect: "kind:government", enabled: true, licence: "CC0-1.0", hosts: 12000 }),
+    sourceList("config-0", "news", "Config", { effect: "kind:news", guard: false, licence: "", hosts: 300 }),
   ] as unknown as SourceListInfo[];
 
 export function mock(): Plugin {

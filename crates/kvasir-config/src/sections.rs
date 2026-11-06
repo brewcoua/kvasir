@@ -358,10 +358,7 @@ impl Default for SourceSettings {
             guard_rank: 10_000,
             allow: Vec::new(),
             deny: Vec::new(),
-            lists: vec![
-                "government=https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
-                    .into(),
-            ],
+            lists: Vec::new(),
         }
     }
 }

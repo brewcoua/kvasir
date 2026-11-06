@@ -39,9 +39,11 @@ struct Entry {
     licence: String,
     effect: String,
     tag: String,
+    #[serde(default)]
+    enabled: bool,
 }
 
-/// Every list the catalog offers, off, as it ships.
+/// Every list the catalog offers, as it ships.
 pub fn catalog() -> Vec<SourceList> {
     let catalog: Catalog = toml::from_str(CATALOG).expect("the catalog is valid");
     catalog
@@ -52,7 +54,7 @@ pub fn catalog() -> Vec<SourceList> {
             name: entry.name,
             url: Some(entry.url),
             entries: Vec::new(),
-            enabled: false,
+            enabled: entry.enabled,
             effect: entry.effect,
             tag: entry.tag,
             ttl_days: None,
@@ -247,7 +249,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_catalog_is_valid_with_unique_ids_and_starts_off() {
+    fn the_catalog_is_valid_with_unique_ids_and_starts_off_but_for_the_official_list() {
         let lists = catalog();
         assert!(lists.len() >= 23);
         let mut ids: Vec<&str> = lists.iter().map(|list| list.id.as_str()).collect();
@@ -255,9 +257,14 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), lists.len());
         for list in lists {
-            assert!(!list.enabled, "{}", list.id);
-            // No remote list can raise or clear a site by default; see docs/lists-plan.md.
-            assert!(matches!(list.effect.as_str(), "block" | "demote"), "{}", list.id);
+            // No other remote list can raise or clear a site by default; see docs/lists-plan.md.
+            if list.id == "dotgov" {
+                assert!(list.enabled);
+                assert_eq!(list.effect, "kind:government");
+            } else {
+                assert!(!list.enabled, "{}", list.id);
+                assert!(matches!(list.effect.as_str(), "block" | "demote"), "{}", list.id);
+            }
             checked(list).unwrap();
         }
     }

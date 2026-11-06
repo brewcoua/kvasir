@@ -1,5 +1,8 @@
 //! Loads every case in `tests/golden/settings.json`, which Python's `Settings.load` produced, and
 //! expects the same settings, warnings and errors.
+//!
+//! One default differs on purpose: `sources.lists` is empty here, its `.gov` list now being in the
+//! source catalog.
 
 use std::path::Path;
 

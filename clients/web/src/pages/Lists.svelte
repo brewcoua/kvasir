@@ -71,7 +71,7 @@
   }
 
   async function remove(list: SourceListInfo) {
-    const question = list.custom ? `Delete the list ${list.name}? This cannot be undone.` : `Put ${list.name} back as it ships, off?`;
+    const question = list.custom ? `Delete the list ${list.name}? This cannot be undone.` : `Put ${list.name} back as it ships?`;
     if (!(await sure(question, list.custom ? "Delete" : "Reset"))) return;
     attempt(async () => {
       await request("DELETE", path(list.id));
@@ -168,9 +168,13 @@
               {#if list.error}<p class="error">Last download failed: {list.error}. Any older copy stays in use.</p>{/if}
               {#if open === list.id}
                 <div class="list-edit">
-                  <label>Effect
-                    <Choice value={list.effect} choices={EFFECTS.includes(list.effect) ? EFFECTS : [...EFFECTS, list.effect]} disabled={busy} onchange={(effect) => change(list.id, { effect })} />
-                  </label>
+                  {#if !EFFECTS.includes(list.effect)}
+                    <p class="meta">Marks its sites as {list.effect.replace(/^kind:/, "")}. That is what this list is for, so it does not change.</p>
+                  {:else}
+                    <label>Effect
+                      <Choice value={list.effect} choices={EFFECTS} disabled={busy} onchange={(effect) => change(list.id, { effect })} />
+                    </label>
+                  {/if}
                   <label>Tag
                     <input class="field" disabled={busy} value={list.tag} onchange={(event) => change(list.id, { tag: event.currentTarget.value.trim() })} />
                   </label>

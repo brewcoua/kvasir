@@ -2,6 +2,16 @@
 # `licence` is what the list's repository or SSSS's README states, "none" when it states nothing.
 
 [[list]]
+id = "dotgov"
+name = "US .gov domains"
+url = "https://raw.githubusercontent.com/cisagov/dotgov-data/main/current-full.csv"
+group = "Official"
+licence = "CC0-1.0"
+effect = "kind:government"
+tag = ""
+enabled = true
+
+[[list]]
 id = "content-farm-list"
 name = "Content Farm List"
 url = "https://raw.githubusercontent.com/wdmpa/content-farm-list/main/uBlacklist.txt"
