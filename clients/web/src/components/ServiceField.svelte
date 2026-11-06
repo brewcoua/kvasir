@@ -3,6 +3,7 @@
   import { tick } from "svelte";
   import { request, type ModelInfo, type SettingInfo, type SettingsView } from "../lib/api";
   import { settingLabel } from "../lib/service";
+  import ListField from "./ListField.svelte";
   import ModelField from "./ModelField.svelte";
 
   let { field, models, onsaved }: { field: SettingInfo; models: ModelInfo[]; onsaved: (view: SettingsView) => void } = $props();
@@ -11,7 +12,7 @@
   const id = $derived(`${uid}-${field.key}`);
   const label = $derived(settingLabel(field.key));
   let error = $state("");
-  let control: HTMLInputElement | HTMLTextAreaElement | undefined = $state();
+  let control: HTMLInputElement | undefined = $state();
   // svelte-ignore state_referenced_locally
   let model = $state(String(field.value ?? ""));
 
@@ -19,7 +20,7 @@
   function show() {
     model = String(field.value ?? "");
     if (control && field.type === "secret") control.value = "";
-    else if (control) control.value = field.type === "list" ? (field.value as string[]).join("\n") : String(field.value ?? "");
+    else if (control) control.value = String(field.value ?? "");
   }
 
   async function send(method: "PATCH" | "DELETE", path: string, body?: unknown) {
@@ -59,8 +60,6 @@
     const value = typed.trim();
     if (value !== "") save(value);
   }
-
-  const lines = (text: string) => text.split("\n").map((line) => line.trim()).filter(Boolean);
 </script>
 
 <div class="setting" data-setting={field.key} class:wide={field.type !== "integer" && field.type !== "number" && field.type !== "boolean"} class:changed={field.stored}>
@@ -89,7 +88,7 @@
       onchange={(e) => secret(e.currentTarget.value)}
     />
   {:else if field.type === "list"}
-    <textarea {id} bind:this={control} rows="3" value={(field.value as string[]).join("\n")} onchange={(e) => save(lines(e.currentTarget.value))}></textarea>
+    <ListField {id} items={field.value as string[]} choices={field.choices ?? undefined} onchange={save} />
   {:else if field.choices}
     <Select.Root type="single" bind:value={() => String(field.value), (choice) => save(choice)} items={field.choices.map((choice) => ({ value: choice, label: choice }))}>
       <Select.Trigger {id} class="select">{field.value}</Select.Trigger>
@@ -109,7 +108,6 @@
   <button type="button" class="reset" aria-label={`Reset ${label.toLowerCase()} to the default`} onclick={reset}>Reset</button>
   <p class="hint">
     {field.help}
-    {#if field.type === "list"}One per line{#if field.choices}, of {field.choices.join(", ")}{/if}.{/if}
     {#if field.restart}Applies at the next restart.{/if}
   </p>
   {#if error}<p class="hint error" role="alert">{error}</p>{/if}

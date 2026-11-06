@@ -1060,8 +1060,7 @@ header .icon {
 }
 .setting input[type="number"],
 .setting input[type="text"],
-.setting input[type="password"],
-.setting textarea {
+.setting input[type="password"] {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
@@ -1073,6 +1072,92 @@ header .icon {
 }
 .setting .switch {
   justify-self: end;
+}
+.list-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.list-field ol {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.list-field li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.25rem;
+  /* Keeps the rows from moving when one is marked as where a drop lands. */
+  border-block: 2px solid transparent;
+  background: var(--bg);
+}
+.list-field li + li {
+  box-shadow: 0 -1px 0 var(--line);
+}
+.list-field li.dragged {
+  opacity: 0.4;
+}
+.list-field li.above {
+  border-top-color: var(--accent);
+}
+.list-field li.below {
+  border-bottom-color: var(--accent);
+}
+.list-item {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.list-grip,
+.list-remove {
+  display: inline-flex;
+  flex: none;
+  padding: 0.2rem;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.list-grip {
+  cursor: grab;
+}
+.list-grip:hover,
+.list-remove:hover {
+  color: var(--text);
+}
+.list-add {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.5rem;
+  color: var(--dim);
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+}
+.list-add input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+.action.list-pick {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.3rem;
+}
+.list-edit-field {
+  display: grid;
+  gap: 0.25rem;
 }
 .setting .select {
   width: 100%;

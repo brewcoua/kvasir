@@ -94,7 +94,7 @@ test("the settings group the search providers, with prices and the scraping noti
   await expect(page.getByRole("button", { name: /Brave.*\$5 per 1,000 queries/ })).toBeVisible();
   await expect(page.getByText("These read each engine's own pages")).toBeVisible();
   await page.getByRole("button", { name: "DuckDuckGo" }).click();
-  await expect(page.getByRole("switch", { name: "Duckduckgo enabled", exact: true })).not.toBeChecked();
+  await expect(page.getByRole("switch", { name: "DuckDuckGo enabled", exact: true })).not.toBeChecked();
   await page.getByRole("tab", { name: "Specialized" }).click();
   await expect(page.getByRole("button", { name: "Wikipedia" })).toBeVisible();
   // Every field the service has is placed somewhere on purpose.
@@ -114,7 +114,7 @@ test("a setting found by search opens where it lives", async ({ page, request })
   await search.fill("brave key");
   await search.press("Enter");
   await expect(page.getByRole("tab", { name: "Web" })).toHaveAttribute("data-state", "active");
-  await expect(page.getByLabel("Brave api key", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Brave API key", { exact: true })).toBeFocused();
 });
 
 test("the verification tab has an icon, and no setting shows twice", async ({ page, request }) => {
@@ -127,6 +127,35 @@ test("the verification tab has an icon, and no setting shows twice", async ({ pa
   await expect(page.getByLabel("Fast", { exact: true })).toBeVisible();
   await page.getByLabel("Search settings").fill("fast model");
   await expect(page.locator(".setting-hit-label", { hasText: /^Fast model$/ })).toHaveCount(0);
+});
+
+test("a list setting orders by dragging, and adds from its choices or by typing", async ({ page, request }) => {
+  await settings(request, { ...SET_UP, "favicons.providers": ["direct", "duckduckgo"], "sources.allow": [] });
+  await logIn(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Favicons" }).click();
+
+  const providers = page.locator('[data-setting="favicons.providers"]');
+  await providers.locator(".list-pick").click();
+  await page.getByRole("menuitem", { name: "google" }).click();
+  await expect.poll(async () => (await field(request, "favicons.providers")).value).toEqual(["direct", "duckduckgo", "google"]);
+
+  await providers.locator("li", { hasText: "google" }).dragTo(providers.locator("li", { hasText: "direct" }));
+  await expect.poll(async () => (await field(request, "favicons.providers")).value).toEqual(["google", "direct", "duckduckgo"]);
+  await expect(providers.locator(".list-item")).toHaveText(["google", "direct", "duckduckgo"]);
+
+  await providers.getByRole("button", { name: "Remove direct" }).click();
+  await expect.poll(async () => (await field(request, "favicons.providers")).value).toEqual(["google", "duckduckgo"]);
+
+  await page.getByRole("tab", { name: "Sources" }).click();
+  const allow = page.getByLabel("Allow", { exact: true });
+  await allow.fill("a.example");
+  await allow.press("Enter");
+  await expect.poll(async () => (await field(request, "sources.allow")).value).toEqual(["a.example"]);
+  await page.getByRole("button", { name: "Reset allow to the default" }).click();
+  await expect(page.locator('[data-setting="sources.allow"] .list-item')).toHaveCount(0);
+  await page.getByRole("tab", { name: "Favicons" }).click();
+  await page.getByRole("button", { name: "Reset providers to the default" }).click();
 });
 
 test("a blank value does not end the setup", async ({ page }) => {
@@ -147,7 +176,7 @@ test("a secret setting is written but never shown", async ({ page, request }) =>
   await page.getByRole("tab", { name: "Web" }).click();
   await page.getByRole("button", { name: /Brave/ }).click();
 
-  const key = page.getByLabel("Brave api key", { exact: true });
+  const key = page.getByLabel("Brave API key", { exact: true });
   await expect(key).toHaveAttribute("placeholder", "not set");
   await key.fill("hidden");
   await key.blur();

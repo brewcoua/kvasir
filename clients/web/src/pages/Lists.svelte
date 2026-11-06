@@ -1,10 +1,10 @@
 <script lang="ts">
   import { Switch } from "bits-ui";
   import { request, type ListChange, type SourceExplanation, type SourceListInfo } from "../lib/api";
+  import ListField from "../components/ListField.svelte";
   import SourceBadge from "../components/SourceBadge.svelte";
 
   const EFFECTS = ["block", "demote", "exempt", "trust"];
-  const lines = (text: string) => text.split(/[\s,]+/).filter(Boolean);
   const day = (at: number) => new Date(at * 1000).toLocaleDateString(undefined, { dateStyle: "medium" });
 
   let lists = $state<SourceListInfo[] | null>(null);
@@ -14,7 +14,7 @@
   let open = $state<string | null>(null);
   let host = $state("");
   let explained = $state<SourceExplanation | null>(null);
-  let draft = $state({ name: "", url: "", entries: "", effect: "block", tag: "" });
+  let draft = $state({ name: "", url: "", entries: [] as string[], effect: "block", tag: "" });
 
   const groups = $derived.by(() => {
     const out = new Map<string, SourceListInfo[]>();
@@ -84,10 +84,10 @@
     event.preventDefault();
     if (risky && !confirm(`Whoever maintains ${draft.url.trim()} could ${draft.effect === "trust" ? "make any site trusted" : "unblock any site"}. Add it?`)) return;
     const url = draft.url.trim();
-    const fields: ListChange = { name: draft.name.trim(), effect: draft.effect, tag: draft.tag.trim(), ...(url ? { url } : { entries: lines(draft.entries) }) };
+    const fields: ListChange = { name: draft.name.trim(), effect: draft.effect, tag: draft.tag.trim(), ...(url ? { url } : { entries: draft.entries }) };
     attempt(async () => {
       await request("POST", "/v1/sources/lists", fields);
-      draft = { name: "", url: "", entries: "", effect: "block", tag: "" };
+      draft = { name: "", url: "", entries: [], effect: "block", tag: "" };
       await load();
     });
   }
@@ -183,15 +183,17 @@
                       <Switch.Thumb class="switch-thumb" />
                     </Switch.Root>
                   </label>
-                  <label>Sites this list does not apply to
-                    <textarea class="field" disabled={busy} value={list.except.join("\n")} onchange={(event) => change(list.id, { except: lines(event.currentTarget.value) })}></textarea>
-                  </label>
+                  <div class="list-edit-field">
+                    <label for={`${list.id}-except`}>Sites this list does not apply to</label>
+                    <ListField id={`${list.id}-except`} items={list.except} placeholder="Add a site" disabled={busy} onchange={(except) => change(list.id, { except })} />
+                  </div>
                   {#if list.url}
                     <p class="meta">{list.url}</p>
                   {:else}
-                    <label>Sites
-                      <textarea class="field" disabled={busy} value={list.entries.join("\n")} onchange={(event) => change(list.id, { entries: lines(event.currentTarget.value) })}></textarea>
-                    </label>
+                    <div class="list-edit-field">
+                      <label for={`${list.id}-entries`}>Sites</label>
+                      <ListField id={`${list.id}-entries`} items={list.entries} placeholder="Add a site" disabled={busy} onchange={(entries) => change(list.id, { entries })} />
+                    </div>
                   {/if}
                   <p class="actions">
                     {#if list.url}<button type="button" class="action" disabled={busy} onclick={() => refresh(list.id)}>Fetch now</button>{/if}
@@ -210,7 +212,10 @@
           <label>Name <input class="field" bind:value={draft.name} /></label>
           <label>URL <input class="field" placeholder="https://…" bind:value={draft.url} /></label>
           {#if !draft.url.trim()}
-            <label>Or sites <textarea class="field" bind:value={draft.entries}></textarea></label>
+            <div class="list-edit-field">
+              <label for="draft-entries">Or sites</label>
+              <ListField id="draft-entries" items={draft.entries} placeholder="Add a site" onchange={(entries) => (draft.entries = entries)} />
+            </div>
           {/if}
           <label>Effect
             <select class="field" bind:value={draft.effect}>
@@ -219,7 +224,7 @@
           </label>
           <label>Tag <input class="field" bind:value={draft.tag} /></label>
           {#if risky}<p class="error">Whoever maintains this list could {draft.effect === "trust" ? "make any site trusted" : "unblock any site"}.</p>{/if}
-          <p class="actions"><button type="submit" class="action" disabled={busy || !draft.name.trim() || (!draft.url.trim() && !draft.entries.trim())}>Add</button></p>
+          <p class="actions"><button type="submit" class="action" disabled={busy || !draft.name.trim()}>Add</button></p>
         </div>
       </form>
     {/if}

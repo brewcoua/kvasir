@@ -8,6 +8,7 @@
     chip: "M6 2v2M10 2v2M6 12v2M10 12v2M2 6h2M2 10h2M12 6h2M12 10h2",
     start: "M3 8h10M9 4l4 4-4 4",
     plus: "M8 3v10M3 8h10",
+    grip: "M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01",
     close: "M4.5 4.5l7 7M11.5 4.5l-7 7",
     ranking: "M2 4h12M2 8h8.5M2 12h5",
     table: "M2 3h12v10H2zM2 6.5h12M2 9.8h12M6.5 3v10",

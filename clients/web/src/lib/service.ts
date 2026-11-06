@@ -4,7 +4,27 @@ import { json, type ModelInfo, type ProviderInfo } from "./api";
 const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 // `research.max_searches` as "Max searches", `search.brave.api_key` as "Brave api key".
-export const labelOf = (key: string) => capitalize(key.slice(key.indexOf(".") + 1).replaceAll(/[._]/g, " "));
+// What a key's lowercase cannot spell.
+const WORDS: Record<string, string> = {
+  api: "API",
+  html: "HTML",
+  pmc: "PMC",
+  rsp: "RSP",
+  ttl: "TTL",
+  url: "URL",
+  arxiv: "arXiv",
+  duckduckgo: "DuckDuckGo",
+  openalex: "OpenAlex",
+  searxng: "SearXNG",
+};
+export const labelOf = (key: string) =>
+  capitalize(
+    key
+      .slice(key.indexOf(".") + 1)
+      .split(/[._]/)
+      .map((word) => WORDS[word] ?? word)
+      .join(" "),
+  );
 
 // Names that say more than the key does, in the settings dialog.
 const LABELS: Record<string, string> = {
