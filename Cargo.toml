@@ -42,6 +42,7 @@ http-body-util = "0.1"
 httpdate = "1"
 idna = "1.1"
 indexmap = { version = "2", features = ["serde"] }
+pbkdf2 = "0.12"
 pdf_oxide = "0.3.78"
 psl = "2"
 quick-xml = { version = "0.42", features = ["serialize"] }

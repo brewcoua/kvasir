@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Bing, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider,
-    Row, SemanticScholar, Startpage, Tavily, Wikipedia,
+    Arxiv, Bing, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, MojeekHtml,
+    OpenAlex, Provider, Row, SemanticScholar, Startpage, Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -917,5 +917,145 @@ mod startpage {
             Startpage::at(&server.uri()).query("q").await,
             Err(Failure::Other("no results in the page".into()))
         );
+    }
+}
+
+mod mojeek_html {
+    use wiremock::Request;
+    use wiremock::matchers::body_string_contains;
+
+    use super::*;
+
+    const RESULTS: &str = r#"<ul class="results-standard">
+        <li>
+          <a class="ob" href="https://a.org/x">https://a.org/x</a>
+          <h2><a class="title" href="https://a.org/x">The <b>title</b></a></h2>
+          <p class="s">About <b>a</b>.</p>
+        </li>
+        <li><a class="ob" href="https://b.org/y"></a><h2><a>B</a></h2></li>
+        <li><h2><a>No address</a></h2></li>
+      </ul>"#;
+
+    /// Answers a challenge any key solves, since its prefix is empty.
+    async fn serve_challenge(server: &MockServer) {
+        let challenge = json!({"parameters": {
+            "algorithm": "PBKDF2/SHA-256",
+            "nonce": "ab",
+            "salt": "cd",
+            "keyPrefix": "",
+            "cost": 1,
+            "keyLength": 4,
+        }, "signature": "s"});
+        Mock::given(method("GET"))
+            .and(path("/captcha/challenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge))
+            .mount(server)
+            .await;
+    }
+
+    /// Gives `token` for the next solution.
+    async fn serve_token(server: &MockServer, token: &str) {
+        Mock::given(method("POST"))
+            .and(path("/captcha/verify"))
+            .and(body_string_contains("name=\"altcha\""))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .append_header("Set-Cookie", format!("chllg={token}; Path=/").as_str()),
+            )
+            .up_to_n_times(1)
+            .mount(server)
+            .await;
+    }
+
+    fn with_token(token: &'static str) -> impl Fn(&Request) -> bool + Send + Sync {
+        move |request| {
+            let cookie = request.headers.get("cookie").and_then(|c| c.to_str().ok());
+            cookie == Some(format!("chllg={token}").as_str())
+        }
+    }
+
+    async fn solutions(server: &MockServer) -> usize {
+        let requests = server.received_requests().await.unwrap();
+        requests.iter().filter(|r| r.url.path() == "/captcha/verify").count()
+    }
+
+    #[tokio::test]
+    async fn a_token_is_won_once_and_results_read_from_the_page() {
+        let server = MockServer::start().await;
+        serve_challenge(&server).await;
+        serve_token(&server, "won").await;
+        Mock::given(method("GET"))
+            .and(path("/search"))
+            .and(query_param("q", "the query"))
+            .and(with_token("won"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(RESULTS))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let mojeek = MojeekHtml::at(&server.uri());
+
+        let rows = mojeek.query("the query").await.unwrap();
+        mojeek.query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [row("https://a.org/x", "The title", "About a."), row("https://b.org/y", "B", "")]
+        );
+        assert_eq!(solutions(&server).await, 1);
+    }
+
+    #[tokio::test]
+    async fn a_lapsed_token_is_won_again() {
+        let server = MockServer::start().await;
+        serve_challenge(&server).await;
+        serve_token(&server, "first").await;
+        serve_token(&server, "second").await;
+        Mock::given(path("/search"))
+            .and(with_token("first"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(RESULTS))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(path("/search"))
+            .and(with_token("first"))
+            .respond_with(ResponseTemplate::new(403))
+            .mount(&server)
+            .await;
+        Mock::given(path("/search"))
+            .and(with_token("second"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(RESULTS))
+            .mount(&server)
+            .await;
+        let mojeek = MojeekHtml::at(&server.uri());
+        mojeek.query("q").await.unwrap();
+
+        assert_eq!(mojeek.query("q").await.unwrap().len(), 2);
+
+        assert_eq!(solutions(&server).await, 2);
+    }
+
+    #[tokio::test]
+    async fn a_new_token_refused_is_a_captcha() {
+        let server = MockServer::start().await;
+        serve_challenge(&server).await;
+        serve_token(&server, "won").await;
+        Mock::given(path("/search"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("/captcha/challenge"))
+            .mount(&server)
+            .await;
+
+        assert_eq!(MojeekHtml::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+    }
+
+    #[tokio::test]
+    async fn no_token_for_a_solved_challenge_is_a_captcha() {
+        let server = MockServer::start().await;
+        serve_challenge(&server).await;
+        Mock::given(path("/captcha/verify"))
+            .respond_with(ResponseTemplate::new(400))
+            .mount(&server)
+            .await;
+
+        assert_eq!(MojeekHtml::at(&server.uri()).query("q").await, Err(Failure::Captcha));
     }
 }

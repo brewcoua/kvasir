@@ -255,6 +255,12 @@ pub const FIELDS: &[Field] = &[
         "Search Startpage by reading its pages, which is against its terms.",
     ),
     field("search.startpage.weight", Kind::Float, "Its weight when results are fused."),
+    field(
+        "search.mojeek_html.enabled",
+        Kind::Bool,
+        "Search Mojeek by reading its pages, solving its proof-of-work. No key, but slow.",
+    ),
+    field("search.mojeek_html.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

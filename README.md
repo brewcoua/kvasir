@@ -671,6 +671,8 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `search.bing.weight` | `1.0` | Its weight when results are fused. |
 | `search.startpage.enabled` | `false` | Search Startpage by reading its pages, which is against its terms. |
 | `search.startpage.weight` | `1.0` | Its weight when results are fused. |
+| `search.mojeek_html.enabled` | `false` | Search Mojeek by reading its pages, solving its proof-of-work. No key, but slow. |
+| `search.mojeek_html.weight` | `1.0` | Its weight when results are fused. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |

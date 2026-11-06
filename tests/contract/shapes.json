@@ -3755,6 +3755,8 @@
   "search.bing.weight": "string",
   "search.startpage.enabled": "string",
   "search.startpage.weight": "string",
+  "search.mojeek_html.enabled": "string",
+  "search.mojeek_html.weight": "string",
   "search.searxng.enabled": "string",
   "search.searxng.url": "string",
   "search.searxng.weight": "string",

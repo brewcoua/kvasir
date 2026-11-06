@@ -18,6 +18,7 @@ mod duckduckgo;
 mod europe_pmc;
 mod exa;
 mod mojeek;
+mod mojeek_html;
 mod openalex;
 mod scrape;
 mod searxng;
@@ -51,6 +52,7 @@ pub use duckduckgo::DuckDuckGo;
 pub use europe_pmc::EuropePmc;
 pub use exa::Exa;
 pub use mojeek::Mojeek;
+pub use mojeek_html::MojeekHtml;
 pub use openalex::OpenAlex;
 pub use searxng::SearXng;
 pub use semantic_scholar::SemanticScholar;
@@ -357,6 +359,9 @@ impl Providers {
         }
         if settings.startpage.enabled {
             providers.push((Box::new(Startpage::default()), settings.startpage.weight));
+        }
+        if settings.mojeek_html.enabled {
+            providers.push((Box::new(MojeekHtml::default()), settings.mojeek_html.weight));
         }
         Self::new(providers, web)
     }

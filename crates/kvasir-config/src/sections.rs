@@ -144,6 +144,7 @@ pub struct SearchSettings {
     pub duckduckgo: OpenSettings,
     pub bing: OpenSettings,
     pub startpage: OpenSettings,
+    pub mojeek_html: OpenSettings,
 }
 
 impl SearchSettings {
@@ -153,7 +154,7 @@ impl SearchSettings {
             || [&self.brave, &self.tavily, &self.exa, &self.mojeek]
                 .iter()
                 .any(|provider| provider.usable_key().is_some())
-            || [&self.duckduckgo, &self.bing, &self.startpage]
+            || [&self.duckduckgo, &self.bing, &self.startpage, &self.mojeek_html]
                 .iter()
                 .any(|provider| provider.enabled)
     }
@@ -177,6 +178,7 @@ impl Default for SearchSettings {
             duckduckgo: OpenSettings::default(),
             bing: OpenSettings::default(),
             startpage: OpenSettings::default(),
+            mojeek_html: OpenSettings::default(),
         }
     }
 }

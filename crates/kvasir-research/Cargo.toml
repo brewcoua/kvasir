@@ -19,6 +19,7 @@ kvasir-llm.workspace = true
 kvasir-run.workspace = true
 kvasir-sites.workspace = true
 kvasir-types.workspace = true
+pbkdf2.workspace = true
 psl.workspace = true
 quick-xml.workspace = true
 regex.workspace = true
