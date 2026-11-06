@@ -1,4 +1,4 @@
-//! Stand-ins for the research steps' services, as `tests/fakes.py` had them.
+//! Stand-ins for the research steps' services.
 
 #![allow(dead_code)]
 

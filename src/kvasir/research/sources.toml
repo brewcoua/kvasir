@@ -1,6 +1,0 @@
-# Sites the bundled list marks, by tag. One comment line each saying why.
-
-# AI-written wiki pages over code repositories, with no human author to check them.
-"deepwiki.com" = "ai_generated"
-# An AI-written encyclopedia; Wikidata marks it as AI-generated content too.
-"grokipedia.com" = "ai_generated"

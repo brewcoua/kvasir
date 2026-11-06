@@ -24,7 +24,7 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-COPY --from=web /app/src/kvasir/static ./src/kvasir/static
+COPY --from=web /app/web/dist ./web/dist
 
 # The target directory is a cache mount, so the binary is copied out in the same step.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

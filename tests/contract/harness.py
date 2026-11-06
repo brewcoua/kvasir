@@ -1,8 +1,8 @@
 """The service as a client sees it: a child process, and fakes for what it talks to over HTTP.
 
-Nothing here imports kvasir. `KVASIR_CONTRACT_COMMAND` names the service to test; the default is
-this checkout's Python one. The harness starts it, rather than taking a URL, because the service has
-to be pointed at the fakes when it starts.
+`KVASIR_CONTRACT_COMMAND` names the service to test; the default is this checkout's debug build,
+which `cargo build --bin kvasir` makes. The harness starts it, rather than taking a URL, because the
+service has to be pointed at the fakes when it starts.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import re
 import shlex
 import socket
 import subprocess
-import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -30,7 +29,9 @@ import httpx
 TOKEN = "contract-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 COST = 0.001
-COMMAND = os.environ.get("KVASIR_CONTRACT_COMMAND", f"{sys.executable} -m kvasir")
+# Loopback, since the fakes listen on this machine.
+BUILT = shlex.quote(str(Path(__file__).parents[2] / "target" / "debug" / "kvasir"))
+COMMAND = os.environ.get("KVASIR_CONTRACT_COMMAND", f"{BUILT} serve --allow-loopback")
 START_TIMEOUT_SECONDS = 60.0
 FACT = "The Kvasir stone was catalogued in 1783 at the parish of Rok."
 PAGE = (

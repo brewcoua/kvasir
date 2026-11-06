@@ -665,7 +665,9 @@ Differences from Python, all deliberate:
    `[workspace.package] version`, which every crate inherits. release-please's `rust` type refuses
    inherited versions and a virtual root manifest, so the `simple` type bumps the root
    `Cargo.toml` and each workspace crate in `Cargo.lock` through `toml` extra files.
-4. Remove `src/`, `pyproject.toml`, `uv.lock`, and Python tests other than the pipe's and contract.
+4. Remove `src/` and the Python tests other than the pipe's and contract. `pyproject.toml` and
+   `uv.lock` stay, cut down to what those tests and the pipe's lint need, so CI still syncs a
+   locked environment and Renovate still sees the pins.
 5. Rewrite `docs/architecture.md`, `docs/research.md`, the README, `owui/README.md`. Replace
    `docs/fork-notes.md` with STORM's behaviour requirements and credit.
 

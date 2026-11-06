@@ -10,7 +10,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # The Open WebUI pipe, and the contract tests, which drive the service over HTTP with fakes for
+  # the providers, SearXNG and the sites.
+  contract:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,15 +23,16 @@ jobs:
           enable-cache: true
 
       # --locked fails rather than re-resolving, so a lockfile that drifted from pyproject.toml is
-      # caught here instead of producing an image built from different versions than were tested.
+      # caught here.
       - run: uv sync --locked
 
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
 
-      # Integration tests need a gateway and a SearXNG, and are deselected by the marker
-      # expression in pyproject.toml.
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --bin kvasir
       - run: uv run pytest
 
   rust:

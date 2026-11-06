@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 const MOCK = "http://localhost:5179";
 const SERVICE = "http://127.0.0.1:8765";
 
-// `mock` drives the page against the fixtures. `service` checks the build as FastAPI serves it,
+// `mock` drives the page against the fixtures. `service` checks the build as the service serves it,
 // with a configuration that points nowhere, since no test here starts a run on it.
 export default defineConfig({
   testDir: "e2e",

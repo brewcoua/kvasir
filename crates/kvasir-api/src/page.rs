@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 // Read from disk in a debug build, and built into the binary in a release one. Not required at
 // build time, so the service still builds from a checkout where the page is not built.
 #[derive(rust_embed::Embed)]
-#[folder = "../../src/kvasir/static"]
+#[folder = "../../web/dist"]
 #[allow_missing = true]
 struct Built;
 

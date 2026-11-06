@@ -9,11 +9,6 @@ export default defineConfig(({ mode }) => ({
   server: {
     proxy: mode === "mock" ? undefined : { "/v1": "http://localhost:8080" },
   },
-  build: {
-    // Served by FastAPI from the package, so a checkout and the image find it at the same place.
-    outDir: "../src/kvasir/static",
-    emptyOutDir: true,
-  },
   resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
   test: {
     environment: "jsdom",

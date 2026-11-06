@@ -8,11 +8,6 @@
       "description": "Base and tool images are pinned by digest so a rebuild resolves to the same bytes.",
       "matchManagers": ["dockerfile"],
       "pinDigests": true
-    },
-    {
-      "description": "dspy shapes the prompts the fork in src/kvasir/storm sends, so a minor bump can change what the models are asked. Raising it wants a run against a real gateway, not an automatic merge.",
-      "matchPackageNames": ["dspy"],
-      "enabled": false
     }
   ]
 }

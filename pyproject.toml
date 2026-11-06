@@ -1,57 +1,16 @@
 [project]
-name = "kvasir"
-# Read from src/kvasir/__init__.py so release-please's version bump does not touch this file. A
-# static version here also lands in uv.lock, which then drifts on every release PR and breaks
-# `uv sync --locked`; with a dynamic version uv omits the field entirely.
-dynamic = ["version"]
-description = "A self-hostable HTTP service for deep research and Stanford STORM, with an Open WebUI client"
-readme = "README.md"
+name = "kvasir-tests"
+version = "0"
+description = "The contract tests and the Open WebUI pipe's checks. The service itself is the Rust workspace."
+# Open WebUI runs the pipe on 3.11.
 requires-python = "==3.11.*"
-license = { text = "MIT OR Apache-2.0" }
-dependencies = [
-    "courlan==1.4.0",
-    "fastapi==0.141.1",
-    "httpx==0.28.1",
-    "pydantic==2.13.4",
-    "tld==0.13.2",
-    "trafilatura==2.3.1",
-    "uvicorn==0.52.3",
-    # src/kvasir/storm is a fork of knowledge_storm, so its dependencies are declared here rather
-    # than pulled in through a published package. See src/kvasir/storm/NOTICE.
-    "backoff==2.2.1",
-    "beautifulsoup4==4.15.0",
-    "dspy==3.3.0",
-    "numpy==2.4.6",
-    "pypdf==6.21.4",
-]
 
-[project.optional-dependencies]
-# Pages that need JavaScript are rendered in Chromium; the default image carries neither.
-browser = [
-    "playwright==1.64.1",
-    "patchright==1.64.4",
-]
-
-[project.urls]
-Homepage = "https://github.com/brewcoua/kvasir"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.version]
-path = "src/kvasir/__init__.py"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/kvasir"]
+[tool.uv]
+package = false
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
-# The fork arrived formatted to upstream's own conventions. Reformatting it wholesale would bury
-# every subsequent fix in unrelated churn, so it is excluded until the trimming pass, which is when
-# what survives becomes small enough to adopt these rules deliberately.
-extend-exclude = ["src/kvasir/storm"]
+src = ["tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -59,28 +18,17 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src", "owui"]
-# The fork is untyped, so its classes are Any and strict mode refuses to subclass them. Extending
-# its callback handlers is the supported way to observe a run.
-disallow_subclassing_any = false
-exclude = ["^src/kvasir/storm/"]
-
-[[tool.mypy.overrides]]
-# The fork is untyped, and typing 10k lines of it is not this project's work.
-module = ["kvasir.storm.*"]
-ignore_missing_imports = true
-follow_imports = "skip"
+files = ["owui"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "integration: requires a live gateway and SearXNG; skipped by default",
-    "browser: requires the browser extra and Chromium; skipped by default",
-]
-addopts = "-m 'not integration and not browser'"
+testpaths = ["tests/contract"]
 
 [dependency-groups]
 dev = [
+    # What Open WebUI provides the pipe.
+    "aiohttp==3.14.3",
+    "pydantic==2.13.4",
+    "httpx==0.28.1",
     "mypy==2.3.1",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",

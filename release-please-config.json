@@ -9,7 +9,6 @@
       "include-component-in-tag": false,
       "extra-files": [
         "owui/pipe.py",
-        "src/kvasir/__init__.py",
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(!@.source)].version" }
       ]
