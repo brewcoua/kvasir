@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use kvasir_db::DbError;
-use kvasir_types::sites::{ListChange, SourceList, is_list_effect, is_list_tag};
+use kvasir_types::sites::{ListChange, SourceList, SourceListInfo, is_list_effect, is_list_tag};
 use serde::Deserialize;
 use sha1::{Digest, Sha1};
 use url::Url;
@@ -181,7 +181,10 @@ impl Sources {
     }
 
     /// Adds a list of the operator's own, on and blocking unless `change` says otherwise.
-    pub async fn add_list(self: &Arc<Self>, change: ListChange) -> Result<SourceList, ListError> {
+    pub async fn add_list(
+        self: &Arc<Self>,
+        change: ListChange,
+    ) -> Result<SourceListInfo, ListError> {
         let seed = format!("{:?} {:?} {}", change.name, change.url, now());
         let digest: String =
             Sha1::digest(seed.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect();
@@ -192,7 +195,7 @@ impl Sources {
         let kept = serde_json::to_string(&as_checked(change, &list)).expect("a change");
         self.store.put_list(&id, kept).await?;
         self.lists_changed().await;
-        Ok(list)
+        Ok(self.status(list))
     }
 
     /// Changes one field or more of a list. A catalog list keeps its source.
@@ -200,7 +203,7 @@ impl Sources {
         self: &Arc<Self>,
         id: &str,
         change: ListChange,
-    ) -> Result<SourceList, ListError> {
+    ) -> Result<SourceListInfo, ListError> {
         let lists = self.lists().await?;
         let Some(mut list) = lists.into_iter().find(|list| list.id == id) else {
             return Err(ListError::Missing(id.to_owned()));
@@ -218,7 +221,7 @@ impl Sources {
         let kept = serde_json::to_string(&kept).expect("a change");
         self.store.put_list(id, kept).await?;
         self.lists_changed().await;
-        Ok(list)
+        Ok(self.status(list))
     }
 
     /// Removes a list of the operator's own, or puts a catalog list back as it ships.

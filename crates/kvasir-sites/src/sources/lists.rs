@@ -7,15 +7,16 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime};
 
-use kvasir_types::sites::{KINDS, LIST_TAGS, SourceList};
+use kvasir_types::sites::{KINDS, LIST_TAGS, ListHit, SourceList, SourceListInfo};
 use regex::Regex;
 use reqwest::header;
 use sha1::{Digest, Sha1};
 use tokio::time::Instant;
 
 use super::survey::RANKED;
-use super::{Sources, normalize, parse_rsp, parse_tranco};
+use super::{DbError, Sources, normalize, parse_rsp, parse_tranco};
 
+const APPLIES: &str = "applies";
 // How often the downloaded lists are checked for age.
 pub(super) const LIST_CHECK: Duration = Duration::from_secs(3600);
 pub(super) static COMMENT: LazyLock<Regex> =
@@ -53,11 +54,23 @@ impl Effect {
             _ => effect.strip_prefix("kind:").map(|kind| Self::Kind(kind.to_owned())),
         }
     }
+
+    fn label(&self) -> String {
+        match self {
+            Self::Block => "block".to_owned(),
+            Self::Demote => "demote".to_owned(),
+            Self::Exempt => "exempt".to_owned(),
+            Self::Trust => "trust".to_owned(),
+            Self::Kind(kind) => format!("kind:{kind}"),
+            Self::Tag(tag) => format!("tag:{tag}"),
+        }
+    }
 }
 
 /// One list, read from disk or from its entries. A list that is off is held too: a run may turn it
 /// on for itself.
 pub(super) struct Listed {
+    pub(super) id: String,
     pub(super) name: String,
     pub(super) enabled: bool,
     pub(super) effect: Effect,
@@ -65,10 +78,11 @@ pub(super) struct Listed {
     pub(super) guard: bool,
     pub(super) except: HostSet,
     pub(super) hosts: HostSet,
+    pub(super) skipped: usize,
 }
 
 impl Listed {
-    fn from_label(entry: &str, label: &str, hosts: HashSet<String>) -> Option<Self> {
+    fn from_label(at: usize, entry: &str, label: &str, parsed: Parsed) -> Option<Self> {
         let effect = if LIST_TAGS.contains(&label) {
             Effect::Tag(label.to_owned())
         } else if KINDS[..KINDS.len() - 1].contains(&label) {
@@ -78,13 +92,15 @@ impl Listed {
             return None;
         };
         Some(Self {
+            id: config_id(at),
             name: label.to_owned(),
             enabled: true,
             effect,
             tag: String::new(),
             guard: false,
             except: HostSet::default(),
-            hosts: HostSet::new(hosts),
+            hosts: HostSet::new(parsed.hosts),
+            skipped: parsed.skipped,
         })
     }
 
@@ -92,9 +108,20 @@ impl Listed {
         matches!(self.effect, Effect::Block | Effect::Demote)
     }
 
-    fn names(&self, names: &[&str]) -> bool {
-        names.iter().any(|name| self.hosts.contains(name))
-            && !names.iter().any(|name| self.except.contains(name))
+    /// Whether this list names a site known by `names`, and if so, whether it counts.
+    fn state(&self, names: &[&str], guarded: bool) -> Option<&'static str> {
+        if !names.iter().any(|name| self.hosts.contains(name)) {
+            return None;
+        }
+        Some(if !self.enabled {
+            "off"
+        } else if names.iter().any(|name| self.except.contains(name)) {
+            "except"
+        } else if guarded && self.guard && self.lowers() {
+            "guard"
+        } else {
+            APPLIES
+        })
     }
 }
 
@@ -153,11 +180,21 @@ impl Lists {
     /// what a list would lower it by, for its suffix; its rank is checked here.
     pub(super) fn hits(&self, names: &[&str], guarded: bool) -> Vec<&Listed> {
         let guarded = guarded || names.iter().any(|name| self.top.contains(name));
-        self.listed
-            .iter()
-            .filter(|list| list.enabled && list.names(names))
-            .filter(|list| !(guarded && list.guard && list.lowers()))
-            .collect()
+        self.listed.iter().filter(|list| list.state(names, guarded) == Some(APPLIES)).collect()
+    }
+
+    /// Every list naming a site known by `names`, and whether it counts.
+    pub(super) fn explain(&self, names: &[&str], guarded: bool) -> Vec<ListHit> {
+        let guarded = guarded || names.iter().any(|name| self.top.contains(name));
+        let hit = |list: &Listed| {
+            list.state(names, guarded).map(|state| ListHit {
+                id: list.id.clone(),
+                name: list.name.clone(),
+                effect: list.effect.label(),
+                state: state.to_owned(),
+            })
+        };
+        self.listed.iter().filter_map(hit).collect()
     }
 }
 
@@ -177,11 +214,83 @@ impl Sources {
             if age.is_some_and(|age| age < ttl) {
                 continue;
             }
-            if let Err(e) = self.download(&url, &path).await {
-                tracing::warn!("source list {name} not fetched ({url}): {e}");
-            }
+            self.fetch(&name, &url, &path).await;
         }
         self.load_lists().await;
+    }
+
+    /// Downloads `url` to `path`, keeping why it failed for the list's status.
+    async fn fetch(&self, name: &str, url: &str, path: &Path) {
+        let done = self.download(url, path).await;
+        let mut errors = self.list_errors.lock().unwrap_or_else(|e| e.into_inner());
+        match done {
+            Ok(()) => drop(errors.remove(url)),
+            Err(e) => {
+                tracing::warn!("source list {name} not fetched ({url}): {e}");
+                errors.insert(url.to_owned(), e);
+            }
+        }
+    }
+
+    /// Downloads one list now, however young its copy, and reads it in.
+    pub async fn refresh_list(
+        self: &Arc<Self>,
+        id: &str,
+    ) -> Result<SourceListInfo, super::ListError> {
+        let lists = self.lists().await?;
+        let Some(list) = lists.into_iter().find(|list| list.id == id) else {
+            return Err(super::ListError::Missing(id.to_owned()));
+        };
+        if let Some(url) = &list.url {
+            self.fetch(&list.name, url, &self.list_path(url)).await;
+        }
+        self.load_lists().await;
+        Ok(self.status(list))
+    }
+
+    /// Every list with its status: the catalog's and the operator's, then those in the config.
+    pub async fn list_statuses(&self) -> Result<Vec<SourceListInfo>, DbError> {
+        let mut lists: Vec<SourceList> = self.lists().await?;
+        lists.extend(self.settings.lists.iter().enumerate().map(|(at, entry)| {
+            let (label, url) = entry.split_once('=').unwrap_or((entry, ""));
+            let effect = if LIST_TAGS.contains(&label) { "tag" } else { "kind" };
+            SourceList {
+                id: config_id(at),
+                name: label.to_owned(),
+                url: Some(url.to_owned()),
+                entries: Vec::new(),
+                enabled: true,
+                effect: format!("{effect}:{label}"),
+                tag: String::new(),
+                ttl_days: None,
+                guard: false,
+                except: Vec::new(),
+                group: "Config".to_owned(),
+                licence: String::new(),
+                custom: false,
+            }
+        }));
+        Ok(lists.into_iter().map(|list| self.status(list)).collect())
+    }
+
+    pub(super) fn status(&self, list: SourceList) -> SourceListInfo {
+        let lists = self.current_lists();
+        let read = lists.listed.iter().find(|read| read.id == list.id);
+        let url = list.url.as_deref();
+        let fetched_at = url
+            .and_then(|url| std::fs::metadata(self.list_path(url)).ok())
+            .and_then(|meta| meta.modified().ok())
+            .and_then(|at| at.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|age| age.as_secs());
+        let errors = self.list_errors.lock().unwrap_or_else(|e| e.into_inner());
+        let error = url.and_then(|url| errors.get(url)).cloned();
+        SourceListInfo {
+            hosts: read.map_or(0, |read| read.hosts.ends.len() as u64),
+            skipped: read.map_or(0, |read| read.skipped as u64),
+            fetched_at,
+            error,
+            list,
+        }
     }
 
     pub(super) async fn download(&self, url: &str, path: &Path) -> Result<(), String> {
@@ -300,28 +409,30 @@ impl Sources {
 
     pub(super) fn read_lists(&self) -> Lists {
         let mut listed = Vec::new();
-        for entry in &self.settings.lists {
+        for (at, entry) in self.settings.lists.iter().enumerate() {
             let (label, url) = entry.split_once('=').unwrap_or((entry, ""));
-            if let Some(hosts) = self.read_hosts(label, url) {
-                listed.extend(Listed::from_label(entry, label, hosts));
+            if let Some(parsed) = self.read_hosts(label, url) {
+                listed.extend(Listed::from_label(at, entry, label, parsed));
             }
         }
         for list in self.current_specs().iter() {
-            let hosts = match &list.url {
+            let parsed = match &list.url {
                 Some(url) => self.read_hosts(&list.name, url),
-                None => Some(list.entries.iter().cloned().collect()),
+                None => Some(Parsed { hosts: list.entries.iter().cloned().collect(), skipped: 0 }),
             };
-            let (Some(hosts), Some(effect)) = (hosts, Effect::parse(&list.effect)) else {
+            let (Some(parsed), Some(effect)) = (parsed, Effect::parse(&list.effect)) else {
                 continue;
             };
             listed.push(Listed {
+                id: list.id.clone(),
                 name: list.name.clone(),
                 enabled: list.enabled,
                 effect,
                 tag: list.tag.clone(),
                 guard: list.guard,
                 except: HostSet::new(list.except.iter().cloned()),
-                hosts: HostSet::new(hosts),
+                hosts: HostSet::new(parsed.hosts),
+                skipped: parsed.skipped,
             });
         }
         let (popular, top) = self.read_tranco();
@@ -329,15 +440,16 @@ impl Sources {
     }
 
     /// The hosts of the copy on disk of the list at `url`, if there is one that can be read.
-    fn read_hosts(&self, name: &str, url: &str) -> Option<HashSet<String>> {
+    fn read_hosts(&self, name: &str, url: &str) -> Option<Parsed> {
         match std::fs::read_to_string(self.list_path(url)) {
             Ok(text) => {
-                let Parsed { hosts, skipped } = parse_list(&text);
+                let parsed = parse_list(&text);
                 tracing::info!(
-                    "source list {name}: {} hosts, {skipped} rules skipped",
-                    hosts.len()
+                    "source list {name}: {} hosts, {} rules skipped",
+                    parsed.hosts.len(),
+                    parsed.skipped
                 );
-                Some(hosts)
+                Some(parsed)
             }
             // Not downloaded yet: the first refresh runs after the first load.
             Err(e) if e.kind() == io::ErrorKind::NotFound => None,
@@ -397,6 +509,11 @@ impl Sources {
     pub(super) fn current_lists(&self) -> Arc<Lists> {
         self.lists.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default()
     }
+}
+
+/// The id shown for the `at`th entry of `sources.lists`.
+fn config_id(at: usize) -> String {
+    format!("config-{at}")
 }
 
 /// What a list holds.

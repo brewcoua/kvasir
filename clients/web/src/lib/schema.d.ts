@@ -301,6 +301,30 @@ export interface components {
             input: components["schemas"]["Input"];
             options?: components["schemas"]["LedgerOptions"];
         };
+        /** @description What to change on a list: only the fields given. A catalog list keeps its `url` and `entries`. */
+        ListChange: {
+            name: string | null;
+            url: string | null;
+            entries: string[] | null;
+            enabled: boolean | null;
+            effect: string | null;
+            tag: string | null;
+            /**
+             * Format: uint64
+             * @description 0 goes back to `sources.ttl_days`.
+             */
+            ttl_days: number | null;
+            guard: boolean | null;
+            except: string[] | null;
+        };
+        /** @description A list naming a site, and whether it counts. */
+        ListHit: {
+            id: string;
+            name: string;
+            effect: string;
+            /** @description `applies`, or why not: `off`, `except` or `guard`. */
+            state: string;
+        };
         /** @description One completion request, while it is waiting and after it returns. */
         LmCall: {
             /** Format: uint64 */
@@ -341,7 +365,7 @@ export interface components {
             sentence: string;
         };
         Mark: {
-            /** @description `allow`, `deny` or a kind other than `unknown`. */
+            /** @description `allow`, `deny`, `exempt` or a kind other than `unknown`. */
             value: string;
         };
         /** @description One entry of `GET /v1/methods`. */
@@ -785,6 +809,11 @@ export interface components {
             tags: string[];
             tier: components["schemas"]["Tier"];
         };
+        /** @description What is known of a site, and every list that names it. */
+        SourceExplanation: {
+            source: components["schemas"]["SourceInfo"];
+            lists: components["schemas"]["ListHit"][];
+        };
         /** @description What is known of a site: its kind, tags and trust tier. */
         SourceInfo: {
             kind: string;
@@ -801,6 +830,55 @@ export interface components {
             origin: string;
             /** @description Why the survey called it a likely farm. Left out otherwise. */
             evidence?: string;
+            /** @description The lists that decided or tagged it, by name. Left out when none did. */
+            listed_by: string[];
+        };
+        /** @description A list and how its last read and download went. */
+        SourceListInfo: {
+            id: string;
+            name: string;
+            /** @description Where it is downloaded from. None for a list typed in as `entries`. */
+            url: string | null;
+            entries: string[];
+            enabled: boolean;
+            /**
+             * @description `block`, `demote`, `exempt`, `trust`, or `kind:<kind>`. A list in `sources.lists` may show
+             *     `tag:<tag>`.
+             */
+            effect: string;
+            /** @description A label its sites show, or empty. */
+            tag: string;
+            /**
+             * Format: uint64
+             * @description Days between downloads. None for `sources.ttl_days`.
+             */
+            ttl_days: number | null;
+            /** @description Whether popular sites and those a suffix rule decides are spared. */
+            guard: boolean;
+            /** @description Hosts, with their subdomains, this list does not apply to. */
+            except: string[];
+            /** @description `Config` for a list in `sources.lists`, which can only be changed there. */
+            group: string;
+            /** @description What the list's own repository states, `none` when nothing. Empty for the operator's lists. */
+            licence: string;
+            custom: boolean;
+            /**
+             * Format: uint64
+             * @description The hosts held now, 0 until a first download.
+             */
+            hosts: number;
+            /**
+             * Format: uint64
+             * @description The rules it holds that are not whole hosts, which do nothing.
+             */
+            skipped: number;
+            /**
+             * Format: uint64
+             * @description When the copy on disk was downloaded, in seconds since the epoch.
+             */
+            fetched_at: number | null;
+            /** @description Why the last download failed; the older copy stays in use. */
+            error: string | null;
         };
         /** @description What one stage spent, including what is not a completion. */
         StageUsage: {

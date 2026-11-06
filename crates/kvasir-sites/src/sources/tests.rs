@@ -657,7 +657,7 @@ async fn a_catalog_list_keeps_what_was_changed_until_removed() {
         .await
         .unwrap();
 
-    assert!(changed.enabled);
+    assert!(changed.list.enabled);
     let later = setting.service().lists().await.unwrap();
     let list = later.iter().find(|list| list.id == "seo-garbage").unwrap();
     assert_eq!((list.enabled, list.effect.as_str()), (true, "demote"));
@@ -697,15 +697,16 @@ async fn an_own_list_is_kept_changed_and_removed() {
         })
         .await
         .unwrap();
-    assert!(added.custom && added.enabled && added.id.starts_with("custom-"));
-    assert_eq!(added.effect, "block");
+    assert!(added.list.custom && added.list.enabled && added.list.id.starts_with("custom-"));
+    assert_eq!(added.hosts, 1);
+    assert_eq!(added.list.effect, "block");
 
     let change = ListChange { effect: Some("exempt".to_owned()), ..<_>::default() };
-    sources.change_list(&added.id, change).await.unwrap();
+    sources.change_list(&added.list.id, change).await.unwrap();
     let lists = setting.service().lists().await.unwrap();
     assert_eq!(lists.last().unwrap().effect, "exempt");
 
-    sources.remove_list(&added.id).await.unwrap();
+    sources.remove_list(&added.list.id).await.unwrap();
     assert_eq!(sources.lists().await.unwrap().len(), catalog().len());
     let nameless = ListChange { entries: Some(vec!["a.org".to_owned()]), ..<_>::default() };
     assert!(matches!(sources.add_list(nameless).await, Err(ListError::Invalid(_))));
@@ -719,7 +720,7 @@ async fn own(sources: &Arc<Sources>, effect: &str, entries: &[&str]) -> SourceLi
         effect: Some(effect.to_owned()),
         ..ListChange::default()
     };
-    sources.add_list(change).await.unwrap()
+    sources.add_list(change).await.unwrap().list
 }
 
 #[tokio::test]
@@ -843,6 +844,40 @@ async fn a_list_tag_shows_and_a_downloaded_list_fetches_on_its_own_terms() {
     assert_eq!(found.tier(), Tier::Avoid);
     assert!(found.tags.contains("seo_spam"));
     assert_eq!(found.listed_by, ["Spam"]);
+}
+
+#[tokio::test]
+async fn a_list_reports_its_hosts_its_rules_and_its_last_failure() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let url = setting.list("/good", body("||farm.org^\n||farm.org/path^\n")).await;
+    let gone = setting.list("/gone", ResponseTemplate::new(404)).await;
+    let sources =
+        setting.with(SourceSettings { lists: vec![format!("news={url}")], ..setting.settings() });
+    let change = |url: &str| ListChange {
+        name: Some("A list".to_owned()),
+        url: Some(url.to_owned()),
+        ..ListChange::default()
+    };
+    let good = sources.add_list(change(&url)).await.unwrap().list.id;
+    let bad = sources.add_list(change(&gone)).await.unwrap().list.id;
+
+    let fresh = sources.refresh_list(&good).await.unwrap();
+    assert_eq!((fresh.hosts, fresh.skipped), (1, 1));
+    assert!(fresh.fetched_at.is_some() && fresh.error.is_none());
+    let failed = sources.refresh_list(&bad).await.unwrap();
+    assert_eq!(failed.error.as_deref(), Some("status 404"));
+    assert_eq!(failed.fetched_at, None);
+    assert!(matches!(sources.refresh_list("config-0").await, Err(ListError::Missing(_))));
+
+    let all = sources.list_statuses().await.unwrap();
+    let config = all.last().unwrap();
+    assert_eq!((config.list.group.as_str(), config.list.effect.as_str()), ("Config", "kind:news"));
+    assert_eq!(config.hosts, 1);
+
+    let explained = sources.explain("farm.org").await;
+    assert_eq!(explained.source.listed_by, ["news", "A list"]);
+    assert_eq!(explained.lists.len(), 2);
 }
 
 #[test]

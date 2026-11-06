@@ -44,6 +44,12 @@ GUARDED = [
     ("DELETE", "/v1/sources"),
     ("PUT", "/v1/sources/x/mark"),
     ("DELETE", "/v1/sources/x/mark"),
+    ("GET", "/v1/sources/x/explain"),
+    ("GET", "/v1/sources/lists"),
+    ("POST", "/v1/sources/lists"),
+    ("PATCH", "/v1/sources/lists/x"),
+    ("DELETE", "/v1/sources/lists/x"),
+    ("POST", "/v1/sources/lists/x/refresh"),
 ]
 
 

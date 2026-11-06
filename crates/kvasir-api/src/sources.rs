@@ -9,9 +9,9 @@ use axum::body::Bytes;
 use axum::extract::{Path, RawQuery, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get};
-use kvasir_sites::sources::{DEADLINE, MarkError, Sources, normalize};
-use kvasir_types::sites::{SiteTags, SourceInfo};
+use axum::routing::{delete, get, post};
+use kvasir_sites::sources::{DEADLINE, ListError, MarkError, Sources, normalize};
+use kvasir_types::sites::{ListChange, SiteTags, SourceExplanation, SourceInfo, SourceListInfo};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -28,7 +28,7 @@ const MAX_TAG_HOSTS: usize = 1000;
 
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct Mark {
-    /// `allow`, `deny` or a kind other than `unknown`.
+    /// `allow`, `deny`, `exempt` or a kind other than `unknown`.
     value: String,
 }
 
@@ -41,7 +41,11 @@ pub fn routes() -> axum::Router<Arc<App>> {
     axum::Router::new()
         .route("/v1/sources", delete(flush))
         .route("/v1/sources/tags", get(tags_of_query).post(tags_of_body))
+        .route("/v1/sources/lists", get(lists).post(add_list))
+        .route("/v1/sources/lists/{id}", delete(remove_list).patch(change_list))
+        .route("/v1/sources/lists/{id}/refresh", post(refresh_list))
         .route("/v1/sources/{host}", get(source))
+        .route("/v1/sources/{host}/explain", get(explain))
         .route("/v1/sources/{host}/mark", delete(unmark).put(mark))
         .route("/v1/favicons", delete(flush_favicons))
         .route("/v1/favicons/{host}", get(favicon))
@@ -133,6 +137,75 @@ async fn tags_of_body(
     body::object(&value, &at)?;
     let TagsRequest { hosts } = body::decode(&value, &at)?;
     tags(&app, &hosts).await
+}
+
+impl From<ListError> for ApiError {
+    fn from(err: ListError) -> Self {
+        match err {
+            ListError::Invalid(message) => Self::new(StatusCode::UNPROCESSABLE_ENTITY, message),
+            ListError::Missing(_) => Self::new(StatusCode::NOT_FOUND, err.to_string()),
+            ListError::Store(err) => err.into(),
+        }
+    }
+}
+
+fn change_of(sent: &Bytes) -> Result<ListChange, ApiError> {
+    let value = body::json(sent)?;
+    let at = body::loc(&["body"]);
+    body::object(&value, &at)?;
+    Ok(body::decode(&value, &at)?)
+}
+
+/// Every list, on or off, with how its last download went. Those in `sources.lists` come last.
+async fn lists(State(app): State<Arc<App>>) -> Result<Json<Vec<SourceListInfo>>, ApiError> {
+    Ok(Json(sources(&app)?.list_statuses().await?))
+}
+
+/// Adds a list of the operator's own, on and blocking unless the body says otherwise.
+async fn add_list(
+    State(app): State<Arc<App>>,
+    sent: Bytes,
+) -> Result<(StatusCode, Json<SourceListInfo>), ApiError> {
+    let added = sources(&app)?.add_list(change_of(&sent)?).await?;
+    Ok((StatusCode::CREATED, Json(added)))
+}
+
+/// Changes one field or more of a list. A catalog list keeps its `url` and `entries`.
+async fn change_list(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+    sent: Bytes,
+) -> Result<Json<SourceListInfo>, ApiError> {
+    Ok(Json(sources(&app)?.change_list(&id, change_of(&sent)?).await?))
+}
+
+/// Removes a list of the operator's own, or puts a catalog list back as it ships.
+async fn remove_list(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    sources(&app)?.remove_list(&id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Downloads a list now, however young its copy.
+async fn refresh_list(
+    State(app): State<Arc<App>>,
+    Path(id): Path<String>,
+) -> Result<Json<SourceListInfo>, ApiError> {
+    Ok(Json(sources(&app)?.refresh_list(&id).await?))
+}
+
+/// What is known of a site, and every list naming it with whether it counts.
+async fn explain(
+    State(app): State<Arc<App>>,
+    Path(host): Path<String>,
+) -> Result<Json<SourceExplanation>, ApiError> {
+    if normalize(&host).is_none() {
+        let message = format!("{} is not a host name", quoted(&host));
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, message));
+    }
+    Ok(Json(sources(&app)?.explain(&host).await))
 }
 
 /// Forgets the cached Wikidata answers. Marks and the config stay.

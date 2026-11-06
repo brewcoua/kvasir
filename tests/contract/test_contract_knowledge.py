@@ -205,6 +205,62 @@ def test_a_mark_is_set_and_cleared(client: httpx.Client) -> None:
     assert client.delete("/v1/sources").status_code == 204
 
 
+def test_a_list_is_added_explained_changed_and_removed(client: httpx.Client) -> None:
+    listed = client.get("/v1/sources/lists")
+    assert listed.status_code == 200
+    matches_shape("sources.lists", listed.json()[0])
+
+    added = client.post(
+        "/v1/sources/lists", json={"name": "Mine", "entries": ["farm.example"], "tag": "seo_spam"}
+    )
+    assert added.status_code == 201
+    matches_shape("sources.list", added.json())
+    assert added.json()["hosts"] == 1
+    list_id = added.json()["id"]
+
+    explained = client.get("/v1/sources/farm.example/explain")
+    assert explained.status_code == 200
+    matches_shape("sources.explain", explained.json())
+    assert explained.json()["source"]["tier"] == "avoid"
+    assert explained.json()["source"]["listed_by"] == ["Mine"]
+    assert explained.json()["lists"][0]["state"] == "applies"
+
+    off = client.patch(f"/v1/sources/lists/{list_id}", json={"enabled": False})
+    assert off.status_code == 200
+    assert client.get("/v1/sources/farm.example").json()["tier"] != "avoid"
+    assert client.get("/v1/sources/farm.example/explain").json()["lists"][0]["state"] == "off"
+
+    assert client.post(f"/v1/sources/lists/{list_id}/refresh").status_code == 200
+    assert client.delete(f"/v1/sources/lists/{list_id}").status_code == 204
+    assert client.delete(f"/v1/sources/lists/{list_id}").status_code == 404
+    assert client.patch(f"/v1/sources/lists/{list_id}", json={}).status_code == 404
+
+
+def test_a_mistaken_list_says_why(client: httpx.Client) -> None:
+    nameless = client.post("/v1/sources/lists", json={"entries": ["a.example"]})
+    assert nameless.status_code == 422
+    assert list(nameless.json()) == ["message"]
+
+    unknown = client.post("/v1/sources/lists", json={"name": "x", "nope": 1})
+    assert unknown.status_code == 422
+
+    catalog = client.get("/v1/sources/lists").json()[0]["id"]
+    fixed = client.patch(f"/v1/sources/lists/{catalog}", json={"url": "https://a.example/l"})
+    assert fixed.status_code == 422
+
+
+def test_an_exempt_mark_cancels_a_list_and_grants_no_trust(client: httpx.Client) -> None:
+    added = client.post("/v1/sources/lists", json={"name": "Mine", "entries": ["spared.example"]})
+    assert client.get("/v1/sources/spared.example").json()["tier"] == "avoid"
+
+    marked = client.put("/v1/sources/spared.example/mark", json={"value": "exempt"})
+
+    assert marked.json()["tier"] == "unknown"
+    assert marked.json()["tags"] == ["exempt"]
+    assert client.delete("/v1/sources/spared.example/mark").status_code == 204
+    assert client.delete(f"/v1/sources/lists/{added.json()['id']}").status_code == 204
+
+
 def test_tags_answer_for_many_hosts_at_once(client: httpx.Client) -> None:
     marked = client.put("/v1/sources/farm.example/mark", json={"value": "deny"})
     assert marked.status_code == 200

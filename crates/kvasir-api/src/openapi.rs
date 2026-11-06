@@ -124,6 +124,9 @@ pub fn document() -> Value {
     add::<runs::SearchContent>(&mut generator);
     add::<sites::SiteTags>(&mut generator);
     add::<sites::SourceInfo>(&mut generator);
+    add::<sites::SourceListInfo>(&mut generator);
+    add::<sites::SourceExplanation>(&mut generator);
+    add::<sites::ListChange>(&mut generator);
     add::<SettingsView>(&mut generator);
     add::<SettingInfo>(&mut generator);
     add::<ProviderInfo>(&mut generator);

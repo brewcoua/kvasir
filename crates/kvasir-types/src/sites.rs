@@ -48,7 +48,8 @@ pub struct SourceList {
     pub url: Option<String>,
     pub entries: Vec<String>,
     pub enabled: bool,
-    /// `block`, `demote`, `exempt`, `trust`, or `kind:<kind>`.
+    /// `block`, `demote`, `exempt`, `trust`, or `kind:<kind>`. A list in `sources.lists` may show
+    /// `tag:<tag>`.
     pub effect: String,
     /// A label its sites show, or empty.
     pub tag: String,
@@ -58,10 +59,43 @@ pub struct SourceList {
     pub guard: bool,
     /// Hosts, with their subdomains, this list does not apply to.
     pub except: Vec<String>,
+    /// `Config` for a list in `sources.lists`, which can only be changed there.
     pub group: String,
     /// What the list's own repository states, `none` when nothing. Empty for the operator's lists.
     pub licence: String,
     pub custom: bool,
+}
+
+/// A list and how its last read and download went.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SourceListInfo {
+    #[serde(flatten)]
+    pub list: SourceList,
+    /// The hosts held now, 0 until a first download.
+    pub hosts: u64,
+    /// The rules it holds that are not whole hosts, which do nothing.
+    pub skipped: u64,
+    /// When the copy on disk was downloaded, in seconds since the epoch.
+    pub fetched_at: Option<u64>,
+    /// Why the last download failed; the older copy stays in use.
+    pub error: Option<String>,
+}
+
+/// A list naming a site, and whether it counts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ListHit {
+    pub id: String,
+    pub name: String,
+    pub effect: String,
+    /// `applies`, or why not: `off`, `except` or `guard`.
+    pub state: String,
+}
+
+/// What is known of a site, and every list that names it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SourceExplanation {
+    pub source: SourceInfo,
+    pub lists: Vec<ListHit>,
 }
 
 /// What to change on a list: only the fields given. A catalog list keeps its `url` and `entries`.
@@ -137,6 +171,9 @@ pub struct SourceInfo {
     /// Why the survey called it a likely farm. Left out otherwise.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub evidence: String,
+    /// The lists that decided or tagged it, by name. Left out when none did.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub listed_by: Vec<String>,
 }
 
 /// A site's kind, tags and tier, without what only a person reading about it needs.

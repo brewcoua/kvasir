@@ -24,7 +24,9 @@ use std::time::Duration;
 use kvasir_config::SourceSettings;
 use kvasir_db::DbError;
 use kvasir_fetch::Web;
-use kvasir_types::sites::{KINDS, SourceInfo, SourceList, Tier, normalize_host, registrable, tier};
+use kvasir_types::sites::{
+    KINDS, SourceExplanation, SourceInfo, SourceList, Tier, normalize_host, registrable, tier,
+};
 use tokio::sync::{Semaphore, watch};
 use tokio::time::{Instant, timeout_at};
 use url::Url;
@@ -93,6 +95,7 @@ impl Source {
             qid: self.qid.clone(),
             origin: self.origin.clone(),
             evidence: self.evidence.clone(),
+            listed_by: self.listed_by.clone(),
         }
     }
 }
@@ -133,6 +136,8 @@ pub struct Sources {
     bundled: HashMap<String, Source>,
     lists: Mutex<Option<Arc<Lists>>>,
     specs: Mutex<Arc<Vec<SourceList>>>,
+    /// Why each list URL's last download failed.
+    list_errors: Mutex<HashMap<String, String>>,
     first_load: tokio::sync::Mutex<()>,
     lists_checked: Mutex<Option<Instant>>,
     rsp_url: String,
@@ -180,6 +185,7 @@ impl Sources {
             bundled: bundled(),
             lists: Mutex::new(None),
             specs: Mutex::default(),
+            list_errors: Mutex::default(),
             first_load: tokio::sync::Mutex::new(()),
             lists_checked: Mutex::new(None),
             rsp_url: RSP_URL.to_owned(),
@@ -246,6 +252,17 @@ impl Sources {
             self.note_met(out.values()).await;
         }
         out
+    }
+
+    /// What is known of `host`, and every list naming it, whether it counts or not.
+    pub async fn explain(self: &Arc<Self>, host: &str) -> SourceExplanation {
+        let hosts = [host.to_owned()];
+        let mut found = self.classify(&hosts, DEADLINE).await;
+        let source = found.remove(host).expect("every host asked is answered");
+        let lists = normalize(host).map_or_else(Vec::new, |key| {
+            self.current_lists().explain(&site_names(&key), rule(&key).is_some())
+        });
+        SourceExplanation { source: source.info(), lists }
     }
 
     /// Sets `allow`, `deny`, `exempt` or a kind on `host`, until `unmark`.
