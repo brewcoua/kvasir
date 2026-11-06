@@ -1,10 +1,60 @@
 // The service's own settings, as opposed to the per-run ones in `settings.svelte.ts`.
-import { json, type ModelInfo, type ProviderInfo } from "./api";
+import { json, type ModelInfo, type ProviderInfo, type SettingInfo } from "./api";
 
 export const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 // `research.max_searches` as "Max searches", `search.brave.api_key` as "Brave api key".
 export const labelOf = (key: string) => capitalize(key.slice(key.indexOf(".") + 1).replaceAll(/[._]/g, " "));
+
+export const SCRAPING_NOTICE = "These read each engine's own pages, which is against its terms: turning one on is your choice and your risk. An engine may block them or change its pages without notice.";
+
+// Prices as `docs/search-plan.md` found them. An engine's own page is the authority.
+const SEARCH_GROUPS: { title: string; notice?: string; providers: { id: string; name: string; price?: string }[] }[] = [
+  {
+    title: "Web, with a key",
+    providers: [
+      { id: "brave", name: "Brave", price: "$5 per 1,000 queries, $5 a month free" },
+      { id: "tavily", name: "Tavily", price: "$8 per 1,000 queries, 1,000 a month free" },
+      { id: "exa", name: "Exa", price: "$4 to $7 per 1,000 queries, $10 a month free" },
+      { id: "mojeek", name: "Mojeek", price: "£2 per 1,000 queries" },
+    ],
+  },
+  { title: "Web, without a key", providers: [{ id: "searxng", name: "SearXNG" }] },
+  {
+    title: "Web, scraped",
+    notice: SCRAPING_NOTICE,
+    providers: [
+      { id: "duckduckgo", name: "DuckDuckGo" },
+      { id: "bing", name: "Bing" },
+      { id: "startpage", name: "Startpage" },
+      { id: "mojeek_html", name: "Mojeek HTML" },
+    ],
+  },
+  {
+    title: "Specialized",
+    providers: [
+      { id: "wikipedia", name: "Wikipedia" },
+      { id: "arxiv", name: "arXiv" },
+      { id: "crossref", name: "Crossref" },
+      { id: "europe_pmc", name: "Europe PMC" },
+      { id: "semantic_scholar", name: "Semantic Scholar" },
+      { id: "openalex", name: "OpenAlex", price: "$1 per 1,000 queries, $1 a day free" },
+    ],
+  },
+];
+
+// The search settings under their providers, and what belongs to none, such as `search.top_k`.
+export function groupSearch(fields: SettingInfo[]) {
+  const of = (id: string) => fields.filter((field) => field.key.startsWith(`search.${id}.`));
+  const known = SEARCH_GROUPS.flatMap((group) => group.providers.flatMap((provider) => of(provider.id)));
+  return {
+    rest: fields.filter((field) => !known.includes(field)),
+    groups: SEARCH_GROUPS.map((group) => ({
+      ...group,
+      providers: group.providers.map((provider) => ({ ...provider, fields: of(provider.id) })),
+    })),
+  };
+}
 
 // A provider that cannot list its models is told apart, so a page can say which.
 export async function loadModels(): Promise<{ models: ModelInfo[]; unreachable: string[]; providers: number }> {

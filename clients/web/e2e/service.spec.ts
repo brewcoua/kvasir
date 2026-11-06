@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 const AUTH = { Authorization: "Bearer e2e-token" };
-const REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.enabled", "search.searxng.url"];
+const REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.enabled", "search.searxng.url", "search.duckduckgo.enabled"];
 const SET_UP = { "model.fast": "unused/fast", "model.strong": "unused/strong", "model.embedding": "unused/embed", "search.searxng.enabled": true, "search.searxng.url": "http://127.0.0.1:9" };
 
 async function settings(request: APIRequestContext, changes: Record<string, unknown>) {
@@ -67,6 +67,33 @@ test("the setup asks for a search provider", async ({ page }) => {
   await page.getByLabel("Embedding model").fill("unused/embed");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("alert")).toContainText("Still unset: a search provider.");
+});
+
+test("a scraped engine can be the setup's search provider, against a notice of its terms", async ({ page, request }) => {
+  await logIn(page);
+  await expect(page.getByText("These read each engine's own pages")).toBeVisible();
+  await page.getByLabel("Fast model").fill("unused/fast");
+  await page.getByLabel("Strong model").fill("unused/strong");
+  await page.getByLabel("Embedding model").fill("unused/embed");
+  await page.getByLabel("DuckDuckGo").check();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert").first()).toContainText("provider unused");
+  expect((await field(request, "search.duckduckgo.enabled")).value).toBe(true);
+  expect((await field(request, "search.bing.enabled")).value).toBe(false);
+});
+
+test("the service settings group the search providers, with prices and the scraping notice", async ({ page, request }) => {
+  await settings(request, SET_UP);
+  await logIn(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Service" }).click();
+
+  for (const group of ["Web, with a key", "Web, without a key", "Web, scraped", "Specialized"]) {
+    await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
+  }
+  await expect(page.getByText("Brave: $5 per 1,000 queries")).toBeVisible();
+  await expect(page.getByText("These read each engine's own pages")).toBeVisible();
+  await expect(page.getByLabel("Duckduckgo enabled", { exact: true })).not.toBeChecked();
 });
 
 test("a blank value does not end the setup", async ({ page }) => {

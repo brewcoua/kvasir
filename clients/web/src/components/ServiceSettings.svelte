@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { json, type ModelInfo, type SettingInfo, type SettingsView } from "../lib/api";
-  import { capitalize, loadModels } from "../lib/service";
+  import { capitalize, groupSearch, loadModels } from "../lib/service";
   import ServiceField from "./ServiceField.svelte";
 
   let view: SettingsView | null = $state(null);
@@ -32,7 +32,24 @@
 {/if}
 {#each sections as [section, fields] (section)}
   <h4>{capitalize(section)}</h4>
-  {#each fields as field (field.key)}
-    <ServiceField {field} {models} onsaved={(saved) => (view = saved)} />
-  {/each}
+  {#if section === "search"}
+    {@const search = groupSearch(fields)}
+    {#each search.rest as field (field.key)}
+      <ServiceField {field} {models} onsaved={(saved) => (view = saved)} />
+    {/each}
+    {#each search.groups as group (group.title)}
+      <h5>{group.title}</h5>
+      {#if group.notice}<p class="hint">{group.notice}</p>{/if}
+      {#each group.providers as provider (provider.id)}
+        {#if provider.price}<p class="hint">{provider.name}: {provider.price}.</p>{/if}
+        {#each provider.fields as field (field.key)}
+          <ServiceField {field} {models} onsaved={(saved) => (view = saved)} />
+        {/each}
+      {/each}
+    {/each}
+  {:else}
+    {#each fields as field (field.key)}
+      <ServiceField {field} {models} onsaved={(saved) => (view = saved)} />
+    {/each}
+  {/if}
 {/each}

@@ -921,7 +921,8 @@ header .icon {
 .setting input[type="checkbox"] {
   justify-self: end;
 }
-.settings h4 {
+.settings h4,
+.settings h5 {
   margin: 0.75rem 0 0;
   font-size: 0.85rem;
   color: var(--dim);

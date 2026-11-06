@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { request, type ModelInfo, type SettingsView } from "../lib/api";
-  import { describeModel, labelOf, loadModels } from "../lib/service";
+  import { SCRAPING_NOTICE, describeModel, labelOf, loadModels } from "../lib/service";
   import ModelField from "./ModelField.svelte";
 
   const EMBEDDING = "model.embedding";
@@ -13,6 +13,13 @@
     { name: "Tavily API key", key: "search.tavily.api_key", enabled: "search.tavily.enabled" },
     { name: "Exa API key", key: "search.exa.api_key", enabled: "search.exa.enabled" },
     { name: "Mojeek API key", key: "search.mojeek.api_key", enabled: "search.mojeek.enabled" },
+  ];
+  // Nothing to fill in, so each is a choice. Off unless picked, as they are against the engines' terms.
+  const SCRAPED = [
+    { name: "DuckDuckGo", enabled: "search.duckduckgo.enabled" },
+    { name: "Bing", enabled: "search.bing.enabled" },
+    { name: "Startpage", enabled: "search.startpage.enabled" },
+    { name: "Mojeek HTML", enabled: "search.mojeek_html.enabled" },
   ];
 
   let { view, ondone }: { view: SettingsView; ondone: () => void } = $props();
@@ -27,6 +34,7 @@
     Object.fromEntries([...fields, ...providers.map((provider) => provider.field)].map((field) => [field.key, field.type === "secret" ? "" : String(field.value ?? "")])),
   );
 
+  const scraped: Record<string, boolean> = $state({});
   let models: ModelInfo[] = $state([]);
   let unreachable: string[] = $state([]);
   let noProviders = $state(false);
@@ -61,6 +69,9 @@
       for (const { key, enabled } of WEB_PROVIDERS) {
         const value = values[key].trim();
         if (value !== "") Object.assign(entered, { [key]: value, [enabled]: true });
+      }
+      for (const { enabled } of SCRAPED) {
+        if (scraped[enabled]) entered[enabled] = true;
       }
       const saved = await request<SettingsView>("PATCH", "/v1/settings", entered);
       if (saved.missing.length > 0) {
@@ -114,6 +125,10 @@
       <input id={field.key} type="text" autocomplete="off" bind:value={values[field.key]} />
     {/if}
     <p class="meta">{field.help}</p>
+  {/each}
+  <p class="meta">{SCRAPING_NOTICE}</p>
+  {#each SCRAPED as { name, enabled } (enabled)}
+    <label><input type="checkbox" bind:checked={scraped[enabled]} /> {name}</label>
   {/each}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if silent}
