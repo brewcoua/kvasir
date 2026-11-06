@@ -102,7 +102,7 @@ flowchart TD
     stale{"claims arrived since<br/>its last judgement?"}
     judge1["judge it"]
     query["SearchFor: one query,<br/>in this attempt's shape"]
-    search["SearXNG<br/>skip URLs already read"]
+    search["Search providers<br/>skip URLs already read"]
     read["fetch, split, filter,<br/>intake each piece"]
     new{"new claims?"}
     judge2["judge it"]
@@ -252,7 +252,7 @@ question has had:
 
 `SearchFor` also reads the queries already tried and what the last judgement found missing. After
 `max_attempts` attempts, an open question becomes `unresolved`. Whether `site:` and `filetype:`
-work depends on the engines SearXNG uses.
+work depends on the search providers enabled.
 
 ### Judging a question
 
@@ -295,8 +295,8 @@ the graph. Each page goes through the same steps.
 
 ```mermaid
 flowchart LR
-    search["SearXNG results<br/>and leads"]
-    pool["top 20 by<br/>SearXNG score"]
+    search["Provider results<br/>and leads"]
+    pool["top 20 by<br/>fused score"]
     fuse["fuse 3 or 4 rankings<br/>weighted RRF"]
     pick["pick results_per_query<br/>skip repeats"]
     fetch["fetch_page<br/>cache, HTML, browser, PDF"]
@@ -320,22 +320,22 @@ flowchart LR
     ground -- no --> drop
 ```
 
-- **Pick.** `crates/kvasir-research/src/search.rs` sorts a query's unseen results by SearXNG's `score`, not by the
-  order of the response, which SearXNG groups by category, and keeps the first `POOL` (20). It
-  ranks them three ways: by SearXNG's score; by relevance, the cosine similarity between the
+- **Pick.** `crates/kvasir-research/src/search.rs` sorts a query's unseen results by their score from the providers,
+  the reciprocal rank fusion of their lists by each provider's `weight`, and keeps the first `POOL` (20). It
+  ranks them three ways: by that score; by relevance, the cosine similarity between the
   question and the result's `title` and snippet; and by novelty, 1 less the highest cosine
   similarity to a claim the run holds. Novelty applies only when the run holds claims. With
   `[sources] enabled`, the hosts of a call's results and leads are classified in one batch, a
   result of an `avoid` site is dropped, and marked seen, before ranking even when nothing else is
   left, and a fourth ranking, when the tiers differ, orders the rest by tier: `high`, `normal`,
-  `unknown`, then `low`, ties in SearXNG's order. With `rsp` also set, Wikipedia's perennial sources
+  `unknown`, then `low`, ties in the providers' order. With `rsp` also set, Wikipedia's perennial sources
   list adds a tag to a site it names: `rsp_reliable` makes it `high`, `rsp_unreliable` `low` and
   `rsp_deprecated`, which takes in its blacklisted sites, `avoid`; `rsp_mixed` changes nothing, and
   the kind stays what the rules and Wikidata give. Every other lookup (leads, recall, affinity, site
   searches) reads only what the cache, rules and lists know, since the host was classified when
   found. The
   rankings are fused as `Σ w / (RRF_K + rank)`, with `RRF_K` 60 and weights
-  `SEARXNG_WEIGHT` 1.0, `RELEVANCE_WEIGHT` 1.0, `NOVELTY_WEIGHT` 0.5 and `TRUST_WEIGHT` 0.5. The
+  `PROVIDERS_WEIGHT` 1.0, `RELEVANCE_WEIGHT` 1.0, `NOVELTY_WEIGHT` 0.5 and `TRUST_WEIGHT` 0.5. The
   weights are a first guess, not tuned. Results are then taken best first, skipping one whose domain was already taken
   for the query, whose snippet has a cosine similarity above `NEAR_DUPLICATE` (0.9) to one
   taken, or whose site the run has read `PAGES_PER_SITE` (6) pages of, until `results_per_query`
@@ -435,8 +435,8 @@ The methods behind picking:
 
 | Method | What it does | Use here |
 | --- | --- | --- |
-| Reciprocal Rank Fusion (Cormack, Clarke and Büttcher, SIGIR 2009) | Combines rankings with `score = Σ w_i / (k + rank_i)`, k = 60. It uses ranks only, so no score scaling is needed | Merges SearXNG's order with kvasir's own |
-| CombSUM / CombMNZ (Fox and Shaw 1994) | Adds normalized scores; MNZ multiplies by how many systems found the result | SearXNG's `score` already does this across engines |
+| Reciprocal Rank Fusion (Cormack, Clarke and Büttcher, SIGIR 2009) | Combines rankings with `score = Σ w_i / (k + rank_i)`, k = 60. It uses ranks only, so no score scaling is needed | Merges the providers' lists, then that order with kvasir's own |
+| CombSUM / CombMNZ (Fox and Shaw 1994) | Adds normalized scores; MNZ multiplies by how many systems found the result | A SearXNG instance's `score` does this across its engines |
 | Embedding similarity of the snippet | Cosine between the question and `title + snippet`, with the encoder kvasir already uses | kvasir's relevance ranking |
 | MMR (Carbonell and Goldstein 1998) | Picks greedily by `λ·relevance − (1−λ)·max similarity to what is already held or picked` | Avoids pages that repeat claims the run already has; kvasir uses the cheap form: novelty as a ranking, plus a near-duplicate and domain skip |
 
@@ -483,7 +483,7 @@ corroborated it (the best, if several), since affinity counts corroborated claim
 corroborations: `high` and `normal` 1, `unknown` 0.5, `low` 0.25, `avoid` 0.
 `RELATED_BONUS` (0.1) is for a link in a related block. `trust_bonus` is the site's tier: `high`
 0.1, `normal` 0.05, `unknown` 0, `low` -0.1; a lead of an `avoid` site is not a candidate. Leads join the search's pool,
-ranked by worth where a result is ranked by SearXNG's score, and at most `LEADS_PER_QUERY` (2) are
+ranked by worth where a result is ranked by the providers' score, and at most `LEADS_PER_QUERY` (2) are
 picked a search. A lead is read only once `allowed` passes: its host resolves to public addresses
 only, since a page chose the URL, and the site's `robots.txt`, kept a day, lets it be read. A
 `robots.txt` that is missing or answers 4xx allows everything; one that answers 5xx or not at all

@@ -1,6 +1,6 @@
 # Search providers: plan
 
-Status: written 2026-11-06. Phases 1 to 8 built. Needs [encryption-plan.md](encryption-plan.md), built,
+Status: written 2026-11-06. Phases 1 to 8 and 10 built. Phase 9, and the fallback to Chromium in phase 8, wait on the open test under the phases. Needs [encryption-plan.md](encryption-plan.md), built,
 since this plan stores API keys in `kvasir.db`.
 
 Every search goes to one SearXNG instance (`SearXng`, `kvasir-research/src/search.rs:86`). That
@@ -182,6 +182,11 @@ provider's later queries go through the same Chromium instead.
     runs it. Commit.
 
 ## Open questions
+
+- Whether a solved tab keeps answering, and whether its cookies work from `reqwest`. Both need a
+  real block and a person, so phase 8 tested the hand-off against a fake block page only. Phase 9
+  and the fallback to Chromium wait on the answer. The UI polls `GET /v1/search/challenges` rather
+  than reading a run's event stream, since a block outlives the run that met it.
 
 - Cost. Every enabled provider is asked every query. With three paid providers a run of 50 queries
   makes 150 billed calls. A per-provider `fallback` mode, asked only when the others return too

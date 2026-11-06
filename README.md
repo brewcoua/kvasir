@@ -25,16 +25,16 @@ How the service fits together, from a request to its result, is in
 - At least one OpenAI-compatible endpoint, such as a local Ollama or a hosted provider. Each is a
   provider, and all model and embedding traffic goes to the providers you configure. Nothing calls
   `api.openai.com` unless you configure it.
-- A [SearXNG](https://docs.searxng.org/) instance **with the JSON output format enabled**. One
-  serving HTML only fails as an empty result set rather than an error, which looks like a topic
-  with no sources. Add `json` to `search.formats` in its `settings.yml`.
+- At least one [search provider](#search-providers) that searches the whole web: a
+  [SearXNG](https://docs.searxng.org/) instance, an API key, or a scraped engine.
 - A writable data directory, for `kvasir.db` and the caches, encrypted under `KVASIR_SECRET_KEY`.
 
 No paid search credential is needed, and no database, cache or queue.
 
 ## Quickstart
 
-Run kvasir from a checkout, against a local [Ollama](https://ollama.com/) and a throwaway SearXNG.
+Run kvasir from a checkout, against a local [Ollama](https://ollama.com/) and a throwaway SearXNG. Any other
+[search provider](#search-providers) works in its place.
 This needs [rustup](https://rustup.rs/), which installs the compiler `rust-toolchain.toml` pins on
 first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for SearXNG only.
 
@@ -53,7 +53,8 @@ first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for 
    serve`, or set that variable in its service unit. A larger context takes more memory, so more of
    the model may run on the CPU.
 
-2. Start SearXNG with JSON output enabled, from the repository root:
+2. Start SearXNG with JSON output enabled, from the repository root. To use another search provider
+   instead, skip this step and fill that provider in on the setup page in step 5:
 
    ```bash
    podman run -d --name searxng -p 127.0.0.1:8888:8080 \
@@ -156,7 +157,7 @@ $ curl -s localhost:8080/readyz
 ```
 
 `/readyz` returns 503 if a provider a model refers to is unreachable, or if no search provider can
-serve, and says which. It probes only the providers a model refers to, and SearXNG. Each search
+serve, and says which. It probes only the providers a model refers to, and SearXNG if enabled. Each search
 provider's `state` is `ok`, `cooling_down` with `until` in seconds since the epoch, `unauthorized` or
 `unreachable`. One cooling down still counts as able to serve. On a first start it answers 503 with the settings still to
 store, listed as `missing`: store them as in [Store a setting](#store-a-setting). A
@@ -428,7 +429,7 @@ own address, so a reload or a shared link keeps it.
     calls, output tokens per second and the mean time per call.
   - Calls lists every model call with a clock on any still waiting. Opening one shows what it sent
     and what it answered, when `runs.keep_call_content` kept it.
-  - Searches lists every query sent to SearXNG, with the event it followed, how many results came
+  - Searches lists every query sent to the search providers, with the event it followed, how many results came
     back and why it failed if it did. Opening one lists the results, when
     `runs.keep_call_content` kept them.
   - Graph is shown for a run of the `graph` method. It lays out the topic, the first questions
@@ -586,6 +587,43 @@ A model is written `<provider>/<name>`. Only the first `/` splits, so the name m
 `cloud/org/model:tag`. kvasir calls the provider's endpoint with the name. A request that overrides
 `model_fast`, `model_strong` or `model_reason` with an unknown provider gets 400. An override may
 name a different provider.
+
+### Search providers
+
+A query goes to every enabled provider at once. Their lists are fused by rank, with each provider's
+`weight`, and a URL found by several counts once. A run needs one provider that searches the whole
+web; the specialized ones only add to it. All are off until enabled, under Settings > Service or as
+in [Store a setting](#store-a-setting).
+
+| Kind | Providers | Needs |
+| --- | --- | --- |
+| Whole web, API | Brave, Tavily, Exa, Mojeek | An API key. |
+| Whole web, self-hosted | SearXNG | An instance **with the JSON output format enabled**. One serving HTML only fails as an empty result set rather than an error, which looks like a topic with no sources. Add `json` to `search.formats` in its `settings.yml`. |
+| Whole web, scraped | DuckDuckGo, Bing, Startpage, Mojeek HTML | Nothing. |
+| Specialized | Wikipedia, arXiv, Crossref, Europe PMC, Semantic Scholar, OpenAlex | Nothing, except OpenAlex's key. |
+
+The scraped providers read each engine's own pages, which is against its terms: turning one on is
+your choice and your risk. An engine may block them or change its pages without notice. They send a
+browser's `User-Agent` but not its TLS fingerprint, one request at a time and at least 2 seconds
+apart.
+
+A provider that fails rests and the others carry the query: 60 seconds after a rate limit unless it
+says otherwise, an hour after a CAPTCHA. Its `state` in `/readyz` says so.
+
+#### Clear a block
+
+DuckDuckGo and Startpage can be unblocked by a person, in a build with Chromium such as the image's
+`browser` target. The banner stays for 10 minutes. A block met after that raises it again.
+
+1. When a banner on the runs page names the provider, select **Solve**.
+2. Solve the challenge in the dialog, which shows a browser running on the service.
+
+The dialog closes when the block is gone. kvasir keeps the provider's cookies in `kvasir.db`, sends
+them with its later requests, and ends the rest at once. Whether an engine accepts cookies won in
+Chromium from kvasir's own HTTP client has not been tested against a real engine; if the provider
+blocks again right away, it does not.
+
+The other providers offer nothing to solve: they rest and try again.
 
 ### Encryption at rest
 

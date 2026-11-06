@@ -10,7 +10,7 @@ are started, streamed, accounted for or stored. The research pipeline has its ow
 
 kvasir is one Rust process, `kvasir serve`. It holds no state that a restart must recover except, optionally, a
 run history. Every model and embedding call goes to an
-OpenAI-compatible provider, and every search goes to one SearXNG instance.
+OpenAI-compatible provider, and every search goes to the enabled search providers, side by side (`kvasir-research/src/providers/`).
 
 Solid arrows are requests kvasir makes or serves. Dotted arrows are files it writes.
 
@@ -28,7 +28,7 @@ flowchart LR
     end
 
     gateway["OpenAI-compatible<br/>providers"]
-    searxng["SearXNG"]
+    search["Search providers"]
     web["Web pages<br/>and PDFs"]
     data[("/data<br/>kvasir.db")]
 
@@ -39,9 +39,9 @@ flowchart LR
     api --> storm
     api --> deep
     storm --> gateway
-    storm --> searxng
+    storm --> search
     deep --> gateway
-    deep --> searxng
+    deep --> search
     deep --> web
     api -.-> data
     registry -.-> data
