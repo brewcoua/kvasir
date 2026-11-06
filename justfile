@@ -56,6 +56,46 @@ doctor:
     [ "$failed" = 0 ] && echo "tools ok"
     exit "$failed"
 
+# Run SearXNG, API and page together until Ctrl-C. SearXNG is left running
+dev: searxng
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ load }}
+    cargo build {{ cargo_features }}
+    # Each job gets its own process group, so stopping one stops what it started.
+    set -m
+    groups=()
+    stop() { for group in "${groups[@]}"; do kill -- "-$group" 2>/dev/null || true; done; }
+    trap stop EXIT
+    trap 'exit 130' INT TERM
+    start_api() {
+        target/debug/kvasir serve &
+        api=$!
+        groups+=("$api")
+        until curl -fsS -m 2 "localhost:$KVASIR_PORT/healthz" >/dev/null 2>&1; do
+            kill -0 "$api" 2>/dev/null || { echo "kvasir did not start" >&2; exit 1; }
+            sleep 0.2
+        done
+    }
+    start_api
+    # Only a first start, so a setting changed on the page is not overwritten.
+    if curl -sS "localhost:$KVASIR_PORT/readyz" | jq -e '.setup == "required"' >/dev/null; then
+        seeded=$(just seed) || { echo "settings.dev.json refused: $seeded" >&2; exit 1; }
+        # A setting read only at startup, such as runs.store, needs the service started again.
+        if [ "$(jq '.restart_required | length' <<<"$seeded")" != 0 ]; then
+            kill "$api"
+            wait "$api" || true
+            start_api
+        fi
+    fi
+    pnpm --dir clients/web dev --strictPort &
+    groups+=("$!")
+    echo
+    echo "page:  http://localhost:5173"
+    echo "token: $KVASIR_TOKEN"
+    echo
+    wait -n
+
 # Run only the API
 api:
     @{{ load }}; cargo run {{ cargo_features }} -- serve
@@ -86,6 +126,12 @@ searxng:
 # Stop and remove SearXNG
 searxng-stop:
     @{{ runtime }}; "$runtime" rm -f kvasir-searxng >/dev/null
+
+# Store settings.dev.json in the running service
+seed:
+    @{{ load }}; curl -sS --fail-with-body -X PATCH "localhost:$KVASIR_PORT/v1/settings" \
+        -H "Authorization: Bearer $KVASIR_TOKEN" -H 'Content-Type: application/json' \
+        --data @settings.dev.json
 
 # Print the token to log in with
 token:
