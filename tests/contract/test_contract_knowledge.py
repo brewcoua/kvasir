@@ -205,6 +205,35 @@ def test_a_mark_is_set_and_cleared(client: httpx.Client) -> None:
     assert client.delete("/v1/sources").status_code == 204
 
 
+def test_tags_answer_for_many_hosts_at_once(client: httpx.Client) -> None:
+    marked = client.put("/v1/sources/farm.example/mark", json={"value": "deny"})
+    assert marked.status_code == 200
+    farm = {"kind": "unknown", "tags": ["deny"], "tier": "avoid"}
+    other = {"kind": "unknown", "tags": [], "tier": "unknown"}
+
+    queried = client.get("/v1/sources/tags", params={"host": ["farm.example", "other.example"]})
+    assert queried.status_code == 200
+    assert queried.json() == {"farm.example": farm, "other.example": other}
+
+    posted = client.post("/v1/sources/tags", json={"hosts": ["farm.example", "not a host"]})
+    assert posted.status_code == 200
+    assert posted.json() == {"farm.example": farm, "not a host": other}
+
+    assert client.get("/v1/sources/tags").json() == {}
+    assert client.delete("/v1/sources/farm.example/mark").status_code == 204
+
+
+def test_tags_refuse_too_many_hosts(client: httpx.Client) -> None:
+    hosts = [f"h{number}.example" for number in range(1001)]
+
+    answer = client.post("/v1/sources/tags", json={"hosts": hosts})
+
+    assert answer.status_code == 422
+    assert answer.json() == {"message": "at most 1000 hosts at a time, got 1001"}
+    assert client.post("/v1/sources/tags", json={"hosts": hosts[:1000]}).status_code == 200
+    assert client.post("/v1/sources/tags", json={}).json()["detail"][0]["loc"] == ["body", "hosts"]
+
+
 def test_a_mistaken_source_request_says_why(client: httpx.Client) -> None:
     bad_host = client.get("/v1/sources/not a host")
     assert bad_host.status_code == 422
@@ -239,6 +268,8 @@ def test_sources_turned_off_say_so(new_service: Any) -> None:
     with service.client() as client:
         for response in (
             client.get("/v1/sources/nature.com"),
+            client.get("/v1/sources/tags", params={"host": "nature.com"}),
+            client.post("/v1/sources/tags", json={"hosts": ["nature.com"]}),
             client.delete("/v1/sources"),
             client.put("/v1/sources/x.example/mark", json={"value": "deny"}),
             client.delete("/v1/sources/x.example/mark"),

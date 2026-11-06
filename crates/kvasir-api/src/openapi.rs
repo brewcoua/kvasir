@@ -121,6 +121,7 @@ pub fn document() -> Value {
     add::<runs::RunDetail>(&mut generator);
     add::<runs::RunSummary>(&mut generator);
     add::<runs::SearchContent>(&mut generator);
+    add::<sites::SiteTags>(&mut generator);
     add::<sites::SourceInfo>(&mut generator);
     add::<SettingsView>(&mut generator);
     add::<SettingInfo>(&mut generator);
@@ -129,6 +130,7 @@ pub fn document() -> Value {
     add::<ModelInfo>(&mut generator);
     add::<auth::Login>(&mut generator);
     add::<sources::Mark>(&mut generator);
+    add::<sources::TagsRequest>(&mut generator);
 
     // By name, as FastAPI listed them, so the generated file reads in order.
     let mut schemas: BTreeMap<String, Value> =

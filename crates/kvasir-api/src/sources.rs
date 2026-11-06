@@ -1,16 +1,17 @@
 //! What kind of site a host is and how far to trust it, the marks a user sets on hosts, and site
 //! icons, served from the cache that fills itself on the first request for a site.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, RawQuery, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get};
 use kvasir_sites::sources::{DEADLINE, MarkError, Sources, normalize};
-use kvasir_types::sites::SourceInfo;
+use kvasir_types::sites::{SiteTags, SourceInfo};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -23,15 +24,23 @@ const ICON_AGE: u32 = 604_800;
 const MISS_AGE: u32 = 86_400;
 const RETRY_AGE: u32 = 60;
 
+const MAX_TAG_HOSTS: usize = 1000;
+
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct Mark {
     /// `allow`, `deny` or a kind other than `unknown`.
     value: String,
 }
 
+#[derive(Deserialize, JsonSchema)]
+pub(crate) struct TagsRequest {
+    hosts: Vec<String>,
+}
+
 pub fn routes() -> axum::Router<Arc<App>> {
     axum::Router::new()
         .route("/v1/sources", delete(flush))
+        .route("/v1/sources/tags", get(tags_of_query).post(tags_of_body))
         .route("/v1/sources/{host}", get(source))
         .route("/v1/sources/{host}/mark", delete(unmark).put(mark))
         .route("/v1/favicons", delete(flush_favicons))
@@ -86,6 +95,44 @@ async fn source(
         return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, message));
     }
     Ok(Json(site(&sources(&app)?, &host, DEADLINE).await))
+}
+
+/// What is known of each host now, by the host as sent: nothing waits for Wikidata, whose answer
+/// the next request gets. A name that is not a host is `unknown`, so one bad row spares the rest.
+async fn tags(app: &App, hosts: &[String]) -> Result<Json<BTreeMap<String, SiteTags>>, ApiError> {
+    let sources = sources(app)?;
+    if hosts.len() > MAX_TAG_HOSTS {
+        let message = format!("at most {MAX_TAG_HOSTS} hosts at a time, got {}", hosts.len());
+        return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, message));
+    }
+    let found = sources.classify(hosts, std::time::Duration::ZERO).await;
+    let tags = found.into_iter().map(|(host, source)| (host, source.info().into()));
+    Ok(Json(tags.collect()))
+}
+
+/// The tags of the sites named by each `host` in the query.
+async fn tags_of_query(
+    State(app): State<Arc<App>>,
+    RawQuery(query): RawQuery,
+) -> Result<Json<BTreeMap<String, SiteTags>>, ApiError> {
+    let query = query.unwrap_or_default();
+    let hosts: Vec<String> = url::form_urlencoded::parse(query.as_bytes())
+        .filter(|(name, _)| name == "host")
+        .map(|(_, host)| host.into_owned())
+        .collect();
+    tags(&app, &hosts).await
+}
+
+/// The tags of the sites in the body, for more of them than a URL holds.
+async fn tags_of_body(
+    State(app): State<Arc<App>>,
+    sent: Bytes,
+) -> Result<Json<BTreeMap<String, SiteTags>>, ApiError> {
+    let value = body::json(&sent)?;
+    let at = body::loc(&["body"]);
+    body::object(&value, &at)?;
+    let TagsRequest { hosts } = body::decode(&value, &at)?;
+    tags(&app, &hosts).await
 }
 
 /// Forgets the cached Wikidata answers. Marks and the config stay.

@@ -779,6 +779,12 @@ export interface components {
             links: number;
             source?: components["schemas"]["SourceInfo"] | null;
         };
+        /** @description A site's kind, tags and tier, without what only a person reading about it needs. */
+        SiteTags: {
+            kind: string;
+            tags: string[];
+            tier: components["schemas"]["Tier"];
+        };
         /** @description What is known of a site: its kind, tags and trust tier. */
         SourceInfo: {
             kind: string;
@@ -864,6 +870,9 @@ export interface components {
             method: "storm";
             input: components["schemas"]["Input"];
             options?: components["schemas"]["StormOptions"];
+        };
+        TagsRequest: {
+            hosts: string[];
         };
         /**
          * @description Body of `POST /v1/tasks`: OpenAI-shaped chat messages, forwarded to the fast model as-is. At

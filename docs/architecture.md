@@ -259,7 +259,7 @@ The Knowledge page of the dashboard, `#/knowledge`, shows what it holds, through
 need the token, and anyone who holds it can empty the cache.
 
 With `sources.enabled` set to `true`, `crates/kvasir-api/src/sources.rs` adds `GET /v1/sources/{host}`,
-`PUT` and `DELETE /v1/sources/{host}/mark`, and `DELETE /v1/sources`, which clears the cache and
+`GET` and `POST /v1/sources/tags`, `PUT` and `DELETE /v1/sources/{host}/mark`, and `DELETE /v1/sources`, which clears the cache and
 keeps the marks. The routes answer 404 when it is off. They use the `Sources` instance runs use,
 so a mark reaches a run in flight. A host set in `ALLOW` or `DENY` answers
 409 and shows `origin: "config"`. `Site`, `SiteNode`, `Citation` and a search result carry a

@@ -38,6 +38,8 @@ GUARDED = [
     ("DELETE", "/v1/sites/x"),
     ("GET", "/v1/favicons/x"),
     ("DELETE", "/v1/favicons"),
+    ("GET", "/v1/sources/tags"),
+    ("POST", "/v1/sources/tags"),
     ("GET", "/v1/sources/x"),
     ("DELETE", "/v1/sources"),
     ("PUT", "/v1/sources/x/mark"),

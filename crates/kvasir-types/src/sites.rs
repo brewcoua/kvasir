@@ -70,6 +70,20 @@ pub struct SourceInfo {
     pub origin: String,
 }
 
+/// A site's kind, tags and tier, without what only a person reading about it needs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SiteTags {
+    pub kind: String,
+    pub tags: Vec<String>,
+    pub tier: Tier,
+}
+
+impl From<SourceInfo> for SiteTags {
+    fn from(info: SourceInfo) -> Self {
+        Self { kind: info.kind, tags: info.tags, tier: info.tier }
+    }
+}
+
 /// The domain `host` was registered under, which a private suffix such as `github.io` counts for.
 /// `host` itself when its suffix is not on the public suffix list.
 pub fn registrable(host: &str) -> &str {
