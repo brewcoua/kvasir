@@ -4,6 +4,7 @@
   import { isWeb } from "../lib/format";
   import { provideNotes, type Note } from "../lib/notes";
   import Favicon from "./Favicon.svelte";
+  import Fold from "./Fold.svelte";
   import Markdown from "./Markdown.svelte";
   import Ranking from "./Ranking.svelte";
   import SourceBadge from "./SourceBadge.svelte";
@@ -52,18 +53,18 @@
         <Markdown source={body} />
 
         {#if research && research.assumptions.length > 0}
-          <details>
-            <summary>Assumptions ({research.assumptions.length})</summary>
+          <Fold>
+            {#snippet head()}Assumptions ({research.assumptions.length}){/snippet}
             <ul>
               {#each research.assumptions as assumption, i (i)}<li>{assumption}</li>{/each}
             </ul>
-          </details>
+          </Fold>
         {/if}
 
         {#if research && research.questions.length > 0}
           <!-- Claim ids, like the removed sentences: they match the evidence table's # column. -->
-          <details>
-            <summary>Questions ({research.questions.length})</summary>
+          <Fold>
+            {#snippet head()}Questions ({research.questions.length}){/snippet}
             <div class="scroll claims">
               <table>
                 <thead><tr><th>#</th><th>question</th><th>status</th><th>queries</th><th>claims</th></tr></thead>
@@ -80,20 +81,20 @@
                 </tbody>
               </table>
             </div>
-          </details>
+          </Fold>
         {/if}
 
         {#if "outline" in result && result.outline}
-          <details>
-            <summary>Outline</summary>
+          <Fold>
+            {#snippet head()}Outline{/snippet}
             <pre class="prose">{result.outline}</pre>
-          </details>
+          </Fold>
         {/if}
 
         {#if citations.length > 0}
           <!-- Open, so a citation marker has somewhere to jump to. -->
-          <details open>
-            <summary>Sources ({citations.length})</summary>
+          <Fold open>
+            {#snippet head()}Sources ({citations.length}){/snippet}
             <ol class="citations">
               {#each citations as citation (citation.index)}
                 <li value={citation.index} id={`cite-${citation.index}`}>
@@ -102,13 +103,13 @@
                 </li>
               {/each}
             </ol>
-          </details>
+          </Fold>
         {/if}
 
         {#if research && research.claims.length > 0}
           <!-- Every claim the run gathered, so any cited sentence can be checked against its quote. -->
-          <details>
-            <summary>Evidence ({research.claims.length} claims)</summary>
+          <Fold>
+            {#snippet head()}Evidence ({research.claims.length} claims){/snippet}
             <div class="scroll claims">
               <table>
                 <thead><tr><th>#</th><th>claim</th><th>quote</th><th>source</th><th>confidence</th></tr></thead>
@@ -126,12 +127,12 @@
                 </tbody>
               </table>
             </div>
-          </details>
+          </Fold>
         {/if}
 
         {#if research && research.removed.length > 0}
-          <details>
-            <summary>Removed by verification ({research.removed.length} sentences)</summary>
+          <Fold>
+            {#snippet head()}Removed by verification ({research.removed.length} sentences){/snippet}
             <!-- The markers here are claim ids, as the writer wrote them, so they match the
                  evidence table's # column rather than the source numbers above. -->
             <p class="meta">[n] is the claim id in the evidence table.</p>
@@ -145,12 +146,12 @@
                 </tbody>
               </table>
             </div>
-          </details>
+          </Fold>
         {/if}
 
         {#if research && research.revised.length > 0}
-          <details>
-            <summary>Rewritten by verification ({research.revised.length} sentences)</summary>
+          <Fold>
+            {#snippet head()}Rewritten by verification ({research.revised.length} sentences){/snippet}
             <p class="meta">Rewritten to what their quotes say. [n] is the claim id in the evidence table.</p>
             <div class="scroll claims">
               <table>
@@ -162,12 +163,12 @@
                 </tbody>
               </table>
             </div>
-          </details>
+          </Fold>
         {/if}
 
         {#if research && research.unverified.length > 0}
-          <details>
-            <summary>Unverified ({research.unverified.length} sentences)</summary>
+          <Fold>
+            {#snippet head()}Unverified ({research.unverified.length} sentences){/snippet}
             <p class="meta">No model could judge these. They stay in the report, marked. [n] is the claim id in the evidence table.</p>
             <div class="scroll claims">
               <table>
@@ -179,7 +180,7 @@
                 </tbody>
               </table>
             </div>
-          </details>
+          </Fold>
         {/if}
       </div>
     </div>

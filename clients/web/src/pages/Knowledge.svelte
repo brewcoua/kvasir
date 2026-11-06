@@ -2,8 +2,10 @@
   import { request, type CacheStats, type PageDetail, type PageSummary, type Recall, type Site, type SiteGraph as Graph, type SourceInfo } from "../lib/api";
   import { count, duration, isWeb, size } from "../lib/format";
   import { go, href } from "../lib/route.svelte";
+  import { sure } from "../lib/sure.svelte";
   import { Switch } from "bits-ui";
   import Favicon from "../components/Favicon.svelte";
+  import Fold from "../components/Fold.svelte";
   import Markdown from "../components/Markdown.svelte";
   import SiteGraph from "../components/SiteGraph.svelte";
   import SourceBadge from "../components/SourceBadge.svelte";
@@ -64,8 +66,8 @@
     attempt(load);
   }
 
-  function flush() {
-    if (!confirm("Delete every cached page, link and piece? This cannot be undone.")) return;
+  async function flush() {
+    if (!(await sure("Delete every cached page, link and piece? This cannot be undone."))) return;
     attempt(async () => {
       await request("DELETE", "/v1/pages");
       site = null;
@@ -80,8 +82,8 @@
     });
   }
 
-  function removeSite(domain: string) {
-    if (!confirm(`Delete every cached page of ${domain}, with its pieces? This cannot be undone.`)) return;
+  async function removeSite(domain: string) {
+    if (!(await sure(`Delete every cached page of ${domain}, with its pieces? This cannot be undone.`))) return;
     attempt(async () => {
       await request("DELETE", `/v1/sites/${encodeURIComponent(domain)}`);
       await load();
@@ -101,8 +103,8 @@
     });
   }
 
-  function removePage(page: PageDetail) {
-    if (!confirm(`Delete this page and its pieces from the cache?\n${page.url}\nThis cannot be undone.`)) return;
+  async function removePage(page: PageDetail) {
+    if (!(await sure(`Delete this page and its pieces from the cache?\n${page.url}\nThis cannot be undone.`))) return;
     attempt(async () => {
       await request("DELETE", `/v1/pages/${page.id}`);
       go({ page: "knowledge", id: null });
@@ -154,14 +156,14 @@
         </div>
         <h3>Leads</h3>
         {#each Object.entries(detail.leads) as [region, leads] (region)}
-          <details>
-            <summary>{region} ({leads.length})</summary>
+          <Fold>
+            {#snippet head()}{region} ({leads.length}){/snippet}
             <ul class="citations">
               {#each leads as lead, i (i)}
                 <li>{@render web(lead.url)}{#if lead.anchor}<span class="meta">{" · "}{lead.anchor}</span>{/if}</li>
               {/each}
             </ul>
-          </details>
+          </Fold>
         {:else}
           <p class="meta">None.</p>
         {/each}

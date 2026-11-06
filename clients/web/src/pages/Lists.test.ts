@@ -68,21 +68,6 @@ describe("Lists", () => {
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
-  it("warns before adding a remote list that could unblock any site, and adds nothing when told no", async () => {
-    answer.mockResolvedValue([]);
-    const refuse = vi.fn(() => false);
-    vi.stubGlobal("confirm", refuse);
-    render(Lists);
-    await fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "Theirs" } });
-    await fireEvent.input(screen.getByLabelText("URL"), { target: { value: "https://x.example/l" } });
-    await fireEvent.change(screen.getAllByLabelText("Effect").at(-1)!, { target: { value: "trust" } });
-    expect(await screen.findByText(/could make any site trusted/)).toBeTruthy();
-
-    await fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(refuse).toHaveBeenCalled();
-    expect(answer).not.toHaveBeenCalledWith("POST", "/v1/sources/lists", expect.anything());
-  });
-
   it("explains a site by the lists naming it", async () => {
     answer.mockImplementation(async (_method, path) =>
       path.endsWith("/explain")

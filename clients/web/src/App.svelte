@@ -3,6 +3,7 @@
   import { defaultsOf, json, type ChallengeInfo, type Defaults, type MethodInfo, type RunSummary, type SettingsView } from "./lib/api";
   import { go, route } from "./lib/route.svelte";
   import Challenges from "./components/Challenges.svelte";
+  import Confirm from "./components/Confirm.svelte";
   import Icon from "./components/Icon.svelte";
   import Login from "./components/Login.svelte";
   import RunList from "./components/RunList.svelte";
@@ -129,6 +130,7 @@
   </main>
 
   <Settings bind:open={settingsOpen} {defaults} onsaved={loadDefaults} />
+  <Confirm />
 {/if}
 
 <svelte:window onkeydown={slash} />

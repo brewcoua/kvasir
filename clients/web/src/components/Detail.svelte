@@ -6,6 +6,7 @@
   import { meter, overall, skipped, stageCounter } from "../lib/steps";
   import Calls from "./Calls.svelte";
   import Clock from "./Clock.svelte";
+  import Meter from "./Meter.svelte";
   import Graph from "./Graph.svelte";
   import Result from "./Result.svelte";
   import Searches from "./Searches.svelte";
@@ -95,8 +96,8 @@
       <p class="now"><span class="stage">{run.latest.stage}</span> {run.latest.detail}</p>
       <div class="split-bar" data-testid="split-bar">
         <div class="halves">
-          {#if whole}<progress class="whole" max={whole.total} value={whole.done}></progress>{/if}
-          <progress class="part" max="1" value={part?.share ?? 0}></progress>
+          {#if whole}<Meter class="whole" max={whole.total} value={whole.done} />{/if}
+          <Meter class="part" value={part?.share ?? 0} />
         </div>
         <span class="meta">
           {#if whole}stages {whole.done}/{whole.total}{#if part}{" · "}{/if}{/if}{#if part}{run.stage} {part.text}{/if}

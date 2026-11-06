@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Select, Switch } from "bits-ui";
+  import { Switch } from "bits-ui";
   import { tick } from "svelte";
   import { request, type ModelInfo, type SettingInfo, type SettingsView } from "../lib/api";
   import { settingLabel } from "../lib/service";
+  import Choice from "./Choice.svelte";
   import ListField from "./ListField.svelte";
   import ModelField from "./ModelField.svelte";
 
@@ -90,16 +91,7 @@
   {:else if field.type === "list"}
     <ListField {id} items={field.value as string[]} choices={field.choices ?? undefined} onchange={save} />
   {:else if field.choices}
-    <Select.Root type="single" bind:value={() => String(field.value), (choice) => save(choice)} items={field.choices.map((choice) => ({ value: choice, label: choice }))}>
-      <Select.Trigger {id} class="select">{field.value}</Select.Trigger>
-      <Select.Portal>
-        <Select.Content class="menu" sideOffset={4}>
-          <Select.Viewport>
-            {#each field.choices as choice (choice)}<Select.Item value={choice} label={choice} class="option">{choice}</Select.Item>{/each}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
+    <Choice {id} value={String(field.value)} choices={field.choices} onchange={save} />
   {:else if field.type === "model"}
     <ModelField {id} bind:value={model} {models} oncommit={() => text(model)} />
   {:else}

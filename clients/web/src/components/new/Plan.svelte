@@ -2,6 +2,7 @@
   import type { Defaults } from "../../lib/api";
   import { MODELS, values, type Method, type Picked } from "../../lib/methods";
   import { saved, setting, value } from "../../lib/settings.svelte";
+  import Fold from "../Fold.svelte";
   import SettingField from "../SettingField.svelte";
 
   let { method, picked, defaults }: { method: Method; picked: Picked; defaults: Partial<Defaults> } = $props();
@@ -19,15 +20,15 @@
       <p>{stage.does(shown, picked)}</p>
       {#if stage.settings.length > 0}
         {@const changed = stage.settings.filter((name) => name in saved).length}
-        <details open={changed > 0}>
-          <summary class="meta">adjust{#if changed}<span class="changed">{" · "}{changed} changed</span>{/if}</summary>
+        <Fold open={changed > 0} class="meta">
+          {#snippet head()}adjust{#if changed}<span class="changed">{" · "}{changed} changed</span>{/if}{/snippet}
           {#each stage.settings as name (name)}<SettingField setting={setting(name)} {defaults} />{/each}
-        </details>
+        </Fold>
       {/if}
     </li>
   {/each}
 </ol>
-<details class="models">
-  <summary class="meta">models: {models.map((name) => String(value(name, defaults) ?? "").replace(/^openai\//, "")).join(", ")}</summary>
+<Fold class="models meta">
+  {#snippet head()}models: {models.map((name) => String(value(name, defaults) ?? "").replace(/^openai\//, "")).join(", ")}{/snippet}
   {#each models as name (name)}<SettingField setting={setting(name)} {defaults} />{/each}
-</details>
+</Fold>

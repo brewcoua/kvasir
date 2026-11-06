@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Switch } from "bits-ui";
   import { onMount } from "svelte";
   import { request, type ModelInfo, type SettingsView } from "../lib/api";
   import { SCRAPING_NOTICE, describeModel, labelOf, loadModels } from "../lib/service";
@@ -128,7 +129,11 @@
   {/each}
   <p class="meta">{SCRAPING_NOTICE}</p>
   {#each SCRAPED as { name, enabled } (enabled)}
-    <label><input type="checkbox" bind:checked={scraped[enabled]} /> {name}</label>
+    <label class="switch-label">{name}
+      <Switch.Root class="switch" bind:checked={() => Boolean(scraped[enabled]), (on) => (scraped[enabled] = on)}>
+        <Switch.Thumb class="switch-thumb" />
+      </Switch.Root>
+    </label>
   {/each}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if silent}

@@ -75,7 +75,7 @@ test("a scraped engine can be the setup's search provider, against a notice of i
   await page.getByLabel("Fast model").fill("unused/fast");
   await page.getByLabel("Strong model").fill("unused/strong");
   await page.getByLabel("Embedding model").fill("unused/embed");
-  await page.getByLabel("DuckDuckGo").check();
+  await page.getByRole("switch", { name: "DuckDuckGo" }).click();
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("alert").first()).toContainText("provider unused");
   expect((await field(request, "search.duckduckgo.enabled")).value).toBe(true);

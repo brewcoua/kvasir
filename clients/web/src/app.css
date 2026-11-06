@@ -400,10 +400,17 @@ h3 {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-progress {
+.meter {
   width: 100%;
   height: 0.4rem;
-  accent-color: var(--accent);
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 999px;
+}
+.meter-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
 }
 .bar {
   display: flex;
@@ -412,7 +419,7 @@ progress {
   gap: 0.5rem;
   min-width: 0;
 }
-.bar progress {
+.bar .meter {
   flex: 1;
   width: auto;
   margin: 0;
@@ -431,7 +438,7 @@ progress {
   flex: 1;
   gap: 1px;
 }
-.split-bar progress {
+.split-bar .meter {
   height: 0.3rem;
 }
 .split-bar .meta {
@@ -682,10 +689,27 @@ a.source:hover {
   color: var(--accent);
   overflow-wrap: anywhere;
 }
-summary {
-  cursor: pointer;
-  color: var(--dim);
+.disclosure-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
   margin: 0.5rem 0;
+  padding: 0;
+  font: inherit;
+  color: var(--dim);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.disclosure-head svg {
+  flex: none;
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+.disclosure-head[data-state="open"] svg {
+  transform: none;
 }
 .markdown {
   overflow-wrap: anywhere;
@@ -863,6 +887,33 @@ header .icon {
   width: 100%;
   height: 100%;
   user-select: none;
+}
+.confirm {
+  position: fixed;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 0.75rem;
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 1rem 1.25rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.confirm .title {
+  font-weight: 600;
+}
+.confirm-text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.confirm .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 .overlay {
   position: fixed;
@@ -1530,20 +1581,16 @@ table.runs a.topic:hover {
 .plan li.skipped p {
   opacity: 0.5;
 }
-.plan details,
+.plan .disclosure,
 .models {
   font-size: 0.85rem;
 }
-.plan details[open],
-.models[open] {
+.plan .disclosure-body:not([hidden]),
+.models .disclosure-body:not([hidden]) {
   display: grid;
   gap: 0.6rem;
 }
-.plan summary,
-.models summary {
-  cursor: pointer;
-}
-.plan summary .changed {
+.plan .disclosure-head .changed {
   color: var(--accent);
 }
 .models {
@@ -2101,7 +2148,7 @@ table.runs a.topic:hover {
   width: 11px;
   height: 11px;
 }
-.step-body progress {
+.step-body .meter {
   width: 100%;
   height: 4px;
   margin-top: auto;
@@ -2279,12 +2326,12 @@ table.runs a.topic:hover {
   border-top: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
-.step-panel progress {
+.step-panel .meter {
   display: block;
   width: 100%;
   height: 4px;
 }
-.step-line progress {
+.step-line .meter {
   flex: 1;
   width: auto;
   margin: 0;

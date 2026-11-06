@@ -95,28 +95,28 @@ test("a result marks unverified sentences, and lists what verification changed",
   await expect(badge).toHaveText("unverified");
   await expect(badge).toHaveAttribute("title", /No model could judge/);
 
-  const removed = page.locator("details", { has: page.locator("summary", { hasText: "Removed by verification" }) });
-  await removed.locator("summary").click();
+  const removed = page.locator(".disclosure", { has: page.locator(".disclosure-head", { hasText: "Removed by verification" }) });
+  await removed.locator(".disclosure-head").click();
   await expect(removed.getByRole("cell", { name: "reason model" })).toBeVisible();
   await expect(removed.getByRole("cell", { name: "fast model" }).first()).toBeVisible();
 
-  const revised = page.locator("details", { has: page.locator("summary", { hasText: "Rewritten by verification (1 sentences)" }) });
-  await revised.locator("summary").click();
+  const revised = page.locator(".disclosure", { has: page.locator(".disclosure-head", { hasText: "Rewritten by verification (1 sentences)" }) });
+  await revised.locator(".disclosure-head").click();
   await expect(revised.getByRole("cell", { name: /after a public outcry/ })).toBeVisible();
 
-  const unverified = page.locator("details", { has: page.locator("summary", { hasText: "Unverified (1 sentences)" }) });
-  await unverified.locator("summary").click();
+  const unverified = page.locator(".disclosure", { has: page.locator(".disclosure-head", { hasText: "Unverified (1 sentences)" }) });
+  await unverified.locator(".disclosure-head").click();
   await expect(unverified.getByRole("cell", { name: "The reason model returned no readable verdict." })).toBeVisible();
 
-  const evidence = page.locator("details", { has: page.locator("summary", { hasText: "Evidence (" }) });
-  await evidence.locator("summary").click();
+  const evidence = page.locator(".disclosure", { has: page.locator(".disclosure-head", { hasText: "Evidence (" }) });
+  await evidence.locator(".disclosure-head").click();
   await expect(evidence.getByText("from search snippet; page not fetched")).toHaveCount(1);
 });
 
 test("a research run asks its questions first, and sends the settings changed", async ({ page }) => {
   await page.goto("/");
   const plan = page.locator(".plan");
-  await plan.locator("li", { has: page.getByLabel("Searches", { exact: true }) }).locator("summary").click();
+  await plan.locator("li", { has: page.getByLabel("Searches", { exact: true }) }).locator(".disclosure-head").click();
   await plan.getByLabel("Searches", { exact: true }).fill("7");
   await plan.getByLabel("Searches", { exact: true }).press("Tab");
   await expect(plan.locator(".setting.changed")).toHaveCount(1);
@@ -429,8 +429,8 @@ test("a live run's verify counter is one event row that advances in place", asyn
 test("a live run's overview shows the whole run and its current stage on one bar", async ({ page }) => {
   await page.goto("/#/runs/graph-live/overview");
   const bar = run(page).getByTestId("split-bar");
-  await expect(bar.locator("progress.whole")).toBeAttached();
-  await expect(bar.locator("progress.part")).toBeAttached();
+  await expect(bar.locator(".meter.whole")).toBeAttached();
+  await expect(bar.locator(".meter.part")).toBeAttached();
   await expect(bar).toContainText(/stages \d\/4/);
   // Research counts its searches against the budget once it is reached.
   await expect(bar).toContainText(/research \d+% · \d+\/\d+|write \d+%|verify \d+%/, { timeout: 20_000 });
@@ -540,15 +540,37 @@ test("the knowledge page shows what the cache takes", async ({ page }) => {
 
 test("flushing the cache empties the knowledge page after a confirm", async ({ page }) => {
   await page.goto("/#/knowledge");
-  const messages: string[] = [];
-  page.once("dialog", (dialog) => {
-    messages.push(dialog.message());
-    return dialog.accept();
-  });
   await page.getByRole("button", { name: "Flush cache" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("cannot be undone");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Flush cache" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Flush cache" }).click();
+  await dialog.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText("Nothing is cached yet.")).toBeVisible();
-  expect(messages[0]).toContain("cannot be undone");
   await expect(page.getByRole("button", { name: "Flush cache" })).toHaveCount(0);
+});
+
+test("adding a remote list that could unblock any site asks first, and adds nothing when told no", async ({ page }) => {
+  await page.goto("/#/lists");
+  const added: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().endsWith("/v1/sources/lists")) added.push(r.url());
+  });
+  await page.getByLabel("Name").fill("Theirs");
+  await page.getByLabel("URL").fill("https://x.example/l");
+  await page.getByLabel("Effect").last().click();
+  await page.getByRole("option", { name: "trust" }).click();
+  await expect(page.getByText(/could make any site trusted/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Whoever maintains https://x.example/l");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(added).toEqual([]);
 });
 
 test("the lists page turns a list on and explains a site", async ({ page }) => {

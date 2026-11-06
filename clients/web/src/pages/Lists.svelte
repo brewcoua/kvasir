@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Switch } from "bits-ui";
+  import { sure } from "../lib/sure.svelte";
   import { request, type ListChange, type SourceExplanation, type SourceListInfo } from "../lib/api";
+  import Choice from "../components/Choice.svelte";
   import ListField from "../components/ListField.svelte";
   import SourceBadge from "../components/SourceBadge.svelte";
 
@@ -68,9 +70,9 @@
     });
   }
 
-  function remove(list: SourceListInfo) {
+  async function remove(list: SourceListInfo) {
     const question = list.custom ? `Delete the list ${list.name}? This cannot be undone.` : `Put ${list.name} back as it ships, off?`;
-    if (!confirm(question)) return;
+    if (!(await sure(question, list.custom ? "Delete" : "Reset"))) return;
     attempt(async () => {
       await request("DELETE", path(list.id));
       await load();
@@ -80,9 +82,9 @@
   // A remote list of this effect lets whoever maintains it promote or unblock any site.
   const risky = $derived(draft.url.trim() !== "" && (draft.effect === "trust" || draft.effect === "exempt"));
 
-  function add(event: SubmitEvent) {
+  async function add(event: SubmitEvent) {
     event.preventDefault();
-    if (risky && !confirm(`Whoever maintains ${draft.url.trim()} could ${draft.effect === "trust" ? "make any site trusted" : "unblock any site"}. Add it?`)) return;
+    if (risky && !(await sure(`Whoever maintains ${draft.url.trim()} could ${draft.effect === "trust" ? "make any site trusted" : "unblock any site"}. Add it?`, "Add"))) return;
     const url = draft.url.trim();
     const fields: ListChange = { name: draft.name.trim(), effect: draft.effect, tag: draft.tag.trim(), ...(url ? { url } : { entries: draft.entries }) };
     attempt(async () => {
@@ -167,10 +169,7 @@
               {#if open === list.id}
                 <div class="list-edit">
                   <label>Effect
-                    <select class="field" disabled={busy} value={list.effect} onchange={(event) => change(list.id, { effect: event.currentTarget.value })}>
-                      {#each EFFECTS as effect (effect)}<option value={effect}>{effect}</option>{/each}
-                      {#if !EFFECTS.includes(list.effect)}<option value={list.effect}>{list.effect}</option>{/if}
-                    </select>
+                    <Choice value={list.effect} choices={EFFECTS.includes(list.effect) ? EFFECTS : [...EFFECTS, list.effect]} disabled={busy} onchange={(effect) => change(list.id, { effect })} />
                   </label>
                   <label>Tag
                     <input class="field" disabled={busy} value={list.tag} onchange={(event) => change(list.id, { tag: event.currentTarget.value.trim() })} />
@@ -218,9 +217,7 @@
             </div>
           {/if}
           <label>Effect
-            <select class="field" bind:value={draft.effect}>
-              {#each EFFECTS as effect (effect)}<option value={effect}>{effect}</option>{/each}
-            </select>
+            <Choice value={draft.effect} choices={EFFECTS} onchange={(effect) => (draft.effect = effect)} />
           </label>
           <label>Tag <input class="field" bind:value={draft.tag} /></label>
           {#if risky}<p class="error">Whoever maintains this list could {draft.effect === "trust" ? "make any site trusted" : "unblock any site"}.</p>{/if}
