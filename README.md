@@ -33,10 +33,10 @@ No paid search credential is needed, and no database, cache or queue.
 
 ## Quickstart
 
-Run kvasir from a checkout, against a local [Ollama](https://ollama.com/) and a throwaway SearXNG. Any other
-[search provider](#search-providers) works in its place.
-This needs [rustup](https://rustup.rs/), which installs the compiler `rust-toolchain.toml` pins on
-first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for SearXNG only.
+Run kvasir from a checkout, against a local [Ollama](https://ollama.com/) and a throwaway SearXNG.
+This needs [just](https://just.systems/), [rustup](https://rustup.rs/), which installs the compiler
+`rust-toolchain.toml` pins on first use, Node 26, pnpm, [uv](https://docs.astral.sh/uv/), Ollama, and
+podman or docker for SearXNG.
 
 1. Pull the models the quickstart stores:
 
@@ -46,86 +46,60 @@ first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for 
    ```
 
    The example's strong model, `deepseek-v4.1-flash:cloud`, runs on Ollama's servers. It needs
-   `ollama signin`, and no key in kvasir. To stay local, point `strong` at a model you pulled.
+   `ollama signin`, and no key in kvasir. To stay local, point `model.strong` in
+   `settings.dev.json` at a model you pulled, after the next step.
 
    Ollama loads a model with a 4096-token context by default, which is too small for the article
    and polish prompts. Start it with a larger one, for example `OLLAMA_CONTEXT_LENGTH=16384 ollama
    serve`, or set that variable in its service unit. A larger context takes more memory, so more of
    the model may run on the CPU.
 
-2. Start SearXNG with JSON output enabled, from the repository root. To use another search provider
-   instead, skip this step and fill that provider in on the setup page in step 5:
+2. Create the environment and install the dependencies:
 
    ```bash
-   podman run -d --name searxng -p 127.0.0.1:8888:8080 \
-     -e SEARXNG_SECRET="$(openssl rand -hex 32)" -e FORCE_OWNERSHIP=false \
-     -v ./searxng/settings.yml:/etc/searxng/settings.yml:ro,Z \
-     docker.io/searxng/searxng:latest
+   just setup
+   just doctor
    ```
 
-   `docker` takes the same arguments. [`searxng/settings.yml`](searxng/settings.yml) only adds
-   `json` to the default formats. Check it answers in JSON:
+   `just setup` copies `env.example` to `.env` with a generated token and key, copies
+   `settings.dev.example.json` to `settings.dev.json`, and installs what the page and the tests
+   need. Run again, it keeps both files. `just doctor` prints `tools ok`, and names anything
+   missing. It also names a service not answering, such as SearXNG, which the next step starts.
+
+   Keep `.env`: the data directory opens only with the `KVASIR_SECRET_KEY` it was encrypted under.
+
+3. Start everything:
 
    ```bash
-   curl -s 'localhost:8888/search?q=test&format=json' | head -c 100
+   just dev
    ```
 
-   Remove it with `podman rm -f searxng`.
+   This starts SearXNG in the container `kvasir-searxng`, builds and starts kvasir, stores
+   `settings.dev.json` if nothing is configured yet, starts the page, and prints the page's address
+   and the token. kvasir creates the data directory, `data/`. Ctrl-C stops kvasir and the page.
+   SearXNG keeps running, and `just searxng-stop` removes it.
 
-3. Build the runs page:
+4. Open <http://localhost:5173> and log in with the token. Change a setting under Settings >
+   Service, or edit `settings.dev.json` and run `just seed` while kvasir runs. To use another
+   search provider, see [Search providers](#search-providers). `just dev` stores the file only on a
+   first start, so what you change on the page stays.
 
-   ```bash
-   (cd web && pnpm install && pnpm build)
-   ```
-
-   Without it the API works, and `GET /` answers 503 with the command to run. A release build
-   embeds the page, so build the page first, and build kvasir again after changing it.
-
-4. Start kvasir:
-
-   ```bash
-   export KVASIR_TOKEN="$(openssl rand -hex 32)"
-   export KVASIR_SECRET_KEY="$(openssl rand -hex 32)"
-   export KVASIR_DATA_DIR=data KVASIR_LOG_FORMAT=text KVASIR_MAX_THREADS=2
-   export KVASIR_PROVIDER_LOCAL_API_BASE=http://localhost:11434/v1
-   cargo run --release -- serve
-   ```
-
-   Every `/v1` route needs the token, and the runs page asks for it once. Keep the shell open:
-   the examples below send `$KVASIR_TOKEN`. Save `KVASIR_SECRET_KEY` too: the data directory opens
-   only with the key it was encrypted under. Ollama answers one request at a time by default, so
-   `KVASIR_MAX_THREADS=2` keeps intake calls from only queueing; start Ollama with
-   `OLLAMA_NUM_PARALLEL=2` for them to run side by side.
-
-5. Open <http://localhost:8080>, log in with the token, and fill in the setup page: the models,
-   suggested from what Ollama serves, and `http://localhost:8888` for SearXNG. Or, from another shell
-   with the same `KVASIR_TOKEN`:
-
-   ```bash
-   curl -s -X PATCH localhost:8080/v1/settings \
-     -H "Authorization: Bearer $KVASIR_TOKEN" -H 'Content-Type: application/json' \
-     -d '{"model.fast": "local/gpt-oss:20b",
-          "model.strong": "local/deepseek-v4.1-flash:cloud",
-          "model.embedding": "local/nomic-embed-text:latest",
-          "model.reasoning_effort": "none",
-          "search.searxng.enabled": true, "search.searxng.url": "http://localhost:8888"}' | jq '.missing // .message'
-   ```
-
-   It prints `[]` once nothing required is unset, or the `message` naming a value it refused. `reasoning_effort` `none` keeps a thinking model
-   from spending each role's token budget on reasoning. See [Configuration](#configuration) for
-   every setting.
-
-6. Check both dependencies are reachable:
+5. From another shell, check both dependencies are reachable, and set the token the examples below
+   send:
 
    ```console
    $ curl -s localhost:8080/readyz
    {"providers":{"local":true},"search":{"SearXNG":{"state":"ok"}}}
+   $ export KVASIR_TOKEN="$(just token)"
    ```
+
+`just reset` deletes the data directory after asking, with every run and setting in it, and cannot be
+undone. The next `just dev` is a first start again.
 
 Then [write an article](#write-an-article). On one local model a run takes much longer than through
 a hosted gateway.
 
-kvasir binds `0.0.0.0:8080` unless `KVASIR_HOST` and `KVASIR_PORT` say otherwise, so on a laptop it is reachable from the local network. The token
+kvasir binds `0.0.0.0:8080` unless `KVASIR_HOST` and `KVASIR_PORT` say otherwise, so on a laptop it is reachable from the local network. The `.env` from `env.example` sets `127.0.0.1`. The token
 guards every route but `/healthz`, `/readyz`, `POST /v1/login` and the page itself, and nothing
 limits how often it may be guessed: use a long random one.
 
@@ -824,30 +798,32 @@ reference are in [`clients/owui/README.md`](clients/owui/README.md).
 
 ## Development
 
-The service is the Cargo workspace in [`crates/`](crates/). Its tests need no network and no
-credentials:
+The service is the Cargo workspace in [`crates/`](crates/). `just` lists every task, after
+[`just setup`](#quickstart):
 
 ```bash
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo nextest run --locked      # or cargo test --locked
-cargo deny check
+just check          # what CI runs, but for the image build
+just lint           # rustfmt, clippy, cargo-deny, ruff, mypy, svelte-check
+just test           # test-rust, test-contract and test-web
+just fmt            # format the Rust and the Python
+just build          # the page, then the release binary that embeds it
+just image          # the container image
 ```
+
+`just test-rust` and `just lint` need [cargo-nextest](https://nexte.st/) and
+[cargo-deny](https://embarkstudios.github.io/cargo-deny/). The tests need no network and no
+credentials, and do not read `.env`. Only `just dev`, `api`, `web`, `seed`, `eval` and the other
+recipes that run the service do.
 
 A few tests are ignored by default because they need something outside the repository: a real
 Chromium (`cargo test -p kvasir-browser --features chromium -- --ignored`), or a real provider, as
 the top of `crates/kvasir-llm/tests/live.rs` shows.
 
+`just features=chromium dev` builds the service with Chromium, to render pages and [clear a
+block](#clear-a-block). `just api`, `web` and `mock` run one part on its own.
+
 [`tests/contract/`](tests/contract/) drives the built binary over HTTP, with fakes for the
-providers, SearXNG and the sites, and the Open WebUI pipe against it. It needs
-[uv](https://docs.astral.sh/uv/):
-
-```bash
-cargo build --bin kvasir
-uv run pytest
-uv run ruff check . && uv run ruff format --check . && uv run mypy
-```
-
+providers, SearXNG and the sites, and the Open WebUI pipe against it. `just test-contract` runs it.
 `KVASIR_CONTRACT_COMMAND` runs it against another build instead of `target/debug/kvasir`.
 
 Each prompt is pinned byte for byte by `tests/golden/signatures.json`, as dspy 3.3.0 rendered it
@@ -858,17 +834,14 @@ upstream. Read it before changing `crates/kvasir-storm`.
 ### Work on the runs page
 
 The page is a Svelte app in `clients/web/`, built with Vite into `clients/web/dist/`, which is not
-committed. It needs Node 26 and pnpm.
+committed.
 
 ```bash
-cd clients/web
-pnpm install
-pnpm dev:mock   # the page on localhost:5173, its API answered from fixtures/
-pnpm dev        # the same, with /v1 proxied to a kvasir on localhost:8080
-pnpm build      # into dist/, which the service serves and a release build embeds
+just mock    # the page on localhost:5173, its API answered from fixtures/
+just web     # the same, with /v1 proxied to the kvasir on KVASIR_PORT
 ```
 
-`pnpm dev:mock` needs no gateway, search engine or run. Each file in `clients/web/fixtures/` is a run named
+`just mock` needs no gateway, search engine or run. Each file in `clients/web/fixtures/` is a run named
 after it, and `#/runs/<name>/result` opens its result directly: `#/runs/ranking/result` shows the
 ranking table. Two more runs are made from `ranking.json`: `running`, frozen partway, and `live`,
 replayed at 20 times its real pace and started again once it ends. Set `MOCK_SPEED` to change the
@@ -906,16 +879,11 @@ done | jq -s -c add > clients/web/fixtures/<name>.searches.json
 ```
 
 The TypeScript types in `clients/web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
-Run `pnpm types` after changing a type in `crates/kvasir-types/` or `crates/kvasir-api/`; it builds
+Run `just types` after changing a type in `crates/kvasir-types/` or `crates/kvasir-api/`; it builds
 and runs `kvasir openapi`, and CI fails when the types differ.
 
-```bash
-pnpm check   # svelte-check
-pnpm test    # Vitest: the markdown renderer
-pnpm e2e     # Playwright, against the mock and against the built page served by the service
-```
-
-`pnpm e2e` needs Chromium once: `pnpm exec playwright install chromium`.
+`just e2e` runs Playwright against the mock and against the built page served by the service,
+installing its Chromium first. `just lint` runs svelte-check, and `just test-web` runs Vitest.
 
 ### Evaluate research
 
@@ -924,11 +892,10 @@ tables. Each lists the output type its wording asks for and a few checks a reade
 would need answered. To evaluate, start the service, then run:
 
 ```bash
-cargo run --release -- eval data/eval/baseline
+just eval data/eval/baseline
 ```
 
-It reads the token, the providers and the judge's model from the same `KVASIR_*` variables and
-`kvasir.db` as the service, so run it with the service's environment, from the repository root.
+It loads `.env` as the service does, and reads the judge's model from the same `kvasir.db`.
 
 It researches each question through the service at `http://localhost:8080` (`--url` to change),
 without clarifications, and saves each result as `<id>.json`. `--method` picks the method, `ledger`
