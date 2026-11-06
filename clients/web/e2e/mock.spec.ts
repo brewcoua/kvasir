@@ -278,9 +278,9 @@ test("steps lay a run out as stages that open into questions and attempts", asyn
 test("a ledger run stacks its rows, puts repair in verify, and links every step", async ({ page }) => {
   await page.goto("/#/runs/ledger/steps");
   const row = (id: string) => run(page).getByTestId(`step-${id}`);
-  // The view is zoomed to fit, so a row's size is checked by its shape: 460 by 36 in flow units.
+  // The view is zoomed to fit, so a row's size is checked by its shape: 380 by 36 in flow units.
   const shape = (await row("e:7").boundingBox())!;
-  expect(shape.width / shape.height).toBeCloseTo(460 / 36, 0);
+  expect(shape.width / shape.height).toBeCloseTo(380 / 36, 0);
   await expect(row("e:7")).toContainText("#1");
   await expect(row("e:7")).toContainText("Roman dynasties");
   await expect(row("e:7")).toContainText("24 results");
