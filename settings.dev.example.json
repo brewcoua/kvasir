@@ -1,0 +1,10 @@
+{
+  "model.fast": "local/gpt-oss:20b",
+  "model.strong": "local/deepseek-v4.1-flash:cloud",
+  "model.embedding": "local/nomic-embed-text:latest",
+  "model.reasoning_effort": "none",
+  "search.searxng.enabled": true,
+  "search.searxng.url": "http://localhost:8888",
+  "runs.store": "sqlite",
+  "runs.keep_call_content": true
+}
