@@ -1,6 +1,6 @@
 # Blocklists and allowlists: plan
 
-Status: written 2026-11-06.
+Status: built 2026-11-06, except the evaluation in step 9. See [Where this stands](#where-this-stands).
 
 This plan lets an operator subscribe to community blocklists from a catalog, add their own, choose
 what each list does, and override any list with an allowlist. It builds on source trust
@@ -151,6 +151,14 @@ One commit per step, each with its tests passing.
    `just eval` with lists on and off.
 
 Not in this plan: path rules, such as the 205 in `BadWebsiteBlocklist`, which need a check per URL.
+
+## Where this stands
+
+Steps 1 to 8 are built, each with tests. The first version differs from the plan above in these ways:
+
+- `lists_on` and `lists_off` have no field in the dashboard yet, so per-run overrides are API only.
+- Citation badges on a stored run use the lists as they stand, not the run's overrides.
+- `exempt` lists leave no `exempt` tag; a site's explanation shows them instead.
 
 ## Decisions
 

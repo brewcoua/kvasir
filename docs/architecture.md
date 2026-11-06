@@ -234,12 +234,13 @@ Every database file below is encrypted with SQLCipher under `KVASIR_SECRET_KEY`;
 | Research evidence | The run's result | As long as the run | The `done` frame carries every claim, so nothing else needs storing. |
 | Pages read | `$KVASIR_DATA_DIR/pages.db`: each page's text and links, and its pieces with their vectors | Served for `fetch.max_age_hours`, then revalidated; kept until deleted from the Knowledge page | A page read once is not downloaded again, and a later run can answer from it with no search. Public page content only: no brief, question or claim. One cache serves every user of the service. |
 | Site icons | `$KVASIR_DATA_DIR/favicons.db`: one row per host, with the image and the provider that gave it | `favicons.ttl_days` for an icon, `favicons.miss_ttl_days` for a site with none; emptied by `DELETE /v1/favicons`. File not created when `favicons.providers` is empty | An icon is public and cheap to refetch, but a site should be asked once a month, not per page view. A separate file so flushing the page cache keeps them. |
-| Source trust | `$KVASIR_DATA_DIR/sources.db`: `sources`, Wikidata's answer per host, `surveys`, what `sources.survey` found per site, and `marks`, the kinds and `allow`/`deny` a user set; downloaded lists, and with `sources.rsp` the perennial sources page as the API's JSON, beside it as `sources-<hash>.txt`. Not created unless `sources.enabled` | `sources.ttl_days` for an answer and a list, `sources.miss_ttl_days` for a host Wikidata does not know; marks never expire | A host is classified once a month, not per search. Marks are the user's, so they sit apart from the cache that may be dropped. |
+| Source trust | `$KVASIR_DATA_DIR/sources.db`: `sources`, Wikidata's answer per host, `surveys`, what `sources.survey` found per site, `marks`, the kinds and `allow`/`deny`/`exempt` a user set, and `lists`, what a user changed on a list; downloaded lists, and with `sources.rsp` the perennial sources page as the API's JSON, beside it as `sources-<hash>.txt`. Not created unless `sources.enabled` | `sources.ttl_days` for an answer and a list, `sources.miss_ttl_days` for a host Wikidata does not know; marks never expire | A host is classified once a month, not per search. Marks are the user's, so they sit apart from the cache that may be dropped. |
 
 With `sources.enabled` set to `true`, the server also contacts, from `crates/kvasir-sites/src/sources/` (`wikidata.rs` and `lists.rs`): the Wikidata
 Query Service (`sources.endpoint`), which learns the domains of the search results a run
 considers, at most 50 a query, with a user agent naming this service; and the URLs in
-`sources.lists`, fetched at most once per `sources.ttl_days`. With `sources.rsp` set to `true`, it also fetches
+`sources.lists` and of each list turned on, fetched at most once per `sources.ttl_days` or the list's
+`ttl_days`. Once a guarded list is on, the Tranco list too. With `sources.rsp` set to `true`, it also fetches
 Wikipedia's perennial sources page through the MediaWiki API on `en.wikipedia.org`, on the same
 schedule, with the same user agent. With `sources.survey` set to `true` (`survey.rs`), it fetches
 the Tranco list from `tranco-list.eu` on the same schedule, and, from each site a run met and nothing
@@ -262,7 +263,9 @@ The Knowledge page of the dashboard, `#/knowledge`, shows what it holds, through
 need the token, and anyone who holds it can empty the cache.
 
 With `sources.enabled` set to `true`, `crates/kvasir-api/src/sources.rs` adds `GET /v1/sources/{host}`,
-`GET` and `POST /v1/sources/tags`, `PUT` and `DELETE /v1/sources/{host}/mark`, and `DELETE /v1/sources`, which clears the cache and
+`GET /v1/sources/{host}/explain`, `GET` and `POST /v1/sources/tags`, `PUT` and `DELETE /v1/sources/{host}/mark`,
+`GET` and `POST /v1/sources/lists`, `PATCH` and `DELETE /v1/sources/lists/{id}`,
+`POST /v1/sources/lists/{id}/refresh`, and `DELETE /v1/sources`, which clears the cache and
 keeps the marks. The routes answer 404 when it is off. They use the `Sources` instance runs use,
 so a mark reaches a run in flight. A host set in `ALLOW` or `DENY` answers
 409 and shows `origin: "config"`. `Site`, `SiteNode`, `Citation` and a search result carry a

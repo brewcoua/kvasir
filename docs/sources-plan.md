@@ -355,8 +355,11 @@ list, and against the Tranco top 1M for what they would wrongly block:
 | --- | --- | --- | --- | --- | --- |
 | [CRED-1](https://github.com/aloth/cred-1) | 2,672 | CC BY 4.0 | 0 | 6 | foxnews.com, dailymail.co.uk, greenpeace.org (as `mixed`) |
 | [BadWebsiteBlocklist](https://github.com/popcar2/BadWebsiteBlocklist) | 214 | CC0 | 0 | 8, counting partial rules | msn.com |
-| [Super SEO Spam Suppressor](https://github.com/NotaInutilis/Super-SEO-Spam-Suppressor) | 834,916 | WTFPL | 0 | 28 | twitter.com, linkedin.com, openai.com, anthropic.com; 22 MB, over `MAX_LIST_BYTES` |
+| [Super SEO Spam Suppressor](https://github.com/NotaInutilis/Super-SEO-Spam-Suppressor) | 416,738 domains (`hosts.txt` doubles them with `www`, 834,916 lines) | WTFPL | 0 | 28 | twitter.com, linkedin.com, openai.com, anthropic.com; `hosts.txt` is 22 MB, over `MAX_LIST_BYTES`, `domains.txt` 6.8 MB |
 | [uBlacklist compilation](https://github.com/eallion/uBlacklist-subscription-compilation) | 14,546 | GLWT, merges unlicensed lists | 0 | 37, counting partial rules | mostly Chinese-language farms |
+
+[lists-plan.md](lists-plan.md) later added an opt-in catalog of the lists SSSS aggregates, which may
+block outright once the operator turns them on.
 
 Never read is too strong a verdict for any of them, and they would not have changed either run. None
 joins the default `lists`, so build step 2 needs no code: an operator can still add one to `lists`.

@@ -237,7 +237,7 @@ once more. See [`docs/research.md`](docs/research.md) for how each step works an
 Options: `output`, `criteria`, `entities`, `max_searches`, `results_per_query`, `max_attempts`,
 `follow_ups`, `max_depth`, `max_entities`, `max_criteria`, `frontier`, `ground`, `ground_intake`,
 `corroborate`, `contradict`, `recall_past_runs`, `max_age_hours`, `model_fast`, `model_strong`,
-`model_reason`. Each budget left out takes its `[research]` default from
+`model_reason`, `lists_on`, `lists_off`. Each budget left out takes its `[research]` default from
 [Configuration](#configuration). The research stops when the searches are spent, no question is left
 open, or 4 searches in a row add no claim. A question gets `max_attempts` queries, each a different
 shape: plain words, the exact terms its answer would contain, a primary source (`site:` or
@@ -272,7 +272,7 @@ Stages are `brief`, `research`, `write` and `verify`, and the `done` frame has t
 `ledger` run. Options: `research_minutes`, `max_searches` (an optional cap on top of the time),
 `results_per_query` (5 by default), `max_attempts`, `max_depth` (4 by default), `ground`,
 `ground_intake`, `corroborate`, `contradict`, `recall_past_runs`, `max_age_hours`, `model_fast`,
-`model_strong`, `model_reason`. See
+`model_strong`, `model_reason`, `lists_on`, `lists_off`. See
 [`docs/research.md`](docs/research.md#the-graph-method).
 
 ### Choose what the cache gives
@@ -373,7 +373,7 @@ Every streaming response opens with a `run` frame. Use its `run_id` to follow th
 not know the event name ignores it.
 
 Options: `search_top_k`, `max_conv_turn`, `max_perspective`, `do_polish_article`, `model_fast`,
-`model_strong`. Each falls back to the configured default.
+`model_strong`, `lists_on`, `lists_off`. Each falls back to the configured default.
 
 ## Watch what is running
 
@@ -450,7 +450,11 @@ The same data is available as JSON.
 | `GET /v1/search/challenges/{provider}/live` | A WebSocket on a browser tab on the challenge. Sends `frame` (base64 JPEG) as the page changes and at the end `state`, one of `cleared`, `expired`, `left` or `failed`. Takes mouse, key and text input as JSON. 403 from another site's page. Needs the `chromium` feature. |
 | `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule`, `wikidata` or `survey`) of a site; Wikidata is asked when nothing else decides it. 404 unless `sources.enabled`. |
 | `GET /v1/sources/tags?host=a.com&host=b.org`, `POST /v1/sources/tags` | `{host: {kind, tags, tier}}` for each host, from `host` in the query or `{"hosts": [...]}` in the body, at most 1,000. Answers from what is known and never waits for Wikidata; a name that is not a host is `unknown`. 404 unless `sources.enabled`. |
-| `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `sources.allow` or `sources.deny`. A mark takes effect for runs in flight. 404 unless `sources.enabled`. |
+| `GET /v1/sources/{host}/explain` | `{source, lists}`: what `GET /v1/sources/{host}` answers, and each list naming the site with its `state`: `applies`, `off`, `except` or `guard`. 404 unless `sources.enabled`. |
+| `GET /v1/sources/lists`, `POST /v1/sources/lists` | Every list with `hosts`, `skipped`, `fetched_at` and `error`, or add your own, which answers 201. See [Lists](#lists). 404 unless `sources.enabled`. |
+| `PATCH /v1/sources/lists/{id}`, `DELETE /v1/sources/lists/{id}` | Change a list, or delete your own. Deleting a catalog list puts it back as it ships. A catalog list keeps its `url` and `entries`, 422 otherwise. A list in `sources.lists` answers 404. |
+| `POST /v1/sources/lists/{id}/refresh` | Download a list now, however young its copy. |
+| `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| "exempt" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `sources.allow` or `sources.deny`. A mark takes effect for runs in flight. 404 unless `sources.enabled`. |
 | `DELETE /v1/sources` | Forget the cached Wikidata answers. Marks stay. 404 unless `sources.enabled`. |
 | `DELETE /v1/favicons` | Forget every icon, including the sites remembered as having none, and free the disk space. Use it to retry misses after changing `favicons.providers`. |
 | `POST /v1/pages/{id}/refetch` | Fetch the page again whatever its age. 502 with the reason when it cannot be read. |
@@ -720,7 +724,8 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `sources.deny` | empty | A list of hosts, with their subdomains, never read (`avoid`). Beats `sources.allow` and any mark. |
 | `sources.rsp` | `false` | Also tag hosts by Wikipedia's perennial sources list, fetched from `en.wikipedia.org` and refreshed with the lists. Needs `sources.enabled`. |
 | `sources.survey` | `false` | Tag sites nothing else decides as `likely_farm`, from their own sitemaps and the Tranco list, in the background. Needs `sources.enabled`. |
-| `sources.lists` | CISA `.gov` list | A list of `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, uBlacklist files and CSVs with the host first are read. An empty list uses none. |
+| `sources.guard_rank` | `10000` | A list with its guard on spares sites this high on the Tranco list. `0` spares none for their rank. See [Lists](#lists). |
+| `sources.lists` | CISA `.gov` list | A list of `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, adblock and uBlacklist files and CSVs with the host first are read. An empty list uses none. The [Lists](#lists) page shows them but changes them only here. |
 
 Favicons are fetched by the server and served from `/v1/favicons/{host}`, so a browser never contacts
 the icon provider. What each provider learns:
@@ -739,14 +744,12 @@ site's real icon. A provider that answers 404 for a missing icon is fine.
 
 With `sources.enabled` set to `true`, each host resolves to a kind (government, academic, news and so
 on), tags such as `community` or `ai_generated`, and a tier: `high`, `normal`, `unknown`, `low` or
-`avoid`. A host resolves in this order: `sources.allow` and `sources.deny`, a mark, the bundled list
-(`crates/kvasir-sites/src/sources.toml`) and downloaded lists, suffix rules (`.gov`, `.edu`, `.int`,
-`europa.eu` and the like), the cache in `sources.db`, then Wikidata. Wikidata is asked for the
+`avoid`. A host resolves in this order: `sources.allow` and `sources.deny`, a mark, `trust` lists, the
+bundled list (`crates/kvasir-sites/src/sources.toml`), then other lists, suffix rules (`.gov`, `.edu`,
+`.int`, `europa.eu` and the like), the cache in `sources.db`, then Wikidata. Wikidata is asked for the
 domains of search results in one query per 50 hosts, so its operators see those domains; set
 `sources.wikidata` to `false` to avoid that. A host still unanswered after 5 seconds counts as
-`unknown` for that search and is known by the next. The default list is CISA's `.gov` list. The
-HUGE AI blocklist is not default: its last commit is from October 2025 and it targets AI-generated
-imagery. Add it to `sources.lists` as `ai_generated=<url>` if you want it.
+`unknown` for that search and is known by the next. The default list is CISA's `.gov` list.
 
 With `sources.rsp` set to `true` as well, kvasir fetches Wikipedia's [perennial sources
 list](https://en.wikipedia.org/wiki/Wikipedia:Reliable_sources/Perennial_sources) (WP:RSP) from
@@ -769,6 +772,40 @@ dated day, over 100 or more dated URLs and leaving out its busiest day, and outs
 300,000, gets the tag `likely_farm`, of tier `low`: it is ranked lower and gets no `site:` search, but
 it is still read. Its `evidence` says why, and a mark or `sources.allow` overrides it. These
 thresholds come from 25 sites, so treat them as a first guess.
+
+#### Lists
+
+Open `#/lists` in the dashboard, or use the routes under `/v1/sources/lists`, to choose which
+community blocklists apply and to add your own. The catalog
+(`crates/kvasir-sites/src/sources/catalog.toml`) names 23 lists by URL, all off. kvasir downloads a
+list only once it is on, from where the list is published, and nothing of them ships.
+
+| Effect | Result |
+| --- | --- |
+| `block` | Tier `avoid`: never read. Wikidata is not asked about the site. |
+| `demote` | Tier `low`: ranked lower and still read. It joins what the rest of the order finds. |
+| `exempt` | Cancels `block` and `demote` lists and the bundled list. Trust does not change. |
+| `trust` | Tier `high`. |
+| `kind:<kind>` | Sets the kind. |
+
+An entry matches the host and its parents, down to the registrable domain. A list's `except` names
+hosts it does not apply to. To unblock one site, mark it `exempt`: `allow` would also raise it to
+`high`. `exempt` does not cancel a Wikidata tag, an RSP verdict or `sources.deny`.
+
+With a list's `guard` on, its `block` or `demote` does not reach a site that a suffix rule decides,
+or that is in the Tranco top `sources.guard_rank`. kvasir downloads the Tranco list once a guarded
+list is on; see `sources.survey` above for its licence. Until that download lands, only the suffix
+rule spares a site.
+
+A list can hide any site its guard does not spare. A remote `trust` or `exempt` list lets its
+maintainer promote or unblock any site, so the catalog ships none, and the page warns before adding
+one. The catalog's licences are as each list states, and several state none: check they suit your
+use.
+
+To try one for a single run, pass list ids in the options `lists_on` and `lists_off`. An unknown id
+answers 422. A list turned on this way is downloaded when the run starts if it has no copy yet, and
+the dashboard has no field for these options yet. Badges on a stored run use the lists as they stand,
+not the run's choice. A run's steps name the sites it left out and the lists behind them.
 
 Set `model.reasoning_effort` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,
