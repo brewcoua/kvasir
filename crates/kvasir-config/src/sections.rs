@@ -139,6 +139,7 @@ pub struct SearchSettings {
     pub arxiv: OpenSettings,
     pub crossref: CrossrefSettings,
     pub europe_pmc: OpenSettings,
+    pub semantic_scholar: KeyedSettings,
 }
 
 impl SearchSettings {
@@ -164,6 +165,7 @@ impl Default for SearchSettings {
             arxiv: OpenSettings::default(),
             crossref: CrossrefSettings::default(),
             europe_pmc: OpenSettings::default(),
+            semantic_scholar: KeyedSettings::default(),
         }
     }
 }

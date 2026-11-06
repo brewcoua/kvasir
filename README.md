@@ -659,6 +659,9 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `search.crossref.weight` | `1.0` | Its weight when results are fused. |
 | `search.europe_pmc.enabled` | `false` | Search Europe PMC's life sciences literature. |
 | `search.europe_pmc.weight` | `1.0` | Its weight when results are fused. |
+| `search.semantic_scholar.enabled` | `false` | Search Semantic Scholar's papers. |
+| `search.semantic_scholar.api_key` | unset | Semantic Scholar API key, optional: without one, requests share a public pool. A secret: never returned. |
+| `search.semantic_scholar.weight` | `1.0` | Its weight when results are fused. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |

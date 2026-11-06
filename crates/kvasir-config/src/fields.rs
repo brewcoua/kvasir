@@ -227,6 +227,13 @@ pub const FIELDS: &[Field] = &[
     field("search.crossref.weight", Kind::Float, "Its weight when results are fused."),
     field("search.europe_pmc.enabled", Kind::Bool, "Search Europe PMC's life sciences literature."),
     field("search.europe_pmc.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.semantic_scholar.enabled", Kind::Bool, "Search Semantic Scholar's papers."),
+    field(
+        "search.semantic_scholar.api_key",
+        Kind::Secret,
+        "Semantic Scholar API key. Optional: without one, requests share a public pool.",
+    ),
+    field("search.semantic_scholar.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

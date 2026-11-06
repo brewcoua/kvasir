@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Brave, Crossref, EuropePmc, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia,
+    Arxiv, Brave, Crossref, EuropePmc, Exa, Failure, Mojeek, Provider, Row, SemanticScholar,
+    Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -483,6 +484,59 @@ mod europe_pmc {
 
         let failure = at(&server).query("q").await.unwrap_err();
 
+        assert!(matches!(failure, Failure::Other(_)), "{failure:?}");
+    }
+}
+
+mod semantic_scholar {
+    use super::*;
+
+    fn at(server: &MockServer, key: Option<&str>) -> SemanticScholar {
+        SemanticScholar::at(&format!("{}/s", server.uri()), key)
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"total": 3, "data": [
+            {"paperId": "a", "url": "https://s2.org/a", "title": "A", "abstract": "About\n a."},
+            {"paperId": "b", "url": "https://s2.org/b", "title": null, "abstract": null},
+            {"paperId": "c", "url": null, "title": "No address"},
+        ]});
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(header("x-api-key", "the-key"))
+            .and(query_param("query", "the query"))
+            .and(query_param("limit", "20"))
+            .and(query_param("fields", "title,abstract,url"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server, Some("the-key")).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [row("https://s2.org/a", "A", "About a."), row("https://s2.org/b", "", "")]
+        );
+    }
+
+    #[tokio::test]
+    async fn it_answers_without_a_key_and_with_no_data_when_nothing_matches() {
+        let server = answering(ResponseTemplate::new(200).set_body_json(json!({"total": 0}))).await;
+
+        assert_eq!(at(&server, None).query("q").await, Ok(Vec::new()));
+        let requests = server.received_requests().await.unwrap();
+        assert!(!requests[0].headers.contains_key("x-api-key"));
+    }
+
+    #[tokio::test]
+    async fn a_refusal_is_about_the_key_only_when_there_is_one() {
+        let server = answering(ResponseTemplate::new(403)).await;
+
+        assert_eq!(at(&server, Some("k")).query("q").await, Err(Failure::Unauthorized));
+        let failure = at(&server, None).query("q").await.unwrap_err();
         assert!(matches!(failure, Failure::Other(_)), "{failure:?}");
     }
 }

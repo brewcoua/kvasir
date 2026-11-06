@@ -17,6 +17,7 @@ mod europe_pmc;
 mod exa;
 mod mojeek;
 mod searxng;
+mod semantic_scholar;
 mod tavily;
 mod wikipedia;
 
@@ -44,6 +45,7 @@ pub use europe_pmc::EuropePmc;
 pub use exa::Exa;
 pub use mojeek::Mojeek;
 pub use searxng::SearXng;
+pub use semantic_scholar::SemanticScholar;
 pub use tavily::Tavily;
 pub use wikipedia::Wikipedia;
 
@@ -330,6 +332,10 @@ impl Providers {
         }
         if settings.europe_pmc.enabled {
             providers.push((Box::new(EuropePmc::default()), settings.europe_pmc.weight));
+        }
+        if settings.semantic_scholar.enabled {
+            let key = settings.semantic_scholar.api_key.as_ref().map(|key| key.0.as_str());
+            providers.push((Box::new(SemanticScholar::new(key)), settings.semantic_scholar.weight));
         }
         Self::new(providers, web)
     }
