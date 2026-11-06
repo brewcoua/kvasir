@@ -687,6 +687,10 @@ starts read-only, as today's does.
   run through the contract fakes read a page that answered its plain request with 503 through
   Chromium (`engines: ["render"]`). Chromium's crash handler needs a writable `$HOME`, so the
   target sets it to `/tmp`.
+- **Cutover:** `src/` and the Python tests other than the pipe's and the contract are removed. The
+  contract runs against `target/debug/kvasir` by default (130 pass), and CI's `contract` job builds
+  it first. `docs/architecture.md`, `docs/research.md` and the README describe the Rust service, and
+  `docs/storm.md` replaces `docs/fork-notes.md`. `owui/README.md` needed no change.
 - **`kvasir eval`:** one question (`antikythera`, `max_searches` 4) researched through the Rust
   service and scored with the judge: 2 of 3 checks, 23 of 31 cited sentences supported.
 
