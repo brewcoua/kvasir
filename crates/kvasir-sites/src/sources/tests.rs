@@ -711,6 +711,140 @@ async fn an_own_list_is_kept_changed_and_removed() {
     assert!(matches!(sources.add_list(nameless).await, Err(ListError::Invalid(_))));
 }
 
+/// An own list of `effect` holding `entries`, in effect when this returns.
+async fn own(sources: &Arc<Sources>, effect: &str, entries: &[&str]) -> SourceList {
+    let change = ListChange {
+        name: Some(format!("{effect} list")),
+        entries: Some(entries.iter().map(|entry| (*entry).to_owned()).collect()),
+        effect: Some(effect.to_owned()),
+        ..ListChange::default()
+    };
+    sources.add_list(change).await.unwrap()
+}
+
+#[tokio::test]
+async fn a_block_list_decides_alone_and_names_itself() {
+    let setting = Setting::new().await;
+    let asked = setting.wdqs(Wdqs::default()).await;
+    let sources = setting.service();
+    own(&sources, "block", &["farm.org"]).await;
+
+    let found = one(&sources, "blog.farm.org", WAIT).await;
+    assert_eq!(found.tier(), Tier::Avoid);
+    assert_eq!(found.origin, "list");
+    assert_eq!(found.listed_by, ["block list"]);
+    assert!(asked.queries().is_empty(), "a blocked site is not looked up");
+}
+
+#[tokio::test]
+async fn a_demotion_joins_what_the_rest_of_the_order_finds() {
+    let setting = Setting::new().await;
+    let rows = vec![("nytimes.example", vec![("Q1", "NYT", vec![NEWSPAPER])])];
+    setting.wdqs(Wdqs { rows, ..Wdqs::default() }).await;
+    let sources = setting.service();
+    own(&sources, "demote", &["nytimes.example", "plain.org"]).await;
+
+    let known = one(&sources, "nytimes.example", WAIT).await;
+    assert_eq!(known.kind, "news");
+    assert_eq!(known.tier(), Tier::Low);
+    assert_eq!(known.listed_by, ["demote list"]);
+    let plain = one(&sources, "plain.org", WAIT).await;
+    assert_eq!((plain.tier(), plain.origin.as_str()), (Tier::Low, "list"));
+}
+
+#[tokio::test]
+async fn exempting_cancels_a_block_and_a_demotion_and_grants_no_trust() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let sources = setting.service();
+    own(&sources, "block", &["marked.org", "listed.org", "blocked.org"]).await;
+    own(&sources, "demote", &["marked.org", "listed.org"]).await;
+    own(&sources, "exempt", &["listed.org"]).await;
+    sources.mark("marked.org", "exempt").await.unwrap();
+
+    for host in ["marked.org", "listed.org"] {
+        let found = one(&sources, host, WAIT).await;
+        assert_eq!(found.tier(), Tier::Unknown, "{host}");
+        assert!(found.listed_by.is_empty(), "{host}");
+    }
+    assert!(one(&sources, "marked.org", WAIT).await.tags.contains("exempt"));
+    assert_eq!(one(&sources, "blocked.org", WAIT).await.tier(), Tier::Avoid);
+}
+
+#[tokio::test]
+async fn exempting_cancels_the_bundled_list_and_keeps_a_kind_list() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let sources = setting.service();
+    let bundled = sources.bundled.keys().next().unwrap().clone();
+    assert_eq!(one(&sources, &bundled, WAIT).await.tier(), Tier::Avoid);
+
+    sources.mark(&bundled, "exempt").await.unwrap();
+    assert_eq!(one(&sources, &bundled, WAIT).await.tier(), Tier::Unknown);
+
+    own(&sources, "kind:news", &["paper.org"]).await;
+    own(&sources, "block", &["paper.org"]).await;
+    sources.mark("paper.org", "exempt").await.unwrap();
+    let paper = one(&sources, "paper.org", WAIT).await;
+    assert_eq!(paper.kind, "news");
+    assert_eq!(paper.tier(), Tier::Normal);
+}
+
+#[tokio::test]
+async fn a_trust_list_beats_a_block_list_and_except_spares_a_host() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let sources = setting.service();
+    let block = own(&sources, "block", &["good.org", "farm.org", "kept.org"]).await;
+    own(&sources, "trust", &["good.org"]).await;
+    let except = ListChange { except: Some(vec!["kept.org".to_owned()]), ..ListChange::default() };
+    sources.change_list(&block.id, except).await.unwrap();
+
+    assert_eq!(one(&sources, "good.org", WAIT).await.tier(), Tier::High);
+    assert_eq!(one(&sources, "farm.org", WAIT).await.tier(), Tier::Avoid);
+    assert_eq!(one(&sources, "sub.kept.org", WAIT).await.tier(), Tier::Unknown);
+}
+
+#[tokio::test]
+async fn a_list_applies_once_on_and_stops_once_off_or_removed() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let sources = setting.service();
+    let list = own(&sources, "block", &["farm.org"]).await;
+    let off = ListChange { enabled: Some(false), ..ListChange::default() };
+
+    sources.change_list(&list.id, off).await.unwrap();
+    assert_eq!(one(&sources, "farm.org", WAIT).await.tier(), Tier::Unknown);
+
+    let on = ListChange { enabled: Some(true), ..ListChange::default() };
+    sources.change_list(&list.id, on).await.unwrap();
+    assert_eq!(one(&sources, "farm.org", WAIT).await.tier(), Tier::Avoid);
+
+    sources.remove_list(&list.id).await.unwrap();
+    assert_eq!(one(&sources, "farm.org", WAIT).await.tier(), Tier::Unknown);
+}
+
+#[tokio::test]
+async fn a_list_tag_shows_and_a_downloaded_list_fetches_on_its_own_terms() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let url = setting.list("/spam", body("||farm.org^\n")).await;
+    let sources = setting.service();
+    let change = ListChange {
+        name: Some("Spam".to_owned()),
+        url: Some(url),
+        tag: Some("seo_spam".to_owned()),
+        ..ListChange::default()
+    };
+    sources.add_list(change).await.unwrap();
+    sources.refresh_lists().await;
+
+    let found = one(&sources, "farm.org", WAIT).await;
+    assert_eq!(found.tier(), Tier::Avoid);
+    assert!(found.tags.contains("seo_spam"));
+    assert_eq!(found.listed_by, ["Spam"]);
+}
+
 #[test]
 fn a_list_counts_the_rules_it_cannot_use() {
     for (text, skipped) in
@@ -1305,8 +1439,8 @@ mod survey {
     #[tokio::test]
     async fn the_tranco_list_is_downloaded_only_with_the_survey() {
         let on = site("", |_| {}).await;
-        assert!(on.sources.list_entries().iter().any(|entry| entry.starts_with("tranco=")));
+        assert!(on.sources.fetches().iter().any(|fetch| fetch.name == "tranco"));
         let off = site("", |settings| settings.survey = false).await;
-        assert!(off.sources.list_entries().is_empty());
+        assert!(off.sources.fetches().is_empty());
     }
 }

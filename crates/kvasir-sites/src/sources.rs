@@ -24,13 +24,13 @@ use std::time::Duration;
 use kvasir_config::SourceSettings;
 use kvasir_db::DbError;
 use kvasir_fetch::Web;
-use kvasir_types::sites::{KINDS, SourceInfo, Tier, normalize_host, registrable, tier};
+use kvasir_types::sites::{KINDS, SourceInfo, SourceList, Tier, normalize_host, registrable, tier};
 use tokio::sync::{Semaphore, watch};
 use tokio::time::{Instant, timeout_at};
 use url::Url;
 
 pub use catalog::{ListError, catalog};
-use lists::Lists;
+use lists::{Effect, Listed, Lists};
 pub use lists::{Parsed, parse_list};
 use rsp::RSP_URL;
 pub use rsp::parse_rsp;
@@ -62,6 +62,8 @@ pub struct Source {
     pub origin: String,
     /// Why the survey tagged it; empty otherwise.
     pub evidence: String,
+    /// The lists that decided or tagged it, by name.
+    pub listed_by: Vec<String>,
 }
 
 impl Source {
@@ -74,6 +76,7 @@ impl Source {
             qid: String::new(),
             origin: origin.to_owned(),
             evidence: String::new(),
+            listed_by: Vec::new(),
         }
     }
 
@@ -129,6 +132,7 @@ pub struct Sources {
     backoff_until: Mutex<Option<Instant>>,
     bundled: HashMap<String, Source>,
     lists: Mutex<Option<Arc<Lists>>>,
+    specs: Mutex<Arc<Vec<SourceList>>>,
     first_load: tokio::sync::Mutex<()>,
     lists_checked: Mutex<Option<Instant>>,
     rsp_url: String,
@@ -175,6 +179,7 @@ impl Sources {
             backoff_until: Mutex::new(None),
             bundled: bundled(),
             lists: Mutex::new(None),
+            specs: Mutex::default(),
             first_load: tokio::sync::Mutex::new(()),
             lists_checked: Mutex::new(None),
             rsp_url: RSP_URL.to_owned(),
@@ -211,7 +216,7 @@ impl Sources {
         let mut fetching = Vec::new();
         for (raw, key) in &asked {
             if let Some(fixed) = self.fixed(key, &marks) {
-                out.insert((*raw).clone(), self.overlay(fixed));
+                out.insert((*raw).clone(), self.overlay(fixed, &marks));
                 continue;
             }
             let rule = rule(key);
@@ -223,7 +228,7 @@ impl Sources {
                 }
             }
             let source = merge(key, rule, entry.flatten());
-            out.insert((*raw).clone(), self.overlay(source));
+            out.insert((*raw).clone(), self.overlay(source, &marks));
         }
         let flights = self.start(fetching).await;
         let end = Instant::now() + deadline;
@@ -235,7 +240,7 @@ impl Sources {
             }
             // Read again even with no flight: a lookup that finished since the first read stored it.
             let entry = self.cached(key).await;
-            out.insert(raw.clone(), self.overlay(merge(key, None, entry.flatten())));
+            out.insert(raw.clone(), self.overlay(merge(key, None, entry.flatten()), &marks));
         }
         if self.settings.survey {
             self.note_met(out.values()).await;
@@ -243,11 +248,11 @@ impl Sources {
         out
     }
 
-    /// Sets `allow`, `deny` or a kind on `host`, until `unmark`.
+    /// Sets `allow`, `deny`, `exempt` or a kind on `host`, until `unmark`.
     pub async fn mark(&self, host: &str, value: &str) -> Result<(), MarkError> {
         let invalid = || MarkError::Invalid { host: host.to_owned(), value: value.to_owned() };
-        let known =
-            value == "allow" || value == "deny" || KINDS[..KINDS.len() - 1].contains(&value);
+        let known = matches!(value, "allow" | "deny" | "exempt")
+            || KINDS[..KINDS.len() - 1].contains(&value);
         let key = normalize(host).filter(|_| known).ok_or_else(invalid)?;
         Ok(self.store.mark(&key, value).await?)
     }
@@ -281,8 +286,30 @@ impl Sources {
     }
 
     /// `source` with what the lists and the survey add. A config entry or a mark decides alone.
-    fn overlay(&self, source: Source) -> Source {
-        self.flag(self.rsp(source))
+    fn overlay(&self, source: Source, marks: &HashMap<String, String>) -> Source {
+        self.flag(self.rsp(self.demote(source, marks)))
+    }
+
+    /// `source` with what a `demote` list adds, which joins what the rest of the order found.
+    fn demote(&self, mut source: Source, marks: &HashMap<String, String>) -> Source {
+        if matches!(source.origin.as_str(), "config" | "mark") {
+            return source;
+        }
+        let exempt = is_exempt(&source.host, marks);
+        if exempt {
+            source.tags.insert("exempt".to_owned());
+        }
+        if source.origin == "list" {
+            return source;
+        }
+        if let Some(found) = self.listed(&source.host, exempt) {
+            source.tags.extend(found.tags);
+            source.listed_by = found.listed_by;
+            if source.origin.is_empty() {
+                source.origin = "list".to_owned();
+            }
+        }
+        source
     }
 
     /// `source` with the `rsp_*` tags of its host or registrable domain.
@@ -323,7 +350,8 @@ impl Sources {
         if names.iter().any(|name| self.allow.contains(*name)) {
             return Some(Source::new(key, "unknown", &["allow"], "config"));
         }
-        for name in &names {
+        let exempt = is_exempt(key, marks);
+        for name in names.iter().filter(|_| !exempt) {
             if let Some(value) = marks.get(*name) {
                 return Some(if value == "allow" || value == "deny" {
                     Source::new(key, "unknown", &[value], "mark")
@@ -332,10 +360,56 @@ impl Sources {
                 });
             }
         }
+        // A demotion alone leaves the rest of the order to find out what the site is.
+        let joins = |found: &Source| {
+            found.kind == "unknown" && found.tags.contains("demoted") && found.tier() == Tier::Low
+        };
+        self.listed(key, exempt).filter(|found| !joins(found))
+    }
+
+    /// What the lists say of `key`: a `trust` list alone, or else the bundled list, or else every
+    /// other list that applies. `exempt`, or an `exempt` list, cancels what would lower the site.
+    fn listed(&self, key: &str, exempt: bool) -> Option<Source> {
         let names = site_names(key);
-        let bundled = names.iter().find_map(|name| self.bundled.get(*name)).cloned();
-        let found = bundled.or_else(|| self.current_lists().find(&names))?;
-        Some(Source { host: key.to_owned(), ..found })
+        let lists = self.current_lists();
+        let hits = lists.hits(&names);
+        let exempt = exempt || hits.iter().any(|list| list.effect == Effect::Exempt);
+        let mut found = Source::new(key, "unknown", &[], "list");
+        let note = |found: &mut Source, list: &Listed| {
+            if !list.tag.is_empty() {
+                found.tags.insert(list.tag.clone());
+            }
+            found.listed_by.push(list.name.clone());
+        };
+        if hits.iter().any(|list| list.effect == Effect::Trust) {
+            found.tags.insert("allow".to_owned());
+            for list in hits.iter().filter(|list| list.effect == Effect::Trust) {
+                note(&mut found, list);
+            }
+            return Some(found);
+        }
+        if !exempt {
+            if let Some(bundled) = names.iter().find_map(|name| self.bundled.get(*name)) {
+                return Some(Source { host: key.to_owned(), ..bundled.clone() });
+            }
+        }
+        let priority = |kind: &str| KINDS.iter().position(|known| *known == kind);
+        for list in hits {
+            match &list.effect {
+                Effect::Exempt | Effect::Trust => continue,
+                Effect::Kind(kind) => {
+                    if priority(kind) < priority(&found.kind) {
+                        found.kind.clone_from(kind);
+                    }
+                }
+                _ if exempt => continue,
+                Effect::Block => drop(found.tags.insert("blocked".to_owned())),
+                Effect::Demote => drop(found.tags.insert("demoted".to_owned())),
+                Effect::Tag(tag) => drop(found.tags.insert(tag.clone())),
+            }
+            note(&mut found, list);
+        }
+        (!found.listed_by.is_empty()).then_some(found)
     }
 
     /// The stored answer of `key`: None when it has none, and with Wikidata off, always.
@@ -417,6 +491,11 @@ fn chain(host: &str) -> Vec<&str> {
         names.extend(dots[..dots.len() - 1].iter().map(|at| &host[at + 1..]));
     }
     names
+}
+
+/// Whether a mark of `exempt` covers `host`. A closer mark of another value does not make it so.
+fn is_exempt(host: &str, marks: &HashMap<String, String>) -> bool {
+    chain(host).iter().find_map(|name| marks.get(*name)).is_some_and(|value| value == "exempt")
 }
 
 /// `host` and its parents down to its registrable domain. A list naming a suffix others register

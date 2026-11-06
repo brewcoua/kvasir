@@ -37,7 +37,7 @@ A list is one row:
 | `id` | The catalog's id, or generated for a custom list. |
 | `name` | Shown in the UI. |
 | `url` or `entries` | Where its hosts come from: a download, or hosts typed in. |
-| `enabled` | Whether it applies. Catalog lists start off, except CISA. |
+| `enabled` | Whether it applies. Catalog lists start off. |
 | `effect` | What a hit does; see below. |
 | `tag` | Any label, shown in the site's badge. |
 | `ttl_days` | How often it is fetched. Empty means `sources.ttl_days`. |
@@ -53,7 +53,12 @@ A list is one row:
 | `kind:<kind>` | Sets the kind, as the CISA list does. |
 
 `exempt` exists because `allow` also raises a site to `high`, so unblocking a site should not mean
-trusting it fully. Marks gain the same value.
+trusting it fully. Marks gain the same value. `exempt` also cancels the bundled list, but not a
+Wikidata tag or an RSP verdict, which `allow` overrides.
+
+`sources.lists` stays as operator config, next to `allow` and `deny`. Removing it would make strict
+settings reads fail on stored rows, and it needs no status or editing beyond what it has. CISA stays
+there as its default rather than moving to the catalog. Its entries are not guarded.
 
 ## How a host resolves
 
@@ -90,8 +95,9 @@ Tranco includes a CC BY-NC 4.0 source, so it is downloaded at runtime and never 
 
 One sorted array per list took 2.2 MiB for the 93,893 hosts, against 63 MiB for today's
 `HashMap<String, Source>`, at 55 ns a lookup. The per-list shape gives attribution with no merged
-index: a hit on an array names its list. Enabling, disabling or refreshing a list swaps one array, and
-a run's overrides choose which arrays to check.
+index: a hit on an array names its list. A disabled list that has a copy on disk stays in memory, so
+a run's overrides can choose it. Any change to a list reloads them all, which takes tens of
+milliseconds and needs no swap logic.
 
 A SQLite index was rejected. It took 2.4 MB of disk and answered a 50-host batch in about 25 µs, which
 is fast enough, but a plain file would need a second opener, since `Db::open` encrypts any plain
@@ -104,7 +110,6 @@ entry gives a list's name, URL, group, licence, effect and tag.
 
 | Group | Lists | Effect |
 | --- | --- | --- |
-| Official | CISA `.gov` | `kind:government`, on |
 | SEO and farms | `content-farm-list`, `SpamdexingSites`, `uBlock-Origin-dev-filter`, `seo-garbage`, `BadWebsiteBlocklist`, uBlacklist Stack Overflow and GitHub translation, `my_filters_001` clickbait, `steamdeck_spamblock` | `block` |
 | Scams and fakes | Red Flag Domains, hagezi Fake, AliExpress fake sites (2), `my_filters_001` antitypo, Pi-hole dropshipping | `block` |
 | Malware | Anti-Malware Domains, NoCoin, `my_filters_001` antipup | `block` |
@@ -130,8 +135,7 @@ One commit per step, each with its tests passing.
 
 1. Index and parser. One sorted array per list, multi-list attribution, matching down to the
    registrable domain. Parse `||host^`, and count skipped rules per list.
-2. Storage. The `lists` table and `catalog.toml`. Migrate stored `sources.lists` rows, then remove the
-   field.
+2. Storage. The `lists` table and `catalog.toml`.
 3. Effects. `exempt` marks and lists, `except`, tags, and the resolution order above.
 4. Guard. `sources.guard_rank`, using the Tranco loader.
 5. API. `GET` and `POST /v1/sources/lists`, `PATCH` and `DELETE /v1/sources/lists/{id}`,
@@ -153,7 +157,7 @@ Not in this plan: path rules, such as the 205 in `BadWebsiteBlocklist`, which ne
 Settled 2026-11-06:
 
 - Community lists may block outright, which reverses phase 7's "never read is too strong" for lists
-  the operator enables. Every catalog list but CISA starts off.
+  the operator enables. Every catalog list starts off.
 - The guard is on, at `sources.guard_rank = 10000`.
 - Per-run overrides are in the first version.
 - The index lives in RAM, not in SQLite.

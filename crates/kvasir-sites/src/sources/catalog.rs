@@ -191,6 +191,7 @@ impl Sources {
         let list = checked(list)?;
         let kept = serde_json::to_string(&as_checked(change, &list)).expect("a change");
         self.store.put_list(&id, kept).await?;
+        self.lists_changed().await;
         Ok(list)
     }
 
@@ -216,6 +217,7 @@ impl Sources {
         let kept = merged(old, as_checked(change, &list));
         let kept = serde_json::to_string(&kept).expect("a change");
         self.store.put_list(id, kept).await?;
+        self.lists_changed().await;
         Ok(list)
     }
 
@@ -224,7 +226,16 @@ impl Sources {
         if !self.lists().await?.iter().any(|list| list.id == id) {
             return Err(ListError::Missing(id.to_owned()));
         }
-        Ok(self.store.drop_list(id).await?)
+        self.store.drop_list(id).await?;
+        self.lists_changed().await;
+        Ok(())
+    }
+
+    /// Puts a change into effect now for what is on disk, and downloads the rest behind the caller.
+    async fn lists_changed(self: &Arc<Self>) {
+        self.load_lists().await;
+        let this = Arc::clone(self);
+        tokio::spawn(async move { this.refresh_lists().await });
     }
 }
 
