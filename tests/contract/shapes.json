@@ -3751,6 +3751,8 @@
   "search.openalex.weight": "string",
   "search.duckduckgo.enabled": "string",
   "search.duckduckgo.weight": "string",
+  "search.bing.enabled": "string",
+  "search.bing.weight": "string",
   "search.searxng.enabled": "string",
   "search.searxng.url": "string",
   "search.searxng.weight": "string",

@@ -31,6 +31,7 @@ anyhow = "1"
 arc-swap = "1.9"
 axum = "0.8"
 backon = "1.6"
+base64 = "0.22"
 chromiumoxide = "0.9.1"
 dom_query = "0.24"
 dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }

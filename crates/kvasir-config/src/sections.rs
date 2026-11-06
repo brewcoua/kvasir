@@ -142,6 +142,7 @@ pub struct SearchSettings {
     pub semantic_scholar: KeyedSettings,
     pub openalex: KeyedSettings,
     pub duckduckgo: OpenSettings,
+    pub bing: OpenSettings,
 }
 
 impl SearchSettings {
@@ -151,7 +152,7 @@ impl SearchSettings {
             || [&self.brave, &self.tavily, &self.exa, &self.mojeek]
                 .iter()
                 .any(|provider| provider.usable_key().is_some())
-            || self.duckduckgo.enabled
+            || [&self.duckduckgo, &self.bing].iter().any(|provider| provider.enabled)
     }
 }
 
@@ -171,6 +172,7 @@ impl Default for SearchSettings {
             semantic_scholar: KeyedSettings::default(),
             openalex: KeyedSettings::default(),
             duckduckgo: OpenSettings::default(),
+            bing: OpenSettings::default(),
         }
     }
 }

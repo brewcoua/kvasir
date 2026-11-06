@@ -667,6 +667,8 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `search.openalex.weight` | `1.0` | Its weight when results are fused. |
 | `search.duckduckgo.enabled` | `false` | Search DuckDuckGo by reading its pages, which is against its terms. |
 | `search.duckduckgo.weight` | `1.0` | Its weight when results are fused. |
+| `search.bing.enabled` | `false` | Search Bing by reading its pages, which is against its terms. |
+| `search.bing.weight` | `1.0` | Its weight when results are fused. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |

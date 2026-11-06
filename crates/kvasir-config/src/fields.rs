@@ -243,6 +243,12 @@ pub const FIELDS: &[Field] = &[
         "Search DuckDuckGo by reading its pages, which is against its terms.",
     ),
     field("search.duckduckgo.weight", Kind::Float, "Its weight when results are fused."),
+    field(
+        "search.bing.enabled",
+        Kind::Bool,
+        "Search Bing by reading its pages, which is against its terms.",
+    ),
+    field("search.bing.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

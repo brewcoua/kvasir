@@ -11,6 +11,7 @@
 //! failure says, and the others carry the query.
 
 mod arxiv;
+mod bing;
 mod brave;
 mod crossref;
 mod duckduckgo;
@@ -42,6 +43,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::time::Instant;
 
 pub use arxiv::Arxiv;
+pub use bing::Bing;
 pub use brave::Brave;
 pub use crossref::Crossref;
 pub use duckduckgo::DuckDuckGo;
@@ -347,6 +349,9 @@ impl Providers {
         }
         if settings.duckduckgo.enabled {
             providers.push((Box::new(DuckDuckGo::default()), settings.duckduckgo.weight));
+        }
+        if settings.bing.enabled {
+            providers.push((Box::new(Bing::default()), settings.bing.weight));
         }
         Self::new(providers, web)
     }

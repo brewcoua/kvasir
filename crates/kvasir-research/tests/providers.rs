@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider, Row,
-    SemanticScholar, Tavily, Wikipedia,
+    Arxiv, Bing, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider,
+    Row, SemanticScholar, Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -689,6 +689,58 @@ mod duckduckgo {
     #[tokio::test]
     async fn a_page_it_does_not_understand_is_a_failure() {
         let server = answering(page("<p>Something new</p>")).await;
+
+        assert_eq!(
+            at(&server).query("q").await,
+            Err(Failure::Other("no result list in the page".into()))
+        );
+    }
+}
+
+mod bing {
+    use super::*;
+
+    fn at(server: &MockServer) -> Bing {
+        Bing::at(&format!("{}/s", server.uri()))
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_page() {
+        let server = MockServer::start().await;
+        // "aHR0cHM6Ly9iLm9yZy95" is https://b.org/y.
+        let body = r#"<html><body><ol id="b_results">
+            <li class="b_ad"><h2><a href="https://ad.example">An ad</a></h2></li>
+            <li class="b_algo">
+              <h2><a href="https://a.org/x">The <strong>title</strong></a></h2>
+              <p><span class="algoSlug_icon">Web</span>About <strong>a</strong>.</p>
+            </li>
+            <li class="b_algo">
+              <h2><a href="https://www.bing.com/ck/a?!&&p=abc&u=a1aHR0cHM6Ly9iLm9yZy95&ntb=1">B</a></h2>
+            </li>
+            <li class="b_algo"><h2><a href="https://c.org/no-title"></a></h2></li>
+          </ol></body></html>"#;
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(query_param("q", "the query"))
+            .and(query_param("setlang", "en"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [row("https://a.org/x", "The title", "About a."), row("https://b.org/y", "B", "")]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_page_with_no_list_is_a_failure() {
+        let server =
+            answering(ResponseTemplate::new(200).set_body_string("<p>Verify you are human</p>"))
+                .await;
 
         assert_eq!(
             at(&server).query("q").await,
