@@ -271,12 +271,16 @@ async fn take_all(
 /// Each page, or as `Err` its search snippet when the page cannot be read. A lead has no snippet:
 /// its description is what another page says of it, so one that cannot be read gives no text.
 async fn fetch_all(tools: &Tools, hits: &[Hit]) -> Vec<Result<Page, String>> {
-    let fetches = hits.iter().map(|hit| async move {
-        tools.pages.fetch(&hit.url, tools.max_age).await.map_err(|err| {
-            tracing::info!("falling back to the snippet: {err}");
-            if hit.depth.is_some() { String::new() } else { hit.description.clone() }
+    // Collected first: a lazy map left in the stream keeps the future from being Send.
+    let fetches: Vec<_> = hits
+        .iter()
+        .map(|hit| async move {
+            tools.pages.fetch(&hit.url, tools.max_age).await.map_err(|err| {
+                tracing::info!("falling back to the snippet: {err}");
+                if hit.depth.is_some() { String::new() } else { hit.description.clone() }
+            })
         })
-    });
+        .collect();
     stream::iter(fetches).buffered(tools.max_threads.max(1)).collect().await
 }
 

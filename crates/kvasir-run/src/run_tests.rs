@@ -57,6 +57,30 @@ async fn a_watcher_sees_each_event_then_the_end() {
 }
 
 #[tokio::test]
+async fn a_follower_gets_the_status_as_of_each_event() {
+    let run = run();
+    run.start();
+    let mut follower = run.follow();
+    run.record_progress(Progress::new("research", "asking questions"));
+    // After the event: the status sent with it is from before.
+    run.record_progress(Progress::new("article", "writing"));
+    run.finish(State::Done, None);
+
+    let mut received = Vec::new();
+    while let Some(event) = follower.recv().await {
+        match event {
+            Event::Progress(event) => received.push(event.detail),
+            Event::Status(status) => {
+                received.push(status.summary.latest.map(|latest| latest.detail).unwrap_or_default())
+            }
+            Event::End => break,
+        }
+    }
+
+    assert_eq!(received, ["asking questions", "asking questions", "writing", "writing"]);
+}
+
+#[tokio::test]
 async fn watching_a_finished_run_ends_at_once() {
     let run = run();
     run.finish(State::Done, None);

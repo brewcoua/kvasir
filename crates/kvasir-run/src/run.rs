@@ -55,6 +55,9 @@ impl State {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     Progress(Box<Progress>),
+    /// The run as it stood when the progress event before it was published, to a follower from
+    /// [`Run::follow`].
+    Status(Box<RunStatus>),
     /// The run reached a terminal state, which ends the stream.
     End,
 }
@@ -94,7 +97,8 @@ struct Inner {
     by_stage: IndexMap<String, Usage>,
     embedding_tokens: u64,
     searches: u64,
-    watchers: Vec<mpsc::UnboundedSender<Event>>,
+    /// Each with whether it is sent a status after each progress event.
+    watchers: Vec<(mpsc::UnboundedSender<Event>, bool)>,
     calls: IndexMap<u64, LmCall>,
     contents: HashMap<u64, LmCallContent>,
     next_call: u64,
@@ -127,7 +131,7 @@ impl Inner {
     }
 
     fn notify(&mut self, event: &Event) {
-        self.watchers.retain(|watcher| watcher.send(event.clone()).is_ok());
+        self.watchers.retain(|(watcher, _)| watcher.send(event.clone()).is_ok());
     }
 }
 
@@ -233,6 +237,13 @@ impl Run {
         }
         let seq = event.seq.unwrap_or(0);
         inner.notify(&Event::Progress(Box::new(event)));
+        // Taken here rather than when a follower gets to it, by which time the run has moved on.
+        if inner.watchers.iter().any(|(_, status)| *status) {
+            let status = Event::Status(Box::new(self.status_of(inner, Some(STATUS_CALLS))));
+            inner
+                .watchers
+                .retain(|(watcher, wants)| !wants || watcher.send(status.clone()).is_ok());
+        }
         seq
     }
 
@@ -476,10 +487,19 @@ impl Run {
     /// Follow this run live: progress events, then [`Event::End`]. A run already over sends
     /// nothing, and the receiver ends at once.
     pub fn watch(&self) -> mpsc::UnboundedReceiver<Event> {
+        self.watcher(false)
+    }
+
+    /// As [`Run::watch`], with an [`Event::Status`] after each progress event.
+    pub fn follow(&self) -> mpsc::UnboundedReceiver<Event> {
+        self.watcher(true)
+    }
+
+    fn watcher(&self, status: bool) -> mpsc::UnboundedReceiver<Event> {
         let (sender, receiver) = mpsc::unbounded_channel();
         let mut inner = self.lock();
         if !matches!(inner.state, Some(State::Done | State::Failed | State::Rejected)) {
-            inner.watchers.push(sender);
+            inner.watchers.push((sender, status));
         }
         receiver
     }
