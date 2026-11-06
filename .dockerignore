@@ -1,10 +1,8 @@
 *
-!pyproject.toml
-!uv.lock
-!README.md
-!src
+!Cargo.toml
+!Cargo.lock
+!crates
 !web
 web/node_modules
 web/test-results
 web/playwright-report
-src/kvasir/static

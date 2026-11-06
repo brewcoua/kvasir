@@ -1,7 +1,7 @@
 # Digests rather than tags, so a rebuild resolves to the same bytes and the published image can be
-# pinned by digest downstream. Both are multi-arch indexes, so this builds for arm64 unchanged if
+# pinned by digest downstream. All are multi-arch indexes, so this builds for arm64 unchanged if
 # the publishing workflow is ever asked to.
-# The runs page, built into the package's static directory. Only its output reaches the image.
+# The runs page. Only its output reaches the image, embedded in the binary.
 FROM docker.io/library/node:26.13.0-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS web
 
 RUN npm install --global pnpm@12.15.0
@@ -16,66 +16,57 @@ COPY web ./
 RUN pnpm build
 
 
-FROM docker.io/library/python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91 AS build
-
-COPY --from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c /uv /bin/uv
-
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never
+# The image's compiler is the one rust-toolchain.toml pins, which is left out so rustup does not
+# fetch clippy and rustfmt for a build that needs neither.
+FROM docker.io/library/rust:1.99.1-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS build
 
 WORKDIR /app
 
-# Dependencies resolve from the lockfile alone, so editing source does not invalidate this layer.
-COPY pyproject.toml uv.lock README.md ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --no-install-project
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY --from=web /app/src/kvasir/static ./src/kvasir/static
 
-COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+# The target directory is a cache mount, so the binary is copied out in the same step.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --locked --release --bin kvasir \
+    && cp target/release/kvasir /kvasir
 
 
-FROM docker.io/library/python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91 AS app
+FROM docker.io/library/debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS app
 
-COPY --from=build /app/.venv /app/.venv
-COPY src /app/src
-COPY --from=web /app/src/kvasir/static /app/src/kvasir/static
+# The TLS client verifies against the system's roots.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV PATH=/app/.venv/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    KVASIR_DATA_DIR=/data \
-    DO_NOT_TRACK=1
+COPY --from=build /kvasir /usr/local/bin/kvasir
 
-WORKDIR /app
+ENV KVASIR_DATA_DIR=/data
 
 # Numeric so a Kubernetes runAsNonRoot check can tell this is not root without resolving a name.
 USER 65532:65532
 
 EXPOSE 8080
 
-# Not `uvicorn kvasir.api.app:app`: the module configures logging before uvicorn can install its
-# own, which is what keeps the access log in the same format as everything else. See
-# kvasir/__main__.py.
-CMD ["python", "-m", "kvasir"]
+CMD ["kvasir", "serve"]
 
 
-# `--target browser`: the same image with the browser extra and Chromium, for pages that need
-# JavaScript. Run it with `--init --ipc=host`, as Playwright's Docker docs require against Chromium
-# running out of shared memory. Built on the slim image rather than mcr.microsoft.com/playwright,
-# which is Ubuntu with its own Python and would replace this image's venv and base digest.
+# `--target browser`: the same image with the `chromium` feature and Chromium, for pages that need
+# JavaScript. Run it with `--init --ipc=host`, so Chromium does not run out of shared memory.
 FROM build AS build-browser
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --extra browser
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    cargo build --locked --release --bin kvasir --features chromium \
+    && cp target/release/kvasir /kvasir
 
 FROM app AS browser
-COPY --from=build-browser /app/.venv /app/.venv
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 USER root
-RUN playwright install --with-deps chromium \
-    && patchright install chromium \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends chromium \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=build-browser /kvasir /usr/local/bin/kvasir
+ENV CHROME=/usr/bin/chromium
 USER 65532:65532
 
 # Last, so a build without --target still gives the image without Chromium.
