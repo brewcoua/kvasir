@@ -737,8 +737,10 @@ the icon provider. What each provider learns:
 - `custom` is your own template, such as `https://icons.example.net/{domain}`. Its first request is
   not checked against the public-address rule, so it may be a service on your network.
 
-An icon must be PNG, ICO, GIF, JPEG or WebP, judged by its first bytes, and at most 256 KiB. SVG is
-refused. Do not use as `custom` a service that answers 200 with a placeholder for a missing icon,
+An icon must be PNG, ICO, GIF, JPEG, WebP or SVG, judged by its content, and at most 256 KiB. The
+`direct` provider prefers an SVG the homepage declares, then its largest declared image, then
+`/favicon.ico`, then the same at `www.` or the registrable domain. An SVG is kept only after
+everything but its drawing is removed. Do not use as `custom` a service that answers 200 with a placeholder for a missing icon,
 such as allesedv, Yandex, icon.horse or Bitwarden (as probed): kvasir caches the placeholder as the
 site's real icon. A provider that answers 404 for a missing icon is fine.
 

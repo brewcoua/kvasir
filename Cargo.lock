@@ -2003,6 +2003,7 @@ dependencies = [
  "kvasir-extract",
  "kvasir-fetch",
  "kvasir-types",
+ "quick-xml",
  "regex",
  "reqwest",
  "serde",

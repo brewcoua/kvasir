@@ -2,8 +2,8 @@
 //!
 //! Public icons only. The hosts come from pages a run read, so they are attacker-influenced: every
 //! request, redirect hop and `<link>` target is checked, and what comes back is trusted for nothing
-//! but its first bytes. The content type served is the one those bytes show, and SVG is refused
-//! outright because it would run script when served from this origin.
+//! but its first bytes. The content type served is the one those bytes show. An SVG could run script
+//! when served from this origin, so what is kept of one is what `favicons_svg` lets through.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -16,7 +16,7 @@ use kvasir_db::schema::FAVICONS;
 use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 use kvasir_extract::too_deep;
 use kvasir_fetch::Web;
-use kvasir_types::sites::normalize_host;
+use kvasir_types::sites::{normalize_host, registrable};
 use regex::Regex;
 use reqwest::header;
 use tokio::sync::{Semaphore, watch};
@@ -24,6 +24,9 @@ use tokio::time::{Instant, timeout, timeout_at};
 use url::Url;
 
 use crate::{SECONDS_PER_DAY, now};
+
+#[path = "favicons_svg.rs"]
+mod svg;
 
 // An icon past this is not one, or not worth the disk.
 const MAX_BYTES: usize = 256 * 1024;
@@ -333,35 +336,56 @@ impl Favicons {
         }
     }
 
+    /// The site's icon, or that of a name next to it: an apex can answer with only a bot wall while
+    /// its `www` has the icon, as linkedin.com does, and a subdomain may have none of its own.
     async fn direct(&self, host: &str, budget: &mut Budget) -> Option<Icon> {
-        let origin = self.templates.direct.replace("{domain}", host);
-        if let Some(icon) = self.icon(&format!("{origin}/favicon.ico"), budget, false).await {
+        let apex = registrable(host);
+        let other = if apex == host { format!("www.{host}") } else { apex.to_owned() };
+        if let Some(icon) = self.declared_or_ico(host, budget).await {
             return Some(icon);
         }
-        // Resolving the name again for the homepage would only wait as long a second time.
+        // A name that does not resolve may be an outage, and the other would only wait as long. A
+        // private one was not to be looked up at all, and its neighbours are not its icon.
+        if budget.unresolved || Instant::now() >= budget.deadline || !self.web.public(host).await {
+            return None;
+        }
+        self.declared_or_ico(&other, budget).await
+    }
+
+    /// What the homepage declares, best first, or else `/favicon.ico`. That one is asked first, for
+    /// a name that does not resolve to show before its robots.txt can wait as long again.
+    async fn declared_or_ico(&self, host: &str, budget: &mut Budget) -> Option<Icon> {
+        let origin = self.templates.direct.replace("{domain}", host);
+        let ico = self.icon(&format!("{origin}/favicon.ico"), budget, false).await;
         if budget.unresolved {
             return None;
         }
         let home = format!("{origin}/");
         // Its robots.txt may cost a wait of its own, which the deadline is checked against after.
         if !self.web.allowed(&home).await || Instant::now() >= budget.deadline {
-            return None;
+            return ico;
         }
-        let (body, final_url) = self.get(&home, budget, false, HOMEPAGE_BYTES, true).await?;
-        let links =
-            tokio::task::spawn_blocking(move || icon_links(&body, &final_url)).await.ok()?;
+        let Some((body, final_url)) = self.get(&home, budget, false, HOMEPAGE_BYTES, true).await
+        else {
+            return ico;
+        };
+        let links = tokio::task::spawn_blocking(move || icon_links(&body, &final_url))
+            .await
+            .unwrap_or_default();
         for url in links.iter().take(MAX_CANDIDATES) {
             if let Some(icon) = self.icon(url, budget, false).await {
                 return Some(icon);
             }
         }
-        None
+        ico
     }
 
     async fn icon(&self, url: &str, budget: &mut Budget, trusted: bool) -> Option<Icon> {
         let (body, _) = self.get(url, budget, trusted, MAX_BYTES, false).await?;
-        let content_type = sniff(&body)?;
-        Some(Icon { body, content_type: content_type.to_owned() })
+        if let Some(content_type) = sniff(&body) {
+            return Some(Icon { body, content_type: content_type.to_owned() });
+        }
+        Some(Icon { body: svg::clean(&body)?, content_type: "image/svg+xml".to_owned() })
     }
 
     /// The body and final URL of a 2xx answer, or None. Past `limit` bytes it is None, or with
@@ -470,7 +494,7 @@ fn provider_name(provider: FaviconProvider) -> &'static str {
     }
 }
 
-/// The type of an image format that is safe to serve, from its first bytes alone.
+/// The type of a raster format, from its first bytes alone.
 fn sniff(body: &[u8]) -> Option<&'static str> {
     if body.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Some("image/png");
@@ -491,7 +515,7 @@ fn sniff(body: &[u8]) -> Option<&'static str> {
     None
 }
 
-/// The icons a page declares as absolute URLs, the largest declared first.
+/// The icons a page declares as absolute URLs: vectors, then the largest declared.
 fn icon_links(html: &[u8], page_url: &str) -> Vec<String> {
     let html = String::from_utf8_lossy(html);
     let Some(page) = Url::parse(page_url).ok().filter(|_| !too_deep(&html)) else {
@@ -500,7 +524,7 @@ fn icon_links(html: &[u8], page_url: &str) -> Vec<String> {
     let soup = Document::from(html.as_ref());
     let base = soup.select("base[href]").attr("href");
     let base = base.and_then(|href| page.join(&href).ok()).unwrap_or(page);
-    let mut found: Vec<(String, u128)> = Vec::new();
+    let mut found: Vec<(String, bool, u128)> = Vec::new();
     let mut seen = HashSet::new();
     for link in soup.select("link[href]").iter() {
         let rel = link.attr("rel").unwrap_or_default().to_lowercase();
@@ -512,12 +536,10 @@ fn icon_links(html: &[u8], page_url: &str) -> Vec<String> {
             continue;
         };
         let kind = link.attr("type").unwrap_or_default().trim().to_lowercase();
-        if !matches!(url.scheme(), "http" | "https")
-            || kind == "image/svg+xml"
-            || url.path().to_lowercase().ends_with(".svg")
-        {
+        if !matches!(url.scheme(), "http" | "https") {
             continue;
         }
+        let vector = kind == "image/svg+xml" || url.path().to_lowercase().ends_with(".svg");
         let sizes = link.attr("sizes").unwrap_or_default().to_lowercase();
         let size = SIZE
             .captures_iter(&sizes)
@@ -529,12 +551,12 @@ fn icon_links(html: &[u8], page_url: &str) -> Vec<String> {
             .unwrap_or(0);
         let url = String::from(url);
         if seen.insert(url.clone()) {
-            found.push((url, size));
+            found.push((url, vector, size));
         }
     }
     // Stable, so equally sized icons stay in the page's order.
-    found.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
-    found.into_iter().map(|(url, _)| url).collect()
+    found.sort_by_key(|(_, vector, size)| std::cmp::Reverse((*vector, *size)));
+    found.into_iter().map(|(url, ..)| url).collect()
 }
 
 #[cfg(test)]

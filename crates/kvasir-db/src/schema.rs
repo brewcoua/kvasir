@@ -45,6 +45,9 @@ CREATE TRIGGER IF NOT EXISTS pieces_dropped AFTER DELETE ON pieces BEGIN INSERT 
 /// `favicons.db`: site icons, and the sites that have none.
 pub const FAVICONS: &[&str] = &["
 CREATE TABLE IF NOT EXISTS favicons (host TEXT PRIMARY KEY, body BLOB, content_type TEXT, provider TEXT, fetched_at REAL NOT NULL);
+", "
+-- SVG was refused until now, so every answer here may have a better one, or be a miss that is not.
+DELETE FROM favicons;
 "];
 
 /// `sources.db`: what each site is, what its survey found, and the operator's marks.

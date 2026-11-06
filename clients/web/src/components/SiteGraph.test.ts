@@ -1,13 +1,13 @@
 import { fireEvent, render } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loaded, wantIcons } from "../lib/favicons.svelte";
+import { loaded, loading, wantIcons } from "../lib/favicons.svelte";
 import SiteGraph, { labelVisible } from "./SiteGraph.svelte";
 
 // The real one loads through `Image`, which jsdom never finishes; what it does is in favicons.test.ts.
 vi.mock("../lib/favicons.svelte", async () => {
   const { SvelteSet } = await import("svelte/reactivity");
-  return { iconUrl: (host: string) => `/icon/${host}`, loaded: new SvelteSet<string>(), wantIcons: vi.fn() };
+  return { iconUrl: (host: string) => `/icon/${host}`, loaded: new SvelteSet<string>(), loading: new SvelteSet<string>(), wantIcons: vi.fn() };
 });
 
 // jsdom has none, and `bind:clientWidth` needs one.
@@ -176,6 +176,20 @@ describe("SiteGraph", () => {
       expect(icon.getAttribute("href")).toBe("/icon/c.org");
       expect(icon.closest(".node")!.textContent).toContain("c.org");
       expect(container.querySelectorAll(".node circle:not(.ring)")).toHaveLength(3);
+    });
+
+    it("marks only a site whose icon is being asked for, until it has it", async () => {
+      const { container } = render(SiteGraph, props);
+      const marked = () => [...container.querySelectorAll(".node .icon-loading")].map((ring) => ring.closest(".node")!.textContent);
+      expect(marked()).toEqual([]);
+      loading.add("b.org");
+      await tick();
+      expect(marked()).toHaveLength(1);
+      expect(marked()[0]).toContain("b.org");
+      loading.delete("b.org");
+      loaded.add("b.org");
+      await tick();
+      expect(marked()).toEqual([]);
     });
 
     it("still picks a site when its icon is clicked", async () => {

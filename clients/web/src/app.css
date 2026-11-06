@@ -1725,6 +1725,28 @@ table.runs a.topic:hover {
 }
 /* Clipped round; the pointer events stay on the node, so drag, click and hover still work. The ring redraws
    the outline over the icon, which would otherwise cover its inner half. */
+.site-graph .node .icon-loading {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 25 75;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: icon-loading 0.9s linear infinite;
+}
+@keyframes icon-loading {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-graph .node .icon-loading {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-opacity: 0.5;
+  }
+}
 .site-graph .node .favicon {
   clip-path: circle(50%) fill-box;
   pointer-events: none;

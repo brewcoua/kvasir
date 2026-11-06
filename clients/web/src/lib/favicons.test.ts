@@ -33,6 +33,15 @@ describe("wantIcons", () => {
     expect(srcs().at(-1)).toBe("/v1/favicons/e");
   });
 
+  it("says what is being asked for: not what waits its turn, nor what has failed", async () => {
+    const { loading, wantIcons } = await import("./favicons.svelte");
+    wantIcons(["a", "b", "c", "d", "e"]);
+    expect([...loading]).toEqual(["a", "b", "c", "d"]);
+    FakeImage.made[0].onload();
+    FakeImage.made[1].onerror();
+    expect([...loading].sort()).toEqual(["c", "d", "e"]);
+  });
+
   it("stops what was waiting when asked for something else, and never loads one twice", async () => {
     const { wantIcons } = await import("./favicons.svelte");
     wantIcons(["a", "b", "c", "d", "e"]);

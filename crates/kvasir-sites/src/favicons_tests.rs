@@ -95,6 +95,11 @@ impl Setting {
             .collect()
     }
 
+    /// How often `/favicon.ico` was asked, which the homepage is read after.
+    async fn icos(&self) -> usize {
+        self.asked().await.iter().filter(|at| *at == "/favicon.ico").count()
+    }
+
     fn age(&self, days: f64) {
         kvasir_db::Key::for_tests()
             .connect(self.dir.path().join("favicons.db"))
@@ -144,7 +149,7 @@ async fn each_provider_is_asked_for_the_host_and_its_icon_is_kept() {
         let found = setting.service(&[provider]).find("www.Example.org:8443").await;
 
         assert_eq!(found.icon, png(), "{name}");
-        assert_eq!(setting.asked().await, [at]);
+        assert_eq!(setting.asked().await[0], at);
         assert_eq!(setting.stored("example.org").await.unwrap().provider.as_deref(), Some(name));
     }
 }
@@ -333,7 +338,7 @@ async fn a_stored_icon_is_served_without_a_request() {
     assert_eq!(icons.find("example.org").await.icon, png());
     assert_eq!(icons.find("www.example.org").await.icon, png());
 
-    assert_eq!(setting.asked().await.len(), 1);
+    assert_eq!(setting.icos().await, 1);
 }
 
 #[tokio::test]
@@ -370,7 +375,7 @@ async fn an_expired_entry_is_fetched_again_and_overwritten() {
     let found = icons.find("example.org").await.icon.unwrap();
 
     assert_eq!(found.content_type, "image/gif");
-    assert_eq!(setting.asked().await.len(), 2);
+    assert_eq!(setting.icos().await, 2);
     assert_eq!(setting.stored("example.org").await.unwrap().icon, Some(found));
 }
 
@@ -424,7 +429,7 @@ async fn concurrent_lookups_of_one_host_make_one_request() {
     for found in [founds.0, founds.1, founds.2, founds.3] {
         assert_eq!(found.icon, png());
     }
-    assert_eq!(setting.asked().await.len(), 1);
+    assert_eq!(setting.icos().await, 1);
     assert!(icons.flights.lock().unwrap().is_empty());
 }
 
@@ -441,8 +446,6 @@ async fn a_homepage_is_read_for_icon_links_when_favicon_ico_is_missing() {
                 r#"<link rel="ICON" href="/small.png" sizes="16x16">"#,
                 r#"<link rel="shortcut icon" href="/big.png" sizes="16x16 64x64">"#,
                 &touch,
-                r#"<link rel="icon" href="/vector.svg">"#,
-                r#"<link rel="icon" href="/typed" type="image/svg+xml">"#,
                 r#"<link rel="icon" href="data:image/png;base64,AAAA">"#,
                 r#"<link rel="icon" href="javascript:alert(1)">"#,
                 r#"<link rel="icon" href="/last.png">"#,
@@ -478,7 +481,7 @@ async fn at_most_three_declared_icons_are_tried() {
 
     assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, None);
 
-    assert_eq!(setting.asked().await[2..], ["/96.png", "/64.png", "/48.png"]);
+    assert_eq!(setting.asked().await[2..5], ["/96.png", "/64.png", "/48.png"]);
 }
 
 #[tokio::test]
@@ -490,7 +493,8 @@ async fn a_homepage_that_robots_txt_disallows_is_not_read() {
 
     assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, None);
 
-    assert_eq!(setting.asked().await, ["/favicon.ico"]);
+    // Once for the site and once for its `www`, which the same answers come from here.
+    assert_eq!(setting.asked().await, ["/favicon.ico", "/favicon.ico"]);
 }
 
 #[tokio::test]
@@ -702,10 +706,11 @@ async fn a_new_service_serves_what_the_last_one_stored() {
     let setting = Setting::new().await;
     setting.serve("/favicon.ico", ok(PNG)).await;
     assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, png());
+    let asked = setting.asked().await.len();
 
     assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, png());
 
-    assert_eq!(setting.asked().await.len(), 1);
+    assert_eq!(setting.asked().await.len(), asked);
 }
 
 #[tokio::test]
@@ -728,7 +733,7 @@ async fn a_site_that_did_not_answer_rests_across_a_restart_and_is_asked_again_af
 
     setting.age(31.0 / (24.0 * 60.0));
     assert_eq!(Arc::new(built()).find("example.org").await.icon, png());
-    assert_eq!(setting.asked().await.len(), 1);
+    assert_eq!(setting.icos().await, 1);
 }
 
 #[tokio::test]
@@ -746,4 +751,159 @@ async fn with_the_cache_off_nothing_is_read_or_written() {
 
     assert_eq!(setting.stored("example.org").await.unwrap().icon, None);
     assert!(setting.stored("new.example.org").await.is_none());
+}
+
+#[test]
+fn an_svg_keeps_what_draws_and_loses_everything_else() {
+    let dirty = br##"<?xml version="1.0"?>
+<!DOCTYPE svg [<!ENTITY a "boom">]>
+<!-- from an editor -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:inkscape="x" viewBox="0 0 8 8" onload="alert(1)" inkscape:version="1">
+  <metadata><rdf>nested<rdf>deep</rdf></rdf></metadata>
+  <script>alert(2)</script>
+  <foreignObject><body xmlns="http://www.w3.org/1999/xhtml"><iframe src="x"/></body></foreignObject>
+  <image href="https://evil.example/p.png"/>
+  <animate attributeName="href" to="javascript:alert(3)"/>
+  <defs><linearGradient id="g"><stop offset="0" stop-color="#000"/></linearGradient></defs>
+  <a href="javascript:alert(4)"><path d="M0 0"/></a>
+  <path d="M1 1" fill="url(#g)" onclick="alert(5)" style="fill:red"/>
+  <rect width="1" fill="url(https://evil.example/x)" style="background:url(//evil.example)"/>
+  <use xlink:href="#g"/>
+  <use href="https://evil.example/s.svg#x"/>
+  <circle r="1" fill="&#117;rl(https://evil.example)"/>
+  <text>&a;a &amp; b</text>
+</svg>"##;
+
+    let clean = String::from_utf8(svg::clean(dirty).unwrap()).unwrap();
+
+    assert_eq!(
+        clean,
+        concat!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">"##,
+            r##"<defs><linearGradient id="g"><stop offset="0" stop-color="#000"/></linearGradient></defs>"##,
+            r##"<path d="M1 1" fill="url(#g)" style="fill:red"/>"##,
+            r##"<rect width="1"/>"##,
+            r##"<use href="#g"/>"##,
+            r##"<use/>"##,
+            r##"<circle r="1"/>"##,
+            r##"<text>a &amp; b</text>"##,
+            "</svg>",
+        )
+    );
+}
+
+#[test]
+fn an_svg_style_cannot_reach_outside_the_file_even_split_by_a_comment() {
+    let kept = br#"<svg xmlns="http://www.w3.org/2000/svg"><style><![CDATA[@media (prefers-color-scheme:dark){path{fill:#fff}}]]></style><path d="M0 0"/></svg>"#;
+    let kept = String::from_utf8(svg::clean(kept).unwrap()).unwrap();
+    assert!(kept.contains("<style>@media (prefers-color-scheme:dark){path{fill:#fff}}</style>"));
+
+    for css in [
+        "@import 'https://evil.example/x.css';",
+        "@im<!-- -->port 'https://evil.example/x.css';",
+        "path{fill:url(https://evil.example/x)}",
+        r"path{fill:\75rl(https://evil.example/x)}",
+    ] {
+        let dirty = format!(r#"<svg><style>{css}</style><path d="M0 0"/></svg>"#);
+        let clean = String::from_utf8(svg::clean(dirty.as_bytes()).unwrap()).unwrap();
+        assert!(clean.contains("<style></style>"), "{css}: {clean}");
+    }
+}
+
+#[test]
+fn what_is_no_drawing_is_no_svg() {
+    for body in [
+        &b"<html><svg><path d='M0 0'/></svg></html>"[..],
+        b"<!DOCTYPE html><html></html>",
+        b"<svg/>",
+        b"<svg><script>alert(1)</script></svg>",
+        b"<svg><path d='M0 0'/>",
+        b"<svg><path d='M0 0'></svg>",
+        b"<svg><path d='M0 0'/></svg><script>alert(1)</script>",
+        b"not xml at all",
+        b"",
+        b"\xff\xfe<svg/>",
+    ] {
+        assert_eq!(svg::clean(body), None, "{}", String::from_utf8_lossy(body));
+    }
+}
+
+#[tokio::test]
+async fn a_declared_svg_wins_over_every_raster_and_is_cleaned() {
+    let setting = Setting::new().await;
+    setting.serve("/favicon.ico", ok(ICO)).await;
+    setting
+        .serve(
+            "/",
+            page(&[
+                r#"<link rel="icon" href="/big.png" sizes="512x512">"#,
+                r#"<link rel="icon" href="_static/logo.svg">"#,
+            ]),
+        )
+        .await;
+    setting
+        .serve(
+            "/_static/logo.svg",
+            ok(br#"<svg xmlns="http://www.w3.org/2000/svg"><script>x</script><path d="M0 0"/></svg>"#),
+        )
+        .await;
+
+    let found = setting.service(&[Direct]).find("example.org").await.icon.unwrap();
+
+    assert_eq!(found.content_type, "image/svg+xml");
+    assert_eq!(found.body, br#"<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>"#);
+}
+
+#[tokio::test]
+async fn a_homepage_declaring_nothing_leaves_the_ico() {
+    let setting = Setting::new().await;
+    setting.serve("/favicon.ico", ok(ICO)).await;
+    setting.serve("/", page(&[])).await;
+
+    let found = setting.service(&[Direct]).find("example.org").await.icon.unwrap();
+
+    assert_eq!(found.content_type, "image/x-icon");
+}
+
+#[test]
+fn a_vector_comes_first_however_it_is_declared() {
+    let html = br#"<link rel="icon" href="/big.png" sizes="512x512">
+        <link rel="icon" href="/typed" type="image/svg+xml">
+        <link rel="icon" href="/named.SVG">"#;
+
+    assert_eq!(
+        icon_links(html, "https://example.org/"),
+        [
+            "https://example.org/typed",
+            "https://example.org/named.SVG",
+            "https://example.org/big.png"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_subdomain_with_no_icon_of_its_own_takes_its_domains() {
+    let setting = Setting::new().await;
+    let domain =
+        Mock::given(wiremock::matchers::header("host", format!("kernel.org:{}", setting.port())))
+            .and(path("/favicon.ico"))
+            .respond_with(ok(PNG));
+    domain.mount(&setting.site).await;
+
+    assert_eq!(setting.service(&[Direct]).find("docs.kernel.org").await.icon, png());
+}
+
+#[tokio::test]
+async fn an_apex_with_no_icon_takes_its_www() {
+    let setting = Setting::new().await;
+    let www = Mock::given(wiremock::matchers::header(
+        "host",
+        format!("www.example.org:{}", setting.port()),
+    ))
+    .and(path("/favicon.ico"))
+    .respond_with(ok(PNG));
+    www.mount(&setting.site).await;
+
+    assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, png());
 }

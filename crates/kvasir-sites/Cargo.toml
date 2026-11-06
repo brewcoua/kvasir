@@ -13,6 +13,7 @@ kvasir-db.workspace = true
 kvasir-extract.workspace = true
 kvasir-fetch.workspace = true
 kvasir-types.workspace = true
+quick-xml.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 serde.workspace = true

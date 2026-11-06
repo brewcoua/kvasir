@@ -24,7 +24,7 @@
   import { select } from "d3-selection";
   import { zoom, type ZoomBehavior } from "d3-zoom";
   import { onDestroy, untrack } from "svelte";
-  import { iconUrl, loaded, wantIcons } from "../lib/favicons.svelte";
+  import { iconUrl, loaded, loading, wantIcons } from "../lib/favicons.svelte";
   import SourceBadge from "./SourceBadge.svelte";
 
   let {
@@ -264,6 +264,8 @@
           {#if loaded.has(node.id)}
             <image class="favicon" href={iconUrl(node.id)} x={-node.r} y={-node.r} width={2 * node.r} height={2 * node.r} />
             <circle class="ring" r={node.r} />
+          {:else if loading.has(node.id)}
+            <circle class="icon-loading" r={node.r} pathLength="100" />
           {/if}
           <text dy="0.35em">{node.label}</text>
         </g>

@@ -273,7 +273,10 @@ async fn favicon(State(app): State<Arc<App>>, Path(host): Path<String>) -> Respo
     let headers = [
         (header::CONTENT_TYPE, icon.content_type),
         (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
-        (header::CONTENT_SECURITY_POLICY, "default-src 'none'; sandbox".to_owned()),
+        (
+            header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; style-src 'unsafe-inline'; sandbox".to_owned(),
+        ),
         (header::CACHE_CONTROL, format!("public, max-age={ICON_AGE}")),
     ];
     (headers, icon.body).into_response()

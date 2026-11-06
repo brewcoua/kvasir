@@ -11,6 +11,8 @@ const RETRY_MS = 65_000;
 export const iconUrl = (host: string) => `/v1/favicons/${encodeURIComponent(host)}`;
 
 export const loaded = new SvelteSet<string>();
+// Those being asked for right now. A host waiting its turn or a retry is not in here.
+export const loading = new SvelteSet<string>();
 // Hosts being loaded, waiting to retry, or given up on: none of these go in the queue again.
 const seen = new Set<string>();
 const retried = new Set<string>();
@@ -24,9 +26,11 @@ function next() {
 function load(host: string) {
   running++;
   seen.add(host);
+  loading.add(host);
   const image = new Image();
   const finish = () => {
     running--;
+    loading.delete(host);
     next();
   };
   image.onload = () => {
