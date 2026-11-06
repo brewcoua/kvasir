@@ -97,7 +97,7 @@ mod tests {
     fn a_python_store_loses_co_storm_and_is_backed_up() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("kvasir.db");
-        let old = crate::Key::for_tests().connect(&path).unwrap();
+        let old = Connection::open(&path).unwrap();
         old.execute_batch(&golden("kvasir.sql")).unwrap();
         old.execute_batch(
             "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -139,6 +139,38 @@ mod tests {
 }
 
 /// Opens a copy of a real `pages.db`. Ignored by default; run with
+#[cfg(test)]
+#[test]
+fn a_plain_page_cache_keeps_its_full_text_search() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("pages.db");
+    let old = rusqlite::Connection::open(&path).unwrap();
+    old.execute_batch(PAGES[0]).unwrap();
+    old.execute_batch(
+        "INSERT INTO pieces VALUES ('https://example.org/', 0, 'a granite stone', 'm', x'00');",
+    )
+    .unwrap();
+    drop(old);
+
+    let db = crate::Db::open(&path, &crate::Key::for_tests(), PAGES).unwrap();
+
+    let search = |word: &'static str| {
+        db.call_blocking(move |c| {
+            c.query_row("SELECT count(*) FROM pieces_fts WHERE pieces_fts MATCH ?", [word], |r| {
+                r.get::<_, i64>(0)
+            })
+        })
+        .unwrap()
+    };
+    assert_eq!(search("granite"), 1);
+    // The triggers came across too: a new piece is searchable.
+    db.call_blocking(|c| {
+        c.execute("INSERT INTO pieces VALUES ('https://example.org/', 1, 'marble', 'm', x'00')", [])
+    })
+    .unwrap();
+    assert_eq!(search("marble"), 1);
+}
+
 /// `KVASIR_SECRET_KEY=<its key> KVASIR_REAL_PAGES=<copy of pages.db> cargo test -p kvasir-db -- --ignored`.
 #[cfg(test)]
 #[test]

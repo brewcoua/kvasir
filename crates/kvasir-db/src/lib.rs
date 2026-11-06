@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -54,6 +55,8 @@ pub enum DbError {
     Create { path: PathBuf, source: std::io::Error },
     #[error("{path}: KVASIR_SECRET_KEY does not open it; it was encrypted with another key")]
     WrongKey { path: PathBuf },
+    #[error("encrypting {path}: {reason}")]
+    Encrypt { path: PathBuf, reason: String },
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
     #[error("migrating {path} to version {version}: {source}")]
@@ -88,6 +91,8 @@ impl Db {
             std::fs::create_dir_all(dir)
                 .map_err(|source| DbError::Create { path: dir.to_owned(), source })?;
         }
+        encrypt_plain(path, key)?;
+        encrypt_plain(&backup_path(path), key)?;
         let mut conn = key.connect(path).map_err(|err| match err.sqlite_error_code() {
             Some(rusqlite::ErrorCode::NotADatabase) => DbError::WrongKey { path: path.to_owned() },
             _ => err.into(),
@@ -153,13 +158,101 @@ fn migrate(conn: &mut Connection, path: &Path, migrations: &[&str]) -> Result<()
 /// migrations may leave it unreadable to Python. An existing copy is kept: it is the older one.
 fn backup(conn: &Connection, path: &Path) -> Result<(), DbError> {
     let tables: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get(0))?;
-    let mut name = path.as_os_str().to_owned();
-    name.push(".pre-rust.bak");
-    let copy = PathBuf::from(name);
+    let copy = backup_path(path);
     if tables > 0 && !copy.exists() {
         conn.execute("VACUUM INTO ?1", [copy.to_string_lossy()])?;
     }
     Ok(())
+}
+
+fn backup_path(path: &Path) -> PathBuf {
+    with_suffix(path, ".pre-rust.bak")
+}
+
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+/// Replaces a plain SQLite file at `path` with an encrypted copy, and anything else is left alone.
+/// The plain file stays until the copy is complete and holds the same rows, so a failure or a crash
+/// loses nothing and the next start tries again. It takes the file's size again in free disk.
+fn encrypt_plain(path: &Path, key: &Key) -> Result<(), DbError> {
+    let mut header = [0; 16];
+    let plain = std::fs::File::open(path)
+        .and_then(|mut file| file.read_exact(&mut header))
+        .is_ok_and(|()| &header == b"SQLite format 3\0");
+    if !plain {
+        return Ok(());
+    }
+    tracing::info!("encrypting {}", path.display());
+    let fail = |reason: String| DbError::Encrypt { path: path.to_owned(), reason };
+    let copy = with_suffix(path, ".encrypting");
+    let journal = with_suffix(&copy, "-journal");
+    for leftover in [&copy, &journal] {
+        match std::fs::remove_file(leftover) {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
+                return Err(fail(err.to_string()));
+            }
+            _ => {}
+        }
+    }
+    export(path, &copy, key).map_err(fail)?;
+    // The export read the WAL and its checkpoint emptied it, so it holds nothing the copy lacks.
+    // It goes first: left beside the encrypted file it would be plain text no one reads.
+    for leftover in [with_suffix(path, "-wal"), with_suffix(path, "-shm")] {
+        match std::fs::remove_file(&leftover) {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
+                return Err(fail(err.to_string()));
+            }
+            _ => {}
+        }
+    }
+    std::fs::rename(&copy, path).map_err(|err| fail(err.to_string()))
+}
+
+/// Writes `plain` to `copy` under `key` and checks that every table came across whole.
+fn export(plain: &Path, copy: &Path, key: &Key) -> Result<(), String> {
+    let text = |err: rusqlite::Error| err.to_string();
+    // No key, so this connection reads the file as it is.
+    let conn = Connection::open(plain).map_err(text)?;
+    conn.busy_timeout(BUSY_TIMEOUT).map_err(text)?;
+    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(())).map_err(text)?;
+    let attach = || {
+        conn.execute(
+            "ATTACH DATABASE ?1 AS encrypted KEY ?2",
+            params![copy.to_string_lossy(), format!("x'{}'", key.0)],
+        )
+        .map_err(text)
+    };
+    attach()?;
+    conn.query_row("SELECT sqlcipher_export('encrypted')", [], |_| Ok(())).map_err(text)?;
+    let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).map_err(text)?;
+    conn.pragma_update(Some("encrypted"), "user_version", version).map_err(text)?;
+    // The export writes virtual tables straight into the copy's schema, which is read again here.
+    conn.execute_batch("DETACH DATABASE encrypted").map_err(text)?;
+    attach()?;
+    let mut tables =
+        conn.prepare("SELECT name FROM main.sqlite_master WHERE type = 'table'").map_err(text)?;
+    let tables: Vec<String> = tables
+        .query_map([], |r| r.get(0))
+        .map_err(text)?
+        .collect::<Result<_, _>>()
+        .map_err(text)?;
+    for table in tables {
+        let quoted = table.replace('"', "\"\"");
+        let sql = format!(
+            "SELECT (SELECT count(*) FROM main.\"{quoted}\"), \
+                    (SELECT count(*) FROM encrypted.\"{quoted}\")"
+        );
+        let (was, is): (i64, i64) =
+            conn.query_row(&sql, [], |r| Ok((r.get(0)?, r.get(1)?))).map_err(text)?;
+        if was != is {
+            return Err(format!("{table} has {was} rows, its copy {is}"));
+        }
+    }
+    conn.execute_batch("DETACH DATABASE encrypted").map_err(text)
 }
 
 #[cfg(test)]
@@ -189,7 +282,7 @@ mod tests {
     fn a_file_python_made_is_taken_over_without_losing_rows() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("old.db");
-        let old = Key::for_tests().connect(&path).unwrap();
+        let old = Connection::open(&path).unwrap();
         old.execute_batch(
             "CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT); INSERT INTO t VALUES ('a', 'b');",
         )
@@ -236,6 +329,102 @@ mod tests {
             Db::open(&path, &Key::for_tests(), MIGRATIONS),
             Err(DbError::TooNew { found: 2, known: 1, .. })
         ));
+    }
+
+    fn is_plain(path: &Path) -> bool {
+        std::fs::read(path).unwrap().starts_with(b"SQLite format 3")
+    }
+
+    #[test]
+    fn a_plain_file_is_encrypted_with_its_version_and_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p.db");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch(
+            "CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT);
+             INSERT INTO t VALUES ('a', 'plain-needle');
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+        drop(old);
+
+        let db = Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
+
+        let (v, version): (String, i64) = db
+            .call_blocking(|c| {
+                Ok((
+                    c.query_row("SELECT v FROM t", [], |r| r.get(0))?,
+                    c.pragma_query_value(None, "user_version", |r| r.get(0))?,
+                ))
+            })
+            .unwrap();
+        assert_eq!((v.as_str(), version), ("plain-needle", 1));
+        drop(db);
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!is_plain(&path));
+        assert!(!bytes.windows(12).any(|w| w == b"plain-needle"));
+        assert!(!with_suffix(&path, ".encrypting").exists());
+    }
+
+    #[test]
+    fn what_a_plain_file_holds_only_in_its_wal_is_kept_and_the_wal_goes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("w.db");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch(
+            "PRAGMA journal_mode = wal; PRAGMA wal_autocheckpoint = 0;
+             CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT); INSERT INTO t VALUES ('a', 'in-the-wal');",
+        )
+        .unwrap();
+        // The files as a crash leaves them: the connection is open, so nothing is checkpointed.
+        let crashed = dir.path().join("crashed");
+        std::fs::create_dir(&crashed).unwrap();
+        for name in ["w.db", "w.db-wal"] {
+            std::fs::copy(dir.path().join(name), crashed.join(name)).unwrap();
+        }
+        drop(old);
+        let path = crashed.join("w.db");
+
+        let db = Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
+
+        let v: String =
+            db.call_blocking(|c| c.query_row("SELECT v FROM t", [], |r| r.get(0))).unwrap();
+        assert_eq!(v, "in-the-wal");
+        drop(db);
+        for file in std::fs::read_dir(&crashed).unwrap() {
+            let bytes = std::fs::read(file.unwrap().path()).unwrap();
+            assert!(!bytes.windows(10).any(|w| w == b"in-the-wal"));
+        }
+    }
+
+    #[test]
+    fn a_copy_left_by_a_crash_is_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("c.db");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch("CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT)").unwrap();
+        drop(old);
+        std::fs::write(with_suffix(&path, ".encrypting"), b"half a file").unwrap();
+
+        Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
+
+        assert!(!is_plain(&path));
+        assert!(!with_suffix(&path, ".encrypting").exists());
+    }
+
+    #[test]
+    fn a_plain_backup_beside_a_file_is_encrypted_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("b.db");
+        let copy = backup_path(&path);
+        let old = Connection::open(&copy).unwrap();
+        old.execute_batch("CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT)").unwrap();
+        drop(old);
+
+        Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
+
+        assert!(!is_plain(&copy));
+        Key::for_tests().connect(&copy).unwrap();
     }
 
     #[test]

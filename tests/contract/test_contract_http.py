@@ -238,21 +238,25 @@ def test_a_setting_read_at_startup_waits_for_a_restart(new_service: Any, fakes: 
     assert _field(view, "runs.max")["value"] == 7
 
 
-@pytest.mark.skip(reason="sqlite3 cannot write to an encrypted file")
 def test_a_key_this_version_does_not_know_can_be_deleted(new_service: Any) -> None:
-    """As `sessions.ttl_hours` is, on a store from a version with Co-STORM."""
+    """On a plain store, which also shows that one is encrypted when the service starts."""
     service = new_service()
     service.stop()
+    for file in service.data.glob("kvasir.db*"):
+        file.unlink()
     with sqlite3.connect(service.data / "kvasir.db") as db:
-        db.execute("INSERT INTO settings VALUES ('sessions.ttl_hours', '168')")
+        db.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        db.execute("INSERT INTO settings VALUES ('retired.option', '168')")
+    db.close()
     service.start()
     with service.client() as client:
         refused = client.patch("/v1/settings", json={"storm.max_conv_turn": 5})
         assert refused.status_code == 422
-        assert refused.json() == {"message": "unknown setting sessions.ttl_hours"}
+        assert refused.json() == {"message": "unknown setting retired.option"}
 
-        assert client.delete("/v1/settings/sessions.ttl_hours").status_code == 200
+        assert client.delete("/v1/settings/retired.option").status_code == 200
         assert client.patch("/v1/settings", json={"storm.max_conv_turn": 5}).status_code == 200
+    assert not (service.data / "kvasir.db").read_bytes().startswith(b"SQLite format 3")
 
 
 # -- Methods ---------------------------------------------------------------------------------------

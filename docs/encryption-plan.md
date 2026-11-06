@@ -1,6 +1,6 @@
 # Encryption at rest: plan
 
-Status: written 2026-11-06. Phases 1 and 2 built 2026-11-06.
+Status: written 2026-11-06. Phases 1 to 3 built 2026-11-06.
 
 Every file in `KVASIR_DATA_DIR` is plain SQLite. Anyone who gets a copy of the directory or a backup
 of it reads the runs (questions, prompts, answers, the searches made), the cached pages of what was
@@ -96,14 +96,14 @@ A wrong key shows on the first read: SQLCipher answers `file is not a database`.
    Every opener passes it: `kvasir.db` (settings, `RunStore`, `eval`), `pages.db`, `favicons.db`,
    `sources.db`. Tests: a file written with one key fails to open with another; the raw bytes of a
    file contain no plain text written to it. Commit.
-3. Existing files. A file that starts with `SQLite format 3\0` is plain. At startup it is
-   encrypted in place: `ATTACH '<file>.encrypting' AS encrypted KEY "x'...'"`, `SELECT
-   sqlcipher_export('encrypted')`, `DETACH`, copy `user_version`, open the copy with the key and
-   compare row counts per table, rename it over the original, remove the old `-wal` and `-shm`.
-   The plain file is gone afterwards, so the release notes tell operators to back up the directory
-   first. `sqlcipher_export` and the `ATTACH ... KEY` form are from the SQLCipher docs, unverified
-   here; the phase tests them. A test starts on a plain fixture of each file and reads it back.
-   Commit.
+3. Existing files. A file that starts with `SQLite format 3\0` is plain, and `Db::open` encrypts it
+   before opening it: checkpoint the WAL, `ATTACH '<file>.encrypting' AS encrypted KEY "x'...'"`,
+   `SELECT sqlcipher_export('encrypted')`, copy `user_version`, attach again and compare row counts
+   per table, remove the old `-wal` and `-shm`, rename the copy over the original. A crash at any
+   point leaves the plain file or the finished copy, and a `.encrypting` file left behind is
+   replaced. A plain `<file>.pre-rust.bak` is encrypted the same way. The conversion needs free disk
+   for one more copy of each file, and the plain file is gone afterwards, so the release notes tell
+   operators to back up the directory first. Commit.
 4. Backups. `Db::backup` (`kvasir-db/src/lib.rs:114`) runs `VACUUM INTO` for the pre-Rust upgrade.
    Test whether its output is encrypted under SQLCipher; if not, export with `sqlcipher_export`
    instead. Commit.
