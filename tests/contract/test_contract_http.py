@@ -199,6 +199,40 @@ def test_a_setting_is_changed_and_reset(client: httpx.Client) -> None:
     assert _field(reset.json(), "storm.max_conv_turn")["value"] == 3
 
 
+def test_a_secret_is_written_but_never_returned(client: httpx.Client) -> None:
+    key = "search.brave.api_key"
+    assert _field(client.get("/v1/settings").json(), key)["value"] == {"set": False}
+
+    changed = client.patch("/v1/settings", json={key: "hidden-value"})
+    assert changed.status_code == 200
+    assert "hidden-value" not in changed.text
+    assert _field(changed.json(), key) | {"help": ""} == {
+        "key": key,
+        "type": "secret",
+        "help": "",
+        "value": {"set": True},
+        "default": {"set": False},
+        "stored": True,
+        "required": False,
+        "nullable": False,
+        "restart": False,
+        "minimum": None,
+        "choices": None,
+    }
+
+    other = client.patch("/v1/settings", json={"storm.max_conv_turn": 5})
+    assert _field(other.json(), key)["value"] == {"set": True}
+    assert "hidden-value" not in client.get("/v1/settings").text
+
+    refused = client.patch("/v1/settings", json={key: 12345})
+    assert refused.status_code == 422
+    assert refused.json() == {"message": f"{key} must be a non-empty string"}
+
+    removed = client.delete(f"/v1/settings/{key}")
+    assert _field(removed.json(), key)["value"] == {"set": False}
+    assert client.delete("/v1/settings/storm.max_conv_turn").status_code == 200
+
+
 @pytest.mark.parametrize(
     ("payload", "message"),
     [

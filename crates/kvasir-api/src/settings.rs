@@ -24,17 +24,19 @@ use kvasir_sites::favicons::{FaviconStore, Favicons};
 use kvasir_sites::sources::{SourceStore, Sources};
 use schemars::JsonSchema;
 use serde::Serialize;
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::{ApiError, App, Live, body};
 
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct SettingInfo {
     pub key: String,
-    /// `integer`, `number`, `boolean`, `text`, `list` of text, or `model`, a `<provider>/<name>`.
+    /// `integer`, `number`, `boolean`, `text`, `list` of text, `model`, a `<provider>/<name>`, or
+    /// `secret`.
     #[serde(rename = "type")]
     pub kind: &'static str,
     pub help: &'static str,
+    /// For a `secret`, only `{"set": <bool>}`.
     pub value: Value,
     pub default: Value,
     /// Whether `value` comes from kvasir.db rather than being the default.
@@ -76,14 +78,19 @@ fn info(
         Kind::Bool => ("boolean", None, None),
         Kind::Text { choices } => ("text", None, (!choices.is_empty()).then(|| choices.to_vec())),
         Kind::OptionalText => ("text", None, None),
+        Kind::Secret => ("secret", None, None),
         Kind::List { choices } => ("list", None, (!choices.is_empty()).then(|| choices.to_vec())),
+    };
+    let shown = |settings: &Settings| {
+        let value = settings.value(field.key).unwrap_or(Value::Null);
+        if field.kind == Kind::Secret { json!({"set": !value.is_null()}) } else { value }
     };
     SettingInfo {
         key: field.key.into(),
         kind: if field.is_model() { "model" } else { kind },
         help: field.help,
-        value: settings.value(field.key).unwrap_or(Value::Null),
-        default: defaults.value(field.key).unwrap_or(Value::Null),
+        value: shown(settings),
+        default: shown(defaults),
         stored: stored.contains(field.key),
         required: field.required,
         nullable: field.kind == Kind::OptionalText,

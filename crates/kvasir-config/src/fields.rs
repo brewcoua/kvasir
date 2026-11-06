@@ -20,6 +20,8 @@ pub enum Kind {
     },
     /// Text that may be unset: `null` or `""`.
     OptionalText,
+    /// Text that is never shown: not by the API, in `Debug`, or in a message about a bad value.
+    Secret,
     /// A list of trimmed, non-empty strings, each one of `choices` after lowercasing when given.
     List {
         choices: &'static [&'static str],
@@ -28,7 +30,7 @@ pub enum Kind {
 
 #[derive(Debug)]
 pub struct Field {
-    /// `<section>.<name>`, as stored.
+    /// `<section>.<name>`, as stored. The name may hold dots, for a struct within the section.
     pub key: &'static str,
     pub kind: Kind,
     /// What the settings page shows under the field.
@@ -105,6 +107,10 @@ impl Field {
                 }
                 Ok(items.into())
             }
+            Kind::Secret => match value.as_str().map(str::trim) {
+                Some(text) if !text.is_empty() => Ok(text.into()),
+                _ => Err(ConfigError::new(format!("{key} must be a non-empty string"))),
+            },
             Kind::OptionalText if value.is_null() || value == "" => Ok(Value::Null),
             Kind::OptionalText | Kind::Text { .. } => {
                 let Some(text) = value.as_str() else { return Err(bad("a string")) };
@@ -194,6 +200,7 @@ pub const FIELDS: &[Field] = &[
     ),
     required("search.url", "SearXNG base URL."),
     field("search.top_k", INT, "Search results per query."),
+    field("search.brave.api_key", Kind::Secret, "Brave Search API key."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

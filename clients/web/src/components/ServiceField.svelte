@@ -18,6 +18,7 @@
   function show() {
     model = String(field.value ?? "");
     if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = Boolean(field.value);
+    else if (control && field.type === "secret") control.value = "";
     else if (control) control.value = field.type === "list" ? (field.value as string[]).join("\n") : String(field.value ?? "");
   }
 
@@ -53,6 +54,12 @@
     }
   }
 
+  // Empty keeps what is stored, since the field never shows it. Reset removes it.
+  function secret(typed: string) {
+    const value = typed.trim();
+    if (value !== "") save(value);
+  }
+
   const lines = (text: string) => text.split("\n").map((line) => line.trim()).filter(Boolean);
 </script>
 
@@ -69,6 +76,15 @@
       step={field.type === "number" ? "any" : 1}
       value={field.value}
       onchange={(e) => number(e.currentTarget)}
+    />
+  {:else if field.type === "secret"}
+    <input
+      {id}
+      bind:this={control}
+      type="password"
+      autocomplete="new-password"
+      placeholder={(field.value as { set: boolean }).set ? "set" : "not set"}
+      onchange={(e) => secret(e.currentTarget.value)}
     />
   {:else if field.type === "list"}
     <textarea {id} bind:this={control} rows="3" value={(field.value as string[]).join("\n")} onchange={(e) => save(lines(e.currentTarget.value))}></textarea>

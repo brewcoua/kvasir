@@ -71,6 +71,24 @@ test("a blank value does not end the setup", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Set up kvasir" })).toBeVisible();
 });
 
+test("a secret setting is written but never shown", async ({ page, request }) => {
+  await settings(request, SET_UP);
+  await logIn(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Service" }).click();
+
+  const key = page.getByLabel("Brave api key", { exact: true });
+  await expect(key).toHaveAttribute("placeholder", "not set");
+  await key.fill("hidden");
+  await key.blur();
+  await expect(key).toHaveAttribute("placeholder", "set");
+  await expect(key).toHaveValue("");
+  expect((await field(request, "search.brave.api_key")).value).toEqual({ set: true });
+
+  await page.getByRole("button", { name: "Reset brave api key to the default" }).click();
+  await expect(key).toHaveAttribute("placeholder", "not set");
+});
+
 test("a service setting saves as it changes, and resets", async ({ page, request }) => {
   await settings(request, SET_UP);
   await logIn(page);

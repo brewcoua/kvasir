@@ -51,15 +51,32 @@ impl Default for ModelSettings {
     }
 }
 
+/// A value `Debug` never prints and the settings API never returns.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Secret(pub String);
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Secret(..)")
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BraveSettings {
+    pub api_key: Option<Secret>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchSettings {
     pub url: String,
     pub top_k: usize,
+    pub brave: BraveSettings,
 }
 
 impl Default for SearchSettings {
     fn default() -> Self {
-        Self { url: String::new(), top_k: 3 }
+        Self { url: String::new(), top_k: 3, brave: BraveSettings::default() }
     }
 }
 

@@ -3722,6 +3722,7 @@
   "runs.max_concurrent": "string",
   "runs.store": "string",
   "runs.ttl_days": "string",
+  "search.brave.api_key": "string",
   "search.top_k": "string",
   "search.url": "string",
   "sources.allow": "string",
@@ -3832,6 +3833,23 @@
     "stored": "bool",
     "type": "string",
     "value": []
+   },
+   {
+    "choices": "null",
+    "default": {
+     "set": "bool"
+    },
+    "help": "string",
+    "key": "string",
+    "minimum": "null",
+    "nullable": "bool",
+    "required": "bool",
+    "restart": "bool",
+    "stored": "bool",
+    "type": "string",
+    "value": {
+     "set": "bool"
+    }
    },
    {
     "choices": [

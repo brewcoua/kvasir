@@ -542,6 +542,9 @@ changed since: `runs.store`, `runs.max`, `runs.ttl_days` and `runs.keep_call_con
 written when one is unusable: the answer is 422 with a `message` naming it. `DELETE` also removes a
 key this version does not know, which otherwise blocks every `PATCH`.
 
+A setting of type `secret` is never returned: its `value` is `{"set": true}` or `{"set": false}`.
+`PATCH` with a string sets it, `DELETE` removes it, and a `PATCH` that leaves it out keeps it.
+
 A nullable text setting, such as `model.reason_effort`, is turned off by storing `""`.
 
 ### First start
@@ -631,6 +634,7 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `model.context_tokens` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
 | `search.url` | required | SearXNG base URL. |
 | `search.top_k` | `3` | Search results per query. |
+| `search.brave.api_key` | unset | Brave Search API key. A secret: never returned. No search uses it yet. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |

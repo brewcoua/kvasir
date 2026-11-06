@@ -21,7 +21,8 @@ fn dump(s: &Settings) -> Value {
         "providers": providers,
         "log": s.log,
         "model": s.model,
-        "search": s.search,
+        // The fields Python had.
+        "search": {"url": s.search.url, "top_k": s.search.top_k},
         "runs": s.runs,
         "research": s.research,
         "storm": s.storm,

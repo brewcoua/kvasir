@@ -15,8 +15,9 @@ pub use fields::{FIELDS, Field, Kind, MODEL_KEYS, field_for};
 pub use load::decode;
 use repr::text as quote;
 pub use sections::{
-    FaviconProvider, FaviconSettings, FetchSettings, LogFormat, LogSettings, ModelSettings, Render,
-    ResearchSettings, RunSettings, RunStore, SearchSettings, SourceSettings, StormSettings,
+    BraveSettings, FaviconProvider, FaviconSettings, FetchSettings, LogFormat, LogSettings,
+    ModelSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings, Secret,
+    SourceSettings, StormSettings,
 };
 
 /// Sent when a provider has no key: the OpenAI client refuses an empty one, and Ollama ignores it.
@@ -115,7 +116,8 @@ impl std::fmt::Debug for Settings {
 }
 
 impl Settings {
-    /// The stored field `key`, such as `research.max_searches`, as JSON.
+    /// The stored field `key`, such as `research.max_searches`, as JSON. A secret comes as its text,
+    /// so what shows it to anyone checks the field's kind first.
     pub fn value(&self, key: &str) -> Option<Value> {
         let (section, name) = key.split_once('.')?;
         let value = match section {
@@ -129,7 +131,8 @@ impl Settings {
             "sources" => serde_json::to_value(&self.sources),
             _ => return None,
         };
-        value.expect("sections serialize").get(name).cloned()
+        let value = value.expect("sections serialize");
+        name.split('.').try_fold(&value, |at, part| at.get(part)).cloned()
     }
 
     /// The stored fields the service needs before it can run anything, still unset.
@@ -193,14 +196,66 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::{Map, json};
 
-    #[test]
-    fn the_field_table_matches_the_sections() {
-        let settings = Settings::from_env(
+    fn from_env() -> Settings {
+        Settings::from_env(
             [("KVASIR_TOKEN".into(), "t".into()), ("KVASIR_SECRET_KEY".into(), "ab".repeat(32))],
             &mut vec![],
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    fn leaves(prefix: String, value: &Value, keys: &mut Vec<String>) {
+        match value.as_object() {
+            Some(fields) => {
+                for (name, value) in fields {
+                    leaves(format!("{prefix}.{name}"), value, keys);
+                }
+            }
+            None => keys.push(prefix),
+        }
+    }
+
+    fn stored(key: &str, value: Value) -> Map<String, Value> {
+        Map::from_iter([(key.to_owned(), value)])
+    }
+
+    #[test]
+    fn a_nested_field_loads_beside_its_defaults() {
+        let settings = from_env()
+            .with_stored(&stored("search.brave.api_key", json!(" k ")), true, &mut vec![])
+            .unwrap();
+
+        assert_eq!(settings.search.brave.api_key, Some(Secret("k".into())));
+        assert_eq!(settings.search.top_k, 3);
+        assert_eq!(settings.value("search.brave.api_key"), Some(json!("k")));
+        assert_eq!(settings.value("search.brave"), Some(json!({"api_key": "k"})));
+        assert_eq!(settings.value("search.brave.nope"), None);
+    }
+
+    #[test]
+    fn no_message_shows_a_secret() {
+        let settings = from_env()
+            .with_stored(&stored("search.brave.api_key", json!("hidden")), true, &mut vec![])
+            .unwrap();
+        assert!(!format!("{settings:?}").contains("hidden"));
+
+        for bad in [json!(""), json!("  "), json!(123456)] {
+            let err = from_env()
+                .with_stored(&stored("search.brave.api_key", bad), true, &mut vec![])
+                .unwrap_err();
+            assert_eq!(err.to_string(), "search.brave.api_key must be a non-empty string");
+        }
+
+        let row = vec![("search.brave.api_key".to_owned(), "hidden".to_owned())];
+        let err = decode(row, true, &mut vec![]).unwrap_err();
+        assert_eq!(err.to_string(), "search.brave.api_key is not JSON");
+    }
+
+    #[test]
+    fn the_field_table_matches_the_sections() {
+        let settings = from_env();
         let mut keys = Vec::new();
         for (name, value) in [
             ("model", serde_json::to_value(&settings.model)),
@@ -212,7 +267,7 @@ mod tests {
             ("favicons", serde_json::to_value(&settings.favicons)),
             ("sources", serde_json::to_value(&settings.sources)),
         ] {
-            keys.extend(value.unwrap().as_object().unwrap().keys().map(|k| format!("{name}.{k}")));
+            leaves(name.to_owned(), &value.unwrap(), &mut keys);
         }
         assert_eq!(keys, FIELDS.iter().map(|f| f.key).collect::<Vec<_>>());
     }

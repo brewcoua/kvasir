@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
-use crate::fields::{self, FIELDS, MODEL_KEYS, field_for};
+use crate::fields::{self, FIELDS, Kind, MODEL_KEYS, field_for};
 use crate::repr::text as quote;
 use crate::{
     ConfigError, FaviconProvider, FaviconSettings, FetchSettings, LogFormat, LogSettings,
@@ -214,6 +214,9 @@ pub fn decode(
             Ok(value) => {
                 stored.insert(key, value);
             }
+            Err(_) if field_for(&key).is_some_and(|f| f.kind == Kind::Secret) => {
+                problem(format!("{key} is not JSON"), strict, warnings)?;
+            }
             Err(_) => problem(format!("{key} is not JSON: {}", quote(&text)), strict, warnings)?,
         }
     }
@@ -236,7 +239,13 @@ fn section<T: Default + Serialize + DeserializeOwned>(
 ) -> T {
     let Some(values) = parsed.remove(name) else { return T::default() };
     let mut section = serde_json::to_value(T::default()).expect("sections serialize");
-    section.as_object_mut().expect("sections are objects").extend(values);
+    for (name, value) in values {
+        let mut at = &mut section;
+        for part in name.split('.') {
+            at = &mut at[part];
+        }
+        *at = value;
+    }
     serde_json::from_value(section).expect("a checked value fits its section")
 }
 

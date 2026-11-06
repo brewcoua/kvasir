@@ -3,8 +3,8 @@ import { json, type ModelInfo, type ProviderInfo } from "./api";
 
 export const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 
-// `research.max_searches` as "Max searches".
-export const labelOf = (key: string) => capitalize(key.slice(key.indexOf(".") + 1).replaceAll("_", " "));
+// `research.max_searches` as "Max searches", `search.brave.api_key` as "Brave api key".
+export const labelOf = (key: string) => capitalize(key.slice(key.indexOf(".") + 1).replaceAll(/[._]/g, " "));
 
 // A provider that cannot list its models is told apart, so a page can say which.
 export async function loadModels(): Promise<{ models: ModelInfo[]; unreachable: string[]; providers: number }> {

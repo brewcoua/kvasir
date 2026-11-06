@@ -707,9 +707,13 @@ export interface components {
         };
         SettingInfo: {
             key: string;
-            /** @description `integer`, `number`, `boolean`, `text`, `list` of text, or `model`, a `<provider>/<name>`. */
+            /**
+             * @description `integer`, `number`, `boolean`, `text`, `list` of text, `model`, a `<provider>/<name>`, or
+             *     `secret`.
+             */
             type: string;
             help: string;
+            /** @description For a `secret`, only `{"set": <bool>}`. */
             value: unknown;
             choices?: string[] | null;
             /** @description Whether `value` comes from kvasir.db rather than being the default. */
