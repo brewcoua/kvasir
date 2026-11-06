@@ -137,3 +137,66 @@ seed:
 token:
     @{{ load }}; echo "$KVASIR_TOKEN"
 
+# Format the Rust and the Python
+fmt:
+    cargo fmt
+    uv run ruff format .
+
+# Run the linters CI runs
+lint:
+    cargo fmt --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo deny check
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run mypy
+    pnpm --dir clients/web check
+
+# Run the Rust, contract and page unit tests
+test: test-rust test-contract test-web
+
+test-rust:
+    cargo nextest run --locked --no-tests=pass
+
+test-contract:
+    cargo build --locked --bin kvasir
+    uv run pytest
+
+test-web:
+    pnpm --dir clients/web test
+
+# Run the Playwright tests
+e2e:
+    pnpm --dir clients/web exec playwright install chromium
+    pnpm --dir clients/web e2e
+
+# Generate the page's types from the service's schema
+types:
+    pnpm --dir clients/web types
+
+# Run what CI runs, but for the image build
+check: lint test types e2e
+    git diff --exit-code clients/web/src/lib/schema.d.ts
+
+# Build the page, then the release binary that embeds it
+build:
+    pnpm --dir clients/web build
+    cargo build --locked --release {{ cargo_features }}
+
+# Build the image
+image:
+    @{{ runtime }}; "$runtime" build -t kvasir:dev .
+
+# Evaluate research into a directory, as in `just eval data/eval/baseline --method graph`
+[positional-arguments]
+eval *args:
+    @{{ load }}; cargo run --release -- eval "$@"
+
+# Delete the data directory
+[confirm("Delete the data directory and everything in it?")]
+reset:
+    @{{ load }}; rm -rf -- "$KVASIR_DATA_DIR"
+
+# Delete the build output
+clean:
+    cargo clean
