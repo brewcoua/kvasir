@@ -672,6 +672,18 @@ Differences from Python, all deliberate:
 Gate: eval scores no worse, as judged by reading them; soak shows no leak or stuck slot; the image
 starts read-only, as today's does.
 
+#### Phase 6 result: in progress
+
+- **Soak:** 60 rounds against the contract harness's fake provider and search, `runs.max_concurrent`
+  3, three runs per round. Every third round the provider answered 503 for 1.5 s. Round 20 stopped
+  the service with SIGTERM while its runs were in flight; it waited for them, and they were stored
+  `done`. Round 40 killed it; on restart its runs were stored `failed`, "interrupted by a restart".
+  Every other run ended `done`, no slot stayed taken, and a run past the slots answered 429. RSS
+  stayed between 49 and 58 MB with no rise across rounds or restarts.
+- **Image:** 128 MB. With `--read-only` and a volume at `/data`, `/healthz` and `/` answer 200.
+- **`kvasir eval`:** one question (`antikythera`, `max_searches` 4) researched through the Rust
+  service and scored with the judge: 2 of 3 checks, 23 of 31 cited sentences supported.
+
 ### Phase 7: after cutover
 
 Each is its own change, once parity holds: `POST /v1/runs/{id}/cancel` and a `cancelled` state;
