@@ -372,7 +372,7 @@ impl Sources {
     fn listed(&self, key: &str, exempt: bool) -> Option<Source> {
         let names = site_names(key);
         let lists = self.current_lists();
-        let hits = lists.hits(&names);
+        let hits = lists.hits(&names, rule(key).is_some());
         let exempt = exempt || hits.iter().any(|list| list.effect == Effect::Exempt);
         let mut found = Source::new(key, "unknown", &[], "list");
         let note = |found: &mut Source, list: &Listed| {
@@ -388,10 +388,8 @@ impl Sources {
             }
             return Some(found);
         }
-        if !exempt {
-            if let Some(bundled) = names.iter().find_map(|name| self.bundled.get(*name)) {
-                return Some(Source { host: key.to_owned(), ..bundled.clone() });
-            }
+        if !exempt && let Some(bundled) = names.iter().find_map(|name| self.bundled.get(*name)) {
+            return Some(Source { host: key.to_owned(), ..bundled.clone() });
         }
         let priority = |kind: &str| KINDS.iter().position(|known| *known == kind);
         for list in hits {

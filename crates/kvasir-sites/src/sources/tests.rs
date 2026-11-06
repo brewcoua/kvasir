@@ -1246,10 +1246,81 @@ mod survey {
 
     #[test]
     fn tranco_is_read_from_its_zip() {
-        let hosts = parse_tranco(&tranco("1,google.com\n2,www.example.org\n3,bad name\n")).unwrap();
+        let zip = tranco("1,google.com\n2,www.example.org\n3,bad name\n");
+        let hosts = parse_tranco(&zip, 3).unwrap();
         assert_eq!(hosts.len(), 2);
         assert!(hosts.contains("google.com") && hosts.contains("example.org"));
-        assert!(parse_tranco(b"not a zip").is_err());
+        assert!(parse_tranco(b"not a zip", 1).is_err());
+    }
+
+    #[test]
+    fn the_tranco_list_is_read_down_to_the_rank_asked() {
+        let zip = tranco("1,first.org\n2,second.org\n3,third.org\n");
+        let hosts = parse_tranco(&zip, 2).unwrap();
+        assert!(hosts.contains("second.org") && !hosts.contains("third.org"));
+    }
+
+    /// A list of `effect` on `entries`, with the Tranco copy read once it applies.
+    async fn guarded(site: &Site, effect: &str, entries: &[&str], guard: bool) {
+        let change = ListChange {
+            name: Some("Guarded".to_owned()),
+            entries: Some(entries.iter().map(|entry| (*entry).to_owned()).collect()),
+            effect: Some(effect.to_owned()),
+            guard: Some(guard),
+            ..ListChange::default()
+        };
+        site.sources.add_list(change).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_guard_spares_ranked_and_suffix_sites_from_what_lowers_them() {
+        let site = site("1,popular.org\n2,farm.org\n", |config| {
+            config.survey = false;
+            config.guard_rank = 1;
+        })
+        .await;
+        guarded(
+            &site,
+            "block",
+            &["popular.org", "news.popular.org", "farm.org", "agency.gov"],
+            true,
+        )
+        .await;
+
+        for host in ["popular.org", "news.popular.org"] {
+            assert_eq!(classify(&site, host).await.tier(), Tier::Unknown, "{host}");
+        }
+        assert_eq!(classify(&site, "agency.gov").await.kind, "government");
+        assert_eq!(classify(&site, "farm.org").await.tier(), Tier::Avoid);
+    }
+
+    #[tokio::test]
+    async fn a_list_with_its_guard_off_or_a_rank_of_zero_spares_only_as_asked() {
+        let off = site("1,popular.org\n", |config| config.survey = false).await;
+        guarded(&off, "block", &["popular.org"], false).await;
+        assert_eq!(classify(&off, "popular.org").await.tier(), Tier::Avoid);
+
+        let zero = site("1,popular.org\n", |config| {
+            config.survey = false;
+            config.guard_rank = 0;
+        })
+        .await;
+        guarded(&zero, "block", &["popular.org", "agency.gov"], true).await;
+        assert_eq!(classify(&zero, "popular.org").await.tier(), Tier::Avoid);
+        assert_eq!(classify(&zero, "agency.gov").await.kind, "government");
+    }
+
+    #[tokio::test]
+    async fn the_guard_leaves_kinds_alone_and_downloads_tranco_only_when_needed() {
+        let site = site("1,popular.org\n", |config| config.survey = false).await;
+        assert!(site.sources.fetches().is_empty());
+
+        guarded(&site, "kind:news", &["popular.org"], true).await;
+        assert_eq!(classify(&site, "popular.org").await.kind, "news");
+        assert!(site.sources.fetches().is_empty());
+
+        guarded(&site, "demote", &["other.org"], true).await;
+        assert!(site.sources.fetches().iter().any(|fetch| fetch.name == "tranco"));
     }
 
     fn sitemap(days: usize, per_day: usize) -> String {

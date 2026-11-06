@@ -347,6 +347,11 @@ pub const FIELDS: &[Field] = &[
         "Tag sites nothing decides as likely farms, from their sitemaps and the Tranco list.",
     ),
     field(
+        "sources.guard_rank",
+        INT,
+        "Lists with their guard on spare sites this high on the Tranco list. 0 turns this off.",
+    ),
+    field(
         "sources.allow",
         Kind::List { choices: &[] },
         "Hosts, with their subdomains, always trusted. Beats any mark.",

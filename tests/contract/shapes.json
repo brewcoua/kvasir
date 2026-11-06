@@ -3765,6 +3765,7 @@
   "sources.deny": "string",
   "sources.enabled": "string",
   "sources.endpoint": "string",
+  "sources.guard_rank": "string",
   "sources.lists": "string",
   "sources.miss_ttl_days": "string",
   "sources.rsp": "string",

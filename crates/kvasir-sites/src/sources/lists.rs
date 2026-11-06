@@ -13,6 +13,7 @@ use reqwest::header;
 use sha1::{Digest, Sha1};
 use tokio::time::Instant;
 
+use super::survey::RANKED;
 use super::{Sources, normalize, parse_rsp, parse_tranco};
 
 // How often the downloaded lists are checked for age.
@@ -26,6 +27,8 @@ pub(super) struct Lists {
     pub(super) listed: Vec<Listed>,
     pub(super) rsp: HashMap<String, String>,
     pub(super) popular: HashSet<String>,
+    /// The sites a guarded list spares for their rank.
+    pub(super) top: HostSet,
 }
 
 /// What a list does to the sites it names.
@@ -59,6 +62,7 @@ pub(super) struct Listed {
     pub(super) enabled: bool,
     pub(super) effect: Effect,
     pub(super) tag: String,
+    pub(super) guard: bool,
     pub(super) except: HostSet,
     pub(super) hosts: HostSet,
 }
@@ -78,9 +82,14 @@ impl Listed {
             enabled: true,
             effect,
             tag: String::new(),
+            guard: false,
             except: HostSet::default(),
             hosts: HostSet::new(hosts),
         })
+    }
+
+    fn lowers(&self) -> bool {
+        matches!(self.effect, Effect::Block | Effect::Demote)
     }
 
     fn names(&self, names: &[&str]) -> bool {
@@ -140,9 +149,15 @@ impl HostSet {
 }
 
 impl Lists {
-    /// The lists that apply to a site known by `names`.
-    pub(super) fn hits(&self, names: &[&str]) -> Vec<&Listed> {
-        self.listed.iter().filter(|list| list.enabled && list.names(names)).collect()
+    /// The lists that apply to a site known by `names`. `guarded` says a guard spares it from
+    /// what a list would lower it by, for its suffix; its rank is checked here.
+    pub(super) fn hits(&self, names: &[&str], guarded: bool) -> Vec<&Listed> {
+        let guarded = guarded || names.iter().any(|name| self.top.contains(name));
+        self.listed
+            .iter()
+            .filter(|list| list.enabled && list.names(names))
+            .filter(|list| !(guarded && list.guard && list.lowers()))
+            .collect()
     }
 }
 
@@ -218,10 +233,18 @@ impl Sources {
         if self.settings.enabled && self.settings.rsp {
             fetches.push(fetch("rsp", &self.rsp_url, None));
         }
-        if self.settings.enabled && self.settings.survey {
+        if self.settings.enabled && (self.settings.survey || self.guard_applies()) {
             fetches.push(fetch("tranco", &self.tranco_url, None));
         }
         fetches
+    }
+
+    /// Whether any list on needs the Tranco list for its guard.
+    fn guard_applies(&self) -> bool {
+        self.settings.guard_rank > 0
+            && self.current_specs().iter().any(|list| {
+                list.enabled && list.guard && matches!(list.effect.as_str(), "block" | "demote")
+            })
     }
 
     pub(super) fn current_specs(&self) -> Arc<Vec<SourceList>> {
@@ -296,11 +319,13 @@ impl Sources {
                 enabled: list.enabled,
                 effect,
                 tag: list.tag.clone(),
+                guard: list.guard,
                 except: HostSet::new(list.except.iter().cloned()),
                 hosts: HostSet::new(hosts),
             });
         }
-        Lists { listed, rsp: self.read_rsp(), popular: self.read_popular() }
+        let (popular, top) = self.read_tranco();
+        Lists { listed, rsp: self.read_rsp(), popular, top }
     }
 
     /// The hosts of the copy on disk of the list at `url`, if there is one that can be read.
@@ -338,19 +363,35 @@ impl Sources {
         })
     }
 
-    fn read_popular(&self) -> HashSet<String> {
-        if !(self.settings.enabled && self.settings.survey) {
-            return HashSet::new();
+    /// What the survey and the guard need of the Tranco list, each only when it is on.
+    fn read_tranco(&self) -> (HashSet<String>, HostSet) {
+        let survey = self.settings.enabled && self.settings.survey;
+        let guard = self.settings.enabled && self.guard_applies();
+        if !survey && !guard {
+            return Default::default();
         }
-        let read = match std::fs::read(self.list_path(&self.tranco_url)) {
-            Ok(zip) => parse_tranco(&zip),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(HashSet::new()),
-            Err(e) => Err(e.to_string()),
+        let zip = match std::fs::read(self.list_path(&self.tranco_url)) {
+            Ok(zip) => zip,
+            Err(e) => {
+                if e.kind() != io::ErrorKind::NotFound {
+                    tracing::warn!("Tranco list unreadable: {e}");
+                }
+                return Default::default();
+            }
         };
-        read.unwrap_or_else(|e| {
-            tracing::warn!("Tranco list unreadable: {e}");
+        let parse = |top: usize| {
+            parse_tranco(&zip, top).unwrap_or_else(|e| {
+                tracing::warn!("Tranco list unreadable: {e}");
+                HashSet::new()
+            })
+        };
+        let popular = if survey { parse(RANKED) } else { HashSet::new() };
+        let top = if guard {
+            parse(usize::try_from(self.settings.guard_rank).unwrap_or(usize::MAX))
+        } else {
             HashSet::new()
-        })
+        };
+        (popular, HostSet::new(top))
     }
 
     pub(super) fn current_lists(&self) -> Arc<Lists> {

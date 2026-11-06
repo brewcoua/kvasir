@@ -22,7 +22,7 @@ pub(super) const TRANCO_URL: &str = "https://tranco-list.eu/top-1m.csv.zip";
 pub(super) const LIKELY_FARM: &str = "likely_farm";
 // Past this rank a site counts as unvisited. Real small sites sit below it too, so this alone
 // tags nothing.
-const RANKED: usize = 300_000;
+pub(super) const RANKED: usize = 300_000;
 const MIN_DATED: usize = 100;
 const DENSE_PER_DAY: f64 = 5.0;
 const BATCH: usize = 20;
@@ -72,12 +72,12 @@ pub fn verdict(survey: &Survey, ranked: bool) -> Option<String> {
     Some(format!("{rate:.1} URLs a day over {dated} dated, outside Tranco's top {RANKED}"))
 }
 
-/// The top `RANKED` hosts of a Tranco zip, whose one file has `rank,host` lines in rank order.
-pub fn parse_tranco(zip: &[u8]) -> Result<HashSet<String>, String> {
+/// The top `top` hosts of a Tranco zip, whose one file has `rank,host` lines in rank order.
+pub fn parse_tranco(zip: &[u8], top: usize) -> Result<HashSet<String>, String> {
     let mut archive = zip::ZipArchive::new(Cursor::new(zip)).map_err(|e| e.to_string())?;
     let file = archive.by_index(0).map_err(|e| e.to_string())?;
     let mut hosts = HashSet::new();
-    for line in BufReader::new(file).lines().take(RANKED) {
+    for line in BufReader::new(file).lines().take(top) {
         let line = line.map_err(|e| e.to_string())?;
         if let Some(host) = line.split_once(',').and_then(|(_, host)| normalize(host)) {
             hosts.insert(host);

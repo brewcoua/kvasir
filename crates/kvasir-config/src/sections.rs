@@ -331,6 +331,8 @@ pub struct SourceSettings {
     pub rsp: bool,
     /// Whether sites a run met and nothing decides are surveyed for `likely_farm`. Needs `enabled`.
     pub survey: bool,
+    /// How far down the Tranco list a guarded list spares a site. 0 spares no site for its rank.
+    pub guard_rank: u64,
     pub allow: Vec<String>,
     pub deny: Vec<String>,
     /// Each `<label>=<url>`, the label a kind or a tag given to every host on the list.
@@ -347,6 +349,7 @@ impl Default for SourceSettings {
             miss_ttl_days: 7,
             rsp: false,
             survey: false,
+            guard_rank: 10_000,
             allow: Vec::new(),
             deny: Vec::new(),
             lists: vec![
