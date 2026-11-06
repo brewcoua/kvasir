@@ -28,7 +28,7 @@ use regex::Regex;
 use crate::claims::Claim;
 use crate::corpus::Corpus;
 use crate::encoder::{Encoder, cosine};
-use crate::{ResearchError, Tools};
+use crate::{ResearchError, Tools, note_avoided};
 
 /// Results of one query that are ranked; the rest are dropped.
 pub const POOL: usize = 20;
@@ -161,11 +161,14 @@ pub async fn search(
             }
         }
         tiers = sources.tiers(hosts, DEADLINE).await;
+        let mut avoided = Vec::new();
         for hit in gathered.iter().flat_map(|(results, leads)| results.iter().chain(leads)) {
             if tiers.get(&domain(&hit.url)) == Some(&Tier::Avoid) {
                 seen.insert(hit.url.clone());
+                avoided.push(domain(&hit.url));
             }
         }
+        note_avoided(sources.as_ref(), ctx, avoided).await;
     }
     let mut hits = Vec::new();
     for (results, leads) in gathered {

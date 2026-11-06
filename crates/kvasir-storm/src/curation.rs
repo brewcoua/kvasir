@@ -7,7 +7,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use kvasir_fetch::{Web, domain};
 use kvasir_llm::LlmError;
-use kvasir_research::Tools;
+use kvasir_research::{Tools, note_avoided};
 use kvasir_run::RunCtx;
 use kvasir_sites::sources::DEADLINE;
 use kvasir_types::sites::Tier;
@@ -150,6 +150,12 @@ async fn search(tools: &Tools, ctx: &RunCtx, query: &str) -> Vec<Info> {
     if let Some(sources) = &tools.sources {
         let hosts = hits.iter().map(|hit| domain(&hit.url)).collect();
         let tiers = sources.tiers(hosts, DEADLINE).await;
+        let avoided = hits
+            .iter()
+            .map(|hit| domain(&hit.url))
+            .filter(|host| tiers.get(host) == Some(&Tier::Avoid))
+            .collect();
+        note_avoided(sources.as_ref(), ctx, avoided).await;
         hits.retain(|hit| tiers.get(&domain(&hit.url)) != Some(&Tier::Avoid));
     }
     hits.into_iter()

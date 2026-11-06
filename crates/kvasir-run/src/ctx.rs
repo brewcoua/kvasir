@@ -54,6 +54,15 @@ impl RunCtx {
         seq
     }
 
+    /// Logs a line under the current stage and event, which later calls do not follow.
+    pub fn note(&self, detail: String) {
+        tracing::info!(run_id = %self.run.id, "{detail}");
+        if let Some(stage) = self.run.current_stage() {
+            let event = Progress { parent: self.event(), ..Progress::new(&stage, detail) };
+            self.run.record_progress(event);
+        }
+    }
+
     pub fn search_started(&self, engine: &str, query: &str) -> u64 {
         self.run.start_search(engine, query, self.event())
     }

@@ -78,6 +78,9 @@ pub fn readable<T>(result: Result<T, LlmError>) -> Result<Option<T>, LlmError> {
     }
 }
 
+// Enough to show which lists are at work, in one line of a run's steps.
+const MAX_NOTED: usize = 8;
+
 /// How far each host is trusted: the source classifier, or a stand-in in tests.
 pub trait Classify: Send + Sync {
     /// Each of `hosts`, waiting at most `deadline` for what is not known yet.
@@ -86,6 +89,35 @@ pub trait Classify: Send + Sync {
         hosts: Vec<String>,
         deadline: Duration,
     ) -> BoxFuture<'a, HashMap<String, Tier>>;
+
+    /// The lists behind what is known of each of `hosts`, by name.
+    fn listed_by<'a>(&'a self, _hosts: Vec<String>) -> BoxFuture<'a, HashMap<String, Vec<String>>> {
+        Box::pin(async { HashMap::new() })
+    }
+}
+
+/// Tells the run which sites its results lost, and the lists behind that, since a run's reader
+/// otherwise cannot see why a site never appears.
+pub async fn note_avoided(sources: &dyn Classify, ctx: &RunCtx, mut hosts: Vec<String>) {
+    if hosts.is_empty() {
+        return;
+    }
+    hosts.sort();
+    hosts.dedup();
+    let lists = sources.listed_by(hosts.clone()).await;
+    let named: Vec<String> = hosts
+        .iter()
+        .take(MAX_NOTED)
+        .map(|host| match lists.get(host) {
+            Some(lists) if !lists.is_empty() => format!("{host} ({})", lists.join(", ")),
+            _ => host.clone(),
+        })
+        .collect();
+    let more = match hosts.len().saturating_sub(MAX_NOTED) {
+        0 => String::new(),
+        more => format!(" and {more} more"),
+    };
+    ctx.note(format!("left out avoided sites: {}{more}", named.join(", ")));
 }
 
 impl Classify for Arc<Sources> {
@@ -97,6 +129,13 @@ impl Classify for Arc<Sources> {
         Box::pin(async move {
             let found = self.classify(&hosts, deadline).await;
             found.into_iter().map(|(host, source)| (host, source.tier())).collect()
+        })
+    }
+
+    fn listed_by<'a>(&'a self, hosts: Vec<String>) -> BoxFuture<'a, HashMap<String, Vec<String>>> {
+        Box::pin(async move {
+            let found = self.classify(&hosts, Duration::ZERO).await;
+            found.into_iter().map(|(host, source)| (host, source.listed_by)).collect()
         })
     }
 }
@@ -116,6 +155,13 @@ impl Classify for Scoped {
         Box::pin(async move {
             let found = self.sources.classify_with(&hosts, deadline, &self.policy).await;
             found.into_iter().map(|(host, source)| (host, source.tier())).collect()
+        })
+    }
+
+    fn listed_by<'a>(&'a self, hosts: Vec<String>) -> BoxFuture<'a, HashMap<String, Vec<String>>> {
+        Box::pin(async move {
+            let found = self.sources.classify_with(&hosts, Duration::ZERO, &self.policy).await;
+            found.into_iter().map(|(host, source)| (host, source.listed_by)).collect()
         })
     }
 }

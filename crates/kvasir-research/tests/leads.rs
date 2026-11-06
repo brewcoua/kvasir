@@ -428,6 +428,47 @@ async fn a_result_of_an_avoid_site_is_never_fetched_even_when_it_is_the_only_one
     assert!(web.fetched().is_empty());
 }
 
+/// Tiers that also name the lists behind them.
+struct Listing(Tiers);
+
+impl Classify for Listing {
+    fn tiers<'a>(
+        &'a self,
+        hosts: Vec<String>,
+        deadline: std::time::Duration,
+    ) -> kvasir_llm::BoxFuture<'a, std::collections::HashMap<String, Tier>> {
+        self.0.tiers(hosts, deadline)
+    }
+
+    fn listed_by<'a>(
+        &'a self,
+        _hosts: Vec<String>,
+    ) -> kvasir_llm::BoxFuture<'a, std::collections::HashMap<String, Vec<String>>> {
+        Box::pin(async { [("bad.org".to_owned(), vec!["Spam".to_owned()])].into() })
+    }
+}
+
+#[tokio::test]
+async fn a_run_is_told_which_sites_it_left_out_and_the_lists_behind_them() {
+    let sources: Option<Arc<dyn Classify>> = Some(Arc::new(Listing(Tiers::new(&[
+        ("bad.org", Tier::Avoid),
+        ("worse.org", Tier::Avoid),
+    ]))));
+    let (mut tools, _) = serving(Fetched::of([]), sources);
+    let hits = ["https://bad.org/x", "https://bad.org/y", "https://worse.org/x"];
+    tools.search = Arc::new(common::Results::new(hits.map(result).to_vec(), Vec::new()));
+    let ctx = ctx();
+    ctx.publish(kvasir_types::runs::Progress::new(kvasir_run::stages::RESEARCH, "started"));
+
+    let mut seen = HashSet::new();
+    search(&tools, &ctx, &["q".into()], 1, &mut seen, Ranking::default()).await.unwrap();
+
+    let events = ctx.run.detail().events;
+    let last = events.last().unwrap();
+    assert_eq!(last.detail, "left out avoided sites: bad.org (Spam), worse.org");
+    assert_eq!(last.parent, Some(0));
+}
+
 #[tokio::test]
 async fn a_lead_of_an_avoid_site_is_never_fetched() {
     let start = page(

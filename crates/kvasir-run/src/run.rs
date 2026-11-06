@@ -184,6 +184,11 @@ impl Run {
     }
 
     /// Records `event`, numbers it, and returns its `seq`.
+    /// The stage the run is in, once it has entered one.
+    pub fn current_stage(&self) -> Option<String> {
+        self.lock().stage.clone()
+    }
+
     pub fn record_progress(&self, mut event: Progress) -> u64 {
         let mut inner = self.lock();
         let inner = &mut *inner;
