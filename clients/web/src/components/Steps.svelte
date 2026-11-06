@@ -34,7 +34,7 @@
   ];
 
   const nodeTypes = { step: StepNode, group: StepGroup };
-  const edgeTypes = { trunk: LinkEdge, arc: LinkEdge, rail: LinkEdge };
+  const edgeTypes = { trunk: LinkEdge, arc: LinkEdge, rail: LinkEdge, bypass: LinkEdge };
 
   const roots = $derived(steps(run));
   const linked = $derived(links(run, roots));

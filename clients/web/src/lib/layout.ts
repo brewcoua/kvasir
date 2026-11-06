@@ -31,6 +31,8 @@ const ARC_GAP = 6;
 const ARC_STEP = 13;
 // Corner radius of the trunk and arc paths.
 const R = 6;
+// How far above the stages a bypass runs.
+const BYPASS_RISE = 14;
 
 export interface StepData extends Record<string, unknown> {
   step: Step;
@@ -227,7 +229,8 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
   const progress = (to: Step) => ({ animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? to.state : "done" });
   // A raised link keeps its own colour once done; only the link into a question still being answered or waiting shows it.
   const raised = (to: Step) => ({ animated: to.state === "current", class: to.state === "pending" || to.state === "skipped" ? `raised ${to.state}` : "raised" });
-  const chain = (from: Step, to: Step) => edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, ...progress(to) });
+  // Either end of a link at a skipped stage fades: the run went round it, along the bypass.
+  const chain = (from: Step, to: Step) => edges.push({ id: `${from.id}>${to.id}`, source: from.id, target: to.id, ...(from.state === "skipped" ? { animated: false, class: "skipped" } : progress(to)) });
   // Per research container, where its arcs and trunk are in flow coordinates.
   const lanes: { id: string; x: number; y: number; research: Research }[] = [];
 
@@ -277,10 +280,19 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
   };
 
   let x = 0;
+  let ran: { step: Step; right: number } | null = null;
   roots.forEach((root, i) => {
     const box = measure(root, open, links);
     place(box, x, 0);
     if (i > 0) chain(roots[i - 1], root);
+    if (root.state !== "skipped") {
+      if (ran && roots[i - 1].state === "skipped") {
+        const [y, top, l, r] = [HEADER / 2, -BYPASS_RISE, ran.right + GAP, x - GAP];
+        const path = `M${ran.right} ${y}H${l - R}Q${l} ${y} ${l} ${y - R}V${top + R}Q${l} ${top} ${l + R} ${top}H${r - R}Q${r} ${top} ${r} ${top + R}V${y - R}Q${r} ${y} ${r + R} ${y}H${x}`;
+        edges.push({ id: `bypass:${ran.step.id}>${root.id}`, source: ran.step.id, target: root.id, type: "bypass", ...progress(root), data: { path } satisfies LinkData });
+      }
+      ran = { step: root, right: x + box.width };
+    }
     x += box.width + GAP * 3;
   });
 

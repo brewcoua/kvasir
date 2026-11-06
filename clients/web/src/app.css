@@ -1868,6 +1868,9 @@ table.runs a.topic:hover {
   width: 5px;
   height: 5px;
 }
+.steps-view .svelte-flow__node:has(> .skipped) .svelte-flow__handle.linked {
+  opacity: 0.35;
+}
 .steps-view .svelte-flow__edge.done .svelte-flow__edge-path {
   stroke: color-mix(in srgb, var(--dim) 80%, transparent);
 }
@@ -1876,8 +1879,9 @@ table.runs a.topic:hover {
   stroke-opacity: 0.45;
 }
 .steps-view .svelte-flow__edge.skipped .svelte-flow__edge-path {
-  stroke-dasharray: 1 5;
-  stroke-opacity: 0.3;
+  /* Long enough dashes not to read as the background's dot grid. */
+  stroke-dasharray: 2 4;
+  stroke-opacity: 0.45;
 }
 .steps-view .svelte-flow__edge.animated .svelte-flow__edge-path {
   stroke: var(--busy);

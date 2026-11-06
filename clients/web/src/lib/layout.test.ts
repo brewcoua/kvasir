@@ -217,6 +217,40 @@ describe("layout", () => {
     }
   });
 
+  describe("skipped stages", () => {
+    const stage = (name: string, state: Step["state"]) => ({ ...research, id: `stage:${name}`, label: name, state, children: [] }) as Step;
+    const of = (...states: Step["state"][]) => layout(states.map((s, i) => stage(String(i), s)), new Set(), []).edges;
+    const bypasses = (edges: ReturnType<typeof of>) => edges.filter((e) => e.type === "bypass").map((e) => [e.source, e.target]);
+
+    it("fades the links on both sides of one", () => {
+      const edges = of("done", "skipped", "done");
+      expect(edges.filter((e) => e.type !== "bypass").map((e) => e.class)).toEqual(["skipped", "skipped"]);
+    });
+
+    it("goes round one, above the card, from the stage before to the stage after", () => {
+      const edges = of("done", "skipped", "done");
+      expect(bypasses(edges)).toEqual([["stage:0", "stage:2"]]);
+      const bypass = edges.find((e) => e.type === "bypass")!;
+      expect(bypass.class).toBe("done");
+      expect((bypass.data as { path: string }).path).toMatch(/V-?\d/);
+      expect((bypass.data as { path: string }).path).toContain(" -14");
+    });
+
+    it("goes round several in a row with one line", () => {
+      expect(bypasses(of("done", "skipped", "skipped", "done"))).toEqual([["stage:0", "stage:3"]]);
+    });
+
+    it("has nothing to go round from or to at the ends of a run", () => {
+      expect(bypasses(of("skipped", "done"))).toEqual([]);
+      expect(bypasses(of("done", "skipped"))).toEqual([]);
+    });
+
+    it("animates the bypass into the current stage, not the faded link", () => {
+      const edges = of("done", "skipped", "current");
+      expect(edges.filter((e) => e.animated).map((e) => e.type)).toEqual(["bypass"]);
+    });
+  });
+
   describe("research", () => {
     const open = new Set([research.id]);
     const questions = research.children.filter((c) => c.kind === "question");
