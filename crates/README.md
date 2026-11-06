@@ -53,16 +53,16 @@ dependencies on another crate's code.
 flowchart TD
     api["kvasir-api<br/>methods.rs"]
     ledger["kvasir-ledger"]
-    graph["kvasir-graph"]
+    graphm["kvasir-graph"]
     storm["kvasir-storm"]
     research["kvasir-research"]
 
     api --> ledger
-    api --> graph
+    api --> graphm
     api --> storm
-    graph -- "brief, questions,<br/>search loop" --> ledger
+    graphm -- "brief, questions,<br/>search loop" --> ledger
     ledger --> research
-    graph --> research
+    graphm --> research
     storm -- "Tools, encoder" --> research
 ```
 
