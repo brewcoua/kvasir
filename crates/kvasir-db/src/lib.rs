@@ -12,10 +12,48 @@ pub mod schema;
 /// How long a statement waits for another process's lock before failing.
 pub const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// What every database file is encrypted under: 32 random bytes, as 64 hex characters.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Key(String);
+
+impl std::fmt::Debug for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Key(..)")
+    }
+}
+
+impl Key {
+    /// `None` unless `hex` is 64 hex characters.
+    pub fn parse(hex: &str) -> Option<Self> {
+        (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+            .then(|| Self(hex.to_owned()))
+    }
+
+    /// A fixed key, for tests.
+    pub fn for_tests() -> Self {
+        Self("ab".repeat(32))
+    }
+
+    /// Opens `path` under this key. Fails with `NotADatabase` if the key does not open it.
+    pub fn connect(&self, path: impl AsRef<Path>) -> Result<Connection, rusqlite::Error> {
+        let conn = Connection::open(path)?;
+        // A raw key, since it is random already: a passphrase's PBKDF2 would run at every open.
+        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\"", self.0))?;
+        // SQLCipher does not encrypt temporary files, so there are none.
+        conn.pragma_update(None, "temp_store", "memory")?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        // The key is only checked when a page is read.
+        conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))?;
+        Ok(conn)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error("cannot create {path}: {source}")]
     Create { path: PathBuf, source: std::io::Error },
+    #[error("{path}: KVASIR_SECRET_KEY does not open it; it was encrypted with another key")]
+    WrongKey { path: PathBuf },
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
     #[error("migrating {path} to version {version}: {source}")]
@@ -40,18 +78,20 @@ impl std::fmt::Debug for Db {
 }
 
 impl Db {
-    /// Opens `path`, creating it and its directory, in WAL mode, then applies each of `migrations`
-    /// past the file's `user_version`, one transaction each.
+    /// Opens `path` under `key`, creating it and its directory, in WAL mode, then applies each of
+    /// `migrations` past the file's `user_version`, one transaction each.
     ///
     /// The first migration of each file must accept the schema Python left at `user_version` 0,
     /// so it is written with `IF NOT EXISTS`.
-    pub fn open(path: &Path, migrations: &[&str]) -> Result<Self, DbError> {
+    pub fn open(path: &Path, key: &Key, migrations: &[&str]) -> Result<Self, DbError> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)
                 .map_err(|source| DbError::Create { path: dir.to_owned(), source })?;
         }
-        let mut conn = Connection::open(path)?;
-        conn.busy_timeout(BUSY_TIMEOUT)?;
+        let mut conn = key.connect(path).map_err(|err| match err.sqlite_error_code() {
+            Some(rusqlite::ErrorCode::NotADatabase) => DbError::WrongKey { path: path.to_owned() },
+            _ => err.into(),
+        })?;
         conn.pragma_update(None, "journal_mode", "wal")?;
         migrate(&mut conn, path, migrations)?;
         Ok(Self { path: Arc::new(path.to_owned()), conn: Arc::new(Mutex::new(conn)) })
@@ -131,7 +171,7 @@ mod tests {
     #[test]
     fn a_new_file_is_created_in_wal_mode_and_migrated() {
         let dir = tempfile::tempdir().unwrap();
-        let db = Db::open(&dir.path().join("a/b.db"), MIGRATIONS).unwrap();
+        let db = Db::open(&dir.path().join("a/b.db"), &Key::for_tests(), MIGRATIONS).unwrap();
 
         let (mode, version): (String, i64) = db
             .call_blocking(|c| {
@@ -149,14 +189,14 @@ mod tests {
     fn a_file_python_made_is_taken_over_without_losing_rows() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("old.db");
-        let old = Connection::open(&path).unwrap();
+        let old = Key::for_tests().connect(&path).unwrap();
         old.execute_batch(
             "CREATE TABLE t (k TEXT PRIMARY KEY, v TEXT); INSERT INTO t VALUES ('a', 'b');",
         )
         .unwrap();
         drop(old);
 
-        let db = Db::open(&path, MIGRATIONS).unwrap();
+        let db = Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
 
         let v: String =
             db.call_blocking(|c| c.query_row("SELECT v FROM t", [], |r| r.get(0))).unwrap();
@@ -167,13 +207,17 @@ mod tests {
     fn a_failed_migration_leaves_the_version_where_it_was() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("d.db");
-        Db::open(&path, MIGRATIONS).unwrap();
+        Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
 
-        let err =
-            Db::open(&path, &[MIGRATIONS[0], "ALTER TABLE t ADD w TEXT; nonsense"]).unwrap_err();
+        let err = Db::open(
+            &path,
+            &Key::for_tests(),
+            &[MIGRATIONS[0], "ALTER TABLE t ADD w TEXT; nonsense"],
+        )
+        .unwrap_err();
 
         assert!(matches!(err, DbError::Migrate { version: 2, .. }));
-        let db = Db::open(&path, MIGRATIONS).unwrap();
+        let db = Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
         let columns: i64 = db
             .call_blocking(|c| {
                 c.query_row("SELECT count(*) FROM pragma_table_info('t')", [], |r| r.get(0))
@@ -186,18 +230,61 @@ mod tests {
     fn a_file_from_a_newer_build_is_refused() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("e.db");
-        Db::open(&path, &[MIGRATIONS[0], "SELECT 1"]).unwrap();
+        Db::open(&path, &Key::for_tests(), &[MIGRATIONS[0], "SELECT 1"]).unwrap();
 
         assert!(matches!(
-            Db::open(&path, MIGRATIONS),
+            Db::open(&path, &Key::for_tests(), MIGRATIONS),
             Err(DbError::TooNew { found: 2, known: 1, .. })
         ));
+    }
+
+    #[test]
+    fn a_key_is_64_hex_characters() {
+        assert!(Key::parse(&"aB".repeat(32)).is_some());
+        for bad in ["", "ab", &"ab".repeat(33), &"zz".repeat(32)] {
+            assert!(Key::parse(bad).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_key_does_not_show_in_debug() {
+        assert_eq!(format!("{:?}", Key::for_tests()), "Key(..)");
+    }
+
+    #[test]
+    fn a_file_is_refused_under_another_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("k.db");
+        Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
+
+        let other = Key::parse(&"cd".repeat(32)).unwrap();
+
+        assert!(matches!(Db::open(&path, &other, MIGRATIONS), Err(DbError::WrongKey { .. })));
+    }
+
+    #[test]
+    fn nothing_written_shows_in_the_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p.db");
+        let db = Db::open(&path, &Key::for_tests(), MIGRATIONS).unwrap();
+        db.call_blocking(|c| c.execute("INSERT INTO t VALUES ('k', 'needle-in-the-file')", []))
+            .unwrap();
+
+        let needle: &[u8] = b"needle-in-the-file";
+        for file in std::fs::read_dir(dir.path()).unwrap() {
+            let bytes = std::fs::read(file.unwrap().path()).unwrap();
+            assert!(!bytes.windows(needle.len()).any(|w| w == needle));
+        }
+        drop(db);
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!bytes.windows(needle.len()).any(|w| w == needle));
+        assert!(!bytes.starts_with(b"SQLite format 3"));
     }
 
     #[tokio::test]
     async fn work_runs_off_the_runtime() {
         let dir = tempfile::tempdir().unwrap();
-        let db = Db::open(&dir.path().join("c.db"), MIGRATIONS).unwrap();
+        let db = Db::open(&dir.path().join("c.db"), &Key::for_tests(), MIGRATIONS).unwrap();
 
         db.call(|c| c.execute("INSERT INTO t VALUES ('x', 'y')", []).map(|_| ())).await.unwrap();
         let n: i64 =

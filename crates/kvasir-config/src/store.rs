@@ -41,7 +41,12 @@ mod tests {
     #[tokio::test]
     async fn written_values_load_back_and_none_removes() {
         let dir = tempfile::tempdir().unwrap();
-        let db = Db::open(&dir.path().join("kvasir.db"), kvasir_db::schema::KVASIR).unwrap();
+        let db = Db::open(
+            &dir.path().join("kvasir.db"),
+            &kvasir_db::Key::for_tests(),
+            kvasir_db::schema::KVASIR,
+        )
+        .unwrap();
 
         write(&db, vec![("a.b".into(), Some(json!([1, "x"]))), ("c.d".into(), Some(json!(2)))])
             .await

@@ -116,7 +116,7 @@ pub async fn open(
     llm: Option<Arc<dyn Llm>>,
 ) -> Result<Arc<App>, StartError> {
     // Created at the first start, whatever runs.store is.
-    let db = Db::open(&env.db(), kvasir_db::schema::KVASIR)?;
+    let db = Db::open(&env.db(), &env.secret_key, kvasir_db::schema::KVASIR)?;
     let mut warnings = Vec::new();
     let rows = kvasir_config::store::load(&db).await?;
     let stored = kvasir_config::decode(rows, false, &mut warnings)?;
@@ -131,13 +131,16 @@ pub async fn open(
         guard,
         kvasir_fetch::system_lookup(),
     ));
-    web.set_cache(Some(PageStore::open(&settings.pages_db())?));
+    web.set_cache(Some(PageStore::open(&settings.pages_db(), &settings.secret_key)?));
     let live = settings::build(&settings, None, &web)?;
     settings::configure(&web, &settings, None);
     let store = match settings.runs.store {
-        kvasir_config::RunStore::Sqlite => {
-            Some(RunStore::open(&settings.db(), settings.runs.ttl_days, settings.runs.max)?)
-        }
+        kvasir_config::RunStore::Sqlite => Some(RunStore::open(
+            &settings.db(),
+            &settings.secret_key,
+            settings.runs.ttl_days,
+            settings.runs.max,
+        )?),
         kvasir_config::RunStore::Memory => None,
     };
     // Once, here. Expiry needs no scheduler and no background task.

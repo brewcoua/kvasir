@@ -13,7 +13,7 @@ use std::time::Duration;
 use dom_query::Document;
 use kvasir_config::{FaviconProvider, FaviconSettings};
 use kvasir_db::schema::FAVICONS;
-use kvasir_db::{Db, DbError, OptionalExtension, params};
+use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 use kvasir_extract::too_deep;
 use kvasir_fetch::Web;
 use kvasir_types::sites::normalize_host;
@@ -73,8 +73,8 @@ pub struct FaviconStore {
 }
 
 impl FaviconStore {
-    pub fn open(path: &Path) -> Result<Self, DbError> {
-        Ok(Self { db: Db::open(path, FAVICONS)? })
+    pub fn open(path: &Path, key: &Key) -> Result<Self, DbError> {
+        Ok(Self { db: Db::open(path, key, FAVICONS)? })
     }
 
     /// The answer stored for `host`, unless it is older than `ttl_days` (an icon) or

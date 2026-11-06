@@ -126,6 +126,7 @@ mod tests {
     fn settings(stored: Value) -> Settings {
         let env = [
             ("KVASIR_TOKEN".to_owned(), "t".to_owned()),
+            ("KVASIR_SECRET_KEY".to_owned(), "ab".repeat(32)),
             ("KVASIR_PROVIDER_G_API_BASE".to_owned(), "http://g/v1".to_owned()),
         ];
         let Value::Object(stored) = stored else { panic!() };

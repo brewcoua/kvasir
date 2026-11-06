@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use kvasir_db::schema::KVASIR;
-use kvasir_db::{Db, DbError, OptionalExtension, params};
+use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 use kvasir_types::runs::{LmCallContent, RunDetail, RunSummary, SearchContent, now};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -63,8 +63,8 @@ fn interrupted(record: &str) -> String {
 }
 
 impl RunStore {
-    pub fn open(path: &Path, ttl_days: u64, limit: usize) -> Result<Self, DbError> {
-        Ok(Self { db: Db::open(path, KVASIR)?, ttl_days, limit })
+    pub fn open(path: &Path, key: &Key, ttl_days: u64, limit: usize) -> Result<Self, DbError> {
+        Ok(Self { db: Db::open(path, key, KVASIR)?, ttl_days, limit })
     }
 
     /// Losing a record must not fail the run it records, so a write error is only logged.

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use kvasir_db::rusqlite::params_from_iter;
 use kvasir_db::schema::SOURCES;
-use kvasir_db::{Db, DbError, OptionalExtension, params};
+use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 
 use super::Match;
 use crate::{SECONDS_PER_DAY, now};
@@ -17,8 +17,8 @@ pub struct SourceStore {
 }
 
 impl SourceStore {
-    pub fn open(path: &Path) -> Result<Self, DbError> {
-        Ok(Self { db: Db::open(path, SOURCES)? })
+    pub fn open(path: &Path, key: &Key) -> Result<Self, DbError> {
+        Ok(Self { db: Db::open(path, key, SOURCES)? })
     }
 
     /// The answer stored for `host`, unless it is older than `ttl_days` (a match) or

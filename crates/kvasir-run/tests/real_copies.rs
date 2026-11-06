@@ -1,11 +1,11 @@
 //! Runs Python stored read back, and write out as they were. The file holds private research, so
 //! the test works on a copy and prints counts only.
 //!
-//! `KVASIR_REAL_DATA=<data dir> cargo nextest run -p kvasir-run --run-ignored only`
+//! `KVASIR_SECRET_KEY=<its key> KVASIR_REAL_DATA=<data dir> cargo nextest run -p kvasir-run --run-ignored only`
 
 use std::path::Path;
 
-use kvasir_db::rusqlite::Connection;
+use kvasir_db::Key;
 use kvasir_types::runs::{LmCallContent, RunDetail, RunSummary};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -54,7 +54,8 @@ fn every_stored_run_reads_and_writes_back_unchanged() {
     if wal.exists() {
         std::fs::copy(wal, dir.path().join("kvasir.db-wal")).unwrap();
     }
-    let db = Connection::open(&copy).unwrap();
+    let key = std::env::var("KVASIR_SECRET_KEY").expect("set KVASIR_SECRET_KEY");
+    let db = Key::parse(&key).expect("64 hex").connect(&copy).unwrap();
     let rows: Vec<(String, String)> = db
         .prepare("SELECT summary, detail FROM runs")
         .unwrap()

@@ -188,7 +188,7 @@ pub fn build(
         // The database file is not made when favicons are off.
         _ if settings.favicons.providers.is_empty() => None,
         _ => {
-            let store = FaviconStore::open(&settings.favicons_db())?;
+            let store = FaviconStore::open(&settings.favicons_db(), &settings.secret_key)?;
             Some(Arc::new(Favicons::new(settings.favicons.clone(), store, Arc::clone(web))))
         }
     };
@@ -197,7 +197,7 @@ pub fn build(
         Some(previous) if previous.settings.sources == settings.sources => previous.sources.clone(),
         _ if !settings.sources.enabled => None,
         _ => {
-            let store = SourceStore::open(&settings.sources_db())?;
+            let store = SourceStore::open(&settings.sources_db(), &settings.secret_key)?;
             let data_dir = settings.data_dir.clone();
             Some(Arc::new(Sources::new(settings.sources.clone(), store, data_dir, Arc::clone(web))))
         }

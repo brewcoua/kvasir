@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use kvasir_db::rusqlite::functions::FunctionFlags;
 use kvasir_db::rusqlite::{self, params_from_iter};
 use kvasir_db::schema::PAGES;
-use kvasir_db::{Db, DbError, OptionalExtension, params};
+use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 use kvasir_extract::{Link, Region, normalize};
 use regex::Regex;
 use sha2::{Digest, Sha256};
@@ -114,8 +114,8 @@ pub struct PageStore {
 
 impl PageStore {
     /// Opens `path`, moving any page stored under a URL `normalize` now spells otherwise.
-    pub fn open(path: &Path) -> Result<Self, DbError> {
-        let db = Db::open(path, PAGES)?;
+    pub fn open(path: &Path, key: &Key) -> Result<Self, DbError> {
+        let db = Db::open(path, key, PAGES)?;
         db.call_blocking(rekey)?;
         Ok(Self { db })
     }

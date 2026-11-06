@@ -366,7 +366,8 @@ async fn the_registry_forgets_the_oldest() {
 }
 
 fn store(dir: &TempDir, ttl_days: u64, limit: usize) -> RunStore {
-    RunStore::open(&dir.path().join("kvasir.db"), ttl_days, limit).unwrap()
+    RunStore::open(&dir.path().join("kvasir.db"), &kvasir_db::Key::for_tests(), ttl_days, limit)
+        .unwrap()
 }
 
 #[tokio::test]
@@ -435,7 +436,8 @@ async fn the_store_keeps_only_what_retention_allows() {
     let dir = TempDir::new().unwrap();
     let registry = RunRegistry::new(10, Some(store(&dir, 1, 2)), false);
     let old = registry.start("storm", "old", Vec::new()).await;
-    kvasir_db::rusqlite::Connection::open(dir.path().join("kvasir.db"))
+    kvasir_db::Key::for_tests()
+        .connect(dir.path().join("kvasir.db"))
         .unwrap()
         .execute("UPDATE runs SET created_at = created_at - 2 * 86400", [])
         .unwrap();

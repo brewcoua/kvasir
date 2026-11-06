@@ -30,6 +30,7 @@ export default defineConfig({
         KVASIR_PROVIDER_UNUSED_API_BASE: "http://127.0.0.1:9",
         KVASIR_DATA_DIR: "test-results/data",
         KVASIR_TOKEN: "e2e-token",
+        KVASIR_SECRET_KEY: "ab".repeat(32),
         KVASIR_HOST: "127.0.0.1",
         KVASIR_PORT: "8765",
       },

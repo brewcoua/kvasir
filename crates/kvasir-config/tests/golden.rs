@@ -33,12 +33,31 @@ fn dump(s: &Settings) -> Value {
 }
 
 #[test]
+fn the_secret_key_is_required_and_checked() {
+    let token = || ("KVASIR_TOKEN".to_owned(), "t".to_owned());
+    let load = |env: Vec<(String, String)>| Settings::from_env(env, &mut vec![]);
+
+    assert_eq!(
+        load(vec![token()]).unwrap_err().to_string(),
+        "missing required environment variables: KVASIR_SECRET_KEY"
+    );
+    assert_eq!(
+        load(vec![token(), ("KVASIR_SECRET_KEY".into(), "short".into())]).unwrap_err().to_string(),
+        "KVASIR_SECRET_KEY must be 64 hex characters, as from openssl rand -hex 32"
+    );
+    let good = load(vec![token(), ("KVASIR_SECRET_KEY".into(), "ab".repeat(32))]).unwrap();
+    assert!(!format!("{good:?}").contains(&"ab".repeat(32)));
+}
+
+#[test]
 fn settings_load_as_python_loaded_them() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/settings.json");
     let cases: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let mut failed = Vec::new();
     for case in &cases {
-        let env: Vec<(String, String)> = serde_json::from_value(case["env"].clone()).unwrap();
+        let mut env: Vec<(String, String)> = serde_json::from_value(case["env"].clone()).unwrap();
+        // Python had no such variable, and each case's outcome is about the others.
+        env.insert(0, ("KVASIR_SECRET_KEY".into(), "ab".repeat(32)));
         let stored = case["stored"].as_object().unwrap();
         let strict = case["strict"].as_bool().unwrap();
         let mut warnings = Vec::new();

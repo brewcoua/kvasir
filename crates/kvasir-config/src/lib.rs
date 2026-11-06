@@ -75,6 +75,8 @@ pub struct Settings {
     pub data_dir: PathBuf,
     /// Every route but health, the login and the page needs it.
     pub token: String,
+    /// What every database file is encrypted under.
+    pub secret_key: kvasir_db::Key,
     pub host: String,
     pub port: u16,
     /// How wide fan-out runs, and how many search or page requests may be in flight at once.
@@ -194,8 +196,11 @@ mod tests {
 
     #[test]
     fn the_field_table_matches_the_sections() {
-        let settings =
-            Settings::from_env([("KVASIR_TOKEN".into(), "t".into())], &mut vec![]).unwrap();
+        let settings = Settings::from_env(
+            [("KVASIR_TOKEN".into(), "t".into()), ("KVASIR_SECRET_KEY".into(), "ab".repeat(32))],
+            &mut vec![],
+        )
+        .unwrap();
         let mut keys = Vec::new();
         for (name, value) in [
             ("model", serde_json::to_value(&settings.model)),

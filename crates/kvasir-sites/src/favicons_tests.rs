@@ -3,7 +3,6 @@
 
 use std::net::IpAddr;
 
-use kvasir_db::rusqlite::Connection;
 use kvasir_fetch::{Guard, Lookup, Options};
 use tempfile::TempDir;
 use tokio::io::AsyncWriteExt;
@@ -53,7 +52,9 @@ struct Setting {
 impl Setting {
     async fn new() -> Self {
         let dir = TempDir::new().unwrap();
-        let store = FaviconStore::open(&dir.path().join("favicons.db")).unwrap();
+        let store =
+            FaviconStore::open(&dir.path().join("favicons.db"), &kvasir_db::Key::for_tests())
+                .unwrap();
         Self { site: MockServer::start().await, store, dir }
     }
 
@@ -94,7 +95,8 @@ impl Setting {
     }
 
     fn age(&self, days: f64) {
-        Connection::open(self.dir.path().join("favicons.db"))
+        kvasir_db::Key::for_tests()
+            .connect(self.dir.path().join("favicons.db"))
             .unwrap()
             .execute("UPDATE favicons SET fetched_at = fetched_at - ?", [days * SECONDS_PER_DAY])
             .unwrap();
@@ -149,7 +151,8 @@ async fn each_provider_is_asked_for_the_host_and_its_icon_is_kept() {
 #[test]
 fn the_real_providers_are_where_they_should_be() {
     let dir = TempDir::new().unwrap();
-    let store = FaviconStore::open(&dir.path().join("favicons.db")).unwrap();
+    let store =
+        FaviconStore::open(&dir.path().join("favicons.db"), &kvasir_db::Key::for_tests()).unwrap();
     let icons = Favicons::new(FaviconSettings::default(), store, web(Guard::Public));
     let for_host = |template: &str| template.replace("{domain}", "example.org");
     assert_eq!(for_host(&icons.templates.direct), "https://example.org");
@@ -571,7 +574,8 @@ async fn a_homepage_that_answers_makes_a_miss_final_though_favicon_ico_is_slow()
 async fn a_store_that_fails_does_not_stop_the_lookup() {
     let setting = Setting::new().await;
     setting.serve("/favicon.ico", ok(PNG)).await;
-    Connection::open(setting.dir.path().join("favicons.db"))
+    kvasir_db::Key::for_tests()
+        .connect(setting.dir.path().join("favicons.db"))
         .unwrap()
         .execute_batch("DROP TABLE favicons")
         .unwrap();

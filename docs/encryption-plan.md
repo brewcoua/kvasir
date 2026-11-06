@@ -1,6 +1,6 @@
 # Encryption at rest: plan
 
-Status: written 2026-11-06. Phase 1 built 2026-11-06.
+Status: written 2026-11-06. Phases 1 and 2 built 2026-11-06.
 
 Every file in `KVASIR_DATA_DIR` is plain SQLite. Anyone who gets a copy of the directory or a backup
 of it reads the runs (questions, prompts, answers, the searches made), the cached pages of what was

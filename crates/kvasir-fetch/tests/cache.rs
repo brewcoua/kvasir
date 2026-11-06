@@ -4,7 +4,6 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::Duration;
 
-use kvasir_db::rusqlite::Connection;
 use kvasir_extract::{Link, Region};
 use kvasir_fetch::{Engine, FetchError, Guard, Options, Page, PageStore, Web, system_lookup};
 use tempfile::TempDir;
@@ -39,7 +38,8 @@ impl Setting {
     async fn new() -> Self {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
-        let store = PageStore::open(&dir.path().join("pages.db")).unwrap();
+        let store =
+            PageStore::open(&dir.path().join("pages.db"), &kvasir_db::Key::for_tests()).unwrap();
         let options = Options {
             contact: String::new(),
             host_interval: Duration::ZERO,
@@ -62,7 +62,8 @@ impl Setting {
     }
 
     fn age(&self, hours: f64) {
-        Connection::open(self.dir.path().join("pages.db"))
+        kvasir_db::Key::for_tests()
+            .connect(self.dir.path().join("pages.db"))
             .unwrap()
             .execute("UPDATE pages SET fetched_at = fetched_at - ?", [hours * HOUR])
             .unwrap();
@@ -82,7 +83,7 @@ fn page(url: &str, text: &str) -> Page {
 }
 
 fn store_in(dir: &Path) -> PageStore {
-    PageStore::open(&dir.join("pages.db")).unwrap()
+    PageStore::open(&dir.join("pages.db"), &kvasir_db::Key::for_tests()).unwrap()
 }
 
 async fn search(store: &PageStore, words: &str) -> Vec<String> {
@@ -261,7 +262,7 @@ async fn flushing_frees_the_disk_and_the_text_index() {
     assert_eq!((after.pages, after.pieces, after.text_bytes, after.vector_bytes), (0, 0, 0, 0));
     assert!(after.file_bytes < before, "{} < {before}", after.file_bytes);
     assert!(search(&store, "word").await.is_empty());
-    let db = Connection::open(dir.path().join("pages.db")).unwrap();
+    let db = kvasir_db::Key::for_tests().connect(dir.path().join("pages.db")).unwrap();
     let indexed: i64 = db.query_row("SELECT COUNT(*) FROM pieces_fts", [], |r| r.get(0)).unwrap();
     assert_eq!(indexed, 0);
 }
@@ -293,7 +294,8 @@ async fn concurrent_puts_do_not_error() {
 async fn a_failing_cache_costs_the_download_and_not_the_run() {
     let setting = Setting::new().await;
     let _site = setting.answer(reply(article("first", "/next"), "\"v1\"")).await;
-    Connection::open(setting.dir.path().join("pages.db"))
+    kvasir_db::Key::for_tests()
+        .connect(setting.dir.path().join("pages.db"))
         .unwrap()
         .execute_batch(
             "DROP TABLE links; DROP TRIGGER pieces_dropped; DROP TABLE pieces; DROP TABLE pages;",
@@ -370,7 +372,7 @@ async fn a_page_stored_under_another_spelling_moves_at_open_and_the_newest_wins(
     let dir = TempDir::new().unwrap();
     drop(store_in(dir.path()));
     let path = dir.path().join("pages.db");
-    let db = Connection::open(&path).unwrap();
+    let db = kvasir_db::Key::for_tests().connect(&path).unwrap();
     let add = |url: &str, at: f64, text: &str| {
         db.execute(
             "INSERT INTO pages VALUES (?, ?, ?, NULL, NULL, 'h', 'static', '', ?)",

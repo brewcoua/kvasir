@@ -123,7 +123,7 @@ pub fn main(args: &[&str]) -> anyhow::Result<()> {
 async fn settings() -> anyhow::Result<Settings> {
     let mut warnings = Vec::new();
     let env = Settings::from_env(std::env::vars(), &mut warnings)?;
-    let db = kvasir_db::Db::open(&env.db(), kvasir_db::schema::KVASIR)?;
+    let db = kvasir_db::Db::open(&env.db(), &env.secret_key, kvasir_db::schema::KVASIR)?;
     let rows = kvasir_config::store::load(&db).await?;
     let stored = kvasir_config::decode(rows, false, &mut warnings)?;
     let settings = env.with_stored(&stored, false, &mut warnings)?;

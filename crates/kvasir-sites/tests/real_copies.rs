@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use kvasir_db::rusqlite::Connection;
+use kvasir_db::Key;
 use kvasir_fetch::PageStore;
 use kvasir_sites::favicons::FaviconStore;
 use kvasir_sites::sources::SourceStore;
@@ -26,8 +26,13 @@ fn copy_of(name: &str, into: &TempDir) -> PathBuf {
     to
 }
 
+/// The key the copied files were written under.
+fn key() -> Key {
+    Key::parse(&std::env::var("KVASIR_SECRET_KEY").expect("set KVASIR_SECRET_KEY")).expect("64 hex")
+}
+
 fn column(path: &Path, sql: &str) -> Vec<String> {
-    let db = Connection::open(path).unwrap();
+    let db = key().connect(path).unwrap();
     let mut rows = db.prepare(sql).unwrap();
     rows.query_map([], |row| row.get(0)).unwrap().map(Result::unwrap).collect()
 }
@@ -37,7 +42,7 @@ fn column(path: &Path, sql: &str) -> Vec<String> {
 async fn a_real_page_cache_reads_every_page_and_answers_recall() {
     let dir = TempDir::new().unwrap();
     let path = copy_of("pages.db", &dir);
-    let store = PageStore::open(&path).unwrap();
+    let store = PageStore::open(&path, &key()).unwrap();
 
     let rows = store.rows().await.unwrap();
     let mut read = 0;
@@ -69,7 +74,7 @@ async fn a_real_page_cache_reads_every_page_and_answers_recall() {
 async fn a_real_source_cache_reads_every_host_and_its_marks() {
     let dir = TempDir::new().unwrap();
     let path = copy_of("sources.db", &dir);
-    let store = SourceStore::open(&path).unwrap();
+    let store = SourceStore::open(&path, &key()).unwrap();
 
     let hosts = column(&path, "SELECT host FROM sources");
     let (mut matches, mut misses) = (0, 0);
@@ -89,7 +94,7 @@ async fn a_real_source_cache_reads_every_host_and_its_marks() {
 async fn a_real_favicon_cache_reads_every_host() {
     let dir = TempDir::new().unwrap();
     let path = copy_of("favicons.db", &dir);
-    let store = FaviconStore::open(&path).unwrap();
+    let store = FaviconStore::open(&path, &key()).unwrap();
 
     let hosts = column(&path, "SELECT host FROM favicons");
     let mut icons = 0;

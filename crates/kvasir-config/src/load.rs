@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use kvasir_db::Key;
 use kvasir_types::sites::{KINDS, LIST_TAGS, is_list_label, normalize_host};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -17,9 +18,10 @@ use crate::{
 };
 
 const PROVIDER_PREFIX: &str = "KVASIR_PROVIDER_";
-const ENV_NAMES: [&str; 7] = [
+const ENV_NAMES: [&str; 8] = [
     "KVASIR_DATA_DIR",
     "KVASIR_TOKEN",
+    "KVASIR_SECRET_KEY",
     "KVASIR_HOST",
     "KVASIR_PORT",
     "KVASIR_MAX_THREADS",
@@ -52,6 +54,9 @@ impl Settings {
             .collect();
         if get("KVASIR_TOKEN").is_none() {
             missing.push("KVASIR_TOKEN".into());
+        }
+        if get("KVASIR_SECRET_KEY").is_none() {
+            missing.push("KVASIR_SECRET_KEY".into());
         }
         if !missing.is_empty() {
             return Err(ConfigError::new(format!(
@@ -89,6 +94,12 @@ impl Settings {
             |raw| Path::new(raw).components().collect(),
         );
         let token = get("KVASIR_TOKEN").expect("checked above").to_owned();
+        let secret_key =
+            Key::parse(get("KVASIR_SECRET_KEY").expect("checked above")).ok_or_else(|| {
+                ConfigError::new(
+                    "KVASIR_SECRET_KEY must be 64 hex characters, as from openssl rand -hex 32",
+                )
+            })?;
         let host = get("KVASIR_HOST").unwrap_or("0.0.0.0").to_owned();
         let port = int("KVASIR_PORT", 8080)?;
         let port = u16::try_from(port).map_err(|_| {
@@ -112,6 +123,7 @@ impl Settings {
         Ok(Self {
             data_dir,
             token,
+            secret_key,
             host,
             port,
             max_threads,

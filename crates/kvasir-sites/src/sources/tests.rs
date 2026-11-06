@@ -2,7 +2,6 @@
 
 use std::time::SystemTime;
 
-use kvasir_db::rusqlite::Connection;
 use kvasir_fetch::{Guard, Options, system_lookup};
 use tempfile::TempDir;
 use wiremock::matchers::{method, path};
@@ -91,7 +90,8 @@ struct Setting {
 impl Setting {
     async fn new() -> Self {
         let dir = TempDir::new().unwrap();
-        let store = SourceStore::open(&dir.path().join("sources.db")).unwrap();
+        let store = SourceStore::open(&dir.path().join("sources.db"), &kvasir_db::Key::for_tests())
+            .unwrap();
         Self { server: MockServer::start().await, store, dir }
     }
 
@@ -137,7 +137,8 @@ impl Setting {
     }
 
     fn age(&self, days: f64) {
-        Connection::open(self.dir.path().join("sources.db"))
+        kvasir_db::Key::for_tests()
+            .connect(self.dir.path().join("sources.db"))
             .unwrap()
             .execute("UPDATE sources SET fetched_at = fetched_at - ?", [days * SECONDS_PER_DAY])
             .unwrap();

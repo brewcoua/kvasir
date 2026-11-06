@@ -78,12 +78,13 @@ mod tests {
         for (file, migrations) in
             [("pages.sql", PAGES), ("favicons.sql", FAVICONS), ("sources.sql", SOURCES)]
         {
-            let db = Db::open(&dir.path().join(file), migrations).unwrap();
+            let db =
+                Db::open(&dir.path().join(file), &crate::Key::for_tests(), migrations).unwrap();
             let mut got = db.call_blocking(|c| Ok(schema(c))).unwrap();
             got.sort();
             assert_eq!(got, golden_schema(file), "{file}");
         }
-        let db = Db::open(&dir.path().join("kvasir.db"), KVASIR).unwrap();
+        let db = Db::open(&dir.path().join("kvasir.db"), &crate::Key::for_tests(), KVASIR).unwrap();
         let mut got = db.call_blocking(|c| Ok(schema(c))).unwrap();
         got.sort();
         let mut want = golden_schema("kvasir.sql");
@@ -96,7 +97,7 @@ mod tests {
     fn a_python_store_loses_co_storm_and_is_backed_up() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("kvasir.db");
-        let old = Connection::open(&path).unwrap();
+        let old = crate::Key::for_tests().connect(&path).unwrap();
         old.execute_batch(&golden("kvasir.sql")).unwrap();
         old.execute_batch(
             "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -110,7 +111,7 @@ mod tests {
         .unwrap();
         drop(old);
 
-        let db = Db::open(&path, KVASIR).unwrap();
+        let db = Db::open(&path, &crate::Key::for_tests(), KVASIR).unwrap();
 
         let rows = |sql: &'static str| {
             db.call_blocking(move |c| {
@@ -123,7 +124,8 @@ mod tests {
         assert_eq!(rows("SELECT run_id FROM calls"), ["b"]);
         assert!(rows("SELECT run_id FROM searches").is_empty());
         assert_eq!(rows("SELECT key FROM settings"), ["storm.max_conv_turn"]);
-        let copy = Connection::open(dir.path().join("kvasir.db.pre-rust.bak")).unwrap();
+        let copy =
+            crate::Key::for_tests().connect(dir.path().join("kvasir.db.pre-rust.bak")).unwrap();
         let runs: i64 = copy.query_row("SELECT count(*) FROM runs", [], |r| r.get(0)).unwrap();
         assert_eq!(runs, 3);
     }
@@ -131,19 +133,21 @@ mod tests {
     #[test]
     fn a_new_file_is_not_backed_up() {
         let dir = tempfile::tempdir().unwrap();
-        Db::open(&dir.path().join("f.db"), FAVICONS).unwrap();
+        Db::open(&dir.path().join("f.db"), &crate::Key::for_tests(), FAVICONS).unwrap();
         assert!(!dir.path().join("f.db.pre-rust.bak").exists());
     }
 }
 
 /// Opens a copy of a real `pages.db`. Ignored by default; run with
-/// `KVASIR_REAL_PAGES=<copy of pages.db> cargo test -p kvasir-db -- --ignored`.
+/// `KVASIR_SECRET_KEY=<its key> KVASIR_REAL_PAGES=<copy of pages.db> cargo test -p kvasir-db -- --ignored`.
 #[cfg(test)]
 #[test]
 #[ignore = "needs a copy of a real pages.db"]
 fn a_real_pages_db_opens_and_searches() {
     let path = std::env::var("KVASIR_REAL_PAGES").expect("set KVASIR_REAL_PAGES");
-    let db = crate::Db::open(std::path::Path::new(&path), PAGES).unwrap();
+    let key = std::env::var("KVASIR_SECRET_KEY").expect("set KVASIR_SECRET_KEY");
+    let key = crate::Key::parse(&key).expect("64 hex characters");
+    let db = crate::Db::open(std::path::Path::new(&path), &key, PAGES).unwrap();
     let (pages, pieces, found): (i64, i64, i64) = db
         .call_blocking(|c| {
             Ok((

@@ -327,6 +327,7 @@ class Service:
         env = {k: v for k, v in os.environ.items() if not k.startswith("KVASIR_")}
         env |= self.environment | {
             "KVASIR_TOKEN": TOKEN,
+            "KVASIR_SECRET_KEY": "ab" * 32,
             "KVASIR_DATA_DIR": str(self.data),
             "KVASIR_HOST": "127.0.0.1",
             "KVASIR_PORT": str(self.port),
