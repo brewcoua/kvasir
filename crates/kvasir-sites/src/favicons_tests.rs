@@ -907,3 +907,12 @@ async fn an_apex_with_no_icon_takes_its_www() {
 
     assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, png());
 }
+
+#[tokio::test]
+async fn a_site_under_a_private_suffix_has_no_www_to_try() {
+    let setting = Setting::new().await;
+
+    assert_eq!(setting.service(&[Direct]).find("someone.github.io").await, MISS);
+
+    assert_eq!(setting.asked().await, ["/favicon.ico", "/"]);
+}

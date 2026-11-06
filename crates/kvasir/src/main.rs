@@ -10,6 +10,9 @@ use kvasir_api::Proxies;
 use kvasir_config::{LogFormat, Settings};
 use kvasir_fetch::Guard;
 use tracing::level_filters::LevelFilter;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 const USAGE: &str = "usage: kvasir serve | kvasir eval <out> | kvasir openapi | kvasir pdf-text";
 
@@ -60,10 +63,15 @@ fn serve(guard: Guard) -> anyhow::Result<()> {
     let env = Settings::from_env(std::env::vars(), &mut warnings)?;
     let level = level(&env.log.level)
         .with_context(|| format!("KVASIR_LOG_LEVEL: {} is not a log level", env.log.level))?;
+    // It logs every certificate it refuses as an error, though a refused request is an ordinary
+    // answer that whoever made it reports, such as a favicon lookup trying a name with no `www`.
+    let filter = Targets::new()
+        .with_default(level)
+        .with_target("rustls_platform_verifier", LevelFilter::OFF);
     let logs = tracing_subscriber::fmt().with_max_level(level);
     match env.log.format {
-        LogFormat::Json => logs.json().init(),
-        LogFormat::Text => logs.init(),
+        LogFormat::Json => logs.json().finish().with(filter).init(),
+        LogFormat::Text => logs.finish().with(filter).init(),
     }
     for warning in &warnings {
         tracing::warn!("{warning}");

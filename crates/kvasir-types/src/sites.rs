@@ -199,6 +199,12 @@ pub fn registrable(host: &str) -> &str {
     }
 }
 
+/// Whether `host` is under a suffix a company runs for its customers, such as `github.io`, where each
+/// name is a site of its own and nothing says a `www.` of it exists.
+pub fn under_private_suffix(host: &str) -> bool {
+    psl::suffix(host.as_bytes()).and_then(|suffix| suffix.typ()) == Some(psl::Type::Private)
+}
+
 /// `raw` as the key a site is cached under: lowercase, no `www.` and no port. `None` for an IP
 /// literal or anything that is not a DNS name with a dot.
 ///
@@ -256,6 +262,18 @@ mod tests {
             ("", None),
         ] {
             assert_eq!(normalize_host(raw).as_deref(), want, "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn private_suffixes() {
+        for (host, want) in [
+            ("someone.github.io", true),
+            ("example.org", false),
+            ("example.co.uk", false),
+            ("a.b.not-a-suffix", false),
+        ] {
+            assert_eq!(under_private_suffix(host), want, "{host}");
         }
     }
 

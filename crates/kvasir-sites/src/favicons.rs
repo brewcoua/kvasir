@@ -16,7 +16,7 @@ use kvasir_db::schema::FAVICONS;
 use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 use kvasir_extract::too_deep;
 use kvasir_fetch::Web;
-use kvasir_types::sites::{normalize_host, registrable};
+use kvasir_types::sites::{normalize_host, registrable, under_private_suffix};
 use regex::Regex;
 use reqwest::header;
 use tokio::sync::{Semaphore, watch};
@@ -340,7 +340,13 @@ impl Favicons {
     /// its `www` has the icon, as linkedin.com does, and a subdomain may have none of its own.
     async fn direct(&self, host: &str, budget: &mut Budget) -> Option<Icon> {
         let apex = registrable(host);
-        let other = if apex == host { format!("www.{host}") } else { apex.to_owned() };
+        let other = if apex != host {
+            apex.to_owned()
+        } else if under_private_suffix(host) {
+            return self.declared_or_ico(host, budget).await;
+        } else {
+            format!("www.{host}")
+        };
         if let Some(icon) = self.declared_or_ico(host, budget).await {
             return Some(icon);
         }
