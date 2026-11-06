@@ -13,10 +13,12 @@
 mod arxiv;
 mod brave;
 mod crossref;
+mod duckduckgo;
 mod europe_pmc;
 mod exa;
 mod mojeek;
 mod openalex;
+mod scrape;
 mod searxng;
 mod semantic_scholar;
 mod tavily;
@@ -42,6 +44,7 @@ use tokio::time::Instant;
 pub use arxiv::Arxiv;
 pub use brave::Brave;
 pub use crossref::Crossref;
+pub use duckduckgo::DuckDuckGo;
 pub use europe_pmc::EuropePmc;
 pub use exa::Exa;
 pub use mojeek::Mojeek;
@@ -341,6 +344,9 @@ impl Providers {
         }
         if let Some(key) = settings.openalex.usable_key() {
             providers.push((Box::new(OpenAlex::new(key)), settings.openalex.weight));
+        }
+        if settings.duckduckgo.enabled {
+            providers.push((Box::new(DuckDuckGo::default()), settings.duckduckgo.weight));
         }
         Self::new(providers, web)
     }

@@ -237,6 +237,12 @@ pub const FIELDS: &[Field] = &[
     field("search.openalex.enabled", Kind::Bool, "Search OpenAlex's scholarly works."),
     field("search.openalex.api_key", Kind::Secret, "OpenAlex API key."),
     field("search.openalex.weight", Kind::Float, "Its weight when results are fused."),
+    field(
+        "search.duckduckgo.enabled",
+        Kind::Bool,
+        "Search DuckDuckGo by reading its pages, which is against its terms.",
+    ),
+    field("search.duckduckgo.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

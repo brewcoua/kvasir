@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Brave, Crossref, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider, Row,
+    Arxiv, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider, Row,
     SemanticScholar, Tavily, Wikipedia,
 };
 use serde_json::json;
@@ -611,5 +611,88 @@ mod openalex {
 
         assert!(matches!(failure, Failure::Other(_)));
         assert!(!failure.to_string().contains("the-key"), "{failure}");
+    }
+}
+
+mod duckduckgo {
+    use wiremock::matchers::body_string_contains;
+
+    use super::*;
+
+    fn at(server: &MockServer) -> DuckDuckGo {
+        DuckDuckGo::at(&format!("{}/s", server.uri()))
+    }
+
+    fn page(body: &str) -> ResponseTemplate {
+        ResponseTemplate::new(200).set_body_string(format!("<html><body>{body}</body></html>"))
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_page() {
+        let server = MockServer::start().await;
+        let body = r#"<div id="links">
+            <div class="result results_links web-result result--ad">
+              <h2><a href="https://duckduckgo.com/y.js?ad=1">An ad</a></h2>
+            </div>
+            <div class="result results_links web-result">
+              <h2 class="result__title"><a class="result__a" href="https://a.org/x">The
+                 <b>title</b></a></h2>
+              <a class="result__snippet" href="https://a.org/x">About <b>a</b>.</a>
+            </div>
+            <div class="result web-result">
+              <h2><a href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fb.org%2Fy%3Fz%3D1&amp;rut=abc">B</a></h2>
+            </div>
+            <div class="result web-result"><h2><a>No address</a></h2></div>
+          </div>"#;
+        Mock::given(method("POST"))
+            .and(path("/s"))
+            .and(header("content-type", "application/x-www-form-urlencoded"))
+            .and(body_string_contains("q=the+query"))
+            .respond_with(page(body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [row("https://a.org/x", "The title", "About a."), row("https://b.org/y?z=1", "B", "")]
+        );
+    }
+
+    #[tokio::test]
+    async fn no_match_is_no_results() {
+        let server =
+            answering(page(r#"<div id="links"><div class="no-results">No</div></div>"#)).await;
+
+        assert_eq!(at(&server).query("q").await, Ok(Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn its_blocks_are_told_apart() {
+        for body in
+            [r#"<form id="challenge-form"></form>"#, r#"<div class="anomaly-modal__title"></div>"#]
+        {
+            let server = answering(page(body)).await;
+            assert_eq!(at(&server).query("q").await, Err(Failure::Captcha));
+        }
+
+        let server = answering(ResponseTemplate::new(202)).await;
+        assert_eq!(at(&server).query("q").await, Err(Failure::RateLimited { retry_after: None }));
+
+        let server = answering(ResponseTemplate::new(303)).await;
+        assert!(matches!(at(&server).query("q").await, Err(Failure::Other(_))));
+    }
+
+    /// An empty list here would look like a topic with no sources.
+    #[tokio::test]
+    async fn a_page_it_does_not_understand_is_a_failure() {
+        let server = answering(page("<p>Something new</p>")).await;
+
+        assert_eq!(
+            at(&server).query("q").await,
+            Err(Failure::Other("no result list in the page".into()))
+        );
     }
 }
