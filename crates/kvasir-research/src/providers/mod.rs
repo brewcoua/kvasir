@@ -10,6 +10,7 @@
 //! different engines do not compare. A provider that failed is left alone for as long as its
 //! failure says, and the others carry the query.
 
+mod brave;
 mod searxng;
 
 use std::collections::HashSet;
@@ -22,9 +23,12 @@ use kvasir_fetch::Web;
 use kvasir_llm::BoxFuture;
 use kvasir_run::RunCtx;
 use kvasir_types::runs::SearchResult;
+use reqwest::StatusCode;
+use reqwest::header::RETRY_AFTER;
 use serde::Serialize;
 use tokio::time::Instant;
 
+pub use brave::Brave;
 pub use searxng::SearXng;
 
 use crate::search::{Hit, RRF_K, Search};
@@ -34,6 +38,38 @@ const RATE_LIMIT_COOL_DOWN: Duration = Duration::from_secs(60);
 /// How long a provider rests after a CAPTCHA, which nothing can solve yet.
 const CAPTCHA_COOL_DOWN: Duration = Duration::from_secs(60 * 60);
 const DAY: u64 = 24 * 60 * 60;
+/// How long a provider has to answer.
+const TIMEOUT: Duration = Duration::from_secs(30);
+/// Results asked of a provider that takes a count: the most Brave and Tavily give, and what a
+/// search ranks.
+const RESULTS: usize = crate::search::POOL;
+
+/// A client for one provider's requests.
+fn client() -> reqwest::Client {
+    reqwest::Client::builder().timeout(TIMEOUT).build().expect("the TLS backend starts")
+}
+
+/// The failure a status means on every provider, if it does.
+fn status_failure(response: &reqwest::Response) -> Option<Failure> {
+    match response.status() {
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Some(Failure::Unauthorized),
+        StatusCode::TOO_MANY_REQUESTS => {
+            let retry_after = response
+                .headers()
+                .get(RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|text| text.parse().ok())
+                .map(Duration::from_secs);
+            Some(Failure::RateLimited { retry_after })
+        }
+        _ => None,
+    }
+}
+
+/// A failure the provider did not explain, without the request's URL, which may hold its key.
+fn other(what: &str, err: reqwest::Error) -> Failure {
+    Failure::Other(format!("{what}: {}", err.without_url()))
+}
 
 /// One result, in the order its provider ranks it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -191,9 +227,12 @@ impl Providers {
 
     pub fn from_settings(settings: &SearchSettings, web: Arc<Web>) -> Self {
         let mut providers: Vec<(Box<dyn Provider>, f64)> = Vec::new();
-        if settings.has_web_provider() {
+        if settings.searxng.enabled && !settings.searxng.url.is_empty() {
             providers
                 .push((Box::new(SearXng::new(&settings.searxng.url)), settings.searxng.weight));
+        }
+        if let Some(key) = settings.brave.usable_key() {
+            providers.push((Box::new(Brave::new(key)), settings.brave.weight));
         }
         Self::new(providers, web)
     }

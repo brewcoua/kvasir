@@ -62,9 +62,26 @@ impl std::fmt::Debug for Secret {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BraveSettings {
+/// A search provider reached with an API key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KeyedSettings {
+    pub enabled: bool,
     pub api_key: Option<Secret>,
+    /// In the fusion of the providers' results.
+    pub weight: f64,
+}
+
+impl KeyedSettings {
+    /// The key, when the provider is enabled and has one.
+    pub fn usable_key(&self) -> Option<&str> {
+        self.api_key.as_ref().filter(|_| self.enabled).map(|key| key.0.as_str())
+    }
+}
+
+impl Default for KeyedSettings {
+    fn default() -> Self {
+        Self { enabled: false, api_key: None, weight: 1.0 }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -85,19 +102,19 @@ impl Default for SearxngSettings {
 pub struct SearchSettings {
     pub top_k: usize,
     pub searxng: SearxngSettings,
-    pub brave: BraveSettings,
+    pub brave: KeyedSettings,
 }
 
 impl SearchSettings {
     /// Whether a provider that searches the whole web can be asked.
     pub fn has_web_provider(&self) -> bool {
-        self.searxng.enabled && !self.searxng.url.is_empty()
+        (self.searxng.enabled && !self.searxng.url.is_empty()) || self.brave.usable_key().is_some()
     }
 }
 
 impl Default for SearchSettings {
     fn default() -> Self {
-        Self { top_k: 3, searxng: SearxngSettings::default(), brave: BraveSettings::default() }
+        Self { top_k: 3, searxng: SearxngSettings::default(), brave: KeyedSettings::default() }
     }
 }
 

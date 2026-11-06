@@ -638,7 +638,9 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `search.searxng.enabled` | `false` | Search through a SearXNG instance. |
 | `search.searxng.url` | unset | SearXNG base URL. |
 | `search.searxng.weight` | `1.0` | Its weight when results are fused. |
-| `search.brave.api_key` | unset | Brave Search API key. A secret: never returned. No search uses it yet. |
+| `search.brave.enabled` | `false` | Search through the Brave Search API. |
+| `search.brave.api_key` | unset | Brave Search API key. A secret: never returned. |
+| `search.brave.weight` | `1.0` | Its weight when results are fused. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |

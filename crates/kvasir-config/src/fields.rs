@@ -202,7 +202,9 @@ pub const FIELDS: &[Field] = &[
     field("search.searxng.enabled", Kind::Bool, "Search through a SearXNG instance."),
     field("search.searxng.url", TEXT, "SearXNG base URL."),
     field("search.searxng.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.brave.enabled", Kind::Bool, "Search through the Brave Search API."),
     field("search.brave.api_key", Kind::Secret, "Brave Search API key."),
+    field("search.brave.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

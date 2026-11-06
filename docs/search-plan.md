@@ -157,8 +157,7 @@ provider's later queries go through the same Chromium instead.
 ## Phases
 
 1. `Secret` field kind: parse, `GET` as `{"set": ...}`, `PATCH`, `DELETE`, the password input in
-   `ServiceField.svelte`. Nested `search.<provider>.<name>` keys in the loader. Its first field is
-   `search.brave.api_key`, which nothing reads until phase 4. Commit.
+   `ServiceField.svelte`. Nested `search.<provider>.<name>` keys in the loader. Commit.
 2. Providers. The provider trait, the typed failure, `Providers` with fan-out, weighted fusion, URL
    merging, per-provider limiter and cool down. SearXNG ported to it, `search.url` moved to
    `search.searxng.url` with a migration of the stored row. The test doubles in

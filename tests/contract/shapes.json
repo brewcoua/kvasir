@@ -3723,6 +3723,8 @@
   "runs.store": "string",
   "runs.ttl_days": "string",
   "search.brave.api_key": "string",
+  "search.brave.enabled": "string",
+  "search.brave.weight": "string",
   "search.searxng.enabled": "string",
   "search.searxng.url": "string",
   "search.searxng.weight": "string",

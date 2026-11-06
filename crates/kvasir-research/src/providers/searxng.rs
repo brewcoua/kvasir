@@ -1,17 +1,10 @@
 //! A SearXNG instance serving its JSON format. One serving HTML only returns an empty result set
 //! rather than failing, which looks like a topic with no sources.
 
-use std::time::Duration;
-
 use kvasir_llm::BoxFuture;
-use reqwest::StatusCode;
-use reqwest::header::RETRY_AFTER;
 use serde::Deserialize;
 
-use super::{Failure, Provider, Row};
-
-/// How long SearXNG has to answer.
-const TIMEOUT: Duration = Duration::from_secs(30);
+use super::{Failure, Provider, Row, client, other, status_failure};
 
 pub struct SearXng {
     url: String,
@@ -22,28 +15,19 @@ impl SearXng {
     /// The instance is the operator's own and may be on their network, so its address is not
     /// guarded.
     pub fn new(url: &str) -> Self {
-        // SearXNG answers its base URL with a 308 to /search, so redirects are followed.
-        let client =
-            reqwest::Client::builder().timeout(TIMEOUT).build().expect("the TLS backend starts");
-        Self { url: url.to_owned(), client }
+        // SearXNG answers its base URL with a 308 to /search, which a client follows by default.
+        Self { url: url.to_owned(), client: client() }
     }
 
     async fn rows(&self, query: &str) -> Result<Vec<Row>, Failure> {
-        let other =
-            |what: &str, err: &dyn std::fmt::Display| Failure::Other(format!("{what}: {err}"));
-        let mut url = url::Url::parse(&self.url).map_err(|e| other("search.searxng.url", &e))?;
+        let mut url = url::Url::parse(&self.url)
+            .map_err(|e| Failure::Other(format!("search.searxng.url: {e}")))?;
         url.query_pairs_mut().append_pair("q", query).append_pair("format", "json");
-        let response = self.client.get(url).send().await.map_err(|e| other("request", &e))?;
-        if response.status() == StatusCode::TOO_MANY_REQUESTS {
-            let retry_after = response
-                .headers()
-                .get(RETRY_AFTER)
-                .and_then(|value| value.to_str().ok())
-                .and_then(|text| text.parse().ok())
-                .map(Duration::from_secs);
-            return Err(Failure::RateLimited { retry_after });
+        let response = self.client.get(url).send().await.map_err(|e| other("request", e))?;
+        if let Some(failure) = status_failure(&response) {
+            return Err(failure);
         }
-        let answer: Answer = response.json().await.map_err(|e| other("answer", &e))?;
+        let answer: Answer = response.json().await.map_err(|e| other("answer", e))?;
         // Rate limits and CAPTCHAs leave the engine out and the answer empty.
         if answer.results.is_empty() && !answer.unresponsive_engines.is_empty() {
             let engines: Vec<String> = answer

@@ -7,7 +7,10 @@
   const EMBEDDING = "model.embedding";
   const WEB_PROVIDER = "search.provider";
   // Those that search the whole web, of which a run needs one. Filling one in enables it.
-  const WEB_PROVIDERS = [{ name: "SearXNG URL", key: "search.searxng.url", enabled: "search.searxng.enabled" }];
+  const WEB_PROVIDERS = [
+    { name: "SearXNG URL", key: "search.searxng.url", enabled: "search.searxng.enabled" },
+    { name: "Brave API key", key: "search.brave.api_key", enabled: "search.brave.enabled" },
+  ];
 
   let { view, ondone }: { view: SettingsView; ondone: () => void } = $props();
 
@@ -18,7 +21,7 @@
   // svelte-ignore state_referenced_locally
   const providers = WEB_PROVIDERS.map((provider) => ({ ...provider, field: view.fields.find((field) => field.key === provider.key)! }));
   const values: Record<string, string> = $state(
-    Object.fromEntries([...fields, ...providers.map((provider) => provider.field)].map((field) => [field.key, String(field.value ?? "")])),
+    Object.fromEntries([...fields, ...providers.map((provider) => provider.field)].map((field) => [field.key, field.type === "secret" ? "" : String(field.value ?? "")])),
   );
 
   let models: ModelInfo[] = $state([]);
@@ -102,7 +105,11 @@
   <p class="meta">At least one of these.</p>
   {#each providers as { name, field } (field.key)}
     <label for={field.key}>{name}</label>
-    <input id={field.key} type="text" autocomplete="off" bind:value={values[field.key]} />
+    {#if field.type === "secret"}
+      <input id={field.key} type="password" autocomplete="new-password" bind:value={values[field.key]} />
+    {:else}
+      <input id={field.key} type="text" autocomplete="off" bind:value={values[field.key]} />
+    {/if}
     <p class="meta">{field.help}</p>
   {/each}
   {#if error}<p class="error" role="alert">{error}</p>{/if}

@@ -15,7 +15,7 @@ pub use fields::{FIELDS, Field, Kind, MODEL_KEYS, field_for};
 pub use load::decode;
 use repr::text as quote;
 pub use sections::{
-    BraveSettings, FaviconProvider, FaviconSettings, FetchSettings, LogFormat, LogSettings,
+    FaviconProvider, FaviconSettings, FetchSettings, KeyedSettings, LogFormat, LogSettings,
     ModelSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings,
     SearxngSettings, Secret, SourceSettings, StormSettings,
 };
@@ -238,7 +238,7 @@ mod tests {
         assert_eq!(settings.search.brave.api_key, Some(Secret("k".into())));
         assert_eq!(settings.search.top_k, 3);
         assert_eq!(settings.value("search.brave.api_key"), Some(json!("k")));
-        assert_eq!(settings.value("search.brave"), Some(json!({"api_key": "k"})));
+        assert_eq!(settings.value("search.brave.enabled"), Some(json!(false)));
         assert_eq!(settings.value("search.brave.nope"), None);
     }
 
@@ -255,6 +255,11 @@ mod tests {
         assert!(lacks_one(&[(enabled, json!(true))]));
         assert!(lacks_one(&[(url, json!("http://s"))]));
         assert!(!lacks_one(&[(enabled, json!(true)), (url, json!("http://s"))]));
+
+        let (enabled, key) = ("search.brave.enabled", "search.brave.api_key");
+        assert!(lacks_one(&[(enabled, json!(true))]));
+        assert!(lacks_one(&[(key, json!("k"))]));
+        assert!(!lacks_one(&[(enabled, json!(true)), (key, json!("k"))]));
     }
 
     #[test]
