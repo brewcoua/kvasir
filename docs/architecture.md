@@ -223,6 +223,9 @@ asked for once more in JSON, then fails the call. `/v1/tasks` and `/v1/clarify` 
 
 ## What is kept, and where
 
+Every database file below is encrypted with SQLCipher under `KVASIR_SECRET_KEY`; see
+[`encryption-plan.md`](encryption-plan.md).
+
 | Data | Where | Lifetime | Why there |
 | --- | --- | --- | --- |
 | Runs | Memory, in `RunRegistry` | The `runs.max` most recent, until restart | Runs are observation, not state: nothing resumes from one. |

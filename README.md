@@ -28,7 +28,7 @@ How the service fits together, from a request to its result, is in
 - A [SearXNG](https://docs.searxng.org/) instance **with the JSON output format enabled**. One
   serving HTML only fails as an empty result set rather than an error, which looks like a topic
   with no sources. Add `json` to `search.formats` in its `settings.yml`.
-- A writable data directory, for `kvasir.db` and the caches.
+- A writable data directory, for `kvasir.db` and the caches, encrypted under `KVASIR_SECRET_KEY`.
 
 No paid search credential is needed, and no database, cache or queue.
 
@@ -84,13 +84,15 @@ first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for 
 
    ```bash
    export KVASIR_TOKEN="$(openssl rand -hex 32)"
+   export KVASIR_SECRET_KEY="$(openssl rand -hex 32)"
    export KVASIR_DATA_DIR=data KVASIR_LOG_FORMAT=text KVASIR_MAX_THREADS=2
    export KVASIR_PROVIDER_LOCAL_API_BASE=http://localhost:11434/v1
    cargo run --release -- serve
    ```
 
    Every `/v1` route needs the token, and the runs page asks for it once. Keep the shell open:
-   the examples below send `$KVASIR_TOKEN`. Ollama answers one request at a time by default, so
+   the examples below send `$KVASIR_TOKEN`. Save `KVASIR_SECRET_KEY` too: the data directory opens
+   only with the key it was encrypted under. Ollama answers one request at a time by default, so
    `KVASIR_MAX_THREADS=2` keeps intake calls from only queueing; start Ollama with
    `OLLAMA_NUM_PARALLEL=2` for them to run side by side.
 
@@ -140,6 +142,7 @@ podman run --rm \
   -e KVASIR_PROVIDER_GATEWAY_API_BASE=https://gateway.example/v1 \
   -e KVASIR_PROVIDER_GATEWAY_API_KEY=... \
   -e KVASIR_TOKEN=... \
+  -e KVASIR_SECRET_KEY=... \
   ghcr.io/brewcoua/kvasir:0.1.0
 ```
 
@@ -577,11 +580,34 @@ A model is written `<provider>/<name>`. Only the first `/` splits, so the name m
 `model_fast`, `model_strong` or `model_reason` with an unknown provider gets 400. An override may
 name a different provider.
 
+### Encryption at rest
+
+Every database file in `KVASIR_DATA_DIR` is encrypted with SQLCipher under `KVASIR_SECRET_KEY`. A
+copy of the directory, a snapshot or a backup is unreadable without the key, so store the key apart
+from them. Encryption does not help against someone with root on the host or a shell in the
+container: the key is in the process's environment and memory. The downloaded source lists
+(`sources-<hash>.txt`) stay plain, since they are public.
+
+**A lost key loses the data.** Nothing can recover it. A wrong key stops startup with
+`<file>: KVASIR_SECRET_KEY does not open it; it was encrypted with another key`.
+
+**Upgrading from a version without encryption:** back up the data directory first. At the first
+start, each plain file, and any `.pre-rust.bak` beside it, is replaced by an encrypted copy, and the
+plain file is deleted. This needs free disk for one more copy of each file. A crash during the
+conversion loses nothing, and the next start tries again.
+
+To read a file by hand, use the `sqlcipher` command line, not `sqlite3`:
+
+```sql
+PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
+```
+
 ### Environment
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `KVASIR_TOKEN` | required | The token every route but health, `POST /v1/login` and the page needs. See [Start a run](#start-a-run). |
+| `KVASIR_SECRET_KEY` | required | The key every database file is encrypted under: 64 hex characters, from `openssl rand -hex 32`. See [Encryption at rest](#encryption-at-rest). |
 | `KVASIR_PROVIDER_<NAME>_API_BASE` | required per provider | Provider base URL, such as `http://localhost:11434/v1`. |
 | `KVASIR_PROVIDER_<NAME>_API_KEY` | unset | Provider credential. |
 | `KVASIR_DATA_DIR` | `/data` | Writable directory for `kvasir.db` and the caches. |
