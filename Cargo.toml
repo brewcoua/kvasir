@@ -61,7 +61,7 @@ toml = "1"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tower = "0.5"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["json"] }
 url = "2.5"
 uuid = { version = "1", features = ["v4"] }
 wiremock = "0.6"

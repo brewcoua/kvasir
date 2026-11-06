@@ -15,7 +15,7 @@ use anyhow::Context;
 use kvasir_api::Proxies;
 use kvasir_config::{LogFormat, Settings};
 use kvasir_fetch::Guard;
-use tracing_subscriber::EnvFilter;
+use tracing::level_filters::LevelFilter;
 
 const USAGE: &str = "usage: kvasir serve | kvasir eval <out> | kvasir openapi | kvasir pdf-text";
 
@@ -49,12 +49,24 @@ fn exit(result: anyhow::Result<()>) -> ExitCode {
     }
 }
 
+/// The level a Python logging name means, as `KVASIR_LOG_LEVEL` takes them, upper case.
+fn level(name: &str) -> Option<LevelFilter> {
+    Some(match name {
+        "CRITICAL" | "FATAL" | "ERROR" => LevelFilter::ERROR,
+        "WARNING" | "WARN" => LevelFilter::WARN,
+        "INFO" => LevelFilter::INFO,
+        "DEBUG" => LevelFilter::DEBUG,
+        "NOTSET" => LevelFilter::TRACE,
+        _ => return None,
+    })
+}
+
 fn serve(guard: Guard) -> anyhow::Result<()> {
     let mut warnings = Vec::new();
     let env = Settings::from_env(std::env::vars(), &mut warnings)?;
-    let filter = EnvFilter::try_new(env.log.level.to_lowercase())
-        .with_context(|| format!("{} is not a log level", env.log.level))?;
-    let logs = tracing_subscriber::fmt().with_env_filter(filter);
+    let level = level(&env.log.level)
+        .with_context(|| format!("KVASIR_LOG_LEVEL: {} is not a log level", env.log.level))?;
+    let logs = tracing_subscriber::fmt().with_max_level(level);
     match env.log.format {
         LogFormat::Json => logs.json().init(),
         LogFormat::Text => logs.init(),
@@ -98,4 +110,18 @@ async fn stopped() {
         () = terminate => {}
     }
     tracing::info!("stopping");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_log_level_is_a_python_logging_name() {
+        assert_eq!(level("WARNING"), Some(LevelFilter::WARN));
+        assert_eq!(level("CRITICAL"), Some(LevelFilter::ERROR));
+        assert_eq!(level("INFO"), Some(LevelFilter::INFO));
+        // Read as a target by tracing's own syntax, it would silence every line.
+        assert_eq!(level("LOUD"), None);
+    }
 }
