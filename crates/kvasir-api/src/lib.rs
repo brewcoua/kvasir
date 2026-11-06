@@ -205,7 +205,18 @@ pub fn router(app: Arc<App>) -> Router {
         .method_not_allowed_fallback(|| async {
             detail(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
         })
+        .layer(middleware::from_fn(access))
         .with_state(app)
+}
+
+/// One line per request, once its response starts, as uvicorn's access log wrote. The query is
+/// left out: a recall's carries the question.
+async fn access(request: axum::extract::Request, next: middleware::Next) -> Response {
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let response = next.run(request).await;
+    tracing::info!(target: "kvasir::access", "{method} {path} {}", response.status().as_u16());
+    response
 }
 
 /// Starlette's own error body.

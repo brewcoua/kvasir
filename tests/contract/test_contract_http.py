@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 import pytest
-from harness import TOKEN, Fakes, Service, matches_shape, transcript
+from harness import TOKEN, Fakes, Service, matches_shape, transcript, until
 
 GUARDED = [
     ("GET", "/v1/runs"),
@@ -50,6 +50,15 @@ def test_health_needs_no_token(service: Service) -> None:
         assert anonymous.get("/readyz").json() == {"providers": {"gateway": True}, "searxng": True}
         # Built or not, the page itself is not behind the token.
         assert anonymous.get("/").status_code in (200, 503)
+
+
+def test_each_request_is_logged(client: httpx.Client, service: Service) -> None:
+    assert client.get("/v1/runs/absent").status_code == 404
+
+    line = until(
+        lambda: [line for line in service.log.read_text().splitlines() if "/v1/runs/absent" in line]
+    )[-1]
+    assert "GET" in line and "404" in line
 
 
 def test_readiness_fails_with_what_is_unreachable(new_service: Any, fakes: Fakes) -> None:
