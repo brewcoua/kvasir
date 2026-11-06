@@ -79,7 +79,7 @@
   {/if}
   {#each fields as field (field.key)}
     {@const chosen = models.find((model) => model.ref === values[field.key])}
-    <label for={field.key}>{field.type === "model" ? `${labelOf(field.key)} model` : field.key === "search.url" ? "SearXNG URL" : labelOf(field.key)}</label>
+    <label for={field.key}>{field.type === "model" ? `${labelOf(field.key)} model` : field.key === "search.searxng.url" ? "SearXNG URL" : labelOf(field.key)}</label>
     {#if field.type === "model"}
       <ModelField id={field.key} bind:value={values[field.key]} {models} required />
     {:else}

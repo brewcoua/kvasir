@@ -67,16 +67,30 @@ pub struct BraveSettings {
     pub api_key: Option<Secret>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SearchSettings {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SearxngSettings {
+    pub enabled: bool,
     pub url: String,
+    /// In the fusion of the providers' results.
+    pub weight: f64,
+}
+
+impl Default for SearxngSettings {
+    fn default() -> Self {
+        Self { enabled: true, url: String::new(), weight: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SearchSettings {
     pub top_k: usize,
+    pub searxng: SearxngSettings,
     pub brave: BraveSettings,
 }
 
 impl Default for SearchSettings {
     fn default() -> Self {
-        Self { url: String::new(), top_k: 3, brave: BraveSettings::default() }
+        Self { top_k: 3, searxng: SearxngSettings::default(), brave: BraveSettings::default() }
     }
 }
 

@@ -115,7 +115,7 @@ impl Field {
             Kind::OptionalText | Kind::Text { .. } => {
                 let Some(text) = value.as_str() else { return Err(bad("a string")) };
                 let mut text = text.trim().to_owned();
-                if key == "search.url" {
+                if key == "search.searxng.url" {
                     text.truncate(text.trim_end_matches('/').len());
                 }
                 if let Kind::Text { choices } = self.kind {
@@ -198,8 +198,10 @@ pub const FIELDS: &[Field] = &[
         "The context window the models are served with, such as Ollama's num_ctx, not the model's \
          maximum.",
     ),
-    required("search.url", "SearXNG base URL."),
     field("search.top_k", INT, "Search results per query."),
+    field("search.searxng.enabled", Kind::Bool, "Search through a SearXNG instance."),
+    required("search.searxng.url", "SearXNG base URL."),
+    field("search.searxng.weight", Kind::Float, "Its weight when results are fused."),
     field("search.brave.api_key", Kind::Secret, "Brave Search API key."),
     restart(
         "runs.store",

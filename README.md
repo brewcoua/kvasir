@@ -107,7 +107,7 @@ first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for 
           "model.strong": "local/deepseek-v4.1-flash:cloud",
           "model.embedding": "local/nomic-embed-text:latest",
           "model.reasoning_effort": "none",
-          "search.url": "http://localhost:8888"}' | jq '.missing // .message'
+          "search.searxng.url": "http://localhost:8888"}' | jq '.missing // .message'
    ```
 
    It prints `[]` once nothing required is unset, or the `message` naming a value it refused. `reasoning_effort` `none` keeps a thinking model
@@ -549,7 +549,7 @@ A nullable text setting, such as `model.reason_effort`, is turned off by storing
 
 ### First start
 
-With `model.fast`, `model.strong`, `model.embedding` or `search.url` unset, the service starts and
+With `model.fast`, `model.strong`, `model.embedding` or `search.searxng.url` unset, the service starts and
 logs which are missing, and the page opens on a setup form asking for them. Until they are stored, `/readyz` answers 503 with
 `{"setup":"required","missing":[...]}`, and every route that starts a run or a task answers 409. A model whose provider is no longer in the environment counts as unset.
 
@@ -632,8 +632,10 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `model.reasoning_effort` | unset | Sent as `reasoning_effort` in every completion's body, except the reason model's. Unset sends nothing. |
 | `model.reason_effort` | `medium` | Sent as `reasoning_effort` to the reason model instead of `model.reasoning_effort`. |
 | `model.context_tokens` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
-| `search.url` | required | SearXNG base URL. |
 | `search.top_k` | `3` | Search results per query. |
+| `search.searxng.enabled` | `true` | Search through a SearXNG instance. |
+| `search.searxng.url` | required | SearXNG base URL. |
+| `search.searxng.weight` | `1.0` | Its weight when results are fused. |
 | `search.brave.api_key` | unset | Brave Search API key. A secret: never returned. No search uses it yet. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |

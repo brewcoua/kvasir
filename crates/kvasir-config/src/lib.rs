@@ -16,8 +16,8 @@ pub use load::decode;
 use repr::text as quote;
 pub use sections::{
     BraveSettings, FaviconProvider, FaviconSettings, FetchSettings, LogFormat, LogSettings,
-    ModelSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings, Secret,
-    SourceSettings, StormSettings,
+    ModelSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings,
+    SearxngSettings, Secret, SourceSettings, StormSettings,
 };
 
 /// Sent when a provider has no key: the OpenAI client refuses an empty one, and Ollama ignores it.

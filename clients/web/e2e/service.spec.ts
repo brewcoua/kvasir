@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 const AUTH = { Authorization: "Bearer e2e-token" };
-const REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.url"];
-const SET_UP = { "model.fast": "unused/fast", "model.strong": "unused/strong", "model.embedding": "unused/embed", "search.url": "http://127.0.0.1:9" };
+const REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.url"];
+const SET_UP = { "model.fast": "unused/fast", "model.strong": "unused/strong", "model.embedding": "unused/embed", "search.searxng.url": "http://127.0.0.1:9" };
 
 async function settings(request: APIRequestContext, changes: Record<string, unknown>) {
   const response = await request.patch("/v1/settings", { headers: AUTH, data: changes });

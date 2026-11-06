@@ -21,8 +21,8 @@ fn dump(s: &Settings) -> Value {
         "providers": providers,
         "log": s.log,
         "model": s.model,
-        // The fields Python had.
-        "search": {"url": s.search.url, "top_k": s.search.top_k},
+        // The fields Python had, as they are called now.
+        "search": {"url": s.search.searxng.url, "top_k": s.search.top_k},
         "runs": s.runs,
         "research": s.research,
         "storm": s.storm,
@@ -53,7 +53,9 @@ fn the_secret_key_is_required_and_checked() {
 #[test]
 fn settings_load_as_python_loaded_them() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/settings.json");
-    let cases: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    // Python had `search.url`.
+    let text = std::fs::read_to_string(path).unwrap().replace("search.url", "search.searxng.url");
+    let cases: Vec<Value> = serde_json::from_str(&text).unwrap();
     let mut failed = Vec::new();
     for case in &cases {
         let mut env: Vec<(String, String)> = serde_json::from_value(case["env"].clone()).unwrap();

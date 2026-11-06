@@ -18,8 +18,8 @@ use kvasir_config::{FIELDS, Field, Kind, Render, Settings};
 use kvasir_db::DbError;
 use kvasir_fetch::Web;
 use kvasir_llm::Target;
-use kvasir_research::search::SearXng;
-use kvasir_research::{Classify, Encoder, Pages, Tools};
+use kvasir_research::providers::Providers;
+use kvasir_research::{Classify, Encoder, Pages, Search, Tools};
 use kvasir_sites::favicons::{FaviconStore, Favicons};
 use kvasir_sites::sources::{SourceStore, Sources};
 use schemars::JsonSchema;
@@ -209,7 +209,14 @@ pub fn build(
             Some(Arc::new(Sources::new(settings.sources.clone(), store, data_dir, Arc::clone(web))))
         }
     };
-    Ok(Live { settings: Arc::new(settings.clone()), favicons, sources })
+    // The same instance while its settings stand, so a cool down outlasts a run.
+    let search = match previous {
+        Some(previous) if previous.settings.search == settings.search => {
+            Arc::clone(&previous.search)
+        }
+        _ => Arc::new(Providers::from_settings(&settings.search, Arc::clone(web))),
+    };
+    Ok(Live { settings: Arc::new(settings.clone()), favicons, sources, search })
 }
 
 pub fn fetch_options(settings: &Settings) -> kvasir_fetch::Options {
@@ -258,7 +265,7 @@ pub fn tools(
         llm: Arc::clone(&app.llm),
         targets,
         encoder: encoder(app, settings)?,
-        search: Arc::new(SearXng::new(&settings.search.url, Arc::clone(&app.web))),
+        search: Arc::clone(&live.search) as Arc<dyn Search>,
         pages: Arc::clone(&app.web) as Arc<dyn Pages>,
         sources: live.sources.clone().map(|sources| Arc::new(sources) as Arc<dyn Classify>),
         context_tokens: settings.model.context_tokens,

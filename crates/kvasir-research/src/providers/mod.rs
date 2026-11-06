@@ -1,0 +1,254 @@
+//! The search providers a query goes to, side by side.
+//!
+//! ```text
+//! query -> every enabled provider not cooling down, in parallel
+//!       -> one ranked list per provider
+//!       -> fused by weighted reciprocal rank, duplicates merged by URL
+//! ```
+//!
+//! The fusion uses each provider's rank, not its score: many return none, and the scores of
+//! different engines do not compare. A provider that failed is left alone for as long as its
+//! failure says, and the others carry the query.
+
+mod searxng;
+
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use indexmap::IndexMap;
+use kvasir_config::SearchSettings;
+use kvasir_fetch::Web;
+use kvasir_llm::BoxFuture;
+use kvasir_run::RunCtx;
+use kvasir_types::runs::SearchResult;
+use tokio::time::Instant;
+
+pub use searxng::SearXng;
+
+use crate::search::{Hit, RRF_K, Search};
+
+/// How long a provider rests after a rate limit that does not say.
+const RATE_LIMIT_COOL_DOWN: Duration = Duration::from_secs(60);
+/// How long a provider rests after a CAPTCHA, which nothing can solve yet.
+const CAPTCHA_COOL_DOWN: Duration = Duration::from_secs(60 * 60);
+const DAY: u64 = 24 * 60 * 60;
+
+/// One result, in the order its provider ranks it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Row {
+    pub url: String,
+    pub title: String,
+    pub snippet: String,
+}
+
+/// Why a provider gave no results, which says how long it is left alone.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Failure {
+    #[error("rate limited")]
+    RateLimited { retry_after: Option<Duration> },
+    #[error("out of quota")]
+    QuotaExhausted,
+    #[error("answered with a CAPTCHA")]
+    Captcha,
+    #[error("refused its API key")]
+    Unauthorized,
+    #[error("{0}")]
+    Other(String),
+}
+
+/// A search engine, called with one of `web`'s process permits held.
+pub trait Provider: Send + Sync {
+    /// As shown in the run's searches and in a failure.
+    fn name(&self) -> &'static str;
+
+    /// The least time between the starts of two requests. A query that comes sooner goes without
+    /// this provider rather than waiting for it.
+    fn interval(&self) -> Duration {
+        Duration::ZERO
+    }
+
+    fn query<'a>(&'a self, query: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>>;
+}
+
+#[derive(Default)]
+struct Gate {
+    cooling_until: Option<Instant>,
+    /// Stays until the key changes, which rebuilds [`Providers`].
+    unauthorized: bool,
+    next_call: Option<Instant>,
+}
+
+struct Entry {
+    provider: Box<dyn Provider>,
+    weight: f64,
+    gate: Mutex<Gate>,
+}
+
+impl Entry {
+    /// Takes the provider's next slot, or says why this query goes without it.
+    fn enter(&self) -> Result<(), String> {
+        let now = Instant::now();
+        let mut gate = self.gate.lock().expect("a gate is not held across a panic");
+        if gate.unauthorized {
+            return Err(Failure::Unauthorized.to_string());
+        }
+        if gate.cooling_until.is_some_and(|until| now < until) {
+            return Err("cooling down".into());
+        }
+        if gate.next_call.is_some_and(|next| now < next) {
+            return Err("waiting on its rate limit".into());
+        }
+        gate.next_call = Some(now + self.provider.interval());
+        Ok(())
+    }
+
+    fn failed(&self, failure: &Failure) {
+        let mut gate = self.gate.lock().expect("a gate is not held across a panic");
+        let rest = match failure {
+            Failure::RateLimited { retry_after } => retry_after.unwrap_or(RATE_LIMIT_COOL_DOWN),
+            Failure::QuotaExhausted => until_next_utc_day(SystemTime::now()),
+            Failure::Captcha => CAPTCHA_COOL_DOWN,
+            Failure::Unauthorized => {
+                gate.unauthorized = true;
+                return;
+            }
+            Failure::Other(_) => return,
+        };
+        gate.cooling_until = Some(Instant::now() + rest);
+    }
+}
+
+fn until_next_utc_day(now: SystemTime) -> Duration {
+    let since_epoch = now.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    Duration::from_secs(DAY - since_epoch % DAY)
+}
+
+/// The providers the settings enable. Lives as long as those settings, so a cool down outlasts a
+/// run.
+pub struct Providers {
+    entries: Vec<Entry>,
+    web: Arc<Web>,
+}
+
+impl Providers {
+    /// Each provider with its weight in the fusion.
+    pub fn new(providers: Vec<(Box<dyn Provider>, f64)>, web: Arc<Web>) -> Self {
+        let entries = providers
+            .into_iter()
+            .map(|(provider, weight)| Entry { provider, weight, gate: Mutex::default() })
+            .collect();
+        Self { entries, web }
+    }
+
+    pub fn from_settings(settings: &SearchSettings, web: Arc<Web>) -> Self {
+        let mut providers: Vec<(Box<dyn Provider>, f64)> = Vec::new();
+        if settings.searxng.enabled {
+            providers
+                .push((Box::new(SearXng::new(&settings.searxng.url)), settings.searxng.weight));
+        }
+        Self::new(providers, web)
+    }
+
+    /// `entry`'s rows for `query`, reported to `ctx`, or why it has none.
+    async fn ask(&self, entry: &Entry, query: &str, ctx: &RunCtx) -> Result<Vec<Row>, String> {
+        let name = entry.provider.name();
+        entry.enter().map_err(|why| format!("{name}: {why}"))?;
+        let search = ctx.search_started(name, query);
+        let answer = {
+            let _permit = self.web.permit().await;
+            entry.provider.query(query).await
+        };
+        match answer {
+            Ok(rows) => {
+                let reported = rows
+                    .iter()
+                    .map(|row| SearchResult {
+                        title: row.title.clone(),
+                        url: row.url.clone(),
+                        snippet: row.snippet.clone(),
+                        source: None,
+                    })
+                    .collect();
+                ctx.search_ended(search, reported, Vec::new());
+                Ok(rows)
+            }
+            Err(failure) => {
+                tracing::error!("{name} failed on query {query}: {failure}");
+                entry.failed(&failure);
+                let why = format!("{name}: {failure}");
+                ctx.search_ended(search, Vec::new(), vec![why.clone()]);
+                Err(why)
+            }
+        }
+    }
+}
+
+/// The lists as one, best first. Each hit's score is its fused score. A URL in several lists is one
+/// hit, with the snippet of each and the score of all.
+fn fuse(lists: Vec<(f64, Vec<Row>)>) -> Vec<Hit> {
+    let mut hits: IndexMap<String, Hit> = IndexMap::new();
+    for (weight, rows) in lists {
+        for (rank, row) in rows.into_iter().enumerate() {
+            let hit = hits
+                .entry(row.url.clone())
+                .or_insert_with(|| Hit { url: row.url, ..Hit::default() });
+            hit.score += weight / (RRF_K + (rank + 1) as f64);
+            if hit.title.is_empty() {
+                hit.title = row.title;
+            }
+            if hit.description.is_empty() {
+                hit.description.clone_from(&row.snippet);
+            }
+            if !row.snippet.is_empty() && !hit.snippets.contains(&row.snippet) {
+                hit.snippets.push(row.snippet);
+            }
+        }
+    }
+    let mut hits: Vec<Hit> = hits.into_values().collect();
+    hits.sort_by(|a, b| b.score.total_cmp(&a.score));
+    hits
+}
+
+impl Search for Providers {
+    fn search<'a>(
+        &'a self,
+        query: &'a str,
+        exclude: &'a HashSet<String>,
+        ctx: &'a RunCtx,
+    ) -> BoxFuture<'a, (Vec<Hit>, Vec<String>)> {
+        Box::pin(async move {
+            if self.entries.is_empty() {
+                return (Vec::new(), vec!["no search provider is enabled".to_owned()]);
+            }
+            let answers = futures::future::join_all(
+                self.entries.iter().map(|entry| self.ask(entry, query, ctx)),
+            )
+            .await;
+            let mut lists = Vec::new();
+            let mut failures = Vec::new();
+            for (entry, answer) in self.entries.iter().zip(answers) {
+                match answer {
+                    Ok(rows) => lists.push((entry.weight, rows)),
+                    Err(why) => failures.push(why),
+                }
+            }
+            let hits = fuse(lists).into_iter().filter(|hit| !exclude.contains(&hit.url)).collect();
+            (hits, failures)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_quota_returns_at_the_next_utc_midnight() {
+        let at = |seconds| UNIX_EPOCH + Duration::from_secs(seconds);
+
+        assert_eq!(until_next_utc_day(at(0)), Duration::from_secs(DAY));
+        assert_eq!(until_next_utc_day(at(10 * DAY + 3600)), Duration::from_secs(DAY - 3600));
+        assert_eq!(until_next_utc_day(at(11 * DAY - 1)), Duration::from_secs(1));
+    }
+}

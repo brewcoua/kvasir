@@ -234,17 +234,21 @@ async fn searches_that_all_fail_end_the_run() {
     assert_eq!(failed.to_string(), "2 searches in a row failed: google: timeout");
 }
 
-mod searxng {
+mod providers {
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
     use std::time::Duration;
 
+    use kvasir_config::{SearchSettings, SearxngSettings};
     use kvasir_fetch::{Guard, Options, Web, system_lookup};
-    use kvasir_research::search::SearXng;
+    use kvasir_llm::BoxFuture;
+    use kvasir_research::Search;
+    use kvasir_research::providers::{Failure, Provider, Providers, Row};
     use serde_json::json;
     use wiremock::matchers::{path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
-    use kvasir_research::Search;
 
     fn web() -> Arc<Web> {
         let options = Options {
@@ -257,21 +261,198 @@ mod searxng {
         Arc::new(Web::new(options, 8, Guard::Public, system_lookup()))
     }
 
-    async fn ask(url: &str) -> (Vec<Hit>, Vec<String>) {
-        SearXng::new(url, web()).search("a", &HashSet::new(), &ctx()).await
+    fn row(url: &str, snippet: &str) -> Row {
+        Row { url: url.into(), title: url.into(), snippet: snippet.into() }
+    }
+
+    /// Answers each query with the next of `answers`, then with nothing.
+    struct Stub {
+        name: &'static str,
+        interval: Duration,
+        answers: Mutex<VecDeque<Result<Vec<Row>, Failure>>>,
+        calls: Arc<Mutex<usize>>,
+    }
+
+    impl Stub {
+        fn boxed(name: &'static str, answers: Vec<Result<Vec<Row>, Failure>>) -> Box<dyn Provider> {
+            Box::new(Self {
+                name,
+                interval: Duration::ZERO,
+                answers: Mutex::new(answers.into()),
+                calls: Arc::default(),
+            })
+        }
+    }
+
+    impl Provider for Stub {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+
+        fn interval(&self) -> Duration {
+            self.interval
+        }
+
+        fn query<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>> {
+            *self.calls.lock().unwrap() += 1;
+            let answer = self.answers.lock().unwrap().pop_front().unwrap_or(Ok(Vec::new()));
+            Box::pin(async move { answer })
+        }
+    }
+
+    async fn ask(providers: &Providers) -> (Vec<Hit>, Vec<String>) {
+        providers.search("a", &HashSet::new(), &ctx()).await
+    }
+
+    fn urls(hits: &[Hit]) -> Vec<&str> {
+        hits.iter().map(|hit| hit.url.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn a_url_two_providers_found_ranks_first_and_keeps_both_snippets() {
+        let providers = Providers::new(
+            vec![
+                (Stub::boxed("one", vec![Ok(vec![row("a", "from one"), row("b", "")])]), 1.0),
+                (Stub::boxed("two", vec![Ok(vec![row("c", ""), row("b", "from two")])]), 1.0),
+            ],
+            web(),
+        );
+
+        let (hits, failures) = ask(&providers).await;
+
+        assert_eq!(urls(&hits), ["b", "a", "c"]);
+        assert_eq!(hits[0].snippets, ["from two"]);
+        assert_eq!(hits[0].description, "from two");
+        assert!(failures.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_provider_weighs_as_its_weight_says() {
+        let lists = |one, two| {
+            Providers::new(
+                vec![
+                    (Stub::boxed("one", vec![Ok(vec![row("a", "")])]), one),
+                    (Stub::boxed("two", vec![Ok(vec![row("b", "")])]), two),
+                ],
+                web(),
+            )
+        };
+
+        assert_eq!(urls(&ask(&lists(2.0, 1.0)).await.0), ["a", "b"]);
+        assert_eq!(urls(&ask(&lists(1.0, 2.0)).await.0), ["b", "a"]);
+    }
+
+    #[tokio::test]
+    async fn a_failed_provider_is_named_and_the_others_carry_the_query() {
+        let providers = Providers::new(
+            vec![
+                (Stub::boxed("down", vec![Err(Failure::Other("broke".into()))]), 1.0),
+                (Stub::boxed("up", vec![Ok(vec![row("a", "")])]), 1.0),
+            ],
+            web(),
+        );
+
+        let (hits, failures) = ask(&providers).await;
+
+        assert_eq!(urls(&hits), ["a"]);
+        assert_eq!(failures, ["down: broke"]);
+    }
+
+    #[tokio::test]
+    async fn no_provider_is_a_failure_rather_than_an_empty_answer() {
+        let (hits, failures) = ask(&Providers::new(Vec::new(), web())).await;
+
+        assert!(hits.is_empty());
+        assert_eq!(failures, ["no search provider is enabled"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_rate_limited_provider_rests_for_as_long_as_it_was_told() {
+        let limited = Failure::RateLimited { retry_after: Some(Duration::from_secs(5)) };
+        let providers = Providers::new(
+            vec![(Stub::boxed("p", vec![Err(limited), Ok(vec![row("a", "")])]), 1.0)],
+            web(),
+        );
+
+        assert_eq!(ask(&providers).await.1, ["p: rate limited"]);
+        assert_eq!(ask(&providers).await.1, ["p: cooling down"]);
+        tokio::time::advance(Duration::from_secs(6)).await;
+        assert_eq!(urls(&ask(&providers).await.0), ["a"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_provider_out_of_quota_rests_until_the_next_day() {
+        let providers = Providers::new(
+            vec![(Stub::boxed("p", vec![Err(Failure::QuotaExhausted)]), 1.0)],
+            web(),
+        );
+
+        assert_eq!(ask(&providers).await.1, ["p: out of quota"]);
+        assert_eq!(ask(&providers).await.1, ["p: cooling down"]);
+        tokio::time::advance(Duration::from_secs(24 * 60 * 60)).await;
+        assert!(ask(&providers).await.1.is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_refused_key_stays_refused() {
+        let providers =
+            Providers::new(vec![(Stub::boxed("p", vec![Err(Failure::Unauthorized)]), 1.0)], web());
+
+        assert_eq!(ask(&providers).await.1, ["p: refused its API key"]);
+        tokio::time::advance(Duration::from_secs(7 * 24 * 60 * 60)).await;
+        assert_eq!(ask(&providers).await.1, ["p: refused its API key"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_query_goes_without_a_provider_its_limiter_holds() {
+        let calls = Arc::new(Mutex::new(0));
+        let slow = Stub {
+            name: "slow",
+            interval: Duration::from_secs(3),
+            answers: Mutex::default(),
+            calls: Arc::clone(&calls),
+        };
+        let providers = Providers::new(vec![(Box::new(slow), 1.0)], web());
+
+        assert!(ask(&providers).await.1.is_empty());
+        assert_eq!(ask(&providers).await.1, ["slow: waiting on its rate limit"]);
+        assert_eq!(*calls.lock().unwrap(), 1);
+        tokio::time::advance(Duration::from_secs(3)).await;
+        assert!(ask(&providers).await.1.is_empty());
+        assert_eq!(*calls.lock().unwrap(), 2);
+    }
+
+    async fn searxng(url: &str) -> (Vec<Hit>, Vec<String>) {
+        let settings = SearchSettings {
+            searxng: SearxngSettings { enabled: true, url: url.into(), weight: 1.0 },
+            ..SearchSettings::default()
+        };
+        ask(&Providers::from_settings(&settings, web())).await
+    }
+
+    #[tokio::test]
+    async fn no_provider_is_asked_when_searxng_is_off() {
+        let settings = SearchSettings {
+            searxng: SearxngSettings { enabled: false, ..SearxngSettings::default() },
+            ..SearchSettings::default()
+        };
+
+        let (_, failures) = ask(&Providers::from_settings(&settings, web())).await;
+
+        assert_eq!(failures, ["no search provider is enabled"]);
     }
 
     /// SearXNG answers its base URL with a 308 to /search; not following it read an HTML page as
     /// an empty answer, and the run collected nothing.
     #[tokio::test]
-    async fn the_redirect_to_search_is_followed_and_each_score_passed_on() {
+    async fn the_redirect_to_search_is_followed_and_results_rank_by_searxng_score() {
         let server = MockServer::start().await;
         let to = format!("{}/search?q=a&format=json", server.uri());
         let moved = ResponseTemplate::new(308).insert_header("location", to.as_str());
         Mock::given(path("/")).respond_with(moved).mount(&server).await;
         let results = json!({"results": [
-            {"url": "https://a.org/x", "content": "about x", "score": 2.5},
             {"url": "https://a.org/y"},
+            {"url": "https://a.org/x", "content": "about x", "score": 2.5},
         ]});
         Mock::given(path("/search"))
             .and(query_param("format", "json"))
@@ -279,11 +460,9 @@ mod searxng {
             .mount(&server)
             .await;
 
-        let (hits, failures) = ask(&server.uri()).await;
+        let (hits, failures) = searxng(&server.uri()).await;
 
-        let found: Vec<(&str, f64)> =
-            hits.iter().map(|hit| (hit.url.as_str(), hit.score)).collect();
-        assert_eq!(found, [("https://a.org/x", 2.5), ("https://a.org/y", 0.0)]);
+        assert_eq!(urls(&hits), ["https://a.org/x", "https://a.org/y"]);
         assert_eq!(hits[0].snippets, ["about x"]);
         assert!(failures.is_empty());
     }
@@ -301,10 +480,24 @@ mod searxng {
             .mount(&server)
             .await;
 
-        let (hits, failures) = ask(&server.uri()).await;
+        let (hits, failures) = searxng(&server.uri()).await;
 
         assert!(hits.is_empty());
-        assert_eq!(failures, ["brave: Suspended: too many requests"]);
+        assert_eq!(failures, ["SearXNG: brave: Suspended: too many requests"]);
+    }
+
+    #[tokio::test]
+    async fn a_429_from_searxng_is_a_rate_limit() {
+        let server = MockServer::start().await;
+        Mock::given(path("/"))
+            .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "120"))
+            .mount(&server)
+            .await;
+
+        let (hits, failures) = searxng(&server.uri()).await;
+
+        assert!(hits.is_empty());
+        assert_eq!(failures, ["SearXNG: rate limited"]);
     }
 
     #[tokio::test]
@@ -313,10 +506,10 @@ mod searxng {
         let url = format!("http://{}", free.local_addr().unwrap());
         drop(free);
 
-        let (hits, failures) = ask(&url).await;
+        let (hits, failures) = searxng(&url).await;
 
         assert!(hits.is_empty());
         assert_eq!(failures.len(), 1);
-        assert!(failures[0].starts_with("request: "), "{}", failures[0]);
+        assert!(failures[0].starts_with("SearXNG: request: "), "{}", failures[0]);
     }
 }

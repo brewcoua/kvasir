@@ -4,7 +4,8 @@
 //! `IF NOT EXISTS` and matches Python's tables exactly. A later change is a new step at the end.
 
 /// `kvasir.db`: stored settings, and the runs when `runs.store` is sqlite.
-pub const KVASIR: &[&str] = &["
+pub const KVASIR: &[&str] = &[
+    "
 CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, created_at REAL NOT NULL, state TEXT NOT NULL, summary TEXT NOT NULL, detail TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS calls (run_id TEXT NOT NULL, id INTEGER NOT NULL, content TEXT NOT NULL, PRIMARY KEY (run_id, id));
 CREATE TABLE IF NOT EXISTS searches (run_id TEXT NOT NULL, id INTEGER NOT NULL, content TEXT NOT NULL, PRIMARY KEY (run_id, id));
@@ -18,7 +19,14 @@ DELETE FROM searches WHERE run_id IN (SELECT id FROM gone);
 DELETE FROM runs WHERE id IN (SELECT id FROM gone);
 DROP TABLE gone;
 DELETE FROM settings WHERE key LIKE 'sessions.%';
-"];
+",
+    // SearXNG became one search provider among several, and an instance already set stays in use.
+    "
+INSERT OR IGNORE INTO settings SELECT 'search.searxng.enabled', 'true' FROM settings WHERE key = 'search.url' AND value <> '\"\"';
+INSERT OR IGNORE INTO settings SELECT 'search.searxng.url', value FROM settings WHERE key = 'search.url';
+DELETE FROM settings WHERE key = 'search.url';
+",
+];
 
 /// `pages.db`: pages read, their links, and their pieces with vectors and a full-text index.
 pub const PAGES: &[&str] = &["
@@ -70,6 +78,34 @@ mod tests {
             .collect();
         lines.sort();
         lines
+    }
+
+    #[test]
+    fn a_stored_searxng_url_moves_to_its_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("kvasir.db");
+        let key = crate::Key::for_tests();
+        let db = Db::open(&path, &key, &KVASIR[..1]).unwrap();
+        db.call_blocking(|c| {
+            c.execute("INSERT INTO settings VALUES ('search.url', '\"http://s\"')", [])
+        })
+        .unwrap();
+        drop(db);
+
+        let db = Db::open(&path, &key, KVASIR).unwrap();
+
+        let rows: Vec<(String, String)> = db
+            .call_blocking(|c| {
+                c.prepare("SELECT key, value FROM settings ORDER BY key")?
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+                    .collect()
+            })
+            .unwrap();
+        let rows: Vec<(&str, &str)> = rows.iter().map(|(k, v)| (&**k, &**v)).collect();
+        assert_eq!(
+            rows,
+            [("search.searxng.enabled", "true"), ("search.searxng.url", "\"http://s\"")]
+        );
     }
 
     #[test]

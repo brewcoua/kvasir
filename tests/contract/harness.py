@@ -165,7 +165,7 @@ class Fakes:
             "model.fast": "gateway/fast",
             "model.strong": "gateway/strong",
             "model.embedding": "gateway/embed",
-            "search.url": f"{self.url}/searx",
+            "search.searxng.url": f"{self.url}/searx",
             "fetch.host_interval_seconds": 0,
             "fetch.render": "off",
             "favicons.providers": ["custom"],

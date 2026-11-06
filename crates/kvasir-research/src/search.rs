@@ -1,32 +1,29 @@
 //! Searching, skipping what the run already read, and choosing which results to read.
 //!
-//! Each query's results are ranked four ways before any page is downloaded: by SearXNG's score, by
-//! closeness of the title and snippet to the question, by distance from what the run holds, and by
+//! Each query's results are ranked four ways before any page is downloaded: by the providers' fused
+//! rank, by closeness of the title and snippet to the question, by distance from what the run holds, and by
 //! the trust tier of the site. A result of an `avoid` site is dropped before ranking. The rankings
 //! are fused with weighted reciprocal rank fusion (Cormack, Clarke and Buttcher, SIGIR 2009), then
 //! picked greedily, skipping a repeated domain or a near-duplicate snippet, as in maximal marginal
-//! relevance (Carbonell and Goldstein, 1998). Without an encoder only SearXNG's score and the domain
-//! skip apply; without a source classifier there is no tier ranking and no drop.
+//! relevance (Carbonell and Goldstein, 1998). Without an encoder only the providers' rank and the
+//! domain skip apply; without a source classifier there is no tier ranking and no drop.
 //!
 //! A run's leads, the links of pages it read, join each query's results as candidates, at most
-//! [`LEADS_PER_QUERY`] of them picked. Their worth stands in for SearXNG's score, which a lead has
-//! not. A lead is picked only if its site's robots.txt allows it; a result is fetched as it is. No
+//! [`LEADS_PER_QUERY`] of them picked. Their worth stands in for the providers' rank, which a lead
+//! has not. A lead is picked only if its site's robots.txt allows it; a result is fetched as it is. No
 //! hit is picked from a site the run has read its limit of pages from.
 //!
 //! The weights are not tuned. They are a first guess, to be kept or changed on evaluation.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use std::sync::LazyLock;
 
-use kvasir_fetch::{Web, domain};
+use kvasir_fetch::domain;
 use kvasir_llm::BoxFuture;
 use kvasir_run::RunCtx;
 use kvasir_sites::sources::DEADLINE;
-use kvasir_types::runs::SearchResult;
 use kvasir_types::sites::Tier;
 use regex::Regex;
-use serde::Deserialize;
 
 use crate::claims::Claim;
 use crate::corpus::Corpus;
@@ -39,9 +36,9 @@ pub const POOL: usize = 20;
 /// noise; a planner that degenerated once wrote thousands of characters of quoted terms.
 pub const MAX_QUERY_CHARACTERS: usize = 300;
 /// Reciprocal rank fusion's constant, 60 in the paper: how flat the reward for a high rank is.
-const RRF_K: f64 = 60.0;
-// What each ranking adds to the fused score.
-const SEARXNG_WEIGHT: f64 = 1.0;
+pub(crate) const RRF_K: f64 = 60.0;
+// What each ranking adds to the fused score. A provider's own weight acts within the first.
+const PROVIDERS_WEIGHT: f64 = 1.0;
 const RELEVANCE_WEIGHT: f64 = 1.0;
 pub const NOVELTY_WEIGHT: f64 = 0.5;
 const TRUST_WEIGHT: f64 = 0.5;
@@ -51,9 +48,6 @@ const TRUST_ORDER: [Tier; 4] = [Tier::High, Tier::Normal, Tier::Unknown, Tier::L
 const NEAR_DUPLICATE: f64 = 0.9;
 /// Leads picked for one query, however many are worth reading.
 pub const LEADS_PER_QUERY: usize = 2;
-/// How long SearXNG has to answer.
-const TIMEOUT: Duration = Duration::from_secs(30);
-
 // What a cut query must not end on: a boolean operator, or a prefix operator whose term was cut.
 static DANGLING: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s*(?:\b(?:OR|AND|NOT)|[-+!|])\s*$").expect("a valid pattern"));
@@ -70,7 +64,7 @@ pub struct Hit {
     pub depth: Option<u32>,
 }
 
-/// A search engine: SearXNG, or a stand-in in tests.
+/// What a query goes to: the [`Providers`](crate::providers::Providers), or a stand-in in tests.
 pub trait Search: Send + Sync {
     /// What `query` found, less `exclude`, and why it failed if it did. Reports the query to `ctx`.
     fn search<'a>(
@@ -79,103 +73,6 @@ pub trait Search: Send + Sync {
         exclude: &'a HashSet<String>,
         ctx: &'a RunCtx,
     ) -> BoxFuture<'a, (Vec<Hit>, Vec<String>)>;
-}
-
-/// A SearXNG instance serving its JSON format. One serving HTML only returns an empty result set
-/// rather than failing, which looks like a topic with no sources.
-pub struct SearXng {
-    url: String,
-    client: reqwest::Client,
-    web: Arc<Web>,
-}
-
-impl SearXng {
-    /// The instance is the operator's own and may be on their network, so its address is not
-    /// guarded. Its requests take one of `web`'s process permits.
-    pub fn new(url: &str, web: Arc<Web>) -> Self {
-        // SearXNG answers its base URL with a 308 to /search, so redirects are followed.
-        let client =
-            reqwest::Client::builder().timeout(TIMEOUT).build().expect("the TLS backend starts");
-        Self { url: url.to_owned(), client, web }
-    }
-
-    async fn rows(&self, query: &str) -> Result<Answer, String> {
-        let mut url = url::Url::parse(&self.url).map_err(|e| format!("search.url: {e}"))?;
-        url.query_pairs_mut().append_pair("q", query).append_pair("format", "json");
-        let _permit = self.web.permit().await;
-        let response = self.client.get(url).send().await.map_err(|e| format!("request: {e}"))?;
-        response.json::<Answer>().await.map_err(|e| format!("answer: {e}"))
-    }
-}
-
-#[derive(Deserialize)]
-struct Answer {
-    results: Vec<Row>,
-    #[serde(default)]
-    unresponsive_engines: Vec<(String, String)>,
-}
-
-#[derive(Deserialize)]
-struct Row {
-    url: String,
-    #[serde(default)]
-    title: String,
-    #[serde(default)]
-    content: String,
-    #[serde(default)]
-    score: f64,
-}
-
-impl Search for SearXng {
-    fn search<'a>(
-        &'a self,
-        query: &'a str,
-        exclude: &'a HashSet<String>,
-        ctx: &'a RunCtx,
-    ) -> BoxFuture<'a, (Vec<Hit>, Vec<String>)> {
-        Box::pin(async move {
-            let search = ctx.search_started("SearXNG", query);
-            let (rows, failures) = match self.rows(query).await {
-                // Rate limits and CAPTCHAs leave the engine out and the answer empty.
-                Ok(answer) if answer.results.is_empty() => {
-                    let failures = answer
-                        .unresponsive_engines
-                        .iter()
-                        .map(|(engine, reason)| format!("{engine}: {reason}"))
-                        .collect();
-                    (Vec::new(), failures)
-                }
-                Ok(answer) => (answer.results, Vec::new()),
-                Err(err) => {
-                    tracing::error!("Error occurs when searching query {query}: {err}");
-                    (Vec::new(), vec![err])
-                }
-            };
-            let reported = rows
-                .iter()
-                .map(|row| SearchResult {
-                    title: row.title.clone(),
-                    url: row.url.clone(),
-                    snippet: row.content.clone(),
-                    source: None,
-                })
-                .collect();
-            ctx.search_ended(search, reported, failures.clone());
-            let hits = rows
-                .into_iter()
-                .filter(|row| !exclude.contains(&row.url))
-                .map(|row| Hit {
-                    snippets: vec![row.content.clone()],
-                    description: row.content,
-                    title: row.title,
-                    url: row.url,
-                    score: row.score,
-                    depth: None,
-                })
-                .collect();
-            (hits, failures)
-        })
-    }
 }
 
 /// `query` cut to [`MAX_QUERY_CHARACTERS`] at a word boundary, without a half-quoted term or an
@@ -202,7 +99,7 @@ pub fn cap(query: &str) -> String {
     cut
 }
 
-/// What a search ranks its results by, besides SearXNG's score.
+/// What a search ranks its results by, besides the providers' rank.
 #[derive(Default)]
 pub struct Ranking<'a> {
     pub encoder: Option<&'a Encoder>,
@@ -218,7 +115,7 @@ pub struct Ranking<'a> {
 
 /// Results not read before, at most `per_query` from each query. Marks them seen.
 ///
-/// The results are the best by SearXNG's score, fused with the rankings of `ranking`. At most one
+/// The results are the best by the providers' rank, fused with the rankings of `ranking`. At most one
 /// result per domain is taken, and none that repeats another's snippet; the next ranked takes a
 /// skipped one's place. Skipped results are not marked seen.
 ///
@@ -277,10 +174,10 @@ pub async fn search(
             results.into_iter().filter(|hit| !seen.contains(&hit.url)).collect();
         let leads: Vec<Hit> = leads.into_iter().filter(|hit| !seen.contains(&hit.url)).collect();
         let first_lead = results.len();
-        // Results by SearXNG's score, leads by their worth.
+        // Results by the providers' rank, leads by their worth.
         let mut fused: Vec<f64> = (1..=results.len())
             .chain(1..=leads.len())
-            .map(|rank| SEARXNG_WEIGHT / (RRF_K + rank as f64))
+            .map(|rank| PROVIDERS_WEIGHT / (RRF_K + rank as f64))
             .collect();
         let pool: Vec<Hit> = results.into_iter().chain(leads).collect();
         if pool.is_empty() {

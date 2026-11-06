@@ -64,7 +64,7 @@ def test_each_request_is_logged(client: httpx.Client, service: Service) -> None:
 def test_readiness_fails_with_what_is_unreachable(new_service: Any, fakes: Fakes) -> None:
     service = new_service()
     with service.client() as client:
-        changes = fakes.settings() | {"search.url": "http://127.0.0.1:9"}
+        changes = fakes.settings() | {"search.searxng.url": "http://127.0.0.1:9"}
         assert client.patch("/v1/settings", json=changes).status_code == 200
 
         response = client.get("/readyz")
@@ -141,7 +141,7 @@ def test_an_unknown_route_is_404(client: httpx.Client) -> None:
 # -- First start -----------------------------------------------------------------------------------
 
 
-REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.url"]
+REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.url"]
 BEFORE_SETUP = [
     ("/v1/runs", {"method": "ledger", "input": {"question": "x"}}),
     ("/v1/clarify", {"question": "x"}),

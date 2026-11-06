@@ -27,6 +27,7 @@ use kvasir_config::{ConfigError, Settings, SetupRequired};
 use kvasir_db::{Db, DbError};
 use kvasir_fetch::{Guard, PageStore, Web};
 use kvasir_llm::Llm;
+use kvasir_research::providers::Providers;
 use kvasir_run::{NotFound, RunRegistry, RunStore, Slots};
 use kvasir_sites::favicons::Favicons;
 use kvasir_sites::sources::Sources;
@@ -67,6 +68,7 @@ pub(crate) struct Live {
     pub settings: Arc<Settings>,
     pub favicons: Option<Arc<Favicons>>,
     pub sources: Option<Arc<Sources>>,
+    pub search: Arc<Providers>,
 }
 
 /// The state every route shares.
@@ -159,7 +161,7 @@ pub async fn open(
     tracing::info!(
         "kvasir ready, providers {}, searxng {}, {} concurrent run(s)",
         providers.join(", "),
-        settings.search.url,
+        settings.search.searxng.url,
         settings.runs.max_concurrent
     );
     let missing = settings.missing();
@@ -253,10 +255,10 @@ async fn readyz(State(app): State<Arc<App>>) -> Response {
             app.probe.get(format!("{}/models", provider.api_base)).bearer_auth(&provider.api_key);
         reachable(request).await
     });
-    let (probed, searxng) = tokio::join!(
-        futures::future::join_all(probes),
-        reachable(app.probe.get(&settings.search.url))
-    );
+    let searxng = &settings.search.searxng;
+    let (probed, searxng) = tokio::join!(futures::future::join_all(probes), async {
+        !searxng.enabled || reachable(app.probe.get(&searxng.url)).await
+    });
     let ready = searxng && probed.iter().all(|ok| *ok);
     let providers: serde_json::Map<String, Value> =
         names.iter().zip(probed).map(|(name, ok)| ((*name).to_owned(), ok.into())).collect();

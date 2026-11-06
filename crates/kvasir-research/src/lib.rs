@@ -6,6 +6,7 @@ pub mod corpus;
 pub mod corroborate;
 pub mod encoder;
 pub mod ground;
+pub mod providers;
 pub mod read;
 pub mod render;
 pub mod search;
