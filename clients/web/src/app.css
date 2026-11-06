@@ -1856,6 +1856,8 @@ table.runs a.topic:hover {
   min-width: 0;
   min-height: 0;
   border-width: 1px;
+  /* Edges still anchor on it, but nothing connects by hand here, so there is nothing to show. */
+  opacity: 0;
   pointer-events: none;
 }
 .steps-view .svelte-flow__edge.done .svelte-flow__edge-path {
