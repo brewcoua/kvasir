@@ -713,8 +713,10 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `fetch.max_age_hours` | `48` | Hours a page cached in `pages.db` is served without asking its site; then it is revalidated with `If-None-Match` or `If-Modified-Since`. `0` fetches every page again. |
 | `favicons.providers` | `direct` | A list of where site icons come from, tried in order; the first icon found wins. `direct`, `duckduckgo`, `google` or `custom`. An empty list turns favicons off and creates no `favicons.db`. See below for what each reveals. |
 | `favicons.custom_url` | empty | URL template for the `custom` provider, with `{domain}` where the site's host goes. Required to be an `http(s)` URL containing `{domain}` when `custom` is listed, or `favicons` keeps its defaults. |
+| `favicons.cache` | `true` | Keep icons in `favicons.db`, so they survive a restart. Off, every request asks the providers again. |
 | `favicons.ttl_days` | `30` | Days a found icon is served before it is looked up again. |
 | `favicons.miss_ttl_days` | `3` | Days a site found to have no icon is remembered before it is asked again. |
+| `favicons.retry_minutes` | `30` | Minutes a site no provider answered for is left alone, across restarts. `0` asks it on every request. |
 | `sources.enabled` | `false` | Classify the sites of search results by kind and trust tier. Off, nothing is classified, downloaded or sent to Wikidata. See [Source trust](#source-trust). |
 | `sources.wikidata` | `true` | Ask Wikidata about hosts that no rule, mark or list decides. `false` sends no domain anywhere. |
 | `sources.endpoint` | `https://query.wikidata.org/sparql` | SPARQL endpoint asked. |

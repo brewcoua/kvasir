@@ -39,6 +39,9 @@ const MAX_CANDIDATES: usize = 3;
 const WORKERS: usize = 8;
 // Past this many lookups in progress, a new one is refused rather than queued without end.
 const MAX_FLIGHTS: usize = 64;
+// In the provider column of a row with no icon: no provider answered, so the site is left alone for
+// `favicons.retry_minutes` and is not taken to have none.
+const RESTING: &str = "resting";
 const ICON_RELS: [&str; 3] = ["icon", "apple-touch-icon", "apple-touch-icon-precomposed"];
 
 static SIZE: LazyLock<Regex> =
@@ -77,13 +80,14 @@ impl FaviconStore {
         Ok(Self { db: Db::open(path, key, FAVICONS)? })
     }
 
-    /// The answer stored for `host`, unless it is older than `ttl_days` (an icon) or
-    /// `miss_ttl_days` (no icon).
+    /// The answer stored for `host`, unless it is older than `ttl_days` (an icon), `miss_ttl_days`
+    /// (no icon) or `retry_minutes` (no answer).
     pub async fn get(
         &self,
         host: &str,
         ttl_days: u64,
         miss_ttl_days: u64,
+        retry_minutes: u64,
     ) -> Result<Option<Entry>, DbError> {
         let host = host.to_owned();
         let row = self
@@ -109,8 +113,14 @@ impl FaviconStore {
             })
             .await?;
         Ok(row.filter(|entry| {
-            let days = if entry.icon.is_some() { ttl_days } else { miss_ttl_days };
-            now() - entry.fetched_at < days as f64 * SECONDS_PER_DAY
+            let seconds = if entry.icon.is_some() {
+                ttl_days as f64 * SECONDS_PER_DAY
+            } else if entry.provider.as_deref() == Some(RESTING) {
+                retry_minutes as f64 * 60.0
+            } else {
+                miss_ttl_days as f64 * SECONDS_PER_DAY
+            };
+            now() - entry.fetched_at < seconds
         }))
     }
 
@@ -228,10 +238,7 @@ impl Favicons {
         tokio::spawn(async move {
             let work = Arc::clone(&this);
             let name = host.clone();
-            let lookup = tokio::spawn(async move {
-                let _worker = work.workers.acquire().await.expect("never closed");
-                work.resolve(&name).await
-            });
+            let lookup = tokio::spawn(async move { work.resolve(&name).await });
             let found = lookup.await;
             if let Err(e) = &found {
                 tracing::error!("favicon lookup failed for {host}: {e}");
@@ -244,11 +251,22 @@ impl Favicons {
 
     async fn resolve(&self, host: &str) -> Found {
         let settings = &self.settings;
-        match self.store.get(host, settings.ttl_days, settings.miss_ttl_days).await {
-            Ok(Some(entry)) => return Found { icon: entry.icon, is_final: true },
-            Ok(None) => {}
-            Err(e) => tracing::warn!("favicon cache unreadable, fetching {host}: {e}"),
+        if settings.cache {
+            let stored = self
+                .store
+                .get(host, settings.ttl_days, settings.miss_ttl_days, settings.retry_minutes)
+                .await;
+            match stored {
+                Ok(Some(entry)) => {
+                    let is_final = entry.provider.as_deref() != Some(RESTING);
+                    return Found { icon: entry.icon, is_final };
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("favicon cache unreadable, fetching {host}: {e}"),
+            }
         }
+        // Only past the store: an icon already held must not wait behind sites being asked.
+        let _worker = self.workers.acquire().await.expect("never closed");
         let mut budget = Budget {
             deadline: Instant::now() + self.deadline,
             attempt: self.attempt,
@@ -270,13 +288,24 @@ impl Favicons {
         // A miss is remembered only when every provider had its turn and one of them answered. One
         // cut short by the deadline might have answered, and slowness or an outage is not an answer.
         if icon.is_none() && (Instant::now() >= budget.deadline || !budget.heard) {
+            // Remembered for a while, so a slow site does not use up a worker on every restart.
+            if settings.retry_minutes > 0 {
+                self.keep(host, None, Some(RESTING)).await;
+            }
             return Found { icon: None, is_final: false };
         }
         let provider = asked.filter(|_| icon.is_some()).map(|provider| provider_name(*provider));
-        if let Err(e) = self.store.put(host, icon.clone(), provider).await {
+        self.keep(host, icon.clone(), provider).await;
+        Found { icon, is_final: true }
+    }
+
+    async fn keep(&self, host: &str, icon: Option<Icon>, provider: Option<&str>) {
+        if !self.settings.cache {
+            return;
+        }
+        if let Err(e) = self.store.put(host, icon, provider).await {
             tracing::warn!("favicon cache not written for {host}: {e}");
         }
-        Found { icon, is_final: true }
     }
 
     async fn ask(

@@ -304,8 +304,12 @@ pub struct FaviconSettings {
     pub providers: Vec<FaviconProvider>,
     /// A URL with `{domain}` where the site's host goes.
     pub custom_url: String,
+    /// Off, nothing is read from or written to `favicons.db`, and every request asks the providers.
+    pub cache: bool,
     pub ttl_days: u64,
     pub miss_ttl_days: u64,
+    /// How long a site no provider answered for is left alone. 0 asks again on every request.
+    pub retry_minutes: u64,
 }
 
 impl Default for FaviconSettings {
@@ -313,8 +317,10 @@ impl Default for FaviconSettings {
         Self {
             providers: vec![FaviconProvider::Direct],
             custom_url: String::new(),
+            cache: true,
             ttl_days: 30,
             miss_ttl_days: 3,
+            retry_minutes: 30,
         }
     }
 }

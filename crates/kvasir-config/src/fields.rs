@@ -321,8 +321,19 @@ pub const FIELDS: &[Field] = &[
         TEXT,
         "URL for the custom provider, with {domain} where the site's host goes.",
     ),
+    field(
+        "favicons.cache",
+        Kind::Bool,
+        "Keep icons in favicons.db, so they survive a restart. Off asks the providers on every \
+         request.",
+    ),
     field("favicons.ttl_days", INT, "Days a found icon is served before it is looked up again."),
     field("favicons.miss_ttl_days", INT, "Days a site with no icon is remembered."),
+    field(
+        "favicons.retry_minutes",
+        Kind::Int { min: 0 },
+        "Minutes a site that did not answer is left alone, across restarts. 0 asks it every time.",
+    ),
     field(
         "sources.enabled",
         Kind::Bool,

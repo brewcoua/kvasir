@@ -27,7 +27,12 @@ fn dump(s: &Settings) -> Value {
         "research": s.research,
         "storm": s.storm,
         "fetch": s.fetch,
-        "favicons": s.favicons,
+        "favicons": {
+            "providers": s.favicons.providers,
+            "custom_url": s.favicons.custom_url,
+            "ttl_days": s.favicons.ttl_days,
+            "miss_ttl_days": s.favicons.miss_ttl_days,
+        },
         "sources": s.sources,
         // Python required its one search URL.
         "missing": s.missing().iter().map(|key| {

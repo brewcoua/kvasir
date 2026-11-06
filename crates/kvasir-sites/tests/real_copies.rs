@@ -99,7 +99,7 @@ async fn a_real_favicon_cache_reads_every_host() {
     let hosts = column(&path, "SELECT host FROM favicons");
     let mut icons = 0;
     for host in &hosts {
-        let entry = store.get(host, FOREVER, FOREVER).await.unwrap().expect("not expired");
+        let entry = store.get(host, FOREVER, FOREVER, FOREVER).await.unwrap().expect("not expired");
         icons += usize::from(entry.icon.is_some());
     }
     println!("hosts {} icons {icons}", hosts.len());

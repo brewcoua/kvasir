@@ -66,6 +66,7 @@ impl Setting {
         let settings = FaviconSettings {
             providers: providers.to_vec(),
             custom_url: format!("http://127.0.0.1:{}/{{domain}}.png", self.port()),
+            retry_minutes: 0,
             ..FaviconSettings::default()
         };
         let mut icons = Favicons::new(settings, self.store.clone(), web(Guard::Loopback));
@@ -103,7 +104,7 @@ impl Setting {
     }
 
     async fn stored(&self, host: &str) -> Option<Entry> {
-        self.store.get(host, 30, 3).await.unwrap()
+        self.store.get(host, 30, 3, 30).await.unwrap()
     }
 }
 
@@ -677,4 +678,72 @@ async fn a_lookup_past_the_limit_in_progress_is_refused_without_a_request() {
     assert_eq!(Arc::new(icons).find("example.org").await, UNSURE);
 
     assert!(setting.asked().await.is_empty());
+}
+
+fn closed_port() -> u16 {
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    closed.local_addr().unwrap().port()
+}
+
+#[tokio::test]
+async fn a_stored_icon_does_not_wait_for_a_worker() {
+    let setting = Setting::new().await;
+    setting.store.put("held.org", png(), Some("direct")).await.unwrap();
+    let icons = setting.service(&[Direct]);
+    let _busy = icons.workers.acquire_many(WORKERS as u32).await.unwrap();
+
+    let found = timeout(Duration::from_secs(1), icons.find("held.org")).await.unwrap();
+
+    assert_eq!(found.icon, png());
+}
+
+#[tokio::test]
+async fn a_new_service_serves_what_the_last_one_stored() {
+    let setting = Setting::new().await;
+    setting.serve("/favicon.ico", ok(PNG)).await;
+    assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, png());
+
+    assert_eq!(setting.service(&[Direct]).find("example.org").await.icon, png());
+
+    assert_eq!(setting.asked().await.len(), 1);
+}
+
+#[tokio::test]
+async fn a_site_that_did_not_answer_rests_across_a_restart_and_is_asked_again_after() {
+    let setting = Setting::new().await;
+    let built = || {
+        let mut icons = setting.built(&[Direct]);
+        icons.settings.retry_minutes = 30;
+        icons
+    };
+    let mut first = built();
+    first.templates.direct = format!("http://{{domain}}:{}", closed_port());
+    assert_eq!(Arc::new(first).find("example.org").await, UNSURE);
+    // Not a miss: nothing says the site has no icon.
+    assert_eq!(setting.stored("example.org").await.unwrap().provider.as_deref(), Some(RESTING));
+
+    setting.serve("/favicon.ico", ok(PNG)).await;
+    assert_eq!(Arc::new(built()).find("example.org").await, UNSURE);
+    assert!(setting.asked().await.is_empty());
+
+    setting.age(31.0 / (24.0 * 60.0));
+    assert_eq!(Arc::new(built()).find("example.org").await.icon, png());
+    assert_eq!(setting.asked().await.len(), 1);
+}
+
+#[tokio::test]
+async fn with_the_cache_off_nothing_is_read_or_written() {
+    let setting = Setting::new().await;
+    setting.serve("/favicon.ico", ok(PNG)).await;
+    setting.store.put("example.org", None, None).await.unwrap();
+    let mut icons = setting.built(&[Direct]);
+    icons.settings.cache = false;
+    icons.settings.retry_minutes = 30;
+    let icons = Arc::new(icons);
+
+    assert_eq!(icons.find("example.org").await.icon, png());
+    assert_eq!(icons.find("new.example.org").await.icon, png());
+
+    assert_eq!(setting.stored("example.org").await.unwrap().icon, None);
+    assert!(setting.stored("new.example.org").await.is_none());
 }
