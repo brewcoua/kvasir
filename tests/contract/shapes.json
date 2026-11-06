@@ -190,6 +190,36 @@
       "title": "string",
       "type": "string"
      },
+     "lists_off": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "lists_on": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
      "max_age_hours": {
       "anyOf": [
        {
@@ -367,6 +397,36 @@
       "title": "string",
       "type": "string"
      },
+     "lists_off": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "lists_on": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
      "max_age_hours": {
       "anyOf": [
        {
@@ -489,6 +549,36 @@
       "default": "bool",
       "title": "string",
       "type": "string"
+     },
+     "lists_off": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
+     },
+     "lists_on": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "string"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "default": "null",
+      "title": "string"
      },
      "max_conv_turn": {
       "anyOf": [

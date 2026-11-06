@@ -847,6 +847,37 @@ async fn a_list_tag_shows_and_a_downloaded_list_fetches_on_its_own_terms() {
 }
 
 #[tokio::test]
+async fn a_run_turns_lists_on_and_off_for_itself_alone() {
+    let setting = Setting::new().await;
+    setting.wdqs(Wdqs::default()).await;
+    let url = setting.list("/late", body("||late.org^\n")).await;
+    let sources = setting.service();
+    let on_for_all = own(&sources, "block", &["farm.org"]).await;
+    let late = ListChange {
+        name: Some("Late".to_owned()),
+        url: Some(url),
+        enabled: Some(false),
+        ..ListChange::default()
+    };
+    let late = sources.add_list(late).await.unwrap().list;
+    let policy = Policy { on: [late.id.clone()].into(), off: [on_for_all.id.clone()].into() };
+    let hosts = ["farm.org".to_owned(), "late.org".to_owned()];
+
+    sources.prepare(&policy).await;
+    let run = sources.classify_with(&hosts, WAIT, &policy).await;
+    assert_eq!(run["farm.org"].tier(), Tier::Unknown);
+    assert_eq!(run["late.org"].tier(), Tier::Avoid);
+
+    let everyone = sources.classify(&hosts, WAIT).await;
+    assert_eq!(everyone["farm.org"].tier(), Tier::Avoid);
+    assert_eq!(everyone["late.org"].tier(), Tier::Unknown);
+
+    assert!(sources.check_policy(&policy).await.is_ok());
+    let unknown = Policy { off: ["nope".to_owned()].into(), ..Policy::default() };
+    assert!(matches!(sources.check_policy(&unknown).await, Err(ListError::Missing(_))));
+}
+
+#[tokio::test]
 async fn a_list_reports_its_hosts_its_rules_and_its_last_failure() {
     let setting = Setting::new().await;
     setting.wdqs(Wdqs::default()).await;

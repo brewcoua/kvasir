@@ -70,6 +70,8 @@ fn options(polish: bool) -> StormOptions {
         do_polish_article: polish,
         model_fast: None,
         model_strong: None,
+        lists_on: None,
+        lists_off: None,
     }
 }
 

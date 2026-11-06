@@ -236,6 +236,15 @@ def test_a_list_is_added_explained_changed_and_removed(client: httpx.Client) -> 
     assert client.patch(f"/v1/sources/lists/{list_id}", json={}).status_code == 404
 
 
+def test_a_run_naming_an_unknown_list_is_refused(client: httpx.Client) -> None:
+    refused = client.post(
+        "/v1/runs",
+        json={"method": "ledger", "input": {"question": "x"}, "options": {"lists_on": ["nope"]}},
+    )
+    assert refused.status_code == 422
+    assert refused.json() == {"message": "no list nope"}
+
+
 def test_a_mistaken_list_says_why(client: httpx.Client) -> None:
     nameless = client.post("/v1/sources/lists", json={"entries": ["a.example"]})
     assert nameless.status_code == 422

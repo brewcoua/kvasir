@@ -24,7 +24,7 @@ use kvasir_config::{ConfigError, Settings};
 use kvasir_fetch::{FetchError, Page, PageStore, Web};
 use kvasir_llm::{BoxFuture, Llm, LlmError, RETRY_FOR, Signature, Target, roles};
 use kvasir_run::RunCtx;
-use kvasir_sites::sources::Sources;
+use kvasir_sites::sources::{Policy, Sources};
 use kvasir_types::sites::Tier;
 
 pub use encoder::Encoder;
@@ -96,6 +96,25 @@ impl Classify for Arc<Sources> {
     ) -> BoxFuture<'a, HashMap<String, Tier>> {
         Box::pin(async move {
             let found = self.classify(&hosts, deadline).await;
+            found.into_iter().map(|(host, source)| (host, source.tier())).collect()
+        })
+    }
+}
+
+/// The sources as one run sees them, with the lists it turned on and off for itself.
+pub struct Scoped {
+    pub sources: Arc<Sources>,
+    pub policy: Policy,
+}
+
+impl Classify for Scoped {
+    fn tiers<'a>(
+        &'a self,
+        hosts: Vec<String>,
+        deadline: Duration,
+    ) -> BoxFuture<'a, HashMap<String, Tier>> {
+        Box::pin(async move {
+            let found = self.sources.classify_with(&hosts, deadline, &self.policy).await;
             found.into_iter().map(|(host, source)| (host, source.tier())).collect()
         })
     }

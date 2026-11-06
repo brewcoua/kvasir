@@ -16,7 +16,7 @@ use reqwest::header;
 use tokio::time::timeout;
 use url::Url;
 
-use super::{Source, Sources, normalize};
+use super::{Policy, Source, Sources, normalize};
 
 pub(super) const TRANCO_URL: &str = "https://tranco-list.eu/top-1m.csv.zip";
 pub(super) const LIKELY_FARM: &str = "likely_farm";
@@ -160,7 +160,7 @@ impl Sources {
         };
         for host in due {
             let marks = self.marks_of(&[&host]).await;
-            let source = match self.fixed(&host, &marks) {
+            let source = match self.fixed(&host, &marks, &Policy::default()) {
                 Some(source) => Some(source),
                 None => self.answered(&host).await,
             };

@@ -15,7 +15,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use kvasir_run::{Event, Run, RunCtx, STATUS_CALLS, State as RunState};
-use kvasir_sites::sources::{Sources, describe_urls};
+use kvasir_sites::sources::{ListError, Sources, describe_urls};
 use kvasir_types::results::RunResult;
 use kvasir_types::runs::{
     ErrorEvent, LmCallContent, RunDetail, RunStarted, RunSummary, SearchContent,
@@ -104,6 +104,17 @@ async fn start(State(app): State<Arc<App>>, sent: Bytes) -> Result<Response, Api
             .map_err(|err| ApiError::new(StatusCode::BAD_REQUEST, err.to_string()))?;
     }
     live.settings.ready()?;
+    let policy = methods::policy(&request);
+    if !policy.is_empty() {
+        let Some(sources) = &live.sources else {
+            let message = "lists_on and lists_off need sources.enabled";
+            return Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, message));
+        };
+        sources.check_policy(&policy).await.map_err(|err| match err {
+            ListError::Store(err) => ApiError::from(err),
+            err => ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, err.to_string()),
+        })?;
+    }
     let method = methods::method(&request);
     let question = methods::input(&request).question.clone();
     // Registered before the slot is claimed, so a refusal is a run that shows up as rejected rather

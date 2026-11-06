@@ -33,7 +33,7 @@ use url::Url;
 
 pub use catalog::{ListError, catalog};
 use lists::{Effect, Listed, Lists};
-pub use lists::{Parsed, parse_list};
+pub use lists::{Parsed, Policy, parse_list};
 use rsp::RSP_URL;
 pub use rsp::parse_rsp;
 pub use store::SourceStore;
@@ -205,6 +205,16 @@ impl Sources {
         hosts: &[String],
         deadline: Duration,
     ) -> HashMap<String, Source> {
+        self.classify_with(hosts, deadline, &Policy::default()).await
+    }
+
+    /// `classify` with the lists `policy` turns on and off.
+    pub async fn classify_with(
+        self: &Arc<Self>,
+        hosts: &[String],
+        deadline: Duration,
+        policy: &Policy,
+    ) -> HashMap<String, Source> {
         self.check_lists().await;
         let mut out = HashMap::new();
         let mut asked = Vec::new();
@@ -221,8 +231,8 @@ impl Sources {
         let mut waiting = Vec::new();
         let mut fetching = Vec::new();
         for (raw, key) in &asked {
-            if let Some(fixed) = self.fixed(key, &marks) {
-                out.insert((*raw).clone(), self.overlay(fixed, &marks));
+            if let Some(fixed) = self.fixed(key, &marks, policy) {
+                out.insert((*raw).clone(), self.overlay(fixed, &marks, policy));
                 continue;
             }
             let rule = rule(key);
@@ -234,7 +244,7 @@ impl Sources {
                 }
             }
             let source = merge(key, rule, entry.flatten());
-            out.insert((*raw).clone(), self.overlay(source, &marks));
+            out.insert((*raw).clone(), self.overlay(source, &marks, policy));
         }
         let flights = self.start(fetching).await;
         let end = Instant::now() + deadline;
@@ -246,7 +256,8 @@ impl Sources {
             }
             // Read again even with no flight: a lookup that finished since the first read stored it.
             let entry = self.cached(key).await;
-            out.insert(raw.clone(), self.overlay(merge(key, None, entry.flatten()), &marks));
+            let source = merge(key, None, entry.flatten());
+            out.insert(raw.clone(), self.overlay(source, &marks, policy));
         }
         if self.settings.survey {
             self.note_met(out.values()).await;
@@ -260,7 +271,8 @@ impl Sources {
         let mut found = self.classify(&hosts, DEADLINE).await;
         let source = found.remove(host).expect("every host asked is answered");
         let lists = normalize(host).map_or_else(Vec::new, |key| {
-            self.current_lists().explain(&site_names(&key), rule(&key).is_some())
+            let policy = Policy::default();
+            self.current_lists().explain(&site_names(&key), rule(&key).is_some(), &policy)
         });
         SourceExplanation { source: source.info(), lists }
     }
@@ -303,12 +315,17 @@ impl Sources {
     }
 
     /// `source` with what the lists and the survey add. A config entry or a mark decides alone.
-    fn overlay(&self, source: Source, marks: &HashMap<String, String>) -> Source {
-        self.flag(self.rsp(self.demote(source, marks)))
+    fn overlay(&self, source: Source, marks: &HashMap<String, String>, policy: &Policy) -> Source {
+        self.flag(self.rsp(self.demote(source, marks, policy)))
     }
 
     /// `source` with what a `demote` list adds, which joins what the rest of the order found.
-    fn demote(&self, mut source: Source, marks: &HashMap<String, String>) -> Source {
+    fn demote(
+        &self,
+        mut source: Source,
+        marks: &HashMap<String, String>,
+        policy: &Policy,
+    ) -> Source {
         if matches!(source.origin.as_str(), "config" | "mark") {
             return source;
         }
@@ -319,7 +336,7 @@ impl Sources {
         if source.origin == "list" {
             return source;
         }
-        if let Some(found) = self.listed(&source.host, exempt) {
+        if let Some(found) = self.listed(&source.host, exempt, policy) {
             source.tags.extend(found.tags);
             source.listed_by = found.listed_by;
             if source.origin.is_empty() {
@@ -359,7 +376,7 @@ impl Sources {
     }
 
     /// The source of `key` when the config, a mark or a list decides it.
-    fn fixed(&self, key: &str, marks: &HashMap<String, String>) -> Option<Source> {
+    fn fixed(&self, key: &str, marks: &HashMap<String, String>, policy: &Policy) -> Option<Source> {
         let names = chain(key);
         if names.iter().any(|name| self.deny.contains(*name)) {
             return Some(Source::new(key, "unknown", &["deny"], "config"));
@@ -381,15 +398,15 @@ impl Sources {
         let joins = |found: &Source| {
             found.kind == "unknown" && found.tags.contains("demoted") && found.tier() == Tier::Low
         };
-        self.listed(key, exempt).filter(|found| !joins(found))
+        self.listed(key, exempt, policy).filter(|found| !joins(found))
     }
 
     /// What the lists say of `key`: a `trust` list alone, or else the bundled list, or else every
     /// other list that applies. `exempt`, or an `exempt` list, cancels what would lower the site.
-    fn listed(&self, key: &str, exempt: bool) -> Option<Source> {
+    fn listed(&self, key: &str, exempt: bool, policy: &Policy) -> Option<Source> {
         let names = site_names(key);
         let lists = self.current_lists();
-        let hits = lists.hits(&names, rule(key).is_some());
+        let hits = lists.hits(&names, rule(key).is_some(), policy);
         let exempt = exempt || hits.iter().any(|list| list.effect == Effect::Exempt);
         let mut found = Source::new(key, "unknown", &[], "list");
         let note = |found: &mut Source, list: &Listed| {

@@ -102,6 +102,12 @@ pub struct LedgerOptions {
     pub model_strong: Option<String>,
     #[serde(default)]
     pub model_reason: Option<String>,
+    /// Source lists, by id, to apply for this run though they are off.
+    #[serde(default)]
+    pub lists_on: Option<Vec<String>>,
+    /// Source lists, by id, to leave out of this run though they are on.
+    #[serde(default)]
+    pub lists_off: Option<Vec<String>>,
 }
 
 /// Options of the `graph` method. The budgets fall back to the configured defaults.
@@ -137,6 +143,12 @@ pub struct GraphOptions {
     pub model_strong: Option<String>,
     #[serde(default)]
     pub model_reason: Option<String>,
+    /// Source lists, by id, to apply for this run though they are off.
+    #[serde(default)]
+    pub lists_on: Option<Vec<String>>,
+    /// Source lists, by id, to leave out of this run though they are on.
+    #[serde(default)]
+    pub lists_off: Option<Vec<String>>,
 }
 
 impl Default for GraphOptions {
@@ -161,6 +173,12 @@ pub struct StormOptions {
     pub model_fast: Option<String>,
     #[serde(default)]
     pub model_strong: Option<String>,
+    /// Source lists, by id, to apply for this run though they are off.
+    #[serde(default)]
+    pub lists_on: Option<Vec<String>>,
+    /// Source lists, by id, to leave out of this run though they are on.
+    #[serde(default)]
+    pub lists_off: Option<Vec<String>>,
 }
 
 impl Default for StormOptions {

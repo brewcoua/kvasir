@@ -32,6 +32,19 @@ pub(super) struct Lists {
     pub(super) top: HostSet,
 }
 
+/// The lists one run turns on and off for itself, by id.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Policy {
+    pub on: HashSet<String>,
+    pub off: HashSet<String>,
+}
+
+impl Policy {
+    pub fn is_empty(&self) -> bool {
+        self.on.is_empty() && self.off.is_empty()
+    }
+}
+
 /// What a list does to the sites it names.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Effect {
@@ -109,11 +122,12 @@ impl Listed {
     }
 
     /// Whether this list names a site known by `names`, and if so, whether it counts.
-    fn state(&self, names: &[&str], guarded: bool) -> Option<&'static str> {
+    fn state(&self, names: &[&str], guarded: bool, policy: &Policy) -> Option<&'static str> {
         if !names.iter().any(|name| self.hosts.contains(name)) {
             return None;
         }
-        Some(if !self.enabled {
+        let on = (self.enabled || policy.on.contains(&self.id)) && !policy.off.contains(&self.id);
+        Some(if !on {
             "off"
         } else if names.iter().any(|name| self.except.contains(name)) {
             "except"
@@ -178,16 +192,19 @@ impl HostSet {
 impl Lists {
     /// The lists that apply to a site known by `names`. `guarded` says a guard spares it from
     /// what a list would lower it by, for its suffix; its rank is checked here.
-    pub(super) fn hits(&self, names: &[&str], guarded: bool) -> Vec<&Listed> {
+    pub(super) fn hits(&self, names: &[&str], guarded: bool, policy: &Policy) -> Vec<&Listed> {
         let guarded = guarded || names.iter().any(|name| self.top.contains(name));
-        self.listed.iter().filter(|list| list.state(names, guarded) == Some(APPLIES)).collect()
+        self.listed
+            .iter()
+            .filter(|list| list.state(names, guarded, policy) == Some(APPLIES))
+            .collect()
     }
 
     /// Every list naming a site known by `names`, and whether it counts.
-    pub(super) fn explain(&self, names: &[&str], guarded: bool) -> Vec<ListHit> {
+    pub(super) fn explain(&self, names: &[&str], guarded: bool, policy: &Policy) -> Vec<ListHit> {
         let guarded = guarded || names.iter().any(|name| self.top.contains(name));
         let hit = |list: &Listed| {
-            list.state(names, guarded).map(|state| ListHit {
+            list.state(names, guarded, policy).map(|state| ListHit {
                 id: list.id.clone(),
                 name: list.name.clone(),
                 effect: list.effect.label(),
@@ -246,6 +263,36 @@ impl Sources {
         }
         self.load_lists().await;
         Ok(self.status(list))
+    }
+
+    /// Refuses a policy naming a list there is none of.
+    pub async fn check_policy(&self, policy: &Policy) -> Result<(), super::ListError> {
+        let lists = self.list_statuses().await?;
+        let known = |id: &&String| lists.iter().any(|list| list.list.id == **id);
+        match policy.on.iter().chain(&policy.off).find(|id| !known(id)) {
+            Some(id) => Err(super::ListError::Missing(id.clone())),
+            None => Ok(()),
+        }
+    }
+
+    /// Downloads what `policy` turns on and has no copy yet, and the Tranco list its guard needs.
+    pub async fn prepare(self: &Arc<Self>, policy: &Policy) {
+        self.check_lists().await;
+        let specs = self.current_specs();
+        let on: Vec<&SourceList> =
+            specs.iter().filter(|list| policy.on.contains(&list.id)).collect();
+        let mut missing: Vec<(&str, &str)> =
+            on.iter().filter_map(|list| Some((list.name.as_str(), list.url.as_deref()?))).collect();
+        if self.settings.guard_rank > 0 && on.iter().any(|list| list.guard) {
+            missing.push(("tranco", self.tranco_url.as_str()));
+        }
+        missing.retain(|(_, url)| !self.list_path(url).exists());
+        for (name, url) in &missing {
+            self.fetch(name, url, &self.list_path(url)).await;
+        }
+        if !missing.is_empty() {
+            self.load_lists().await;
+        }
     }
 
     /// Every list with its status: the catalog's and the operator's, then those in the config.
@@ -478,7 +525,8 @@ impl Sources {
     /// What the survey and the guard need of the Tranco list, each only when it is on.
     fn read_tranco(&self) -> (HashSet<String>, HostSet) {
         let survey = self.settings.enabled && self.settings.survey;
-        let guard = self.settings.enabled && self.guard_applies();
+        // Whenever a copy exists: a run may turn on a guarded list that is off for everyone else.
+        let guard = self.settings.enabled && self.settings.guard_rank > 0;
         if !survey && !guard {
             return Default::default();
         }

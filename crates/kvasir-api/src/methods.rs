@@ -12,9 +12,10 @@ use axum::Json;
 use axum::extract::State;
 use axum::routing::get;
 use kvasir_config::Settings;
-use kvasir_research::Tools;
+use kvasir_research::{Classify, Scoped, Tools};
 use kvasir_run::RunCtx;
 use kvasir_run::stages::{ARTICLE, OUTLINE, POLISH, RESEARCH};
+use kvasir_sites::sources::Policy;
 use kvasir_types::requests::{
     GraphOptions, Input, LedgerOptions, MethodInfo, RunRequest, StormOptions,
 };
@@ -76,6 +77,8 @@ const LEDGER: &[(&str, Kind)] = &[
     ("model_fast", OptionalText),
     ("model_strong", OptionalText),
     ("model_reason", OptionalText),
+    ("lists_on", OptionalList),
+    ("lists_off", OptionalList),
 ];
 
 const GRAPH: &[(&str, Kind)] = &[
@@ -93,6 +96,8 @@ const GRAPH: &[(&str, Kind)] = &[
     ("model_fast", OptionalText),
     ("model_strong", OptionalText),
     ("model_reason", OptionalText),
+    ("lists_on", OptionalList),
+    ("lists_off", OptionalList),
 ];
 
 const STORM: &[(&str, Kind)] = &[
@@ -102,6 +107,8 @@ const STORM: &[(&str, Kind)] = &[
     ("do_polish_article", Bool(true)),
     ("model_fast", OptionalText),
     ("model_strong", OptionalText),
+    ("lists_on", OptionalList),
+    ("lists_off", OptionalList),
 ];
 
 impl Method {
@@ -298,6 +305,17 @@ pub fn input(request: &RunRequest) -> &Input {
     }
 }
 
+/// The source lists this run turns on and off for itself.
+pub fn policy(request: &RunRequest) -> Policy {
+    let (on, off) = match request {
+        RunRequest::Ledger { options: o, .. } => (&o.lists_on, &o.lists_off),
+        RunRequest::Graph { options: o, .. } => (&o.lists_on, &o.lists_off),
+        RunRequest::Storm { options: o, .. } => (&o.lists_on, &o.lists_off),
+    };
+    let ids = |ids: &Option<Vec<String>>| ids.iter().flatten().cloned().collect();
+    Policy { on: ids(on), off: ids(off) }
+}
+
 /// The per-request models, fast, strong and reason, in that order.
 pub fn models(request: &RunRequest) -> [Option<&str>; 3] {
     match request {
@@ -418,6 +436,20 @@ pub async fn run(
     let settings = &live.settings;
     let today = kvasir_research::today();
     let [fast, strong, reason] = models(request);
+    let policy = policy(request);
+    let scoped: Option<Arc<dyn Classify>> = match &live.sources {
+        Some(sources) if !policy.is_empty() => {
+            sources.prepare(&policy).await;
+            Some(Arc::new(Scoped { sources: Arc::clone(sources), policy }))
+        }
+        _ => None,
+    };
+    let scope = |mut tools: Tools| {
+        if scoped.is_some() {
+            tools.sources.clone_from(&scoped);
+        }
+        tools
+    };
     let tools = |ground: Option<bool>,
                  ground_intake: bool,
                  max_age: Option<u64>|
@@ -430,7 +462,7 @@ pub async fn run(
             ground.unwrap_or(true),
             ground_intake,
         )?;
-        Ok(settings::tools(app, live, targets, max_age)?)
+        Ok(scope(settings::tools(app, live, targets, max_age)?))
     };
     match request {
         RunRequest::Ledger { input, options } => {
@@ -447,7 +479,7 @@ pub async fn run(
         }
         RunRequest::Storm { input, options } => {
             let targets = kvasir_storm::targets(settings, fast, strong)?;
-            let tools = settings::tools(app, live, targets, None)?;
+            let tools = scope(settings::tools(app, live, targets, None)?);
             let result =
                 kvasir_storm::run(&tools, &app.web, &settings.storm, ctx, input, options).await?;
             Ok(RunResult::Article(result))

@@ -162,6 +162,16 @@ export interface components {
              * @default null
              */
             model_reason: string | null;
+            /**
+             * Lists On
+             * @default null
+             */
+            lists_on: string[] | null;
+            /**
+             * Lists Off
+             * @default null
+             */
+            lists_off: string[] | null;
         };
         /** GraphRun */
         GraphRun: {
@@ -290,6 +300,16 @@ export interface components {
              * @default null
              */
             model_reason: string | null;
+            /**
+             * Lists On
+             * @default null
+             */
+            lists_on: string[] | null;
+            /**
+             * Lists Off
+             * @default null
+             */
+            lists_off: string[] | null;
         };
         /** LedgerRun */
         LedgerRun: {
@@ -940,6 +960,16 @@ export interface components {
              * @default null
              */
             model_strong: string | null;
+            /**
+             * Lists On
+             * @default null
+             */
+            lists_on: string[] | null;
+            /**
+             * Lists Off
+             * @default null
+             */
+            lists_off: string[] | null;
         };
         /** StormRun */
         StormRun: {
