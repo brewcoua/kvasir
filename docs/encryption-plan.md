@@ -1,6 +1,6 @@
 # Encryption at rest: plan
 
-Status: written 2026-11-06. Phases 1 to 4 built 2026-11-06.
+Status: written 2026-11-06. Built 2026-11-06.
 
 Every file in `KVASIR_DATA_DIR` is plain SQLite. Anyone who gets a copy of the directory or a backup
 of it reads the runs (questions, prompts, answers, the searches made), the cached pages of what was
@@ -68,8 +68,7 @@ openssl rand -hex 32
 ```
 
 It goes to SQLCipher as a raw key, `PRAGMA key = "x'<64 hex>'"`, which skips PBKDF2: the key is
-already random, and the 256,000 iterations would run on every open. The raw-key syntax is from the
-SQLCipher API docs and was not confirmed by this plan's research; phase 2 tests it.
+already random, and the 256,000 iterations would run on every open.
 
 One key serves the four files. Each page has its own random IV, so sharing the key across files
 reuses no IV.
@@ -106,11 +105,22 @@ A wrong key shows on the first read: SQLCipher answers `file is not a database`.
    operators to back up the directory first. Commit.
 4. Backups. `Db::backup` (`kvasir-db/src/lib.rs`) runs `VACUUM INTO` for the pre-Rust upgrade. Its
    output is encrypted under the same key, which a test pins. Commit.
-5. Measure. Time a run and `pieces_fts` searches on a `pages.db` of realistic size, before and
-   after. Record the figures here. Commit.
+5. Measure. Plain against encrypted, on one machine, in a release build, with 20,000 synthetic pieces
+   of 300 words and a 768-dimension vector (117 MB). The times were steady over 3 rounds.
+
+   | Work | Plain | SQLCipher |
+   | --- | --- | --- |
+   | Insert 20,000 pieces in one transaction | 530 ms | 860 ms |
+   | 200 `pieces_fts` searches, ranked | 1.89 s | 2.07 s |
+   | 5,000 reads by primary key | 29 ms | 92 ms |
+   | A full scan of `pieces` | 6 ms | 43 ms |
+   | Opening the file | not measured | 0.25 ms |
+   | File size | 116.5 MB | 117.3 MB |
+
+   A run's cost is its model calls and page downloads, so these do not show in it. A whole run and
+   the conversion of an existing file were not timed. Commit.
 6. Docs. README: the environment table, the quickstart (`openssl rand -hex 32`), what is
-   protected, and that a lost key loses the data. `docs/architecture.md`: the files table
-   (`architecture.md:229`). Commit, as a breaking change, since startup now needs the variable.
+   protected, and that a lost key loses the data. `docs/architecture.md`: the files table. Commit.
 
 ## Open questions
 
