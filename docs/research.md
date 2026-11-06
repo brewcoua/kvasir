@@ -2,7 +2,7 @@
 
 How the `ledger` method turns a question into a cited report, and why each step is shaped the way
 it is. This page describes the pipeline as built: the `ledger` method in
-`src/kvasir/methods/ledger/`, over the steps every method shares in `src/kvasir/research/`. How to
+`crates/kvasir-ledger`, over the steps every method shares in `crates/kvasir-research`. How to
 call it is in the README's [Research a question](../README.md#research-a-question). The plan it was
 built from, with the sources behind each design rule, is
 [`deep-research-plan.md`](deep-research-plan.md). How a run is streamed, accounted for and stored is
@@ -142,14 +142,14 @@ holds for the question (see "Recall and leads"), and a question recall answers c
 
 ### Picking by worth
 
-With the option `frontier` set to `worth`, `methods/ledger/frontier.py` replaces `pick` for the
+With the option `frontier` set to `worth`, `crates/kvasir-ledger/src/frontier.rs` replaces `pick` for the
 first pass of the loop. Filling cells and repairing sentences still search breadth first, since
 their questions are set. A branch is a first question and its follow-ups.
 
 - **Worth.** The question with the highest score goes next. The score is its cosine similarity to
   the brief, plus its distance from the closest claim held, plus 0.2 for a `weak` or
   `contradicted` question, less 0.15 per level of depth and 0.25 per query already tried. Its
-  priority adds 0.2 for `core` and takes 0.2 for `peripheral` (`PRIORITY_BONUS`). The model that
+  priority adds 0.2 for `core` and takes 0.2 for `peripheral`. The model that
   asks a question gives its priority, in `Decompose`, `Expand` or `Gaps`: `core` when the brief
   cannot be answered without it, `supporting` when it explains or qualifies the answer,
   `peripheral` for background. A word outside the three counts as `supporting`, and a follow-up is
@@ -183,7 +183,7 @@ follow-up, while one that keeps coming back `weak` is searched again and split i
   minutes: its answered questions raised no follow-up and its other branches had closed. Without
   the yield check, a live run spent its last 9 minutes on niche questions that added few claims.
   Ending on one dry call, a live run stopped at 8 minutes on a single question that found nothing.
-- **Picking: proof numbers.** `methods/graph/proof.py` applies proof-number search
+- **Picking: proof numbers.** `crates/kvasir-graph/src/proof.rs` applies proof-number search
   ([Allis 1994](https://en.wikipedia.org/wiki/Proof-number_search)). A question is settled either
   by a search for it or by settling every child it raised. Its work, the searches still needed, is
   0 once answered, 1 if never searched, `1 + attempts` for a retry, and the cheaper of a retry and
@@ -320,7 +320,7 @@ flowchart LR
     ground -- no --> drop
 ```
 
-- **Pick.** `research/search.py` sorts a query's unseen results by SearXNG's `score`, not by the
+- **Pick.** `crates/kvasir-research/src/search.rs` sorts a query's unseen results by SearXNG's `score`, not by the
   order of the response, which SearXNG groups by category, and keeps the first `POOL` (20). It
   ranks them three ways: by SearXNG's score; by relevance, the cosine similarity between the
   question and the result's `title` and snippet; and by novelty, 1 less the highest cosine
@@ -349,28 +349,29 @@ flowchart LR
   1. **Cache.** A page in `pages.db` younger than `fetch.max_age_hours` (48) is returned with no
      request. An older one is asked for again with `If-None-Match` and `If-Modified-Since`, and a
      304 marks it fresh.
-  2. **Static.** `httpx`, inside a process-wide fetch permit and at most `HOST_CONCURRENCY` (2)
-     requests to one host at a time, `fetch.host_interval_seconds` (1.0) apart. For 20 seconds at
-     most (`TIMEOUT_SECONDS`) and 20 MB at most (`MAX_BYTES`). A 429 waits out `Retry-After`, at
+  2. **Static.** `reqwest`, inside a process-wide fetch permit and at most `HOST_CONCURRENCY` (2)
+     requests to one host at a time, `fetch.host_interval_seconds` (1.0) apart. A connection or a read
+     that stalls 20 seconds fails (`TIMEOUT`), a request ends after 120 seconds (`TOTAL_TIMEOUT`),
+     and a body stops at 20 MB (`MAX_BYTES`). A 429 waits out `Retry-After`, at
      most 30 seconds. The user agent names kvasir, its version and its repository, and
      `fetch.contact` when set, as Wikimedia's user-agent policy asks.
   3. **Check.** `check_page` refuses a challenge page (markers of Cloudflare, Akamai, DataDome,
      PerimeterX, Imperva, Sucuri and Kasada), a short block page, and an empty shell that only
      its scripts would fill.
-  4. **Render.** With `fetch.render` `auto` and the `browser` extra installed, a refused page, or
-     a 403 or 503, is loaded in Chromium through Playwright (`research/browser.py`), or Patchright
-     with `fetch.stealth`. Images, media, fonts and ad hosts are not loaded. The `web-som` marking
+  4. **Render.** With `fetch.render` `auto` in a build with the `chromium` feature, a refused page,
+     or a 403 or 503, is loaded in Chromium through chromiumoxide (`crates/kvasir-browser`), started
+     without the launch flags that name automation with `fetch.stealth`. Images, media, fonts and ad hosts are not loaded. The `web-som` marking
      script hides cookie walls and overlays covering more than 80% of the page
      (`MAX_COVER_RATIO`) before the HTML is read. The rendered page is checked again.
-  5. **Extract.** HTML becomes markdown with trafilatura, footnote markers such as `[12]` and
+  5. **Extract.** HTML becomes markdown with rs-trafilatura, footnote markers such as `[12]` and
      `[edit]` removed. When trafilatura returns under `MIN_TEXT` (200) characters, the page is
      cleaned instead: scripts, menus, buttons, dialogs and other interactive parts are dropped by
      selector and the visible text kept. Links are read before cleaning, each with its anchor, the
      200 characters around it and its region: `main`, `related` (an `aside`, a "See also" or
      "Related articles" block), `nav` or `footer`.
 
-  A PDF's text layer is read with `pypdf`, which is BSD-licensed and pure Python; PyMuPDF was
-  ruled out as AGPL. A page that cannot be read (another format, a scanned or truncated PDF, an
+  A PDF's text layer is read with `pdf_oxide`, which is MIT OR Apache-2.0, in a child process, since
+  a hostile file can abort on allocation or never finish (`crates/kvasir-extract/src/pdf.rs`). A page that cannot be read (another format, a scanned or truncated PDF, an
   HTTP error, a challenge with no browser) falls back to its search snippet. There is no OCR. A
   claim read from the snippet has `from_snippet` set: the snippet is the search engine's summary
   of the page, not the page. A lead that cannot be read gives nothing, since its snippet is what
@@ -416,9 +417,9 @@ flowchart LR
 - **Qualifier check.** `misleading` drops a claim whose quote the page turns around: "grows"
   quoted from "it never grows" is on the page and means the opposite. The quote is dropped when
   either of the 2 words just before it in its sentence on the page, or any word an ellipsis stands for, is one of
-  `QUALIFIERS` in `research/text.py` (`not`, `no`, `never`, `unless`, `if`, `except`, `without`,
+  `QUALIFIERS` in `crates/kvasir-research/src/text.rs` (`not`, `no`, `never`, `unless`, `if`, `except`, `without`,
   `only`, `cannot`) or a negative contraction such as "isn't".
-- **Grounding.** With the `ground_intake` option and a checker configured, `research/ground.py` asks the
+- **Grounding.** With the `ground_intake` option and a checker configured, `crates/kvasir-research/src/ground.rs` asks the
   checker whether the piece its quote is in supports the claim, and drops the claim if not. The
   piece is the document rather than the quote, since a claim names what its quote leaves to the page, such as
   the subject of "it was found in 1904". A quote on the page shows the claim was read there, not
@@ -441,7 +442,7 @@ The methods behind picking:
 
 ### Recall and leads
 
-A run keeps every piece of every page it reads in its corpus (`research/corpus.py`), with the
+A run keeps every piece of every page it reads in its corpus (`crates/kvasir-research/src/corpus.rs`), with the
 vector the filter computed, and marks the pieces intake read. Before a question is searched, both
 loops recall: the unread pieces closest to the question, at most `RECALL_PIECES` (3), at a cosine
 similarity of at least `RECALL_MIN` (0.6), at most `RECALL_PER_SITE` (2) from one site. Intake
@@ -471,7 +472,7 @@ it and its URL path, and scored for each search:
 
 ```text
 worth = relevance + NOVELTY_WEIGHT * novelty + AFFINITY_WEIGHT * affinity + RELATED_BONUS
-        + TRUST_BONUS[tier]
+        + trust_bonus(tier)
 ```
 
 Relevance is its cosine similarity to the question, and a lead under `LEAD_MIN` (0.5) is not a
@@ -480,7 +481,7 @@ corroborated, per page of the site read, so it is 0 without corroboration: under
 frontier of the ledger. With `[sources] enabled`, a claim counts once, by the tier of the site that
 corroborated it (the best, if several), since affinity counts corroborated claims, not
 corroborations: `high` and `normal` 1, `unknown` 0.5, `low` 0.25, `avoid` 0.
-`RELATED_BONUS` (0.1) is for a link in a related block. `TRUST_BONUS` is the site's tier: `high`
+`RELATED_BONUS` (0.1) is for a link in a related block. `trust_bonus` is the site's tier: `high`
 0.1, `normal` 0.05, `unknown` 0, `low` -0.1; a lead of an `avoid` site is not a candidate. Leads join the search's pool,
 ranked by worth where a result is ranked by SearXNG's score, and at most `LEADS_PER_QUERY` (2) are
 picked a search. A lead is read only once `allowed` passes: its host resolves to public addresses
@@ -539,7 +540,7 @@ the finding, name the actor, prefer the evidence's numbers and names, and leave 
 openers, rhetorical setups, rhythmic triplets, inflated words and em dashes. It bolds the one or
 two key terms of a paragraph, and may add one callout: `> [!WARNING]` for disputed evidence,
 `> [!CAUTION]` for a likely misreading, `> [!IMPORTANT]` for the point a section turns on, or
-`> [!NOTE]` for context. A small model breaks such rules anyway, so `research/style.py` then takes
+`> [!NOTE]` for context. A small model breaks such rules anyway, so `crates/kvasir-research/src/style.rs` then takes
 out what it can without touching a fact: filler openers such as "Notably," and "It is important to
 note that", intensifiers such as "very" and "really", and em dashes, which become commas, or an en
 dash between numbers. Text in double quotes and code is left as written.
@@ -588,7 +589,7 @@ flowchart TD
     rewrite -- no --> removed
 ```
 
-`research/verify.py` cuts each section into sentences and runs every sentence that cites a claim
+`crates/kvasir-research/src/verify.rs` cuts each section into sentences and runs every sentence that cites a claim
 through the cascade. Each step runs over all the sentences before the next begins, since the
 checker and the fast model share one local server and alternating between them would load a model
 for each sentence.
@@ -630,7 +631,7 @@ rewritten. It ties for last when ranked, like any cell no claim spoke to. An unv
 its finding, marked `[unverified]`. Both are recorded under the table's title in `removed` and
 `unverified`.
 
-**Corroborate and contradict.** With `corroborate` or `contradict`, `research/corroborate.py` runs
+**Corroborate and contradict.** With `corroborate` or `contradict`, `crates/kvasir-research/src/corroborate.rs` runs
 after repair. Each claim is paired with up to 3 claims from other sites (`NEIGHBOURS`) at a cosine
 similarity of 0.8 or more (`SAME_FACT`). Sites sharing a registrable domain (`blog.a.org`, `a.org`)
 are one source, and a claim whose quote is another's, or holds it when that quote has 8 words or
@@ -709,9 +710,10 @@ provider. `runs.keep_call_content` governs only what kvasir stores, not this.
 The grounding checker is its own model, `model.checker`, with the role `ground`, 10 tokens
 and temperature 0.
 
-Signatures are typed dspy signatures: those every method shares in `research/signatures.py`,
-`Clarify` in `research/clarify.py`, and the ledger's own in `methods/ledger/signatures.py`. dspy's
-adapter turns each into a prompt and parses the answer back into its declared types, so no step
+Signatures are typed, and rendered as dspy rendered them: those every method shares in
+`crates/kvasir-research/src/signatures.rs`, `Clarify` in `crates/kvasir-research/src/clarify.rs`,
+and the ledger's own in `crates/kvasir-ledger/src/signatures.rs`. `kvasir-llm` turns each into a
+prompt and parses the answer back into its declared types, so no step
 parses prose with a regex. A parse failure in intake, judging, assessing, ranking or verifying is
 logged and treated as no result for that one call, rather than failing the run.
 
@@ -731,12 +733,12 @@ this design's own, to be kept or dropped on evidence.
 
 ## What is not measured yet
 
-`python -m kvasir.research.evaluate` scores runs on 20 fixed questions in
+`kvasir eval` scores runs on 20 fixed questions in
 [`eval/questions.toml`](../eval/questions.toml): the output type, a yes-or-no checklist per
 question, and the citations that survived verification. How to run it is in the README's
 [Evaluate research](../README.md#evaluate-research). The plan asked for a baseline from the rounds
 before the question loop and the repair were built; they were built without one, so neither is yet
 shown to beat what it replaced.
 
-Deferred until there is an evaluation to prove them: thinking mode per step, `dspy.RLM` over the
+Deferred until there is an evaluation to prove them: thinking mode per step, dspy's `RLM` over the
 evidence, a dedicated fact-checking model such as MiniCheck, and pairwise against listwise ranking.
