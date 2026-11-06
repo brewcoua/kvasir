@@ -138,6 +138,7 @@ pub struct SearchSettings {
     pub wikipedia: OpenSettings,
     pub arxiv: OpenSettings,
     pub crossref: CrossrefSettings,
+    pub europe_pmc: OpenSettings,
 }
 
 impl SearchSettings {
@@ -162,6 +163,7 @@ impl Default for SearchSettings {
             wikipedia: OpenSettings::default(),
             arxiv: OpenSettings::default(),
             crossref: CrossrefSettings::default(),
+            europe_pmc: OpenSettings::default(),
         }
     }
 }

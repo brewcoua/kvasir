@@ -3741,6 +3741,8 @@
   "search.crossref.enabled": "string",
   "search.crossref.mailto": "string",
   "search.crossref.weight": "string",
+  "search.europe_pmc.enabled": "string",
+  "search.europe_pmc.weight": "string",
   "search.searxng.enabled": "string",
   "search.searxng.url": "string",
   "search.searxng.weight": "string",

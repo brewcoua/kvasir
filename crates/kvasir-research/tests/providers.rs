@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Brave, Crossref, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia,
+    Arxiv, Brave, Crossref, EuropePmc, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -431,5 +431,58 @@ mod crossref {
     fn a_mailto_shortens_its_interval() {
         assert_eq!(Crossref::new(None).interval(), Duration::from_secs(1));
         assert_eq!(Crossref::new(Some("a@b.c")).interval(), Duration::from_millis(334));
+    }
+}
+
+mod europe_pmc {
+    use super::*;
+
+    fn at(server: &MockServer) -> EuropePmc {
+        EuropePmc::at(&format!("{}/s", server.uri()))
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"resultList": {"result": [
+            {
+                "id": "1",
+                "source": "MED",
+                "doi": "10.1/a",
+                "title": "A <i>title</i>.",
+                "abstractText": "An <b>abstract</b>.",
+            },
+            {"id": "2", "source": "PPR", "title": "No DOI"},
+            {"title": "No address"},
+        ]}});
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(query_param("format", "json"))
+            .and(query_param("query", "the query"))
+            .and(query_param("pageSize", "20"))
+            .and(query_param("resultType", "core"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [
+                row("https://doi.org/10.1/a", "A title .", "An abstract ."),
+                row("https://europepmc.org/article/PPR/2", "No DOI", ""),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failure_is_named() {
+        let server = answering(ResponseTemplate::new(500)).await;
+
+        let failure = at(&server).query("q").await.unwrap_err();
+
+        assert!(matches!(failure, Failure::Other(_)), "{failure:?}");
     }
 }
