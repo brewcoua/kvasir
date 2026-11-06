@@ -16,6 +16,7 @@ mod crossref;
 mod europe_pmc;
 mod exa;
 mod mojeek;
+mod openalex;
 mod searxng;
 mod semantic_scholar;
 mod tavily;
@@ -44,6 +45,7 @@ pub use crossref::Crossref;
 pub use europe_pmc::EuropePmc;
 pub use exa::Exa;
 pub use mojeek::Mojeek;
+pub use openalex::OpenAlex;
 pub use searxng::SearXng;
 pub use semantic_scholar::SemanticScholar;
 pub use tavily::Tavily;
@@ -336,6 +338,9 @@ impl Providers {
         if settings.semantic_scholar.enabled {
             let key = settings.semantic_scholar.api_key.as_ref().map(|key| key.0.as_str());
             providers.push((Box::new(SemanticScholar::new(key)), settings.semantic_scholar.weight));
+        }
+        if let Some(key) = settings.openalex.usable_key() {
+            providers.push((Box::new(OpenAlex::new(key)), settings.openalex.weight));
         }
         Self::new(providers, web)
     }

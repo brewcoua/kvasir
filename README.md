@@ -662,6 +662,9 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `search.semantic_scholar.enabled` | `false` | Search Semantic Scholar's papers. |
 | `search.semantic_scholar.api_key` | unset | Semantic Scholar API key, optional: without one, requests share a public pool. A secret: never returned. |
 | `search.semantic_scholar.weight` | `1.0` | Its weight when results are fused. |
+| `search.openalex.enabled` | `false` | Search OpenAlex's scholarly works. |
+| `search.openalex.api_key` | unset | OpenAlex API key. A secret: never returned. |
+| `search.openalex.weight` | `1.0` | Its weight when results are fused. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |
 | `runs.max` | `100` | Runs kept, most recent first, in either store. Read at startup. |
 | `runs.ttl_days` | `30` | Age past which a stored run is deleted. `sqlite` only. Read at startup. |

@@ -234,6 +234,9 @@ pub const FIELDS: &[Field] = &[
         "Semantic Scholar API key. Optional: without one, requests share a public pool.",
     ),
     field("search.semantic_scholar.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.openalex.enabled", Kind::Bool, "Search OpenAlex's scholarly works."),
+    field("search.openalex.api_key", Kind::Secret, "OpenAlex API key."),
+    field("search.openalex.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

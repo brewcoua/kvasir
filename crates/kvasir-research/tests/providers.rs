@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
-    Arxiv, Brave, Crossref, EuropePmc, Exa, Failure, Mojeek, Provider, Row, SemanticScholar,
-    Tavily, Wikipedia,
+    Arxiv, Brave, Crossref, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider, Row,
+    SemanticScholar, Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -538,5 +538,78 @@ mod semantic_scholar {
         assert_eq!(at(&server, Some("k")).query("q").await, Err(Failure::Unauthorized));
         let failure = at(&server, None).query("q").await.unwrap_err();
         assert!(matches!(failure, Failure::Other(_)), "{failure:?}");
+    }
+}
+
+mod openalex {
+    use super::*;
+
+    fn at(server: &MockServer) -> OpenAlex {
+        OpenAlex::at(&format!("{}/s", server.uri()), "the-key")
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"results": [
+            {
+                "id": "https://openalex.org/W1",
+                "doi": "https://doi.org/10.1/a",
+                "display_name": "A",
+                "primary_location": {"landing_page_url": "https://pub.org/a"},
+                "abstract_inverted_index": {"the": [0, 2], "word": [1], "again": [3]},
+            },
+            {
+                "id": "https://openalex.org/W2",
+                "doi": null,
+                "display_name": "B",
+                "primary_location": {"landing_page_url": "https://pub.org/b"},
+                "abstract_inverted_index": null,
+            },
+            {"id": "https://openalex.org/W3", "primary_location": null},
+            {"display_name": "No address"},
+        ]});
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(query_param("search", "the query"))
+            .and(query_param("per-page", "20"))
+            .and(query_param("api_key", "the-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [
+                row("https://doi.org/10.1/a", "A", "the word the again"),
+                row("https://pub.org/b", "B", ""),
+                row("https://openalex.org/W3", "", ""),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_key_and_a_rate_limit_are_told_apart() {
+        let server = answering(ResponseTemplate::new(401)).await;
+        assert_eq!(at(&server).query("q").await, Err(Failure::Unauthorized));
+
+        let server = answering(ResponseTemplate::new(429)).await;
+        assert_eq!(at(&server).query("q").await, Err(Failure::RateLimited { retry_after: None }));
+    }
+
+    /// The key is in the URL, which a transport error would otherwise print.
+    #[tokio::test]
+    async fn a_failed_request_does_not_print_the_key() {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/s", free.local_addr().unwrap());
+        drop(free);
+
+        let failure = OpenAlex::at(&url, "the-key").query("q").await.unwrap_err();
+
+        assert!(matches!(failure, Failure::Other(_)));
+        assert!(!failure.to_string().contains("the-key"), "{failure}");
     }
 }
