@@ -1,6 +1,14 @@
 import { fireEvent, render } from "@testing-library/svelte";
-import { describe, expect, it, vi } from "vitest";
+import { tick } from "svelte";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loaded, wantIcons } from "../lib/favicons.svelte";
 import SiteGraph, { labelVisible } from "./SiteGraph.svelte";
+
+// The real one loads through `Image`, which jsdom never finishes; what it does is in favicons.test.ts.
+vi.mock("../lib/favicons.svelte", async () => {
+  const { SvelteSet } = await import("svelte/reactivity");
+  return { iconUrl: (host: string) => `/icon/${host}`, loaded: new SvelteSet<string>(), wantIcons: vi.fn() };
+});
 
 // jsdom has none, and `bind:clientWidth` needs one.
 globalThis.ResizeObserver ??= class {
@@ -29,13 +37,39 @@ describe("SiteGraph", () => {
     expect(container.querySelectorAll(".link")).toHaveLength(2);
   });
 
-  it("sizes a site by its pages, then by its links", async () => {
+  it("sizes a site by its pages, then by the sites it shares a line with", async () => {
     const { container, rerender } = render(SiteGraph, props);
     const [a, b] = radii(container);
     expect(a).toBeGreaterThan(b);
-    await rerender({ ...props, size: "links" });
-    const [a2, b2] = radii(container);
+    await rerender({ ...props, size: "connections" });
+    const [a2, b2, c2] = radii(container);
     expect(b2).toBeGreaterThan(a2);
+    expect(a2).toBe(c2);
+  });
+
+  it("counts a site linked both ways once, and not its count of links", async () => {
+    const many = [
+      { source: "a.org", target: "b.org", count: 900 },
+      { source: "b.org", target: "a.org", count: 900 },
+      { source: "c.org", target: "a.org", count: 1 },
+      { source: "c.org", target: "b.org", count: 1 },
+    ];
+    const { container } = render(SiteGraph, { ...props, edges: many, size: "connections" });
+    const [a, b, c] = radii(container);
+    expect(a).toBe(b);
+    expect(a).toBe(c);
+  });
+
+  it("fades all but the hovered site, its neighbours and their lines", async () => {
+    const { container } = render(SiteGraph, { ...props, edges: edges.slice(0, 1).concat({ source: "c.org", target: "d.org", count: 1 }), sites: [...sites, { domain: "d.org", pages: 1, links: 0 }] });
+    const nodes = [...container.querySelectorAll(".node")];
+    const classes = (name: string) => nodes.filter((node) => node.classList.contains(name)).map((node) => node.textContent);
+    await fireEvent.pointerEnter(nodes[0]);
+    expect(classes("lit")).toEqual(["a.org", "b.org"]);
+    expect(classes("faded")).toEqual(["c.org", "d.org"]);
+    expect([...container.querySelectorAll(".link")].map((link) => link.classList.contains("faded"))).toEqual([false, true]);
+    await fireEvent.pointerLeave(nodes[0]);
+    expect(container.querySelectorAll(".faded, .lit")).toHaveLength(0);
   });
 
   it("copes with nothing to size by", () => {
@@ -124,33 +158,29 @@ describe("SiteGraph", () => {
 
   describe("favicons", () => {
     const icons = (container: HTMLElement) => [...container.querySelectorAll(".node image.favicon")];
-    const many = (count: number) => Array.from({ length: count }, (_, i) => ({ domain: `s${i}.org`, pages: count - i, links: 0 }));
 
-    it("draws an icon on a big site only, at the encoded address", () => {
-      const { container } = render(SiteGraph, { ...props, sites: [{ domain: "a.org:8080", pages: 100, links: 0 }, { domain: "tiny.org", pages: 0, links: 0 }], edges: [] });
+    beforeEach(() => loaded.clear());
+
+    it("asks for every site's icon, biggest first", () => {
+      render(SiteGraph, props);
+      expect(vi.mocked(wantIcons).mock.lastCall![0]).toEqual(["a.org", "b.org", "c.org"]);
+    });
+
+    it("draws an icon on any site, once it has loaded", async () => {
+      const { container } = render(SiteGraph, props);
+      expect(icons(container)).toHaveLength(0);
+      loaded.add("c.org");
+      await tick();
       const [icon, ...rest] = icons(container);
       expect(rest).toHaveLength(0);
-      expect(icon.getAttribute("href")).toBe("/v1/favicons/a.org%3A8080");
-      expect(icon.closest(".node")!.textContent).toContain("a.org:8080");
-      expect(container.querySelectorAll(".node circle:not(.ring)")).toHaveLength(2);
-    });
-
-    it("draws at most 60", () => {
-      const { container } = render(SiteGraph, { ...props, sites: many(100), edges: [] });
-      expect(icons(container)).toHaveLength(60);
-    });
-
-    it("drops an icon that fails to load and keeps the circle", async () => {
-      const { container } = render(SiteGraph, { ...props, sites: many(3), edges: [] });
-      const before = icons(container).length;
-      expect(before).toBeGreaterThan(0);
-      await fireEvent.error(icons(container)[0]);
-      expect(icons(container)).toHaveLength(before - 1);
+      expect(icon.getAttribute("href")).toBe("/icon/c.org");
+      expect(icon.closest(".node")!.textContent).toContain("c.org");
       expect(container.querySelectorAll(".node circle:not(.ring)")).toHaveLength(3);
     });
 
     it("still picks a site when its icon is clicked", async () => {
       const onpick = vi.fn();
+      loaded.add("a.org");
       const { container } = render(SiteGraph, { ...props, onpick });
       await fireEvent.click(icons(container)[0]);
       expect(onpick).toHaveBeenCalledWith("a.org");

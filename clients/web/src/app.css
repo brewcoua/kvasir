@@ -1435,6 +1435,20 @@ table.runs a.topic:hover {
 .site-graph .link {
   stroke: var(--dim);
   opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.site-graph .link.lit {
+  stroke: var(--accent);
+  opacity: 1;
+}
+.site-graph .link.faded {
+  opacity: 0.06;
+}
+.site-graph .node {
+  transition: opacity 0.15s;
+}
+.site-graph .node.faded {
+  opacity: 0.15;
 }
 .site-graph {
   position: relative;
@@ -1485,8 +1499,12 @@ table.runs a.topic:hover {
   transform: translate(calc(var(--r) + 4px * var(--inverse, 1)), 0) scale(var(--inverse, 1));
 }
 .site-graph .node.labelled text,
-.site-graph .node.selected text {
+.site-graph .node.selected text,
+.site-graph .node.lit text {
   opacity: 1;
+}
+.site-graph .node.faded text {
+  opacity: 0;
 }
 .site-card {
   position: absolute;

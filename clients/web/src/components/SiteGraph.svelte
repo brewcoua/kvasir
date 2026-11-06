@@ -24,7 +24,7 @@
   import { select } from "d3-selection";
   import { zoom, type ZoomBehavior } from "d3-zoom";
   import { onDestroy, untrack } from "svelte";
-  import { SvelteSet } from "svelte/reactivity";
+  import { iconUrl, loaded, wantIcons } from "../lib/favicons.svelte";
   import SourceBadge from "./SourceBadge.svelte";
 
   let {
@@ -33,15 +33,11 @@
     size,
     selected,
     onpick,
-  }: { sites: Site[]; edges: SiteEdge[]; size: "pages" | "links"; selected: string | null; onpick: (domain: string) => void } = $props();
+  }: { sites: Site[]; edges: SiteEdge[]; size: "pages" | "connections"; selected: string | null; onpick: (domain: string) => void } = $props();
 
   const LABEL = 24;
   const MIN_R = 6;
   const MAX_R = 34;
-  // Icons load over the same few HTTP/1.1 connections as the API (about 6 per host), an uncached one can take
-  // up to 10s, and an SVG <image> cannot load lazily, so only the biggest sites get one.
-  const ICON_MIN_R = 10;
-  const ICON_MAX = 60;
 
   interface Node extends SimulationNodeDatum {
     id: string;
@@ -57,6 +53,19 @@
     id: string;
     count: number;
   }
+
+  // Sites a site shares a line with, either way round: what a line drawn on the graph means.
+  const neighbours = $derived.by(() => {
+    const known = new Set(sites.map((site) => site.domain));
+    const found = new Map<string, Set<string>>();
+    for (const { source, target } of edges) {
+      if (source === target || !known.has(source) || !known.has(target)) continue;
+      found.set(source, (found.get(source) ?? new Set()).add(target));
+      found.set(target, (found.get(target) ?? new Set()).add(source));
+    }
+    return found;
+  });
+  const measure = (site: Site) => (size === "pages" ? site.pages : (neighbours.get(site.domain)?.size ?? 0));
 
   const radiusOf = (t: number) => MIN_R + (MAX_R - MIN_R) * t;
   const shade = (value: number, biggest: number) => (biggest > 0 ? Math.sqrt(value / biggest) : 0);
@@ -86,9 +95,9 @@
   // Rebuilt whenever the sites, edges or size change, keeping where every known site already is,
   // so the layout settles again from where it was rather than starting over.
   $effect(() => {
-    const biggest = Math.max(0, ...sites.map((site) => site[size]));
+    const biggest = Math.max(0, ...sites.map(measure));
     const next: Node[] = sites.map((site) => {
-      const t = shade(site[size], biggest);
+      const t = shade(measure(site), biggest);
       return { id: site.domain, label: short(site.domain), pages: site.pages, links: site.links, source: site.source ?? null, r: radiusOf(t), t };
     });
     const known = new Set(next.map((node) => node.id));
@@ -111,20 +120,9 @@
     untrack(() => tick++);
   });
 
-  // Depends on the sites and the size only, not on `tick`, so the set does not change while the layout moves.
-  const iconIds = $derived.by(() => {
-    const biggest = Math.max(0, ...sites.map((site) => site[size]));
-    return new Set(
-      sites
-        .map((site) => ({ id: site.domain, r: radiusOf(shade(site[size], biggest)) }))
-        .filter((site) => site.r >= ICON_MIN_R)
-        .sort((a, b) => b.r - a.r)
-        .slice(0, ICON_MAX)
-        .map((site) => site.id),
-    );
-  });
-  // Ids whose icon failed to load; the circle alone stays.
-  const brokenIcons = new SvelteSet<string>();
+  // Depends on the sites and the size only, not on `tick`, so the order does not change while the layout moves.
+  $effect(() => wantIcons([...sites].sort((a, b) => measure(b) - measure(a)).map((site) => site.domain)));
+  onDestroy(() => wantIcons([]));
 
   // Copies, so the template sees new positions on every tick.
   const shown = $derived.by(() => {
@@ -134,7 +132,7 @@
       links: links.map((link) => {
         const source = link.source as Node;
         const target = link.target as Node;
-        return { id: link.id, width: 1 + Math.log2(Math.max(1, link.count)), x1: source.x ?? 0, y1: source.y ?? 0, x2: target.x ?? 0, y2: target.y ?? 0 };
+        return { id: link.id, from: source.id, to: target.id, width: 1 + Math.log2(Math.max(1, link.count)), x1: source.x ?? 0, y1: source.y ?? 0, x2: target.x ?? 0, y2: target.y ?? 0 };
       }),
     };
   });
@@ -177,15 +175,10 @@
   let cardWidth = $state(0);
   let cardHeight = $state(0);
 
-  const neighbours = $derived.by(() => {
-    const known = new Set(sites.map((site) => site.domain));
-    const found = new Map<string, Set<string>>();
-    for (const { source, target } of edges) {
-      if (source === target || !known.has(source) || !known.has(target)) continue;
-      found.set(source, (found.get(source) ?? new Set()).add(target));
-      found.set(target, (found.get(target) ?? new Set()).add(source));
-    }
-    return found;
+  // The hovered site and what it links to stay lit while the rest fade.
+  const lit = $derived.by(() => {
+    if (!hovered || busy) return null;
+    return new Set([hovered, ...(neighbours.get(hovered) ?? [])]);
   });
 
   const card = $derived.by(() => {
@@ -237,12 +230,14 @@
   >
     <g transform={transform}>
       {#each shown.links as link (link.id)}
-        <line class="link" stroke-width={link.width} x1={link.x1} y1={link.y1} x2={link.x2} y2={link.y2} />
+        <line class="link" class:lit={lit && (link.from === hovered || link.to === hovered)} class:faded={lit && link.from !== hovered && link.to !== hovered} stroke-width={link.width} x1={link.x1} y1={link.y1} x2={link.x2} y2={link.y2} />
       {/each}
       {#each shown.nodes as node (node.id)}
         <g
           class={["node", node.source && `tier-${node.source.tier}`]}
           class:selected={node.id === selected}
+          class:lit={lit?.has(node.id)}
+          class:faded={lit && !lit.has(node.id)}
           transform={`translate(${node.x},${node.y})`}
           style:--t={node.t}
           style:--r={`${node.r}px`}
@@ -266,16 +261,8 @@
         >
           {#if node.source}<title>{node.id}: {node.source.kind}, {node.source.tier}</title>{/if}
           <circle r={node.r} />
-          {#if iconIds.has(node.id) && !brokenIcons.has(node.id)}
-            <image
-              class="favicon"
-              href={`/v1/favicons/${encodeURIComponent(node.id)}`}
-              x={-node.r}
-              y={-node.r}
-              width={2 * node.r}
-              height={2 * node.r}
-              onerror={() => brokenIcons.add(node.id)}
-            />
+          {#if loaded.has(node.id)}
+            <image class="favicon" href={iconUrl(node.id)} x={-node.r} y={-node.r} width={2 * node.r} height={2 * node.r} />
             <circle class="ring" r={node.r} />
           {/if}
           <text dy="0.35em">{node.label}</text>

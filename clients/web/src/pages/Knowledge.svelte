@@ -14,7 +14,7 @@
   let sites = $state<Site[] | null>(null);
   let graph: Graph | null = $state(null);
   let stats: CacheStats | null = $state(null);
-  let by: "pages" | "links" = $state("pages");
+  let by: "pages" | "connections" = $state("pages");
   let site: string | null = $state(null);
   let pages: PageSummary[] = $state([]);
   let detail: PageDetail | null = $state(null);
@@ -192,10 +192,10 @@
           <SiteGraph sites={graph.sites} edges={graph.edges} size={by} selected={site} onpick={(domain) => pick(domain === site ? null : domain)} />
         </div>
         <div class="graph-bar">
-          <span class="meta">Node size and shade = {by}; line width = links between sites.</span>
+          <span class="meta">Node size and shade = {by === "pages" ? "pages" : "connected sites"}; line width = links between sites.</span>
           <label class="switch-label">
             Size by {by}
-            <Switch.Root class="switch" aria-label="Size by links" checked={by === "links"} onCheckedChange={(on) => (by = on ? "links" : "pages")}>
+            <Switch.Root class="switch" aria-label="Size by connections" checked={by === "connections"} onCheckedChange={(on) => (by = on ? "connections" : "pages")}>
               <Switch.Thumb class="switch-thumb" />
             </Switch.Root>
           </label>

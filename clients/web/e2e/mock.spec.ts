@@ -462,25 +462,36 @@ test("the knowledge page lists a site's pages and opens one on its text", async 
   await expect(page.getByText("related (1)")).toBeVisible();
 });
 
-test("the knowledge graph sizes its nodes by pages or by links", async ({ page }) => {
+test("the knowledge graph sizes its nodes by pages or by connected sites", async ({ page }) => {
   await page.goto("/#/knowledge");
   const radius = async () =>
     Number(await page.getByRole("button", { name: /^en\.wikipedia\.org/ }).locator("circle:not(.ring)").getAttribute("r"));
   const other = async () =>
     Number(await page.getByRole("button", { name: /^britannica\.com/ }).locator("circle:not(.ring)").getAttribute("r"));
-  const toggle = page.getByRole("switch", { name: "Size by links" });
+  const toggle = page.getByRole("switch", { name: "Size by connections" });
   await expect(toggle).not.toBeChecked();
   await expect.poll(radius).toBeGreaterThan(0);
-  // Two pages against one, then three links against none.
+  // Two pages against one, then one connected site each: the links between them count once, for both.
   const byPages = [await radius(), await other()];
   await toggle.click();
   await expect(toggle).toBeChecked();
-  await expect.poll(other).toBe(6);
-  expect(byPages[1]).toBeGreaterThan(6);
-  expect(await radius()).toBeGreaterThan(byPages[0] - 1);
+  await expect.poll(other).toBeGreaterThan(byPages[1]);
+  expect(await radius()).toBe(await other());
 });
 
-test("the knowledge graph draws a favicon on its big sites", async ({ page }) => {
+test("hovering a site in the knowledge graph fades all but it and what it links to", async ({ page }) => {
+  await page.goto("/#/knowledge");
+  const site = page.getByRole("button", { name: /^en\.wikipedia\.org/ });
+  await expect(site).toBeVisible();
+  // Dispatched, as the node keeps moving while the layout settles.
+  await site.dispatchEvent("pointerenter");
+  await expect(site).toHaveClass(/lit/);
+  await expect(page.locator(".site-graph .node.faded, .site-graph .link.faded").first()).toBeAttached();
+  await site.dispatchEvent("pointerleave");
+  await expect(site).not.toHaveClass(/lit/);
+});
+
+test("the knowledge graph draws a favicon on its sites", async ({ page }) => {
   await page.goto("/#/knowledge");
   const icon = page.locator(".site-graph .node image.favicon").first();
   await expect(icon).toHaveAttribute("href", /^\/v1\/favicons\/[^/]+$/);
