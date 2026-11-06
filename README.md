@@ -887,7 +887,7 @@ installing its Chromium first. `just lint` runs svelte-check, and `just test-web
 
 ### Evaluate research
 
-[`eval/questions.toml`](eval/questions.toml) holds 20 questions: 10 reports, 6 rankings and 4
+[`eval/questions.toml`](eval/questions.toml) holds 21 questions: 11 reports, 6 rankings and 4
 tables. Each lists the output type its wording asks for and a few checks a reader of the question
 would need answered. To evaluate, start the service, then run:
 

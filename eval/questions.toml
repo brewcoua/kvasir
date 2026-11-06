@@ -108,6 +108,16 @@ checks = [
 ]
 
 [[question]]
+id = "wasm-adoption"
+question = "How widely is WebAssembly adopted, in the browser and outside it?"
+output = "report"
+checks = [
+  "Separates use in the browser from use outside it, such as on servers or at the edge.",
+  "Gives at least one adoption figure and says who measured it.",
+  "Names at least one production use by a named company or product.",
+]
+
+[[question]]
 id = "cli-languages"
 question = "Rank Python, Go and Rust for writing command-line tools on startup time, ease of distribution and library ecosystem."
 output = "ranking"
