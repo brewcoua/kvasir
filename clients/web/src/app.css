@@ -1752,6 +1752,17 @@ table.runs a.topic:hover {
   width: 240px;
   height: 92px;
 }
+.step-card.short {
+  height: 36px;
+}
+.step-card.short .step-head {
+  height: 100%;
+  border-bottom: 0;
+}
+.step-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
 .step-card.pending {
   opacity: 0.6;
   border-style: dashed;

@@ -248,6 +248,11 @@ describe("steps, synthetic", () => {
     expect(steps(run)[0].progress).toMatchObject({ done: 1, total: 4, kind: "attempt" });
   });
 
+  it("titles a section by its title alone", () => {
+    const run = synthetic([ev(0, "write", { kind: "section", detail: "writing Key findings" })], 1);
+    expect(steps(run).find((s) => s.label === "write")!.children[0]).toMatchObject({ label: "Key findings", detail: "writing Key findings" });
+  });
+
   it("feeds the stage's bar from a section", () => {
     const run = synthetic([ev(0, "research", { kind: "section", done: 2, total: 5 })], 1);
     run.questions = [];

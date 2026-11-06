@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RunDetail } from "./api";
-import { HEADER, layout, PAD, PER_COLUMN, ROW } from "./layout";
+import { CARD, COLUMN_WEIGHT, HEADER, layout, PAD, ROW, STAGE } from "./layout";
 import { links, steps, type Link, type Step } from "./steps";
 
 const graph: RunDetail = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "fixtures", "graph.json"), "utf8"));
@@ -85,13 +85,36 @@ describe("layout", () => {
     for (const root of roots.slice(0, roots.indexOf(research) + 1)) expect(b.pos(root.id)).toEqual(a.pos(root.id));
   });
 
-  it("wraps a container's column every PER_COLUMN children", () => {
+  it("wraps a container's column by weight: eight short cards, or four cards", () => {
     const write = roots.find((s) => s.id === "stage:write")!;
-    const column = write.children.filter((c) => c.kind !== "attempt" && c.kind !== "page").map((c) => c.id);
-    expect(column.length).toBeGreaterThan(PER_COLUMN);
-    const { at } = abs(layout(roots, new Set([write.id]), linked).nodes);
-    const xs = [...new Set(column.map((id) => at.get(id)!.position.x))].sort((a, b) => a - b);
-    expect(column.map((id) => xs.indexOf(at.get(id)!.position.x))).toEqual(column.map((_, i) => Math.floor(i / PER_COLUMN)));
+    // A repair, as a stage lays questions out by depth instead.
+    const parent = (children: Step[]) => ({ ...write, kind: "repair" as const, children });
+    const kid = (i: number, kind: Step["kind"]) => ({ ...write, id: `k:${i}`, kind, children: [] });
+    const columnsOf = (children: Step[]) => {
+      const { at, pos } = abs(layout([parent(children)], new Set([write.id]), []).nodes);
+      const xs = [...new Set(children.map((c) => pos(c.id).x))].sort((a, b) => a - b);
+      return { columns: children.map((c) => xs.indexOf(pos(c.id).x)), at };
+    };
+    const short = Array.from({ length: COLUMN_WEIGHT + 1 }, (_, i) => kid(i, "section"));
+    expect(columnsOf(short).columns).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 1]);
+    const cards = Array.from({ length: 5 }, (_, i) => kid(i, "question"));
+    expect(columnsOf(cards).columns).toEqual([0, 0, 0, 0, 1]);
+    // Six short and a card fill it; the next card would pass it.
+    const mixed = [...short.slice(0, 6), kid(6, "question"), kid(7, "question")];
+    expect(columnsOf(mixed).columns).toEqual([0, 0, 0, 0, 0, 0, 0, 1]);
+  });
+
+  it("makes a card with no content one header high, and leaves a question or stage full size", () => {
+    const write = roots.find((s) => s.id === "stage:write")!;
+    const kid = (kind: Step["kind"], state: Step["state"] = "done") => ({ ...write, id: `k:${kind}:${state}`, kind, state, children: [] });
+    const size = (step: Step) => {
+      const node = layout([step], new Set(), []).nodes[0];
+      return { width: node.width, height: node.height };
+    };
+    for (const kind of ["section", "verdict", "repair", "event"] as const) expect(size(kid(kind))).toEqual({ width: CARD.width, height: HEADER });
+    expect(size(kid("question"))).toEqual(CARD);
+    expect(size(kid("stage"))).toEqual(STAGE);
+    expect(size(kid("stage", "skipped"))).toEqual({ width: STAGE.width, height: HEADER });
   });
 
   it("keeps ids stable across calls", () => {

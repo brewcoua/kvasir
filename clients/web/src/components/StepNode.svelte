@@ -2,7 +2,7 @@
   import { Handle, Position, type NodeProps } from "@xyflow/svelte";
   import { count } from "../lib/format";
   import type { StepData } from "../lib/layout";
-  import { icon, isCounter, outcome, progressText } from "../lib/steps";
+  import { icon, isCounter, isShort, outcome, progressText } from "../lib/steps";
   import Bar from "./Bar.svelte";
   import ClaimDots from "./ClaimDots.svelte";
   import Icon from "./Icon.svelte";
@@ -25,13 +25,14 @@
     </div>
   </div>
 {:else}
-  <div class="step-card {step.state} {step.kind} {step.status ?? ''} {step.kind === 'verdict' ? outcome(step) : ''}" title={step.detail} data-testid="step-{step.id}">
+  <div class="step-card {step.state} {step.kind} {step.status ?? ''} {step.kind === 'verdict' ? outcome(step) : ''}" class:short={isShort(step)} title={step.detail} data-testid="step-{step.id}">
     <div class="step-head">
       <Icon name={icon(step)} /><span class="step-label">{step.label}</span>
+      {#if isShort(step) && step.count !== null}<span class="meta step-count">{count(step.count)}</span>{/if}
       {#if step.state !== "done"}<span class="chip {step.state}">{step.state}</span>{/if}
       {#if data.expandable}<span class="step-toggle">{data.open ? "−" : `+${data.hidden}`}</span>{/if}
     </div>
-    {#if step.kind === "stage" ? usage || step.progress || data.latest : step.kind === "question" || step.count !== null}
+    {#if !isShort(step) && (step.kind === "question" || usage || step.progress || data.latest)}
       <div class="step-body">
         {#if step.kind === "stage"}
           {#if usage}
@@ -48,8 +49,6 @@
             <span class="meta">{plural(step.count ?? 0, "claim")}</span>
           </div>
           <ClaimDots {data} />
-        {:else}
-          <div class="step-line"><span class="meta">{step.count}</span></div>
         {/if}
       </div>
     {/if}

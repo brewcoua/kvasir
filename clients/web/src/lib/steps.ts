@@ -211,7 +211,7 @@ export function steps(run: RunDetail): Step[] {
       add(ev.stage, own(step(`e:${seq}`, "split", "Split", ev.detail, state)));
     } else if (kind === "section") {
       const q = ev.question == null ? undefined : questionById.get(ev.question);
-      const s = own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail, ev.detail, state));
+      const s = own(step(`e:${seq}`, "section", q ? q.title || q.text : ev.detail.replace(/^writing /, ""), ev.detail, state));
       s.question = ev.question ?? null;
       add(ev.stage, s);
       if (ev.done != null) progressOf.set(ev.stage, counter(ev));
@@ -306,6 +306,10 @@ export function steps(run: RunDetail): Step[] {
     return s;
   });
 }
+
+// Nothing to show below its heading, so a card is the heading alone. A stage's stats and a question's claims are all
+// that ever fill a body, and a skipped stage has neither.
+export const isShort = (step: Step) => step.state === "skipped" || (step.kind !== "stage" && step.kind !== "question");
 
 // A verdict's id is `v:<tier>`; any tier other than the two below removed sentences.
 export const outcome = (step: Step): "removed" | "rewritten" | "unverified" => {

@@ -1,6 +1,6 @@
 import type { Edge, Node, Rect } from "@xyflow/svelte";
 import type { ModelUsage, Progress } from "./api";
-import type { Link, Step } from "./steps";
+import { isShort, type Link, type Step } from "./steps";
 
 export const CARD = { width: 220, height: 80 };
 export const STAGE = { width: 240, height: 92 };
@@ -15,9 +15,10 @@ const SPLIT = { width: 80, running: 140 };
 const ROW_GAP = 8;
 // Where a container's children start, so they do not touch its header.
 const TOP = HEADER + PAD;
-// Column children wrap into a new column after this many, so an open stage grows sideways into the free width.
-// By count, not height: opening a card then only grows its own column, and no card changes column.
-export const PER_COLUMN = 4;
+// Column children wrap into a new column once they would pass this weight, so an open stage grows sideways into the
+// free width: a card weighs 2 and a short card 1. By weight closed, not height: opening a card then only grows its
+// own column, and no card changes column.
+export const COLUMN_WEIGHT = 8;
 // An open question or stage is at least this wide, so its title and stats fit in the header.
 const QUESTION_WIDTH = 300;
 const STAGE_WIDTH = 380;
@@ -97,7 +98,22 @@ const descendants = (step: Step): number => step.children.reduce((n, child) => n
 const expandable = (step: Step) => step.children.length > 0 && step.kind !== "page";
 const isRow = (step: Step) => step.kind === "attempt" || step.kind === "recall" || step.kind === "page";
 // A page sits inside its attempt's padding, so the two share an edge.
-const closedSize = (step: Step) => (step.kind === "split" ? { width: step.state === "done" ? SPLIT.width : SPLIT.running, height: HEADER } : step.kind === "page" ? { width: ROW.width - 2 * PAD, height: HEADER } : isRow(step) ? ROW : step.kind === "stage" ? STAGE : CARD);
+const closedSize = (step: Step) => (step.kind === "split" ? { width: step.state === "done" ? SPLIT.width : SPLIT.running, height: HEADER } : step.kind === "page" ? { width: ROW.width - 2 * PAD, height: HEADER } : isRow(step) ? ROW : step.kind === "stage" ? { width: STAGE.width, height: isShort(step) ? HEADER : STAGE.height } : { width: CARD.width, height: isShort(step) ? HEADER : CARD.height });
+
+function wrap(boxes: Box[]): Box[][] {
+  const columns: Box[][] = [];
+  let used = COLUMN_WEIGHT;
+  for (const box of boxes) {
+    const weight = isShort(box.step) ? 1 : 2;
+    if (used + weight > COLUMN_WEIGHT) {
+      columns.push([]);
+      used = 0;
+    }
+    columns.at(-1)!.push(box);
+    used += weight;
+  }
+  return columns;
+}
 
 const sum = (sizes: number[], gap = GAP) => sizes.reduce((n, size) => n + size, 0) + gap * Math.max(sizes.length - 1, 0);
 const widest = (boxes: Box[]) => Math.max(...boxes.map((box) => box.width));
@@ -190,8 +206,7 @@ function measure(step: Step, open: Set<string>, links: Link[]): Box {
   if (step.kind === "stage" && boxes.some(isQuestion)) return research(step, boxes, links);
   const stack = boxes.filter((_, i) => isRow(step.children[i]));
   const column = boxes.filter((_, i) => !isRow(step.children[i]));
-  const columns: Box[][] = [];
-  for (let i = 0; i < column.length; i += PER_COLUMN) columns.push(column.slice(i, i + PER_COLUMN));
+  const columns = wrap(column);
   const stackHeight = sum(stack.map((box) => box.height), ROW_GAP);
   const columnsWidth = columns.length > 0 ? sum(columns.map(widest)) : 0;
   const columnsHeight = Math.max(0, ...columns.map((boxes) => sum(boxes.map((box) => box.height))));
