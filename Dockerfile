@@ -20,6 +20,11 @@ RUN pnpm build
 # fetch clippy and rustfmt for a build that needs neither.
 FROM docker.io/library/rust:1.99.1-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS build
 
+# SQLCipher's vendored OpenSSL builds from source with these; perl-base lacks the modules it needs.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends make perl \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./

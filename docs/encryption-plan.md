@@ -1,6 +1,6 @@
 # Encryption at rest: plan
 
-Status: written 2026-11-06. Nothing built.
+Status: written 2026-11-06. Phase 1 built 2026-11-06.
 
 Every file in `KVASIR_DATA_DIR` is plain SQLite. Anyone who gets a copy of the directory or a backup
 of it reads the runs (questions, prompts, answers, the searches made), the cached pages of what was
@@ -52,8 +52,9 @@ rusqlite 0.41 has two features for it (raw `Cargo.toml` on master):
 
 The image has no OpenSSL today: the runtime stage installs only `ca-certificates` and the lockfile
 has no `openssl` crate. The vendored feature keeps it that way at run time, at the cost of a longer
-build. SQLCipher Community Edition is BSD-style and asks for a notice of Zetetic's and OpenSSL's
-copyright; OpenSSL 3 is Apache-2.0, which `deny.toml` allows (check in phase 1).
+build. The binary links OpenSSL statically, so the runtime stage stays as it is. SQLCipher Community
+Edition is BSD-style and asks for a notice of Zetetic's and OpenSSL's copyright. `sqlcipher-src` adds
+`blessing` and `WTFPL`, which `deny.toml` allows for that crate alone.
 
 SQLite3 Multiple Ciphers (MIT, ChaCha20-Poly1305 by default per its docs, unverified) has no
 rusqlite feature, so using it means a fork of `libsqlite3-sys`. Not taken.
@@ -86,10 +87,9 @@ A wrong key shows on the first read: SQLCipher answers `file is not a database`.
 
 ## Phases
 
-1. Build. Switch the workspace `rusqlite` to `bundled-sqlcipher-vendored-openssl`. Check that the
-   `rust:1.99.1-slim-bookworm` stage has the `perl` and `make` that the OpenSSL build needs, and add
-   them if not. Check `cargo deny check` and the release image size. The tests pass unchanged, since
-   SQLCipher without a key is plain SQLite. Commit.
+1. Build. Switch the workspace `rusqlite` to `bundled-sqlcipher-vendored-openssl`. The
+   `rust:1.99.1-slim-bookworm` stage needs `make` and `perl` for the OpenSSL build (`perl-base` lacks
+   `FindBin`). The tests pass unchanged, since SQLCipher without a key is plain SQLite. Commit.
 2. Key. `KVASIR_SECRET_KEY` read and validated in `kvasir-config/src/load.rs`, kept out of `Debug`
    like `Provider`'s key. `Db::open` (`kvasir-db/src/lib.rs:48`) takes the key and runs, before
    `journal_mode=wal`: `PRAGMA key`, `PRAGMA temp_store = MEMORY`, then a read of `sqlite_master`.

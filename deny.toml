@@ -29,6 +29,8 @@ allow = [
   "Unicode-3.0",
   "Zlib",
 ]
+# SQLCipher bundles SQLite (blessing) and libtomcrypt (WTFPL), both permissive. Only this crate.
+exceptions = [{ crate = "sqlcipher-src", allow = ["blessing", "WTFPL"] }]
 
 [bans]
 multiple-versions = "allow"
