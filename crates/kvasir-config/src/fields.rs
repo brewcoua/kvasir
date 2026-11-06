@@ -249,6 +249,12 @@ pub const FIELDS: &[Field] = &[
         "Search Bing by reading its pages, which is against its terms.",
     ),
     field("search.bing.weight", Kind::Float, "Its weight when results are fused."),
+    field(
+        "search.startpage.enabled",
+        Kind::Bool,
+        "Search Startpage by reading its pages, which is against its terms.",
+    ),
+    field("search.startpage.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

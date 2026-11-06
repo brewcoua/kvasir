@@ -6,7 +6,7 @@ use std::time::Duration;
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
 use kvasir_research::providers::{
     Arxiv, Bing, Brave, Crossref, DuckDuckGo, EuropePmc, Exa, Failure, Mojeek, OpenAlex, Provider,
-    Row, SemanticScholar, Tavily, Wikipedia,
+    Row, SemanticScholar, Startpage, Tavily, Wikipedia,
 };
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
@@ -745,6 +745,177 @@ mod bing {
         assert_eq!(
             at(&server).query("q").await,
             Err(Failure::Other("no result list in the page".into()))
+        );
+    }
+}
+
+mod startpage {
+    use serde_json::Value;
+    use sha2::{Digest, Sha256};
+    use wiremock::Request;
+    use wiremock::matchers::body_string_contains;
+
+    use super::*;
+
+    const HOME: &str = r#"<form id="search" action="/sp/search" method="post">
+        <input type="hidden" name="sc" value="the-token"></form>"#;
+
+    fn results(items: &Value) -> String {
+        let props =
+            json!({"render": {"presenter": {"regions": {"mainline": items}}}, "x": {"y": 1}});
+        // The script closes the props and a call after them, as the engine's own page does.
+        let text = props.to_string();
+        let inner = text.strip_prefix('{').unwrap().strip_suffix("}}").unwrap();
+        format!("<script>React.createElement(UIStartpage.AppSerpWeb, {{{inner}}}}}), x)</script>")
+    }
+
+    fn found() -> String {
+        results(&json!([
+            {"display_type": "ads", "results": [{"clickUrl": "https://ad.example", "title": "Ad"}]},
+            {"display_type": "web-google", "results": [
+                {"clickUrl": "https://a.org/x", "title": "The <b>title</b>", "description": "About <b>a</b>."},
+                {"clickUrl": "https://b.org/y", "title": "B", "description": null},
+                {"title": "No address"},
+            ]},
+        ]))
+    }
+
+    async fn home(server: &MockServer, times: u64) {
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(HOME))
+            .expect(times)
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn the_token_is_fetched_once_and_results_read_from_the_script() {
+        let server = MockServer::start().await;
+        home(&server, 1).await;
+        Mock::given(method("POST"))
+            .and(path("/sp/search"))
+            .and(body_string_contains("query=the+query"))
+            .and(body_string_contains("sc=the-token"))
+            .and(|request: &Request| {
+                let cookie = request.headers.get("cookie").unwrap().to_str().unwrap();
+                cookie.starts_with("preferences=date_timeEEEworldN1N")
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_string(found()))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let startpage = Startpage::at(&server.uri());
+
+        let rows = startpage.query("the query").await.unwrap();
+        startpage.query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [row("https://a.org/x", "The title", "About a."), row("https://b.org/y", "B", "")]
+        );
+    }
+
+    fn challenge(difficulty: u32) -> ResponseTemplate {
+        let payload = json!({
+            "challenge": {"id": "the-id", "randomData": "the-data"},
+            "rules": {"difficulty": difficulty},
+        });
+        let body =
+            format!(r#"<script id="anubis_challenge" type="application/json">{payload}</script>"#);
+        ResponseTemplate::new(200)
+            .set_body_string(body)
+            .append_header("Set-Cookie", "within-challenge=abc; Path=/")
+    }
+
+    fn solved(request: &Request) -> bool {
+        let pair = |name: &str| {
+            request
+                .url
+                .query_pairs()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.into_owned())
+        };
+        let (Some(nonce), Some(digest)) = (pair("nonce"), pair("response")) else {
+            return false;
+        };
+        digest.starts_with('0')
+            && digest == format!("{:x}", Sha256::digest(format!("the-data{nonce}")))
+            && pair("id").as_deref() == Some("the-id")
+            && request.headers.get("cookie").unwrap().to_str().unwrap() == "within-challenge=abc"
+    }
+
+    #[tokio::test]
+    async fn a_challenge_is_solved_for_its_cookie() {
+        let server = MockServer::start().await;
+        home(&server, 1).await;
+        let authorized = |request: &Request| {
+            request
+                .headers
+                .get("cookie")
+                .is_some_and(|cookie| cookie.to_str().unwrap().ends_with("; spchal-auth=the-auth"))
+        };
+        Mock::given(method("POST"))
+            .and(path("/sp/search"))
+            .and(authorized)
+            .respond_with(ResponseTemplate::new(200).set_body_string(found()))
+            .with_priority(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/sp/search"))
+            .respond_with(challenge(1))
+            .with_priority(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/.within.website/x/cmd/anubis/api/pass-challenge"))
+            .and(solved)
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .append_header("Set-Cookie", "spchal-auth=the-auth; Path=/"),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = Startpage::at(&server.uri()).query("q").await.unwrap();
+
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn too_hard_a_challenge_is_a_captcha() {
+        let server = MockServer::start().await;
+        Mock::given(path("/")).respond_with(challenge(5)).mount(&server).await;
+
+        assert_eq!(Startpage::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+    }
+
+    #[tokio::test]
+    async fn its_blocks_are_told_apart() {
+        let server = MockServer::start().await;
+        let captcha = ResponseTemplate::new(302)
+            .append_header("Location", "https://www.startpage.com/sp/captcha?x=1");
+        Mock::given(path("/")).respond_with(captcha).mount(&server).await;
+        assert_eq!(Startpage::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+
+        let server = MockServer::start().await;
+        Mock::given(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("<p>No form</p>"))
+            .mount(&server)
+            .await;
+        assert_eq!(Startpage::at(&server.uri()).query("q").await, Err(Failure::Captcha));
+
+        let server = MockServer::start().await;
+        home(&server, 1).await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("<p>Something new</p>"))
+            .mount(&server)
+            .await;
+        assert_eq!(
+            Startpage::at(&server.uri()).query("q").await,
+            Err(Failure::Other("no results in the page".into()))
         );
     }
 }

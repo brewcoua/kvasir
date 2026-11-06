@@ -22,6 +22,7 @@ mod openalex;
 mod scrape;
 mod searxng;
 mod semantic_scholar;
+mod startpage;
 mod tavily;
 mod wikipedia;
 
@@ -53,6 +54,7 @@ pub use mojeek::Mojeek;
 pub use openalex::OpenAlex;
 pub use searxng::SearXng;
 pub use semantic_scholar::SemanticScholar;
+pub use startpage::Startpage;
 pub use tavily::Tavily;
 pub use wikipedia::Wikipedia;
 
@@ -352,6 +354,9 @@ impl Providers {
         }
         if settings.bing.enabled {
             providers.push((Box::new(Bing::default()), settings.bing.weight));
+        }
+        if settings.startpage.enabled {
+            providers.push((Box::new(Startpage::default()), settings.startpage.weight));
         }
         Self::new(providers, web)
     }

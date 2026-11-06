@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, HeaderMap, HeaderValue, SET_COOKIE, USER_AGENT};
 use reqwest::redirect::Policy;
 
 use super::TIMEOUT;
@@ -35,4 +35,15 @@ pub(super) fn client() -> reqwest::Client {
 /// A form's fields as the body of a POST.
 pub(super) fn form(fields: &[(&str, &str)]) -> String {
     url::form_urlencoded::Serializer::new(String::new()).extend_pairs(fields).finish()
+}
+
+/// The cookies `response` sets, as a `Cookie` header would carry them.
+pub(super) fn cookies(response: &reqwest::Response) -> Vec<(String, String)> {
+    let set = response.headers().get_all(SET_COOKIE);
+    set.iter()
+        .filter_map(|header| {
+            let (name, value) = header.to_str().ok()?.split(';').next()?.split_once('=')?;
+            Some((name.trim().to_owned(), value.trim().to_owned()))
+        })
+        .collect()
 }
