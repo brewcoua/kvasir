@@ -681,6 +681,10 @@ starts read-only, as today's does.
   Every other run ended `done`, no slot stayed taken, and a run past the slots answered 429. RSS
   stayed between 49 and 58 MB with no rise across rounds or restarts.
 - **Image:** 128 MB. With `--read-only` and a volume at `/data`, `/healthz` and `/` answer 200.
+  The `browser` target is 864 MB. Run with `--read-only --tmpfs /tmp --init --ipc=host`, a ledger
+  run through the contract fakes read a page that answered its plain request with 503 through
+  Chromium (`engines: ["render"]`). Chromium's crash handler needs a writable `$HOME`, so the
+  target sets it to `/tmp`.
 - **`kvasir eval`:** one question (`antikythera`, `max_searches` 4) researched through the Rust
   service and scored with the judge: 2 of 3 checks, 23 of 31 cited sentences supported.
 

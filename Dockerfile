@@ -67,6 +67,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build-browser /kvasir /usr/local/bin/kvasir
 ENV CHROME=/usr/bin/chromium
+# Chromium's crash handler writes under $HOME, which is / for this user and read-only.
+ENV HOME=/tmp
 USER 65532:65532
 
 # Last, so a build without --target still gives the image without Chromium.
