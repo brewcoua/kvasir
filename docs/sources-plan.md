@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05; phase 7 waits on research. Co-STORM citations (`conversation.py`) carry no source.
+Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05, and carried to Rust. Phase 7's research done 2026-11-06. File names in phases 1 to 6 are the Python ones. Co-STORM citations (`conversation.py`) carry no source.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
@@ -336,7 +336,65 @@ Research, handed to a separate agent; nothing below it is built until its report
 4. Whether the dataset should score only sites kvasir has met, or also crawl outward, and how a
    score turns into `content_farm` without demoting a real small site.
 
-Build, once the research settles it; one commit per step:
+#### Research report, 2026-11-06
+
+Run 2026-11-06 unless a source is given. Confidence as in the design rules.
+
+**CRED-1 is not a content-farm list.** It is 2,672 political misinformation domains: OpenSources
+and the Iffy index, enriched with RDAP age, Tranco rank, Google Fact Check and Safe Browsing. Labels:
+1,401 `fake`, 519 `unreliable`, 515 `mixed`, 143 `conspiracy`, 94 `satire`. It publishes no
+precision or false-positive figure, and its paper, codebook and code disagree on the score's
+weights. Refreshed weekly, CC BY 4.0, JSON. Its `mixed` takes in foxnews.com and greenpeace.org, so
+the label cannot mean "never read". ([paper](https://arxiv.org/abs/2604.20856),
+[repo](https://github.com/aloth/cred-1)) High for the counts, medium for the method.
+
+**No downloaded list catches the sites we meet.** The 12 hosts of this plan's two runs against each
+list, and against the Tranco top 1M for what they would wrongly block:
+
+| List | Whole domains | Licence | Of the 12 | In the top 1k | Wrongly listed, among others |
+| --- | --- | --- | --- | --- | --- |
+| [CRED-1](https://github.com/aloth/cred-1) | 2,672 | CC BY 4.0 | 0 | 6 | foxnews.com, dailymail.co.uk, greenpeace.org (as `mixed`) |
+| [BadWebsiteBlocklist](https://github.com/popcar2/BadWebsiteBlocklist) | 214 | CC0 | 0 | 8, counting partial rules | msn.com |
+| [Super SEO Spam Suppressor](https://github.com/NotaInutilis/Super-SEO-Spam-Suppressor) | 834,916 | WTFPL | 0 | 28 | twitter.com, linkedin.com, openai.com, anthropic.com; 22 MB, over `MAX_LIST_BYTES` |
+| [uBlacklist compilation](https://github.com/eallion/uBlacklist-subscription-compilation) | 14,546 | GLWT, merges unlicensed lists | 0 | 37, counting partial rules | mostly Chinese-language farms |
+
+Never read is too strong a verdict for any of them, and they would not have changed either run. None
+joins the default `lists`, so build step 2 needs no code: an operator can still add one to `lists`.
+NewsGuard's tracker (3,749 AI sites) is on request only. Not checked: Lin et al. beyond its README
+(no licence file), the Iffy index on its own, predatory journal lists. High for the table.
+
+**Signals, measured on 11 farms and 14 real small sites.** Tranco rank, RDAP age, and each site's
+sitemap, through at most 8 of its files:
+
+| Signal | Farms | Real sites | Verdict |
+| --- | --- | --- | --- |
+| RDAP age under 5 years | 7 of 10 answered | 0 of 13 | Adds nothing below; old domains get bought (pickcomfort.com 8.1 years, energybs.com 8.6). A third party sees each host. Dropped. |
+| Unranked: past 300,000 in Tranco, or absent | 11 of 11 | 5 of 14 | Necessary, far from sufficient. |
+| Dense: 5 or more URLs per day with a `lastmod`, leaving out the busiest day, over 100 or more dated URLs | 8 of 11, from 5.4 to 182 a day | 1 of 14: howtogeek.com at 31.6; the others 3.7 or less | Leaving out the busiest day is what discounts a site regenerating its sitemap. |
+| Dense and unranked | 8 of 11 | 0 of 14 | Chosen. |
+
+The 3 missed have no dated sitemap (hvaclaboratory.com, wisedesk.in) or none at all
+(eduresearchjournal.com). Low confidence: 25 sites picked by hand, the threshold fitted on them, and
+the real sites lean old. Phase 6 is the test. Not measured: signals from `pages.db` (copied quotes,
+outgoing links, verification failures), which would need a run's claims kept per site.
+
+Cost per site: 2 to 10 requests to the site itself. Tranco is one 10 MB zip every `ttl_days`, read
+once into a set of the top 300,000. Its sources include a CC BY-NC 4.0 one
+([Tranco](https://tranco-list.eu/)), so it is downloaded at runtime and never shipped, and the
+setting says so.
+
+**Decisions this settles:**
+
+- Score only sites a run met and left `unknown`. A farm no search returns costs nothing, and crawling
+  outward would send traffic to sites nobody asked about.
+- A survey is evidence, not proof, so it writes a new tag, `likely_farm`, of tier `low`, and never
+  `content_farm`. A false positive is ranked lower and gets no `site:` search, and counts 0.25 as a
+  corroboration, but stays readable. Only a `deny` or a list blocks a site.
+- A known kind, a mark, a config entry or any other tag beats the survey: only a tier of `unknown`
+  takes the tag. Without the Tranco list, nothing is tagged.
+- The tags endpoint takes at most 1,000 hosts.
+
+Build, one commit per step:
 
 1. A background job builds a local dataset in `sources.db` from the signals chosen in step 3 of
    the research. It reruns on a schedule and on new sites met in runs, never blocks a search, and
@@ -346,7 +404,7 @@ Build, once the research settles it; one commit per step:
 3. A tags endpoint, for other uses than a run: `GET /v1/sources/tags?host=a.com&host=b.org` and
    `POST /v1/sources/tags` with `{"hosts": [...]}` for a bulk, answering `{host: {kind, tags,
    tier}}` from what is known, without waiting on Wikidata. It sits next to `GET
-   /v1/sources/{host}` in `api/sources.py`, and answers 404 when `enabled` is false like the others.
+   /v1/sources/{host}` in `crates/kvasir-api/src/sources.rs`, and answers 404 when `enabled` is false like the others.
 4. Phase 6 runs again with the dataset on, and compares the share of `unknown` citations.
 
 ## Decisions
@@ -358,5 +416,4 @@ Settled 2026-11-04:
 - A site can be marked both from the Knowledge page and through `allow` and `deny` in the config;
   the config wins.
 
-Open, for phase 7: which signals and datasets to use, whether the dataset only scores sites a run
-met, and the bulk limit of the tags endpoint.
+Settled 2026-11-06, for phase 7: see its research report.
