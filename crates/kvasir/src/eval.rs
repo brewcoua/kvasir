@@ -424,7 +424,7 @@ mod tests {
     fn the_questions_parse() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../eval/questions.toml");
         let questions = toml::from_str::<Questions>(&std::fs::read_to_string(path).unwrap());
-        assert_eq!(questions.unwrap().question.len(), 20);
+        assert_eq!(questions.unwrap().question.len(), 21);
     }
 
     #[test]
