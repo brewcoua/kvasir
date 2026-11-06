@@ -229,12 +229,13 @@ pub const FIELDS: &[Field] = &[
     field(
         "fetch.render",
         Kind::Text { choices: &["auto", "off"] },
-        "auto renders a page that needs JavaScript, with the browser extra installed.",
+        "auto renders a page that needs JavaScript, in a build with Chromium: the image's browser \
+         target.",
     ),
     field(
         "fetch.stealth",
         Kind::Bool,
-        "Render through Patchright, which hides the signs of automation. Getting past a challenge \
+        "Start Chromium without the launch flags that name automation. Getting past a challenge \
          can break a site's terms.",
     ),
     field(
