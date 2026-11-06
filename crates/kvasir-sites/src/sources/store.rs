@@ -10,8 +10,8 @@ use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 use super::{Match, Survey};
 use crate::{SECONDS_PER_DAY, now};
 
-/// Three tables in one file: `sources` and `surveys`, caches that expire, and `marks`, which never
-/// do.
+/// Four tables in one file: `sources` and `surveys`, caches that expire, and `marks` and `lists`,
+/// which never do.
 #[derive(Clone, Debug)]
 pub struct SourceStore {
     db: Db,
@@ -157,6 +157,45 @@ impl SourceStore {
                 rows.collect()
             })
             .await
+    }
+
+    /// What was changed on each list, as JSON, by id.
+    pub async fn list_changes(&self) -> Result<Vec<(String, String)>, DbError> {
+        self.db
+            .call(|db| {
+                let mut found = db.prepare("SELECT id, change FROM lists ORDER BY rowid")?;
+                let rows = found.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+                rows.collect()
+            })
+            .await
+    }
+
+    pub async fn list_change(&self, id: &str) -> Result<Option<String>, DbError> {
+        let id = id.to_owned();
+        self.db
+            .call(move |db| {
+                db.query_row("SELECT change FROM lists WHERE id = ?", [id], |r| r.get(0)).optional()
+            })
+            .await
+    }
+
+    pub async fn put_list(&self, id: &str, change: String) -> Result<(), DbError> {
+        let id = id.to_owned();
+        self.db
+            .call(move |db| {
+                db.execute(
+                    "INSERT INTO lists VALUES (?1, ?2) \
+                     ON CONFLICT (id) DO UPDATE SET change = ?2",
+                    params![id, change],
+                )
+                .map(|_| ())
+            })
+            .await
+    }
+
+    pub async fn drop_list(&self, id: &str) -> Result<(), DbError> {
+        let id = id.to_owned();
+        self.db.call(move |db| db.execute("DELETE FROM lists WHERE id = ?", [id]).map(|_| ())).await
     }
 
     pub async fn mark(&self, host: &str, value: &str) -> Result<(), DbError> {

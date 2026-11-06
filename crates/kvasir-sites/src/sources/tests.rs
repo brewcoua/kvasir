@@ -10,6 +10,7 @@ use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 use super::wikidata::{INTERNATIONAL, MAX_BACKOFF, NAMESPACE};
 use super::*;
 use crate::SECONDS_PER_DAY;
+use kvasir_types::sites::ListChange;
 
 const WAIT: Duration = Duration::from_secs(5);
 const NEWSPAPER: &str = "Q11032";
@@ -638,6 +639,76 @@ fn lists_are_read_as_hosts_ublacklist_or_csv() {
 fn a_list_may_end_its_lines_in_a_lone_carriage_return() {
     let got = parse_list("a.example\rb.example\r").hosts;
     assert_eq!(got, HashSet::from(["a.example".to_owned(), "b.example".to_owned()]));
+}
+
+#[tokio::test]
+async fn a_catalog_list_keeps_what_was_changed_until_removed() {
+    let setting = Setting::new().await;
+    let sources = setting.service();
+
+    let change =
+        ListChange { enabled: Some(true), effect: Some("demote".to_owned()), ..<_>::default() };
+    let changed = sources.change_list("seo-garbage", change).await.unwrap();
+    sources
+        .change_list(
+            "seo-garbage",
+            ListChange { except: Some(vec!["WWW.A.org".to_owned()]), ..<_>::default() },
+        )
+        .await
+        .unwrap();
+
+    assert!(changed.enabled);
+    let later = setting.service().lists().await.unwrap();
+    let list = later.iter().find(|list| list.id == "seo-garbage").unwrap();
+    assert_eq!((list.enabled, list.effect.as_str()), (true, "demote"));
+    assert_eq!(list.except, ["a.org"]);
+    assert_eq!(later.len(), catalog().len());
+
+    sources.remove_list("seo-garbage").await.unwrap();
+    let back = sources.lists().await.unwrap();
+    let list = back.iter().find(|list| list.id == "seo-garbage").unwrap();
+    assert_eq!((list.enabled, list.effect.as_str()), (false, "block"));
+}
+
+#[tokio::test]
+async fn a_catalog_list_keeps_its_source_and_a_missing_list_is_refused() {
+    let setting = Setting::new().await;
+    let sources = setting.service();
+
+    let moved = ListChange { url: Some("https://l.example/a".to_owned()), ..<_>::default() };
+    assert!(matches!(sources.change_list("seo-garbage", moved).await, Err(ListError::Invalid(_))));
+    assert!(matches!(
+        sources.change_list("nope", ListChange::default()).await,
+        Err(ListError::Missing(_))
+    ));
+    assert!(matches!(sources.remove_list("nope").await, Err(ListError::Missing(_))));
+}
+
+#[tokio::test]
+async fn an_own_list_is_kept_changed_and_removed() {
+    let setting = Setting::new().await;
+    let sources = setting.service();
+
+    let added = sources
+        .add_list(ListChange {
+            name: Some("Mine".to_owned()),
+            entries: Some(vec!["Farm.org".to_owned()]),
+            ..<_>::default()
+        })
+        .await
+        .unwrap();
+    assert!(added.custom && added.enabled && added.id.starts_with("custom-"));
+    assert_eq!(added.effect, "block");
+
+    let change = ListChange { effect: Some("exempt".to_owned()), ..<_>::default() };
+    sources.change_list(&added.id, change).await.unwrap();
+    let lists = setting.service().lists().await.unwrap();
+    assert_eq!(lists.last().unwrap().effect, "exempt");
+
+    sources.remove_list(&added.id).await.unwrap();
+    assert_eq!(sources.lists().await.unwrap().len(), catalog().len());
+    let nameless = ListChange { entries: Some(vec!["a.org".to_owned()]), ..<_>::default() };
+    assert!(matches!(sources.add_list(nameless).await, Err(ListError::Invalid(_))));
 }
 
 #[test]

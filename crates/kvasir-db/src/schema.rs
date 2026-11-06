@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS marks (host TEXT PRIMARY KEY, value TEXT NOT NULL, ma
 CREATE TABLE IF NOT EXISTS sources (host TEXT PRIMARY KEY, kind TEXT, tags TEXT, label TEXT, qid TEXT, fetched_at REAL NOT NULL);
 ", "
 CREATE TABLE surveys (host TEXT PRIMARY KEY, urls INTEGER, dated INTEGER, rate REAL, evidence TEXT, surveyed_at REAL NOT NULL);
+", "
+CREATE TABLE lists (id TEXT PRIMARY KEY, change TEXT NOT NULL);
 "];
 
 #[cfg(test)]

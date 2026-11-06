@@ -11,6 +11,7 @@ Under `src/`.
 | `sources.rs` | `Sources`: a host's kind and tags, resolved in order from config, marks, lists, rules, cache and Wikidata. |
 | `sources/store.rs` | `sources.db`: Wikidata's answers, which expire, and the marks, which do not. |
 | `sources/lists.rs` | The downloaded host lists, refreshed on a TTL. |
+| `sources/catalog.rs` | The lists an operator can turn on, from `sources/catalog.toml`, and their own. |
 | `sources/rsp.rs` | Wikipedia's perennial sources list, as `rsp_*` tags. |
 | `sources/survey.rs` | Tags a site `likely_farm` from its sitemap and the Tranco list, in the background. |
 | `sources/wikidata.rs` | Batched Wikidata lookups, their backoff, and the SPARQL query. |

@@ -1,0 +1,211 @@
+# Lists an operator can turn on. URLs only: the lists are downloaded at runtime, and none is shipped.
+# `licence` is what the list's repository or SSSS's README states, "none" when it states nothing.
+
+[[list]]
+id = "content-farm-list"
+name = "Content Farm List"
+url = "https://raw.githubusercontent.com/wdmpa/content-farm-list/main/uBlacklist.txt"
+group = "SEO and farms"
+licence = "none"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "spamdexing-sites"
+name = "Spamdexing Sites"
+url = "https://raw.githubusercontent.com/elliotwutingfeng/SpamdexingSites/main/blocklist.txt"
+group = "SEO and farms"
+licence = "BSD-3-Clause"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "ublock-origin-dev-filter"
+name = "uBlock Origin dev filter"
+url = "https://raw.githubusercontent.com/quenhus/uBlock-Origin-dev-filter/main/dist/other_format/domains/global.txt"
+group = "SEO and farms"
+licence = "Unlicense"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "seo-garbage"
+name = "SEO garbage"
+url = "https://raw.githubusercontent.com/insomnimus/seo-garbage/main/list.txt"
+group = "SEO and farms"
+licence = "Apache-2.0"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "bad-website-blocklist"
+name = "Bad Website Blocklist"
+url = "https://raw.githubusercontent.com/popcar2/BadWebsiteBlocklist/main/uBlacklist.txt"
+group = "SEO and farms"
+licence = "CC0-1.0"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "ublacklist-stackoverflow"
+name = "uBlacklist Stack Overflow translations"
+url = "https://raw.githubusercontent.com/arosh/ublacklist-stackoverflow-translation/master/uBlacklist.txt"
+group = "SEO and farms"
+licence = "CC0-1.0"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "ublacklist-github"
+name = "uBlacklist GitHub translations"
+url = "https://raw.githubusercontent.com/arosh/ublacklist-github-translation/master/uBlacklist.txt"
+group = "SEO and farms"
+licence = "CC0-1.0"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "my-filters-clickbait"
+name = "my_filters_001 clickbait"
+url = "https://raw.githubusercontent.com/iam-py-test/my_filters_001/main/Alternative%20list%20formats/clickbait_domains.txt"
+group = "SEO and farms"
+licence = "CC0-1.0"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "steamdeck-spamblock"
+name = "Steam Deck spam block"
+url = "https://raw.githubusercontent.com/LiamDawe/steamdeck_spamblock/main/PLAIN_LIST"
+group = "SEO and farms"
+licence = "MIT"
+effect = "block"
+tag = "seo_spam"
+
+[[list]]
+id = "red-flag-domains"
+name = "Red Flag Domains"
+url = "https://dl.red.flag.domains/red.flag.domains.txt"
+group = "Scams and fakes"
+licence = "CC-BY-NC-SA-4.0"
+effect = "block"
+tag = "scam"
+
+[[list]]
+id = "hagezi-fake"
+name = "HaGeZi Fake"
+url = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/fake-onlydomains.txt"
+group = "Scams and fakes"
+licence = "GPL-3.0"
+effect = "block"
+tag = "scam"
+
+[[list]]
+id = "aliexpress-fake-sites"
+name = "AliExpress fake sites"
+url = "https://raw.githubusercontent.com/franga2000/aliexpress-fake-sites/main/domains.txt"
+group = "Scams and fakes"
+licence = "none"
+effect = "block"
+tag = "scam"
+
+[[list]]
+id = "aliexpress-fake-sites-fork"
+name = "AliExpress fake sites (levitation fork)"
+url = "https://raw.githubusercontent.com/levitation-opensource/aliexpress-fake-sites/main/domains.txt"
+group = "Scams and fakes"
+licence = "none"
+effect = "block"
+tag = "scam"
+
+[[list]]
+id = "my-filters-antitypo"
+name = "my_filters_001 antitypo"
+url = "https://raw.githubusercontent.com/iam-py-test/my_filters_001/main/Alternative%20list%20formats/antitypo_domains.txt"
+group = "Scams and fakes"
+licence = "CC0-1.0"
+effect = "block"
+tag = "scam"
+
+[[list]]
+id = "pihole-dropshipping"
+name = "Pi-hole dropshipping"
+url = "https://raw.githubusercontent.com/pihole-blacklists/blacklists/master/blacklists/dropshipping"
+group = "Scams and fakes"
+licence = "none"
+effect = "block"
+tag = "scam"
+
+[[list]]
+id = "anti-malware-domains"
+name = "Dandelion Sprout's Anti-Malware Domains"
+url = "https://raw.githubusercontent.com/DandelionSprout/adfilt/refs/heads/master/Alternate%20versions%20Anti-Malware%20List/AntiMalwareDomains.txt"
+group = "Malware"
+licence = "Dandelicence"
+effect = "block"
+tag = "malware"
+
+[[list]]
+id = "nocoin"
+name = "NoCoin"
+url = "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/refs/heads/master/hosts.txt"
+group = "Malware"
+licence = "MIT"
+effect = "block"
+tag = "malware"
+
+[[list]]
+id = "my-filters-antipup"
+name = "my_filters_001 antipup"
+url = "https://raw.githubusercontent.com/iam-py-test/my_filters_001/main/Alternative%20list%20formats/antipup_domains.txt"
+group = "Malware"
+licence = "CC0-1.0"
+effect = "block"
+tag = "malware"
+
+# Names sites such as cnet.com and opera.com for piracy-related reasons, so it does not hide them.
+[[list]]
+id = "fmhy"
+name = "FMHY filterlist"
+url = "https://raw.githubusercontent.com/fmhy/FMHYFilterlist/refs/heads/main/filterlist-domains.txt"
+group = "Malware"
+licence = "GPL-3.0"
+effect = "demote"
+tag = "malware"
+
+# The AI lists name chatgpt.com, openai.com and claude.ai: blocking them stops research on those.
+[[list]]
+id = "ai-ublock-blacklist"
+name = "AI uBlock Origin Blacklist"
+url = "https://raw.githubusercontent.com/alvi-se/ai-ublock-blacklist/refs/heads/master/ublacklist.txt"
+group = "AI"
+licence = "GPL-3.0"
+effect = "demote"
+tag = "ai_slop"
+
+[[list]]
+id = "image-search-ai-blocklist"
+name = "image-search AI Blocklist"
+url = "https://codeberg.org/just_a_husk/uBlockOrigin-AI-Blocklist/raw/branch/main/noai_hosts.txt"
+group = "AI"
+licence = "CC0-1.0"
+effect = "demote"
+tag = "ai_slop"
+
+[[list]]
+id = "huge-ai-blocklist"
+name = "HUGE AI Blocklist"
+url = "https://raw.githubusercontent.com/laylavish/uBlockOrigin-HUGE-AI-Blocklist/main/noai_hosts.txt"
+group = "AI"
+licence = "CC0-1.0"
+effect = "demote"
+tag = "ai_slop"
+
+[[list]]
+id = "ublacklist-ai"
+name = "uBlacklist AI"
+url = "https://raw.githubusercontent.com/PrincessAkira/ublacklist-ai/main/ublacklist-ai.txt"
+group = "AI"
+licence = "Apache-2.0"
+effect = "demote"
+tag = "ai_slop"

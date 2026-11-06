@@ -8,6 +8,7 @@
 //! URL built from one.
 //! Nothing here is built unless `[sources] enabled`; the caller decides that.
 
+mod catalog;
 mod lists;
 mod rsp;
 mod store;
@@ -28,6 +29,7 @@ use tokio::sync::{Semaphore, watch};
 use tokio::time::{Instant, timeout_at};
 use url::Url;
 
+pub use catalog::{ListError, catalog};
 use lists::Lists;
 pub use lists::{Parsed, parse_list};
 use rsp::RSP_URL;

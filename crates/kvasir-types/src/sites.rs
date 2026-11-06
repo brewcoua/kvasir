@@ -23,6 +23,72 @@ pub fn is_list_label(label: &str) -> bool {
     KINDS[..KINDS.len() - 1].contains(&label) || LIST_TAGS.contains(&label)
 }
 
+/// Whether `effect` is what a list can do: `block`, `demote`, `exempt`, `trust`, or `kind:<kind>`.
+pub fn is_list_effect(effect: &str) -> bool {
+    matches!(effect, "block" | "demote" | "exempt" | "trust")
+        || effect.strip_prefix("kind:").is_some_and(|kind| KINDS[..KINDS.len() - 1].contains(&kind))
+}
+
+/// Whether a list may give sites `tag`: a label, which must not set a tier by itself. Empty is none.
+pub fn is_list_tag(tag: &str) -> bool {
+    let word = tag.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+    let reserved = AVOID_TAGS.contains(&tag)
+        || ["allow", "blocked", "demoted", "exempt", "official", "community", "likely_farm"]
+            .contains(&tag)
+        || tag.starts_with("rsp_");
+    word && !reserved
+}
+
+/// A list of hosts, from the catalog or the operator's own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SourceList {
+    pub id: String,
+    pub name: String,
+    /// Where it is downloaded from. None for a list typed in as `entries`.
+    pub url: Option<String>,
+    pub entries: Vec<String>,
+    pub enabled: bool,
+    /// `block`, `demote`, `exempt`, `trust`, or `kind:<kind>`.
+    pub effect: String,
+    /// A label its sites show, or empty.
+    pub tag: String,
+    /// Days between downloads. None for `sources.ttl_days`.
+    pub ttl_days: Option<u64>,
+    /// Whether popular sites and those a suffix rule decides are spared.
+    pub guard: bool,
+    /// Hosts, with their subdomains, this list does not apply to.
+    pub except: Vec<String>,
+    pub group: String,
+    /// What the list's own repository states, `none` when nothing. Empty for the operator's lists.
+    pub licence: String,
+    pub custom: bool,
+}
+
+/// What to change on a list: only the fields given. A catalog list keeps its `url` and `entries`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListChange {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    /// 0 goes back to `sources.ttl_days`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttl_days: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guard: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub except: Option<Vec<String>>,
+}
+
 /// The kinds that make a site `high` on their own.
 const HIGH_KINDS: [&str; 4] = ["intergovernmental", "government", "academic", "standards"];
 const AVOID_TAGS: [&str; 5] =
@@ -202,5 +268,21 @@ mod tests {
         assert!(is_list_label("predatory"));
         assert!(!is_list_label("unknown"));
         assert!(!is_list_label("rsp_reliable"));
+    }
+
+    #[test]
+    fn a_list_effect_and_tag_are_checked() {
+        for good in ["block", "demote", "exempt", "trust", "kind:news"] {
+            assert!(is_list_effect(good), "{good}");
+        }
+        for bad in ["", "allow", "kind:", "kind:unknown", "kind:shiny"] {
+            assert!(!is_list_effect(bad), "{bad}");
+        }
+        for good in ["", "seo_spam", "ai2"] {
+            assert!(is_list_tag(good), "{good}");
+        }
+        for bad in ["deny", "allow", "blocked", "content_farm", "rsp_reliable", "Has Space"] {
+            assert!(!is_list_tag(bad), "{bad}");
+        }
     }
 }
