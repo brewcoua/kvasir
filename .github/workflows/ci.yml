@@ -56,20 +56,20 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web
+        working-directory: clients/web
     steps:
       - uses: actions/checkout@v7
 
       # The version is package.json's packageManager field.
       - uses: pnpm/action-setup@v6.1.0
         with:
-          package_json_file: web/package.json
+          package_json_file: clients/web/package.json
 
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: clients/web/pnpm-lock.yaml
 
       # `pnpm types` and the e2e service run the kvasir binary.
       - run: rustup show active-toolchain || rustup toolchain install

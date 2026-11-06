@@ -8,11 +8,11 @@ RUN npm install --global pnpm@12.15.0
 
 WORKDIR /app/web
 
-COPY web/package.json web/pnpm-lock.yaml ./
+COPY clients/web/package.json clients/web/pnpm-lock.yaml ./
 RUN --mount=type=cache,target=/pnpm/store \
     pnpm install --frozen-lockfile --store-dir /pnpm/store
 
-COPY web ./
+COPY clients/web ./
 RUN pnpm build
 
 
@@ -24,7 +24,7 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-COPY --from=web /app/web/dist ./web/dist
+COPY --from=web /app/web/dist ./clients/web/dist
 
 # The target directory is a cache mount, so the binary is copied out in the same step.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

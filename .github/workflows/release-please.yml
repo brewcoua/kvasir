@@ -125,7 +125,7 @@ jobs:
       #   gh attestation verify pipe.py --repo brewcoua/kvasir
       - uses: actions/attest-build-provenance@v4
         with:
-          subject-path: owui/pipe.py
+          subject-path: clients/owui/pipe.py
 
       # The App token is revoked when its job ends and cannot cross jobs. Uploading an asset and
       # editing release notes need to trigger nothing, so the built-in token is enough here.
@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh release upload "$TAG" owui/pipe.py --clobber
+          gh release upload "$TAG" clients/owui/pipe.py --clobber
 
           # Read the generated changelog back and append to it, rather than replacing the notes.
           {

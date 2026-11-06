@@ -1,6 +1,6 @@
 # Open WebUI function
 
-One Pipe function, `pipe.py`, that drives a [kvasir](../README.md) service and exposes two models:
+One Pipe function, `pipe.py`, that drives a [kvasir](../../README.md) service and exposes two models:
 **Research** answers a question with a cited report, **STORM** researches a topic and returns a
 cited article.
 

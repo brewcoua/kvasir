@@ -1,4 +1,4 @@
-//! The runs page, built from `web/` by `pnpm build`, which the image does and a checkout has to.
+//! The runs page, built from `clients/web/` by `pnpm build`, which the image does and a checkout has to.
 //! Nothing it loads comes from another origin.
 
 use axum::extract::Path;
@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 // Read from disk in a debug build, and built into the binary in a release one. Not required at
 // build time, so the service still builds from a checkout where the page is not built.
 #[derive(rust_embed::Embed)]
-#[folder = "../../web/dist"]
+#[folder = "../../clients/web/dist"]
 #[allow_missing = true]
 struct Built;
 
@@ -17,7 +17,7 @@ pub async fn index() -> Response {
         Some(file) => ([(header::CONTENT_TYPE, "text/html")], file.data).into_response(),
         None => (
             StatusCode::SERVICE_UNAVAILABLE,
-            "The runs page is not built. Run `pnpm build` in web/.",
+            "The runs page is not built. Run `pnpm build` in clients/web/.",
         )
             .into_response(),
     }

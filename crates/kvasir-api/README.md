@@ -24,5 +24,5 @@ Under `src/`.
 | `sources.rs` | Source kinds, user marks and site icons. |
 | `settings.rs` | The stored settings: what each is, its value, and changing it. |
 | `providers.rs` | The providers in the environment and the models each serves. |
-| `page.rs` | The runs page, built from `web/`. |
+| `page.rs` | The runs page, built from `clients/web/`. |
 | `openapi.rs` | The OpenAPI document, for `kvasir openapi`. |

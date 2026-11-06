@@ -17,7 +17,7 @@ import pytest
 from harness import TOKEN, Fakes, Service
 from test_contract_runs import _start, body
 
-PIPE_PATH = Path(__file__).parents[2] / "owui" / "pipe.py"
+PIPE_PATH = Path(__file__).parents[2] / "clients" / "owui" / "pipe.py"
 
 
 def load_pipe() -> Any:

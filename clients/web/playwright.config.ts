@@ -24,7 +24,7 @@ export default defineConfig({
     },
     {
       // Nothing stored in its data directory, so it starts as a first start does.
-      command: "pnpm build && cargo run -q --manifest-path ../Cargo.toml -p kvasir -- serve",
+      command: "pnpm build && cargo run -q --manifest-path ../../Cargo.toml -p kvasir -- serve",
       url: `${SERVICE}/healthz`,
       env: {
         KVASIR_PROVIDER_UNUSED_API_BASE: "http://127.0.0.1:9",

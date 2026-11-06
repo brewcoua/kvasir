@@ -449,7 +449,7 @@ own address, so a reload or a shared link keeps it.
 Figures update live while the run is in progress. The theme selector in the header offers
 `system`, `light`, `dark`, `paper`, `riso`, `amber`, `moss` and `navy`, and the choice is kept in
 the browser. The page loads nothing from another origin, since the image is read-only and offline.
-Its source is in [`web/`](web/); see [Work on the runs page](#work-on-the-runs-page).
+Its source is in [`clients/web/`](clients/web/); see [Work on the runs page](#work-on-the-runs-page).
 
 The same data is available as JSON.
 
@@ -708,11 +708,11 @@ by stage, by role and by model, which is enough to decide whether the defaults s
 
 ## Open WebUI
 
-One Pipe function lives under [`owui/`](owui/), exposing research and STORM
+One Pipe function lives under [`clients/owui/`](clients/owui/), exposing research and STORM
 as two models. Research asks its clarifying questions as a first reply. It writes a run's progress into the message as it happens, turns sources into citations,
 and reports what the run spent. Open WebUI's own title, tag and follow-up generation is routed to
 `POST /v1/tasks`, so naming a chat does not cost a run. Installation instructions and a valve
-reference are in [`owui/README.md`](owui/README.md).
+reference are in [`clients/owui/README.md`](clients/owui/README.md).
 
 ## Development
 
@@ -749,18 +749,18 @@ upstream. Read it before changing `crates/kvasir-storm`.
 
 ### Work on the runs page
 
-The page is a Svelte app in `web/`, built with Vite into `web/dist/`, which is not committed. It
-needs Node 26 and pnpm.
+The page is a Svelte app in `clients/web/`, built with Vite into `clients/web/dist/`, which is not
+committed. It needs Node 26 and pnpm.
 
 ```bash
-cd web
+cd clients/web
 pnpm install
-pnpm dev:mock   # the page on localhost:5173, its API answered from web/fixtures/
+pnpm dev:mock   # the page on localhost:5173, its API answered from fixtures/
 pnpm dev        # the same, with /v1 proxied to a kvasir on localhost:8080
-pnpm build      # into web/dist/, which the service serves and a release build embeds
+pnpm build      # into dist/, which the service serves and a release build embeds
 ```
 
-`pnpm dev:mock` needs no gateway, search engine or run. Each file in `web/fixtures/` is a run named
+`pnpm dev:mock` needs no gateway, search engine or run. Each file in `clients/web/fixtures/` is a run named
 after it, and `#/runs/<name>/result` opens its result directly: `#/runs/ranking/result` shows the
 ranking table. Two more runs are made from `ranking.json`: `running`, frozen partway, and `live`,
 replayed at 20 times its real pace and started again once it ends. Set `MOCK_SPEED` to change the
@@ -776,7 +776,7 @@ A fixture is a run's detail as `GET /v1/runs/{id}` returns it. To add one from a
 SQLite history:
 
 ```bash
-curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/<run id> > web/fixtures/<name>.json
+curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/<run id> > clients/web/fixtures/<name>.json
 ```
 
 To include its calls' content, with the run kept by a service started with
@@ -784,20 +784,20 @@ To include its calls' content, with the run kept by a service started with
 
 ```bash
 run=<run id>
-for n in $(jq -r '.calls[] | select(.has_content) | .id' web/fixtures/<name>.json); do
+for n in $(jq -r '.calls[] | select(.has_content) | .id' clients/web/fixtures/<name>.json); do
   curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/$run/calls/$n | jq -c --arg n "$n" '{($n): .}'
-done | jq -s -c add > web/fixtures/<name>.calls.json
+done | jq -s -c add > clients/web/fixtures/<name>.calls.json
 ```
 
 Its searches' results are fetched the same way:
 
 ```bash
-for n in $(jq -r '.searches[] | select(.has_content) | .id' web/fixtures/<name>.json); do
+for n in $(jq -r '.searches[] | select(.has_content) | .id' clients/web/fixtures/<name>.json); do
   curl -s -H "Authorization: Bearer $KVASIR_TOKEN" localhost:8080/v1/runs/$run/searches/$n | jq -c --arg n "$n" '{($n): .}'
-done | jq -s -c add > web/fixtures/<name>.searches.json
+done | jq -s -c add > clients/web/fixtures/<name>.searches.json
 ```
 
-The TypeScript types in `web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
+The TypeScript types in `clients/web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
 Run `pnpm types` after changing a type in `crates/kvasir-types/` or `crates/kvasir-api/`; it builds
 and runs `kvasir openapi`, and CI fails when the types differ.
 

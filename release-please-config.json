@@ -8,7 +8,7 @@
       "include-v-in-tag": true,
       "include-component-in-tag": false,
       "extra-files": [
-        "owui/pipe.py",
+        "clients/owui/pipe.py",
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(!@.source)].version" }
       ]

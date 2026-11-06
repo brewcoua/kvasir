@@ -16,7 +16,7 @@ Solid arrows are requests kvasir makes or serves. Dotted arrows are files it wri
 
 ```mermaid
 flowchart LR
-    owui["Open WebUI<br/>owui/pipe.py"]
+    owui["Open WebUI<br/>clients/owui/pipe.py"]
     browser["Browser<br/>runs page"]
     curl["Any HTTP client"]
 
@@ -50,7 +50,7 @@ flowchart LR
 The workspace is one crate per concern, under `crates/`. [`crates/README.md`](../crates/README.md)
 lists them by layer, and each crate's own README lists its modules.
 
-The runs page is built from `web/` into `web/dist` by `pnpm build` and not committed. A debug build
+The runs page is built from `clients/web/` into `clients/web/dist` by `pnpm build` and not committed. A debug build
 reads it from disk and a release build embeds it. `GET /` answers 503 until it is built.
 
 ## Three ways to produce something
@@ -268,7 +268,7 @@ Expiry of stored runs happens at startup and each time a run is written. There i
 
 ## Open WebUI
 
-`owui/pipe.py` is one Pipe function exposing two models: `kvasir.research` and `kvasir.storm`. It
+`clients/owui/pipe.py` is one Pipe function exposing two models: `kvasir.research` and `kvasir.storm`. It
 keeps no state of its own: it uses only aiohttp, pydantic and the standard
 library, which Open WebUI already ships, and finds everything it needs by reading the chat back.
 
@@ -306,7 +306,7 @@ sequenceDiagram
 - STORM ignores conversation history. A follow-up starts a new run, so the pipe asks first when
   `CONFIRM_RERUN` is on.
 
-The valve reference is in [`owui/README.md`](../owui/README.md).
+The valve reference is in [`clients/owui/README.md`](../clients/owui/README.md).
 
 ## Decisions
 

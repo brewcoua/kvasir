@@ -9,7 +9,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "e2e": "playwright test",
-    "types": "cargo run -q --manifest-path ../Cargo.toml -p kvasir -- openapi > .tmp-openapi.json && openapi-typescript .tmp-openapi.json -o src/lib/schema.d.ts && rm .tmp-openapi.json"
+    "types": "cargo run -q --manifest-path ../../Cargo.toml -p kvasir -- openapi > .tmp-openapi.json && openapi-typescript .tmp-openapi.json -o src/lib/schema.d.ts && rm .tmp-openapi.json"
   },
   "packageManager": "pnpm@12.15.0",
   "dependencies": {
