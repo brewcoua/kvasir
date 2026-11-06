@@ -121,6 +121,7 @@ pub struct SearchSettings {
     pub exa: KeyedSettings,
     pub mojeek: KeyedSettings,
     pub wikipedia: OpenSettings,
+    pub arxiv: OpenSettings,
 }
 
 impl SearchSettings {
@@ -143,6 +144,7 @@ impl Default for SearchSettings {
             exa: KeyedSettings::default(),
             mojeek: KeyedSettings::default(),
             wikipedia: OpenSettings::default(),
+            arxiv: OpenSettings::default(),
         }
     }
 }

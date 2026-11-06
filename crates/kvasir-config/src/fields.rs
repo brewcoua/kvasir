@@ -216,6 +216,8 @@ pub const FIELDS: &[Field] = &[
     field("search.mojeek.weight", Kind::Float, "Its weight when results are fused."),
     field("search.wikipedia.enabled", Kind::Bool, "Search English Wikipedia."),
     field("search.wikipedia.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.arxiv.enabled", Kind::Bool, "Search arXiv's preprints."),
+    field("search.arxiv.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

@@ -43,6 +43,7 @@ idna = "1.1"
 indexmap = { version = "2", features = ["serde"] }
 pdf_oxide = "0.3.78"
 psl = "2"
+quick-xml = { version = "0.42", features = ["serialize"] }
 regex = "1"
 reqwest = { version = "0.13", default-features = false, features = ["brotli", "deflate", "gzip", "json", "rustls"] }
 rlimit = "0.11"

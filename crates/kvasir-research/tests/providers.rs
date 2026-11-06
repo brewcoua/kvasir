@@ -4,7 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use kvasir_fetch::{Guard, Options, Web, system_lookup};
-use kvasir_research::providers::{Brave, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia};
+use kvasir_research::providers::{
+    Arxiv, Brave, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia,
+};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -295,5 +297,84 @@ mod wikipedia {
         let failure = at(&server).query("q").await.unwrap_err();
 
         assert!(matches!(failure, Failure::Other(_)), "{failure:?}");
+    }
+}
+
+mod arxiv {
+    use super::*;
+
+    fn at(server: &MockServer) -> Arxiv {
+        Arxiv::at(&format!("{}/s", server.uri()))
+    }
+
+    const FEED: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="html">ArXiv Query</title>
+  <id>http://arxiv.org/api/abc</id>
+  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">2</opensearch:totalResults>
+  <entry>
+    <id>http://arxiv.org/abs/2401.00001v1</id>
+    <title>A long
+      title</title>
+    <summary>  Bounds on a &lt; b
+      and more.
+    </summary>
+    <author><name>A. Author</name></author>
+    <link href="http://arxiv.org/abs/2401.00001v1" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2401.00001v1" rel="related"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2401.00002v2</id>
+    <title>Short</title>
+    <summary>Text.</summary>
+  </entry>
+</feed>"#;
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(query_param("search_query", "all:the query"))
+            .and(query_param("max_results", "20"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(FEED))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [
+                row(
+                    "https://arxiv.org/abs/2401.00001v1",
+                    "A long title",
+                    "Bounds on a < b and more."
+                ),
+                row("https://arxiv.org/abs/2401.00002v2", "Short", "Text."),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_feed_with_no_entries_is_no_results() {
+        let empty =
+            r#"<feed xmlns="http://www.w3.org/2005/Atom"><title>ArXiv Query</title></feed>"#;
+        let server = answering(ResponseTemplate::new(200).set_body_string(empty)).await;
+
+        assert_eq!(at(&server).query("q").await, Ok(Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn an_error_comes_as_an_entry() {
+        let feed = r#"<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+            <id>http://arxiv.org/api/errors#incorrect_id_format</id>
+            <title>Error</title>
+            <summary>incorrect id format</summary>
+        </entry></feed>"#;
+        let server = answering(ResponseTemplate::new(200).set_body_string(feed)).await;
+
+        assert_eq!(at(&server).query("q").await, Err(Failure::Other("incorrect id format".into())));
     }
 }

@@ -10,6 +10,7 @@
 //! different engines do not compare. A provider that failed is left alone for as long as its
 //! failure says, and the others carry the query.
 
+mod arxiv;
 mod brave;
 mod exa;
 mod mojeek;
@@ -34,6 +35,7 @@ use serde::Serialize;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::time::Instant;
 
+pub use arxiv::Arxiv;
 pub use brave::Brave;
 pub use exa::Exa;
 pub use mojeek::Mojeek;
@@ -309,6 +311,9 @@ impl Providers {
         }
         if settings.wikipedia.enabled {
             providers.push((Box::new(Wikipedia::new(Arc::clone(&web))), settings.wikipedia.weight));
+        }
+        if settings.arxiv.enabled {
+            providers.push((Box::new(Arxiv::default()), settings.arxiv.weight));
         }
         Self::new(providers, web)
     }

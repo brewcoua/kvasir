@@ -1943,6 +1943,7 @@ dependencies = [
  "kvasir-testkit",
  "kvasir-types",
  "psl",
+ "quick-xml",
  "regex",
  "reqwest",
  "serde",

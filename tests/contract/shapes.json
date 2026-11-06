@@ -3736,6 +3736,8 @@
   "search.tavily.weight": "string",
   "search.wikipedia.enabled": "string",
   "search.wikipedia.weight": "string",
+  "search.arxiv.enabled": "string",
+  "search.arxiv.weight": "string",
   "search.searxng.enabled": "string",
   "search.searxng.url": "string",
   "search.searxng.weight": "string",
