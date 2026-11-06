@@ -128,6 +128,8 @@ mod tests {
             crate::Key::for_tests().connect(dir.path().join("kvasir.db.pre-rust.bak")).unwrap();
         let runs: i64 = copy.query_row("SELECT count(*) FROM runs", [], |r| r.get(0)).unwrap();
         assert_eq!(runs, 3);
+        let bytes = std::fs::read(dir.path().join("kvasir.db.pre-rust.bak")).unwrap();
+        assert!(!bytes.starts_with(b"SQLite format 3"), "VACUUM INTO keeps the key");
     }
 
     #[test]

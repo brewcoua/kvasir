@@ -1,6 +1,6 @@
 # Encryption at rest: plan
 
-Status: written 2026-11-06. Phases 1 to 3 built 2026-11-06.
+Status: written 2026-11-06. Phases 1 to 4 built 2026-11-06.
 
 Every file in `KVASIR_DATA_DIR` is plain SQLite. Anyone who gets a copy of the directory or a backup
 of it reads the runs (questions, prompts, answers, the searches made), the cached pages of what was
@@ -104,9 +104,8 @@ A wrong key shows on the first read: SQLCipher answers `file is not a database`.
    replaced. A plain `<file>.pre-rust.bak` is encrypted the same way. The conversion needs free disk
    for one more copy of each file, and the plain file is gone afterwards, so the release notes tell
    operators to back up the directory first. Commit.
-4. Backups. `Db::backup` (`kvasir-db/src/lib.rs:114`) runs `VACUUM INTO` for the pre-Rust upgrade.
-   Test whether its output is encrypted under SQLCipher; if not, export with `sqlcipher_export`
-   instead. Commit.
+4. Backups. `Db::backup` (`kvasir-db/src/lib.rs`) runs `VACUUM INTO` for the pre-Rust upgrade. Its
+   output is encrypted under the same key, which a test pins. Commit.
 5. Measure. Time a run and `pieces_fts` searches on a `pages.db` of realistic size, before and
    after. Record the figures here. Commit.
 6. Docs. README: the environment table, the quickstart (`openssl rand -hex 32`), what is
