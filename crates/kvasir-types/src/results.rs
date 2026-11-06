@@ -1,11 +1,12 @@
 //! What a run produces, as its `done` event and its detail carry it.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub use crate::sites::{SourceInfo, Tier};
 
 /// One source, numbered as the article's `[n]` markers reference it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Citation {
     pub index: u64,
     pub url: String,
@@ -17,7 +18,7 @@ pub struct Citation {
 }
 
 /// Payload of the `done` event of a STORM run.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ArticleResult {
     pub article: String,
     pub outline: String,
@@ -25,7 +26,7 @@ pub struct ArticleResult {
     pub duration_seconds: f64,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Output {
     #[default]
@@ -34,7 +35,7 @@ pub enum Output {
     Table,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
     High,
@@ -43,7 +44,7 @@ pub enum Confidence {
 }
 
 /// One piece of evidence, with the verbatim quote it was read from.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ResearchClaim {
     pub id: u64,
     pub text: String,
@@ -64,7 +65,7 @@ pub struct ResearchClaim {
     pub contradicted_by: Vec<u64>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum QuestionStatus {
     Open,
@@ -75,7 +76,7 @@ pub enum QuestionStatus {
 }
 
 /// One question the research searched for, and how far it got.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ResearchQuestion {
     pub id: u64,
     pub text: String,
@@ -94,7 +95,7 @@ pub struct ResearchQuestion {
 }
 
 /// The step of verification that decided a sentence.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum VerifyStage {
     Citation,
@@ -106,7 +107,7 @@ pub enum VerifyStage {
 }
 
 /// A sentence verification took out of the report, and why.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RemovedSentence {
     pub section: String,
     /// As written, so its `[n]` markers are claim ids rather than source numbers.
@@ -117,7 +118,7 @@ pub struct RemovedSentence {
 }
 
 /// A sentence verification found partly unsupported and rewrote to what its quotes say.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RevisedSentence {
     pub section: String,
     pub before: String,
@@ -126,7 +127,7 @@ pub struct RevisedSentence {
 }
 
 /// A sentence no step could judge, left in the report marked `[unverified]`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct UnverifiedSentence {
     pub section: String,
     pub sentence: String,
@@ -134,14 +135,14 @@ pub struct UnverifiedSentence {
 }
 
 /// A sentence whose cited claims all come from sites of low trust, left in the report.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LowTrustSentence {
     pub section: String,
     pub sentence: String,
 }
 
 /// What a ranking or a table compares on, and how much it counts in the overall rank, 1 to 3.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Criterion {
     pub name: String,
     #[serde(default = "one")]
@@ -153,7 +154,7 @@ fn one() -> u8 {
 }
 
 /// What the evidence says about one entity on one criterion.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Cell {
     pub criterion: String,
     /// Empty when no claim spoke to it.
@@ -165,7 +166,7 @@ pub struct Cell {
 }
 
 /// One entity of a ranking or a table.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Row {
     pub entity: String,
     /// Overall place, from the weighted mean of its criterion ranks. Rankings only.
@@ -175,7 +176,7 @@ pub struct Row {
 }
 
 /// Payload of the `done` event of a research run.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ResearchResult {
     pub report: String,
     /// What the brief had to decide that the question and the clarifications left open.
@@ -204,7 +205,7 @@ pub struct ResearchResult {
 }
 
 /// What a run can produce. Told apart by their fields, as pydantic's union was.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum RunResult {
     Article(ArticleResult),

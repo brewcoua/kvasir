@@ -10,6 +10,7 @@ publish.workspace = true
 idna.workspace = true
 indexmap.workspace = true
 psl.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

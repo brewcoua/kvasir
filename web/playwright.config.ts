@@ -24,12 +24,14 @@ export default defineConfig({
     },
     {
       // Nothing stored in its data directory, so it starts as a first start does.
-      command: "pnpm build && uv run uvicorn kvasir.api.app:app --host 127.0.0.1 --port 8765",
+      command: "pnpm build && cargo run -q --manifest-path ../Cargo.toml -p kvasir -- serve",
       url: `${SERVICE}/healthz`,
       env: {
         KVASIR_PROVIDER_UNUSED_API_BASE: "http://127.0.0.1:9",
         KVASIR_DATA_DIR: "test-results/data",
         KVASIR_TOKEN: "e2e-token",
+        KVASIR_HOST: "127.0.0.1",
+        KVASIR_PORT: "8765",
       },
       timeout: 120_000,
       reuseExistingServer: false,

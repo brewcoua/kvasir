@@ -1,5 +1,6 @@
 //! What the routes take, and the answers of the calls that are not runs.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -7,38 +8,38 @@ use crate::results::Output;
 
 /// Body of `POST /v1/tasks`: OpenAI-shaped chat messages, forwarded to the fast model as-is. At
 /// least one.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct TaskRequest {
     pub messages: Vec<std::collections::BTreeMap<String, String>>,
 }
 
 /// Payload of `POST /v1/tasks`. One completion, unparsed.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct TaskResponse {
     pub content: String,
 }
 
 /// One question `/v1/clarify` asked, and the user's answer to it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Clarification {
     pub question: String,
     pub answer: String,
 }
 
 /// Body of `POST /v1/clarify`. The question is not empty.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ClarifyRequest {
     pub question: String,
 }
 
 /// Payload of `POST /v1/clarify`. Empty when the question needs no clarifying.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ClarifyResponse {
     pub questions: Vec<String>,
 }
 
 /// What a run is about. For STORM, the question is the article's topic. It is not empty.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Input {
     pub question: String,
     /// Only a method that clarifies reads them.
@@ -46,7 +47,7 @@ pub struct Input {
     pub clarifications: Vec<Clarification>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Frontier {
     /// Searches the least tried question first.
@@ -58,7 +59,7 @@ pub enum Frontier {
 }
 
 /// Options of the `ledger` method. The budgets fall back to the configured defaults.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LedgerOptions {
     #[serde(default)]
@@ -104,7 +105,7 @@ pub struct LedgerOptions {
 }
 
 /// Options of the `graph` method. The budgets fall back to the configured defaults.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GraphOptions {
     /// Minutes the research may search for, before the report is written. Above 0.
@@ -145,7 +146,7 @@ impl Default for GraphOptions {
 }
 
 /// Options of the `storm` method. Each falls back to the configured default when omitted.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StormOptions {
     #[serde(default)]
@@ -177,7 +178,7 @@ fn twenty() -> f64 {
 }
 
 /// Body of `POST /v1/runs`, one variant per method.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "method", rename_all = "lowercase")]
 pub enum RunRequest {
     Ledger {
@@ -198,7 +199,7 @@ pub enum RunRequest {
 }
 
 /// One entry of `GET /v1/methods`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct MethodInfo {
     pub name: String,
     /// Whether a client should ask `/v1/clarify` before starting it.

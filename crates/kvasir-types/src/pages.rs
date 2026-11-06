@@ -1,12 +1,13 @@
 //! The page cache as the knowledge page shows it.
 
 use indexmap::IndexMap;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::sites::SourceInfo;
 
 /// One domain with pages cached.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Site {
     pub domain: String,
     pub pages: u64,
@@ -19,7 +20,7 @@ pub struct Site {
 }
 
 /// One cached page, without its text.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct PageSummary {
     pub id: String,
     pub url: String,
@@ -32,7 +33,7 @@ pub struct PageSummary {
 }
 
 /// A link of a page, as kept for a run to follow.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct PageLead {
     pub url: String,
     pub anchor: String,
@@ -40,14 +41,14 @@ pub struct PageLead {
 }
 
 /// A stored run whose result cites the page.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct PageRun {
     pub id: String,
     pub topic: String,
 }
 
 /// One cached page with the text intake reads.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct PageDetail {
     pub id: String,
     pub url: String,
@@ -63,7 +64,7 @@ pub struct PageDetail {
 }
 
 /// A cached piece scored against a question.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RecallPiece {
     pub page: String,
     pub url: String,
@@ -76,14 +77,14 @@ pub struct RecallPiece {
 }
 
 /// The pieces recall would take for a question, best first, with the threshold it applies.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Recall {
     pub minimum: f64,
     pub pieces: Vec<RecallPiece>,
 }
 
 /// What the page cache holds and what it takes on disk.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct CacheStats {
     pub pages: u64,
     pub links: u64,
@@ -98,7 +99,7 @@ pub struct CacheStats {
 }
 
 /// One cached site in the link graph.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SiteNode {
     pub domain: String,
     pub pages: u64,
@@ -109,7 +110,7 @@ pub struct SiteNode {
 }
 
 /// Links from the pages of one cached site to the pages of another.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SiteEdge {
     pub source: String,
     pub target: String,
@@ -117,7 +118,7 @@ pub struct SiteEdge {
 }
 
 /// The cached sites and the links between them.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SiteGraph {
     pub sites: Vec<SiteNode>,
     pub edges: Vec<SiteEdge>,

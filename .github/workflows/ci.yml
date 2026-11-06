@@ -73,8 +73,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
+      # `pnpm types` and the e2e service run the kvasir binary.
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+
       - run: pnpm install --frozen-lockfile
-      - run: uv sync --locked
 
       # The types are generated from the service's schema. A diff here means a model changed and
       # `pnpm types` was not run.

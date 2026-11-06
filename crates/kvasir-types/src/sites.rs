@@ -1,5 +1,6 @@
 //! What a site is: its host key and the kinds and tags a source can carry.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Source kinds in priority order: a host that several items classify takes the first.
@@ -28,7 +29,7 @@ const AVOID_TAGS: [&str; 5] =
     ["ai_generated", "content_farm", "predatory", "rsp_deprecated", "deny"];
 
 /// How far a site is trusted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Tier {
     High,
@@ -55,7 +56,7 @@ pub fn tier<'a>(kind: &str, tags: impl IntoIterator<Item = &'a str> + Clone) -> 
 }
 
 /// What is known of a site: its kind, tags and trust tier.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SourceInfo {
     pub kind: String,
     pub tags: Vec<String>,

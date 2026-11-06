@@ -794,7 +794,8 @@ done | jq -s -c add > web/fixtures/<name>.searches.json
 ```
 
 The TypeScript types in `web/src/lib/schema.d.ts` are generated from the service's OpenAPI schema.
-Run `pnpm types` after changing a schema in `src/kvasir/schemas/`; CI fails when they differ.
+Run `pnpm types` after changing a type in `crates/kvasir-types/` or `crates/kvasir-api/`; it builds
+and runs `kvasir openapi`, and CI fails when the types differ.
 
 ```bash
 pnpm check   # svelte-check

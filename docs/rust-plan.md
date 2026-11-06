@@ -1,6 +1,6 @@
 # Rust migration: plan
 
-Status: phase 0 done in Python, phases 1 and 2 passed. Written 2026-11-05 against commit `b34fd37`.
+Status: phase 0 done in Python, phases 1 to 3 passed, phase 4 passed for ledger and graph. Written 2026-11-05 against commit `b34fd37`.
 
 kvasir is one Python process. Its work is blocking, because dspy, litellm and the STORM fork are
 synchronous, so a run is a thread with nested thread pools under an asyncio server. This plan
@@ -293,7 +293,7 @@ Versions are from crates.io on 2026-11-05. `Cargo.lock` is committed, and Renova
 | --- | --- | --- | --- |
 | Runtime | `tokio` 1.54, `tokio-util` 0.7, `futures` 0.3 | asyncio, threads | Production |
 | Server | `axum` 0.8, `tower-http` 0.7 | FastAPI, uvicorn | Production |
-| OpenAPI | `utoipa` 6, `utoipa-axum`, `schemars` 1.2 | FastAPI schema | Production. Fit with `openapi-typescript` tested in phase 4. |
+| OpenAPI | `schemars` 1.2 | FastAPI schema | Production. Fits `openapi-typescript`, tested in phase 4. |
 | Client | `reqwest` 0.13, rustls | httpx | Production |
 | Retries | `backon` 1.6 | backoff | Production |
 | Serialisation | `serde` 1.0, `serde_json` 1.0 | pydantic | Production |
@@ -577,6 +577,38 @@ Gate: `tests/contract/` passes against the binary for ledger and graph. `pnpm ch
 `pnpm e2e` pass. `tests/test_owui.py` still passes. No lock held across an await. A test confirms a
 client leaving mid-run does not free the slot early.
 
+#### Phase 4 result: pass for ledger and graph
+
+Done on 2026-11-06.
+
+- **Contract:** `tests/contract/` against `kvasir serve --allow-loopback`: 101 of 103 pass, three runs
+  in a row. The two that fail are the `storm` cases, which wait for phase 5.
+- **Slot:** `test_a_client_leaving_does_not_end_the_run_or_free_its_slot` is among those that pass.
+- **Web:** `pnpm types` runs `kvasir openapi`, and the e2e service is the binary. `pnpm check` and
+  `pnpm test` (104 tests) pass. `pnpm e2e` passes 44 of 45. The one that fails,
+  `a ledger run stacks its rows` in the mock project, fails the same way on the Python-generated
+  types and never reaches the service.
+- **Open WebUI pipe:** `tests/test_owui.py` passes, 25 tests.
+- **Locks:** clippy denies `await_holding_lock`. The only lock held across an await is the
+  `tokio::sync::Mutex` that keeps a provider's model listing from being asked twice at once.
+
+Differences from Python, all deliberate:
+
+- No `utoipa`. `kvasir openapi` writes `components.schemas` from `schemars` and no `paths`: the web
+  imports only schemas. Which fields are optional is copied from FastAPI's document, and the
+  methods' options, the run bodies and the 422 body are written as pydantic wrote them.
+- A follower's `status` frame is the run as it stood when the progress event before it was
+  published (`Run::follow`), where Python took it when the follower got to the event.
+- Followers are unbounded channels, as Python's queues were.
+- `FORWARDED_ALLOW_IPS` takes `*` or addresses; uvicorn's CIDR ranges are not read.
+- A storm run fails with `NotImplementedError: storm is not ported yet` until phase 5;
+  `/v1/methods` lists storm already.
+- An unexpected failure answers `{"message": "Internal Server Error"}` with 500, where Starlette
+  sent the text alone.
+- JSON logs are `tracing-subscriber`'s format, not Python's.
+- `fetch_all` in `kvasir-research` collects its futures before streaming them: the lazy map kept a
+  run's future from being `Send`, so it could not be spawned.
+
 ### Phase 5: STORM
 
 Build `kvasir-storm`.
@@ -640,7 +672,6 @@ current method name, so a typed `kind` must still accept it. Test against copies
 ## Not verified
 
 - `psl` against `tld` on real hosts. A hand-written list of 59 agreed.
-- `utoipa` 6: OpenAPI version emitted, tagged enum output, and `openapi-typescript` results.
 - Crate choices marked production rest on release dates and download counts, not on use here.
 - Races other than `storm/lm.py:84` and the Co-STORM ones were read from code by a reviewer and not
   reproduced.

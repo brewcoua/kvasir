@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace.dependencies]
+kvasir-api = { path = "crates/kvasir-api" }
 kvasir-browser = { path = "crates/kvasir-browser" }
 kvasir-config = { path = "crates/kvasir-config" }
 kvasir-db = { path = "crates/kvasir-db" }
@@ -25,6 +26,7 @@ kvasir-types = { path = "crates/kvasir-types" }
 
 anyhow = "1"
 arc-swap = "1.9"
+axum = "0.8"
 backon = "1.6"
 chromiumoxide = "0.9.1"
 dom_query = "0.24"
@@ -32,6 +34,7 @@ dsrust-json-repair = { version = "=0.1.0-alpha.3", features = ["serde"] }
 encoding_rs = "0.8"
 fancy-regex = "0.20"
 futures = "0.3"
+http-body-util = "0.1"
 httpdate = "1"
 idna = "1.1"
 indexmap = { version = "2", features = ["serde"] }
@@ -42,15 +45,20 @@ reqwest = { version = "0.13", default-features = false, features = ["brotli", "d
 rlimit = "0.11"
 rs-trafilatura = "0.2.2"
 rusqlite = { version = "0.41", features = ["bundled", "functions"] }
+rust-embed = { version = "8", features = ["mime-guess"] }
+schemars = { version = "1.2", features = ["indexmap2"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+serde_path_to_error = "0.1"
 sha1 = "0.10"
 sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
 toml = "1"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tower = "0.5"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 url = "2.5"
 uuid = { version = "1", features = ["v4"] }
 wiremock = "0.6"

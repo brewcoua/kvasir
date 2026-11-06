@@ -2,6 +2,7 @@
 
 use indexmap::IndexMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -15,7 +16,7 @@ pub fn now() -> f64 {
 }
 
 /// Payload of a `progress` event. The fields are documented in `docs/architecture.md`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Progress {
     pub stage: String,
     pub detail: String,
@@ -71,13 +72,13 @@ impl Progress {
 }
 
 /// Payload of an `error` event.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ErrorEvent {
     pub message: String,
 }
 
 /// What one model, or one role, spent on a run.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ModelUsage {
     pub calls: u64,
     pub prompt_tokens: u64,
@@ -91,7 +92,7 @@ pub struct ModelUsage {
 }
 
 /// What one stage spent, including what is not a completion.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct StageUsage {
     #[serde(flatten)]
     pub model: ModelUsage,
@@ -100,7 +101,7 @@ pub struct StageUsage {
 }
 
 /// A run's totals, and the breakdowns worth having.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunUsage {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
@@ -115,7 +116,7 @@ pub struct RunUsage {
 }
 
 /// One completion request, while it is waiting and after it returns.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LmCall {
     #[serde(default)]
     pub id: Option<u64>,
@@ -134,7 +135,7 @@ pub struct LmCall {
 }
 
 /// What one completion was sent and answered, kept with runs.keep_call_content.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LmCallContent {
     /// As sent to the gateway, in the OpenAI chat shape.
     pub messages: Vec<Map<String, Value>>,
@@ -144,7 +145,7 @@ pub struct LmCallContent {
 }
 
 /// One query sent to the search engine.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SearchCall {
     pub id: u64,
     pub event: Option<u64>,
@@ -159,7 +160,7 @@ pub struct SearchCall {
     pub failures: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SearchResult {
     pub title: String,
     pub url: String,
@@ -169,13 +170,13 @@ pub struct SearchResult {
 }
 
 /// What one search returned, kept with runs.keep_call_content.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SearchContent {
     pub results: Vec<SearchResult>,
 }
 
 /// One run, as `GET /v1/runs` lists it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunSummary {
     pub id: String,
     pub kind: String,
@@ -193,14 +194,14 @@ pub struct RunSummary {
 }
 
 /// One stretch of time spent in a stage. `ended_at` is None while the run is still in it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunSpan {
     pub started_at: f64,
     pub ended_at: Option<f64>,
 }
 
 /// Time spent in one stage, summed over its spans.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunStage {
     pub name: String,
     pub started_at: f64,
@@ -210,7 +211,7 @@ pub struct RunStage {
 }
 
 /// A run's live state, as the `status` event carries it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunStatus {
     #[serde(flatten)]
     pub summary: RunSummary,
@@ -225,7 +226,7 @@ pub struct RunStatus {
 }
 
 /// One run, as `GET /v1/runs/{id}` returns it, with every call it kept.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunDetail {
     #[serde(flatten)]
     pub status: RunStatus,
@@ -234,7 +235,7 @@ pub struct RunDetail {
 }
 
 /// Payload of the `run` event, the first frame of every streaming response.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunStarted {
     pub run_id: String,
 }

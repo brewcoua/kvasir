@@ -3,701 +3,82 @@
  * Do not make direct changes to the file.
  */
 
-export interface paths {
-    "/v1/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Login
-         * @description Sets the cookie the page authenticates with. 401 for a wrong token.
-         */
-        post: operations["login_v1_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Runs
-         * @description Every run kept, newest first.
-         */
-        get: operations["list_runs_v1_runs_get"];
-        put?: never;
-        /**
-         * Start Run
-         * @description Run a method and stream progress until its result is ready.
-         */
-        post: operations["start_run_v1_runs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/runs/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Run Detail */
-        get: operations["run_detail_v1_runs__run_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/runs/{run_id}/calls/{call_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Call Content
-         * @description What one model call was sent and answered. Kept only with runs.keep_call_content.
-         */
-        get: operations["call_content_v1_runs__run_id__calls__call_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/runs/{run_id}/searches/{search_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search Content
-         * @description What one search returned. Kept only with runs.keep_call_content.
-         */
-        get: operations["search_content_v1_runs__run_id__searches__search_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/runs/{run_id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Run Events
-         * @description Follow a run live, including one this client did not start.
-         *
-         *     Opens with a snapshot, so a client attaching midway sees what it missed rather than only what
-         *     happens next. Each progress event is followed by a status, as is every idle interval, so usage
-         *     and stage timings stay current between snapshots.
-         */
-        get: operations["run_events_v1_runs__run_id__events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/methods": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Methods
-         * @description Every method, with its options and their configured defaults, for a client to show.
-         */
-        get: operations["methods_v1_methods_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Sites
-         * @description Each domain with pages cached, the one fetched from last first.
-         */
-        get: operations["list_sites_v1_sites_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sites/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Site Graph
-         * @description The cached sites and, between each two, how many stored links lead from one to the other.
-         */
-        get: operations["site_graph_v1_sites_graph_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/pages/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stats
-         * @description What the cache holds and what it takes on disk.
-         */
-        get: operations["stats_v1_pages_stats_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/pages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Pages
-         * @description The pages of `site`, or the latest `PAGE_LIMIT` of all, newest first.
-         */
-        get: operations["list_pages_v1_pages_get"];
-        put?: never;
-        post?: never;
-        /**
-         * Flush
-         * @description Empties the cache, and frees its disk space.
-         */
-        delete: operations["flush_v1_pages_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/pages/recall": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Recall
-         * @description The cached pieces recall would take for `q`, scored, without marking any read. For tuning
-         *     `RECALL_MIN`: it lists `RECALL_PIECES` times 4, and those under the minimum are flagged.
-         */
-        get: operations["recall_v1_pages_recall_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/pages/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Page Detail */
-        get: operations["page_detail_v1_pages__id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Page */
-        delete: operations["delete_page_v1_pages__id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sites/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Site */
-        delete: operations["delete_site_v1_sites__name__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/pages/{id}/refetch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Refetch
-         * @description Reads the page again whatever its age. The page it answers with is the one now cached at the
-         *     final URL, which is another when the site has moved the page since it was first read. Its
-         *     pieces go with the old text; the next run to read it makes them.
-         */
-        post: operations["refetch_v1_pages__id__refetch_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/favicons/{host}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Favicon
-         * @description The icon of a site. The type is the one the image's own bytes show, and the response is
-         *     locked down so a hostile image cannot run anything from this origin.
-         */
-        get: operations["favicon_v1_favicons__host__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/favicons": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Flush
-         * @description Forgets every icon, and frees its disk space.
-         */
-        delete: operations["flush_v1_favicons_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sources/{host}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Source
-         * @description The kind, tags and trust tier of a site, asking Wikidata when nothing else decides it.
-         */
-        get: operations["source_v1_sources__host__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Flush
-         * @description Forgets the cached Wikidata answers. Marks and the config stay.
-         */
-        delete: operations["flush_v1_sources_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sources/{host}/mark": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Mark
-         * @description Trusts, blocks or classifies a site, until cleared. A host the config sets answers 409.
-         */
-        put: operations["mark_v1_sources__host__mark_put"];
-        post?: never;
-        /** Unmark */
-        delete: operations["unmark_v1_sources__host__mark_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/clarify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clarify Question
-         * @description Questions to ask before researching, or none. One fast-model call.
-         *
-         *     Like `/v1/tasks`, no run is registered and no slot is claimed: the user is still deciding
-         *     whether to start one.
-         */
-        post: operations["clarify_question_v1_clarify_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Task
-         * @description One short completion on the fast model, for a client's own housekeeping.
-         *
-         *     Open WebUI generates a chat title, tags and follow-up prompts by asking whichever model the
-         *     chat is using, which for a kvasir chat is the pipe. Those are not research: sent to
-         *     `/v1/runs` they each take a run slot, and with one slot they collide with the very run they
-         *     are summarising. Deliberately not `streamed` — no run is registered and no slot is claimed.
-         */
-        post: operations["task_v1_tasks_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Settings
-         * @description Every stored setting, with its value, its default and what it accepts.
-         */
-        get: operations["get_settings_v1_settings_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Patch Settings
-         * @description Set each key to its value, or back to its default with null. Nothing is written unless every
-         *     stored setting is valid afterwards; 422 names the first that is not.
-         */
-        patch: operations["patch_settings_v1_settings_patch"];
-        trace?: never;
-    };
-    "/v1/settings/{key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Reset Setting
-         * @description Set `key` back to its default. Also removes a key this version does not know.
-         */
-        delete: operations["reset_setting_v1_settings__key__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/providers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Providers
-         * @description Every provider, by name. Neither its address nor its key is shown.
-         */
-        get: operations["list_providers_v1_providers_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/providers/{name}/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Models
-         * @description The models `name` serves, sorted by id. Cached for a few minutes.
-         */
-        get: operations["list_models_v1_providers__name__models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/healthz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Healthz
-         * @description Liveness. Deliberately checks no dependency: a provider outage must not restart the pod.
-         */
-        get: operations["healthz_healthz_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/readyz": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Readyz
-         * @description Readiness. Fails while a required setting is unset, or when SearXNG or any provider a model
-         *     uses is unreachable.
-         *
-         *     No check spends tokens. Listing models is free, and SearXNG is only asked for its root. A
-         *     provider no model refers to is not probed, since no run needs it.
-         */
-        get: operations["readyz_readyz_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-}
+export type paths = Record<string, never>;
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * ArticleResult
-         * @description Payload of the `done` event.
-         */
+        /** @description Payload of the `done` event of a STORM run. */
         ArticleResult: {
-            /** Article */
             article: string;
-            /** Outline */
             outline: string;
-            /** Citations */
             citations: components["schemas"]["Citation"][];
-            /** Duration Seconds */
+            /** Format: double */
             duration_seconds: number;
         };
-        /**
-         * CacheStats
-         * @description What the page cache holds and what it takes on disk.
-         */
+        /** @description What the page cache holds and what it takes on disk. */
         CacheStats: {
-            /** Pages */
+            /** Format: uint64 */
             pages: number;
-            /** Links */
+            /** Format: uint64 */
             links: number;
-            /** Pieces */
+            /** Format: uint64 */
             pieces: number;
-            /** Text Bytes */
+            /** Format: uint64 */
             text_bytes: number;
-            /** Vector Bytes */
+            /** Format: uint64 */
             vector_bytes: number;
-            /** File Bytes */
+            /**
+             * Format: uint64
+             * @description The database file with its -wal and -shm files.
+             */
             file_bytes: number;
-            /** Path */
             path: string;
-            /** Oldest */
+            /** Format: double */
             oldest: number | null;
-            /** Newest */
+            /** Format: double */
             newest: number | null;
         };
-        /**
-         * Cell
-         * @description What the evidence says about one entity on one criterion.
-         */
+        /** @description What the evidence says about one entity on one criterion. */
         Cell: {
-            /** Criterion */
             criterion: string;
-            /** Finding */
+            /** @description Empty when no claim spoke to it. */
             finding: string;
-            /** Claims */
             claims: number[];
-            /** Rank */
+            /**
+             * Format: double
+             * @description This entity's place on this criterion, averaged over both ranking passes. Rankings only.
+             */
             rank?: number | null;
         };
-        /**
-         * Citation
-         * @description One source, numbered as the article's `[n]` markers reference it.
-         */
+        /** @description One source, numbered as the article's `[n]` markers reference it. */
         Citation: {
-            /** Index */
+            /** Format: uint64 */
             index: number;
-            /** Url */
             url: string;
-            /** Title */
             title: string;
-            /** Snippet */
             snippet: string;
+            /** @description None when `[sources] enabled` is false, and in runs stored before it existed. */
             source?: components["schemas"]["SourceInfo"] | null;
         };
-        /**
-         * Clarification
-         * @description One question `/v1/clarify` asked, and the user's answer to it.
-         */
+        /** @description One question `/v1/clarify` asked, and the user's answer to it. */
         Clarification: {
-            /** Question */
             question: string;
-            /** Answer */
             answer: string;
         };
-        /**
-         * ClarifyRequest
-         * @description Body of `POST /v1/clarify`.
-         */
+        /** @description Body of `POST /v1/clarify`. The question is not empty. */
         ClarifyRequest: {
-            /** Question */
             question: string;
         };
-        /**
-         * ClarifyResponse
-         * @description Payload of `POST /v1/clarify`. Empty when the question needs no clarifying.
-         */
+        /** @description Payload of `POST /v1/clarify`. Empty when the question needs no clarifying. */
         ClarifyResponse: {
-            /** Questions */
             questions: string[];
         };
-        /**
-         * Criterion
-         * @description What a ranking or a table compares on, and how much it counts in the overall rank.
-         */
+        /** @enum {string} */
+        Confidence: "high" | "medium" | "low";
+        /** @description What a ranking or a table compares on, and how much it counts in the overall rank, 1 to 3. */
         Criterion: {
-            /** Name */
             name: string;
-            /**
-             * Weight
-             * @default 1
-             */
+            /** Format: uint8 */
             weight: number;
         };
         /**
@@ -710,16 +91,31 @@ export interface components {
              * @default 20
              */
             research_minutes: number;
-            /** Max Searches */
-            max_searches?: number | null;
-            /** Results Per Query */
-            results_per_query?: number | null;
-            /** Max Attempts */
-            max_attempts?: number | null;
-            /** Max Depth */
-            max_depth?: number | null;
-            /** Ground */
-            ground?: boolean | null;
+            /**
+             * Max Searches
+             * @default null
+             */
+            max_searches: number | null;
+            /**
+             * Results Per Query
+             * @default null
+             */
+            results_per_query: number | null;
+            /**
+             * Max Attempts
+             * @default null
+             */
+            max_attempts: number | null;
+            /**
+             * Max Depth
+             * @default null
+             */
+            max_depth: number | null;
+            /**
+             * Ground
+             * @default null
+             */
+            ground: boolean | null;
             /**
              * Ground Intake
              * @default false
@@ -740,50 +136,46 @@ export interface components {
              * @default true
              */
             recall_past_runs: boolean;
-            /** Max Age Hours */
-            max_age_hours?: number | null;
-            /** Model Fast */
-            model_fast?: string | null;
-            /** Model Strong */
-            model_strong?: string | null;
-            /** Model Reason */
-            model_reason?: string | null;
+            /**
+             * Max Age Hours
+             * @default null
+             */
+            max_age_hours: number | null;
+            /**
+             * Model Fast
+             * @default null
+             */
+            model_fast: string | null;
+            /**
+             * Model Strong
+             * @default null
+             */
+            model_strong: string | null;
+            /**
+             * Model Reason
+             * @default null
+             */
+            model_reason: string | null;
         };
         /** GraphRun */
         GraphRun: {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Method
+             * @constant
              */
             method: "graph";
             input: components["schemas"]["Input"];
-            /**
-             * @default {
-             *       "research_minutes": 20,
-             *       "ground_intake": false,
-             *       "corroborate": false,
-             *       "contradict": false,
-             *       "recall_past_runs": true
-             *     }
-             */
-            options: components["schemas"]["GraphOptions"];
+            options?: components["schemas"]["GraphOptions"];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /**
-         * Input
-         * @description What a run is about. For STORM, the question is the article's topic.
-         */
+        /** @description What a run is about. For STORM, the question is the article's topic. It is not empty. */
         Input: {
-            /** Question */
             question: string;
-            /**
-             * Clarifications
-             * @default []
-             */
+            /** @description Only a method that clarifies reads them. */
             clarifications: components["schemas"]["Clarification"][];
         };
         /**
@@ -791,34 +183,67 @@ export interface components {
          * @description Options of the `ledger` method. The budgets fall back to the configured defaults.
          */
         LedgerOptions: {
-            /** Output */
-            output?: ("report" | "ranking" | "table") | null;
-            /** Criteria */
-            criteria?: string[] | null;
-            /** Entities */
-            entities?: string[] | null;
-            /** Max Searches */
-            max_searches?: number | null;
-            /** Results Per Query */
-            results_per_query?: number | null;
-            /** Max Attempts */
-            max_attempts?: number | null;
-            /** Follow Ups */
-            follow_ups?: boolean | null;
-            /** Max Depth */
-            max_depth?: number | null;
-            /** Max Entities */
-            max_entities?: number | null;
-            /** Max Criteria */
-            max_criteria?: number | null;
+            /**
+             * Output
+             * @default null
+             */
+            output: ("report" | "ranking" | "table") | null;
+            /**
+             * Criteria
+             * @default null
+             */
+            criteria: string[] | null;
+            /**
+             * Entities
+             * @default null
+             */
+            entities: string[] | null;
+            /**
+             * Max Searches
+             * @default null
+             */
+            max_searches: number | null;
+            /**
+             * Results Per Query
+             * @default null
+             */
+            results_per_query: number | null;
+            /**
+             * Max Attempts
+             * @default null
+             */
+            max_attempts: number | null;
+            /**
+             * Follow Ups
+             * @default null
+             */
+            follow_ups: boolean | null;
+            /**
+             * Max Depth
+             * @default null
+             */
+            max_depth: number | null;
+            /**
+             * Max Entities
+             * @default null
+             */
+            max_entities: number | null;
+            /**
+             * Max Criteria
+             * @default null
+             */
+            max_criteria: number | null;
             /**
              * Frontier
              * @default breadth
              * @enum {string}
              */
             frontier: "breadth" | "worth";
-            /** Ground */
-            ground?: boolean | null;
+            /**
+             * Ground
+             * @default null
+             */
+            ground: boolean | null;
             /**
              * Ground Intake
              * @default false
@@ -839,763 +264,549 @@ export interface components {
              * @default true
              */
             recall_past_runs: boolean;
-            /** Max Age Hours */
-            max_age_hours?: number | null;
-            /** Model Fast */
-            model_fast?: string | null;
-            /** Model Strong */
-            model_strong?: string | null;
-            /** Model Reason */
-            model_reason?: string | null;
+            /**
+             * Max Age Hours
+             * @default null
+             */
+            max_age_hours: number | null;
+            /**
+             * Model Fast
+             * @default null
+             */
+            model_fast: string | null;
+            /**
+             * Model Strong
+             * @default null
+             */
+            model_strong: string | null;
+            /**
+             * Model Reason
+             * @default null
+             */
+            model_reason: string | null;
         };
         /** LedgerRun */
         LedgerRun: {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Method
+             * @constant
              */
             method: "ledger";
             input: components["schemas"]["Input"];
-            /**
-             * @default {
-             *       "frontier": "breadth",
-             *       "ground_intake": false,
-             *       "corroborate": false,
-             *       "contradict": false,
-             *       "recall_past_runs": true
-             *     }
-             */
-            options: components["schemas"]["LedgerOptions"];
+            options?: components["schemas"]["LedgerOptions"];
         };
-        /**
-         * LmCall
-         * @description One completion request, while it is waiting and after it returns.
-         */
+        /** @description One completion request, while it is waiting and after it returns. */
         LmCall: {
-            /** Id */
+            /** Format: uint64 */
             id?: number | null;
-            /** Event */
-            event?: number | null;
             /**
-             * Has Content
-             * @default false
+             * Format: uint64
+             * @description The `seq` of the last event published in the work that made the call.
              */
+            event?: number | null;
             has_content: boolean;
-            /** Role */
             role: string | null;
-            /** Model */
             model: string;
-            /** Started At */
+            /** Format: double */
             started_at: number;
-            /** Ended At */
+            /** Format: double */
             ended_at: number | null;
-            /** Prompt Tokens */
+            /** Format: uint64 */
             prompt_tokens: number | null;
-            /** Completion Tokens */
+            /** Format: uint64 */
             completion_tokens: number | null;
-            /** Failed */
             failed: boolean;
         };
-        /**
-         * LmCallContent
-         * @description What one completion was sent and answered, kept with runs.keep_call_content.
-         */
+        /** @description What one completion was sent and answered, kept with runs.keep_call_content. */
         LmCallContent: {
-            /** Messages */
+            /** @description As sent to the gateway, in the OpenAI chat shape. */
             messages: {
                 [key: string]: unknown;
             }[];
-            /** Response */
             response: string | null;
-            /** Reasoning */
             reasoning?: string | null;
         };
-        /** Login */
         Login: {
-            /** Token */
             token: string;
         };
-        /**
-         * LowTrustSentence
-         * @description A sentence whose cited claims all come from sites of low trust, left in the report.
-         */
+        /** @description A sentence whose cited claims all come from sites of low trust, left in the report. */
         LowTrustSentence: {
-            /** Section */
             section: string;
-            /** Sentence */
             sentence: string;
         };
-        /** Mark */
         Mark: {
-            /** Value */
+            /** @description `allow`, `deny` or a kind other than `unknown`. */
             value: string;
         };
-        /**
-         * MethodInfo
-         * @description One entry of `GET /v1/methods`.
-         */
+        /** @description One entry of `GET /v1/methods`. */
         MethodInfo: {
-            /** Name */
             name: string;
-            /** Clarifies */
+            /** @description Whether a client should ask `/v1/clarify` before starting it. */
             clarifies: boolean;
-            /** Stages */
+            /** @description The stages a run with the default options goes through. */
             stages: string[];
-            /** Options */
+            /** @description The options' JSON Schema, with the configured defaults as each property's `default`. */
             options: {
                 [key: string]: unknown;
             };
         };
-        /** ModelInfo */
         ModelInfo: {
-            /** Id */
             id: string;
-            /** Ref */
+            /** @description What a model setting takes: `<provider>/<id>`. */
             ref: string;
-            /** Context Length */
+            /**
+             * Format: uint64
+             * @description The window the model was trained with, when the provider says. Not the one it is served
+             *     with.
+             */
             context_length?: number | null;
-            /** Capabilities */
+            /** @description Such as `completion`, `embedding`, `tools`, `thinking`, when the provider says. */
             capabilities?: string[] | null;
         };
-        /**
-         * ModelUsage
-         * @description What one model, or one role, spent on a run.
-         */
+        /** @description What one model, or one role, spent on a run. */
         ModelUsage: {
-            /** Calls */
+            /** Format: uint64 */
             calls: number;
-            /** Prompt Tokens */
+            /** Format: uint64 */
             prompt_tokens: number;
-            /** Completion Tokens */
+            /** Format: uint64 */
             completion_tokens: number;
-            /** Reasoning Tokens */
+            /**
+             * Format: uint64
+             * @description Part of `completion_tokens`, not in addition to it.
+             */
             reasoning_tokens: number;
-            /** Cost */
+            /** Format: double */
             cost: number;
             /**
-             * Seconds
-             * @default 0
+             * Format: double
+             * @description Wall time of the calls that answered, summed.
              */
             seconds: number;
         };
-        /**
-         * PageDetail
-         * @description One cached page with the text intake reads.
-         */
+        /** @enum {string} */
+        Output: "report" | "ranking" | "table";
+        /** @description One cached page with the text intake reads. */
         PageDetail: {
-            /** Id */
             id: string;
-            /** Url */
             url: string;
-            /** Final Url */
             final_url: string;
-            /** Title */
             title: string;
-            /** Engine */
             engine: string;
-            /** Fetched At */
+            /** Format: double */
             fetched_at: number;
-            /** Text */
+            /** @description Markdown, as extracted. */
             text: string;
-            /** Leads */
+            /** @description By region of the page: main, related, nav or footer. */
             leads: {
                 [key: string]: components["schemas"]["PageLead"][];
             };
-            /** Runs */
             runs: components["schemas"]["PageRun"][];
         };
-        /**
-         * PageLead
-         * @description A link of a page, as kept for a run to follow.
-         */
+        /** @description A link of a page, as kept for a run to follow. */
         PageLead: {
-            /** Url */
             url: string;
-            /** Anchor */
             anchor: string;
-            /** Context */
             context: string;
         };
-        /**
-         * PageRun
-         * @description A stored run whose result cites the page.
-         */
+        /** @description A stored run whose result cites the page. */
         PageRun: {
-            /** Id */
             id: string;
-            /** Topic */
             topic: string;
         };
-        /**
-         * PageSummary
-         * @description One cached page, without its text.
-         */
+        /** @description One cached page, without its text. */
         PageSummary: {
-            /** Id */
             id: string;
-            /** Url */
             url: string;
-            /** Title */
             title: string;
-            /** Engine */
             engine: string;
-            /** Fetched At */
+            /** Format: double */
             fetched_at: number;
-            /** Pieces */
+            /** Format: uint64 */
             pieces: number;
-            /** Length */
+            /**
+             * Format: uint64
+             * @description Characters of the extracted text.
+             */
             length: number;
         };
-        /**
-         * Progress
-         * @description Payload of a `progress` event.
-         */
+        /** @description Payload of a `progress` event. The fields are documented in `docs/architecture.md`. */
         Progress: {
-            /** Stage */
             stage: string;
-            /** Detail */
             detail: string;
-            /** At */
+            /**
+             * Format: double
+             * @description When it was published.
+             */
             at?: number;
-            /** Done */
+            /** Format: uint64 */
             done?: number | null;
-            /** Total */
+            /** Format: uint64 */
             total?: number | null;
-            /** Seq */
+            /**
+             * Format: uint64
+             * @description Its place in the run, numbered from 0.
+             */
             seq?: number | null;
-            /** Kind */
+            /**
+             * @description What step of the run this is: attempt, part, result, section, recall, repair; None for a
+             *     log line.
+             */
             kind?: string | null;
-            /** Parent */
+            /**
+             * Format: uint64
+             * @description The `seq` of the event this one sits under.
+             */
             parent?: number | null;
-            /** Question */
+            /** Format: uint64 */
             question?: number | null;
-            /** Search */
+            /** Format: uint64 */
             search?: number | null;
-            /** Page */
+            /**
+             * Format: uint64
+             * @description The 1-based index of the page within its attempt.
+             */
             page?: number | null;
-            /** Series */
+            /** @description Names a counter within its stage; its updates are one event. */
             series?: string | null;
-            /** Updated At */
+            /** Format: double */
             updated_at?: number | null;
         };
-        /** ProviderInfo */
         ProviderInfo: {
-            /** Name */
             name: string;
-            /** Reachable */
+            /** @description Whether its model list could be read. */
             reachable: boolean;
         };
-        /**
-         * Recall
-         * @description The pieces recall would take for a question, best first, with the threshold it applies.
-         */
+        /** @enum {string} */
+        QuestionStatus: "open" | "weak" | "answered" | "contradicted" | "unresolved";
+        /** @description The pieces recall would take for a question, best first, with the threshold it applies. */
         Recall: {
-            /** Minimum */
+            /** Format: double */
             minimum: number;
-            /** Pieces */
             pieces: components["schemas"]["RecallPiece"][];
         };
-        /**
-         * RecallPiece
-         * @description A cached piece scored against a question.
-         */
+        /** @description A cached piece scored against a question. */
         RecallPiece: {
-            /** Page */
             page: string;
-            /** Url */
             url: string;
-            /** Title */
             title: string;
-            /** Site */
             site: string;
-            /** Text */
             text: string;
-            /** Similarity */
+            /** Format: double */
             similarity: number;
-            /** Clears */
+            /** @description Whether it reaches the recall threshold. */
             clears: boolean;
         };
-        /**
-         * RemovedSentence
-         * @description A sentence verification took out of the report, and why.
-         */
+        /** @description A sentence verification took out of the report, and why. */
         RemovedSentence: {
-            /** Section */
             section: string;
-            /** Sentence */
+            /** @description As written, so its `[n]` markers are claim ids rather than source numbers. */
             sentence: string;
-            /** Reason */
             reason: string;
-            /**
-             * Stage
-             * @default verify
-             * @enum {string}
-             */
-            stage: "citation" | "checker" | "verify" | "escalate" | "rewrite";
+            stage: components["schemas"]["VerifyStage"];
         };
-        /**
-         * ResearchClaim
-         * @description One piece of evidence, with the verbatim quote it was read from.
-         */
+        /** @description One piece of evidence, with the verbatim quote it was read from. */
         ResearchClaim: {
-            /** Id */
+            /** Format: uint64 */
             id: number;
-            /** Text */
             text: string;
-            /** Quote */
             quote: string;
-            /** Url */
             url: string;
-            /** Title */
             title: string;
+            confidence: components["schemas"]["Confidence"];
             /**
-             * Confidence
-             * @enum {string}
-             */
-            confidence: "high" | "medium" | "low";
-            /**
-             * Step
-             * @default 0
+             * Format: uint64
+             * @description The search that found it. Defaulted, so a run stored when claims had rounds still loads.
              */
             step: number;
-            /**
-             * From Snippet
-             * @default false
-             */
+            /** @description Read from the search snippet because the page could not be fetched. */
             from_snippet: boolean;
-            /**
-             * Corroborated By
-             * @default []
-             */
+            /** @description Claims from other sites that support this one, and that disagree with it. */
             corroborated_by: number[];
-            /**
-             * Contradicted By
-             * @default []
-             */
             contradicted_by: number[];
         };
-        /**
-         * ResearchQuestion
-         * @description One question the research searched for, and how far it got.
-         */
+        /** @description One question the research searched for, and how far it got. */
         ResearchQuestion: {
-            /** Id */
+            /** Format: uint64 */
             id: number;
-            /** Text */
             text: string;
-            /**
-             * Title
-             * @default
-             */
+            /** @description A few words naming it, or empty when the model gave none. */
             title: string;
-            /** Parent */
-            parent: number | null;
-            /** Depth */
-            depth: number;
             /**
-             * Status
-             * @enum {string}
+             * Format: uint64
+             * @description The question this one follows up on.
              */
-            status: "open" | "weak" | "answered" | "contradicted" | "unresolved";
-            /** Claims */
+            parent: number | null;
+            /** Format: uint64 */
+            depth: number;
+            status: components["schemas"]["QuestionStatus"];
+            /** @description The claims whose quotes support the answer. */
             claims: number[];
-            /** Queries */
             queries: string[];
-            /** Missing */
+            /** @description What the last judgement found missing. */
             missing: string;
         };
-        /**
-         * ResearchResult
-         * @description Payload of the `done` event of a research run.
-         */
+        /** @description Payload of the `done` event of a research run. */
         ResearchResult: {
-            /** Report */
             report: string;
-            /** Assumptions */
+            /** @description What the brief had to decide that the question and the clarifications left open. */
             assumptions: string[];
-            /** Citations */
             citations: components["schemas"]["Citation"][];
-            /** Claims */
+            /** @description Every claim gathered, cited or not. */
             claims: components["schemas"]["ResearchClaim"][];
-            /**
-             * Questions
-             * @default []
-             */
             questions: components["schemas"]["ResearchQuestion"][];
-            /**
-             * Removed
-             * @default []
-             */
             removed: components["schemas"]["RemovedSentence"][];
-            /**
-             * Revised
-             * @default []
-             */
             revised: components["schemas"]["RevisedSentence"][];
-            /**
-             * Unverified
-             * @default []
-             */
             unverified: components["schemas"]["UnverifiedSentence"][];
-            /**
-             * Low Trust
-             * @default []
-             */
             low_trust: components["schemas"]["LowTrustSentence"][];
-            /**
-             * Output
-             * @default report
-             * @enum {string}
-             */
-            output: "report" | "ranking" | "table";
-            /**
-             * Criteria
-             * @default []
-             */
+            output: components["schemas"]["Output"];
             criteria: components["schemas"]["Criterion"][];
-            /**
-             * Matrix
-             * @default []
-             */
+            /** @description Best first for a ranking. Empty for a report. */
             matrix: components["schemas"]["Row"][];
-            /** Duration Seconds */
+            /** Format: double */
             duration_seconds: number;
         };
-        /**
-         * RevisedSentence
-         * @description A sentence verification found partly unsupported and rewrote to what its quotes say.
-         */
+        /** @description A sentence verification found partly unsupported and rewrote to what its quotes say. */
         RevisedSentence: {
-            /** Section */
             section: string;
-            /** Before */
             before: string;
-            /** After */
             after: string;
-            /** Reason */
             reason: string;
         };
-        /**
-         * Row
-         * @description One entity of a ranking or a table.
-         */
+        /** @description One entity of a ranking or a table. */
         Row: {
-            /** Entity */
             entity: string;
-            /** Rank */
+            /**
+             * Format: uint64
+             * @description Overall place, from the weighted mean of its criterion ranks. Rankings only.
+             */
             rank?: number | null;
-            /** Cells */
             cells: components["schemas"]["Cell"][];
         };
-        /**
-         * RunDetail
-         * @description One run, as `GET /v1/runs/{id}` returns it. Its `calls` are every call the run kept.
-         */
+        /** @description One run, as `GET /v1/runs/{id}` returns it, with every call it kept. */
         RunDetail: {
-            /** Id */
             id: string;
-            /** Kind */
             kind: string;
-            /** Topic */
             topic: string;
-            /** State */
             state: string;
-            /** Stage */
             stage: string | null;
-            /** Created At */
+            /** Format: double */
             created_at: number;
-            /** Started At */
+            /** Format: double */
             started_at: number | null;
-            /** Ended At */
+            /** Format: double */
             ended_at: number | null;
-            /** Error */
             error: string | null;
             usage: components["schemas"]["RunUsage"];
-            /** Planned Stages */
             planned_stages: string[];
             latest: components["schemas"]["Progress"] | null;
-            /** Has Result */
             has_result: boolean;
-            /** Stages */
             stages: components["schemas"]["RunStage"][];
-            /** Calls */
+            /** @description The most recent completions, oldest first, including those in flight. */
             calls: components["schemas"]["LmCall"][];
-            /**
-             * Searches
-             * @default []
-             */
             searches: components["schemas"]["SearchCall"][];
-            /**
-             * Questions
-             * @default []
-             */
+            /** @description The questions a graph run has asked so far. */
             questions: components["schemas"]["ResearchQuestion"][];
-            /** Events */
             events: components["schemas"]["Progress"][];
-            /** Result */
-            result: components["schemas"]["ArticleResult"] | components["schemas"]["ResearchResult"] | null;
+            result: components["schemas"]["RunResult"] | null;
         };
-        /**
-         * RunSpan
-         * @description One stretch of time spent in a stage. `ended_at` is null while the run is still in it.
-         */
+        /** @description What a run can produce. Told apart by their fields, as pydantic's union was. */
+        RunResult: components["schemas"]["ArticleResult"] | components["schemas"]["ResearchResult"];
+        /** @description One stretch of time spent in a stage. `ended_at` is None while the run is still in it. */
         RunSpan: {
-            /** Started At */
+            /** Format: double */
             started_at: number;
-            /** Ended At */
+            /** Format: double */
             ended_at: number | null;
         };
-        /**
-         * RunStage
-         * @description Time spent in one stage.
-         *
-         *     A stage can be entered more than once, so `seconds` sums the spans rather than measuring from
-         *     the first entry to the last exit.
-         */
+        /** @description Time spent in one stage, summed over its spans. */
         RunStage: {
-            /** Name */
             name: string;
-            /** Started At */
+            /** Format: double */
             started_at: number;
-            /** Ended At */
+            /** Format: double */
             ended_at: number | null;
-            /** Seconds */
+            /** Format: double */
             seconds: number;
-            /** Spans */
             spans: components["schemas"]["RunSpan"][];
         };
-        /**
-         * RunSummary
-         * @description One run, as `GET /v1/runs` lists it.
-         */
+        /** @description One run, as `GET /v1/runs` lists it. */
         RunSummary: {
-            /** Id */
             id: string;
-            /** Kind */
             kind: string;
-            /** Topic */
             topic: string;
-            /** State */
             state: string;
-            /** Stage */
             stage: string | null;
-            /** Created At */
+            /** Format: double */
             created_at: number;
-            /** Started At */
+            /** Format: double */
             started_at: number | null;
-            /** Ended At */
+            /** Format: double */
             ended_at: number | null;
-            /** Error */
             error: string | null;
             usage: components["schemas"]["RunUsage"];
-            /** Planned Stages */
             planned_stages: string[];
             latest: components["schemas"]["Progress"] | null;
-            /** Has Result */
             has_result: boolean;
         };
-        /**
-         * RunUsage
-         * @description A run's totals, and the breakdowns worth having.
-         */
+        /** @description A run's totals, and the breakdowns worth having. */
         RunUsage: {
-            /** Prompt Tokens */
+            /** Format: uint64 */
             prompt_tokens: number;
-            /** Completion Tokens */
+            /** Format: uint64 */
             completion_tokens: number;
-            /** Reasoning Tokens */
+            /** Format: uint64 */
             reasoning_tokens: number;
-            /** Cost */
+            /** Format: double */
             cost: number;
-            /** Embedding Tokens */
+            /** Format: uint64 */
             embedding_tokens: number;
-            /** Searches */
+            /** Format: uint64 */
             searches: number;
-            /** By Model */
             by_model: {
                 [key: string]: components["schemas"]["ModelUsage"];
             };
-            /** By Role */
             by_role: {
                 [key: string]: components["schemas"]["ModelUsage"];
             };
-            /** By Stage */
+            /** @description Keyed by the stage the run was in when the call was made. */
             by_stage: {
                 [key: string]: components["schemas"]["StageUsage"];
             };
         };
-        /**
-         * SearchCall
-         * @description One query sent to the search engine, while it is waiting and after it returns.
-         */
+        /** @description One query sent to the search engine. */
         SearchCall: {
-            /** Id */
+            /** Format: uint64 */
             id: number;
-            /** Event */
+            /** Format: uint64 */
             event: number | null;
-            /** Has Content */
             has_content: boolean;
-            /** Engine */
             engine: string;
-            /** Query */
             query: string;
-            /** Started At */
+            /** Format: double */
             started_at: number;
-            /** Ended At */
+            /** Format: double */
             ended_at: number | null;
-            /** Results */
+            /**
+             * Format: uint64
+             * @description What the engine returned, before the run drops what it already read.
+             */
             results: number | null;
-            /** Failures */
+            /** @description Why it came back empty, when it failed rather than found nothing. */
             failures: string[];
         };
-        /**
-         * SearchContent
-         * @description What one search returned, kept with runs.keep_call_content.
-         */
+        /** @description What one search returned, kept with runs.keep_call_content. */
         SearchContent: {
-            /** Results */
             results: components["schemas"]["SearchResult"][];
         };
-        /** SearchResult */
         SearchResult: {
-            /** Title */
             title: string;
-            /** Url */
             url: string;
-            /** Snippet */
             snippet: string;
             source?: components["schemas"]["SourceInfo"] | null;
         };
-        /** SettingInfo */
         SettingInfo: {
-            /** Key */
             key: string;
-            /** Type */
+            /** @description `integer`, `number`, `boolean`, `text`, `list` of text, or `model`, a `<provider>/<name>`. */
             type: string;
-            /** Help */
             help: string;
-            /** Value */
             value: unknown;
-            /** Default */
-            default: unknown;
-            /** Stored */
-            stored: boolean;
-            /** Required */
-            required: boolean;
-            /** Nullable */
-            nullable: boolean;
-            /** Restart */
-            restart: boolean;
-            /** Minimum */
-            minimum?: number | null;
-            /** Choices */
             choices?: string[] | null;
+            /** @description Whether `value` comes from kvasir.db rather than being the default. */
+            stored: boolean;
+            /** @description The service runs nothing while a required setting is empty. */
+            required: boolean;
+            /** @description Whether `value` may be null, which `""` stores. */
+            nullable: boolean;
+            /** @description Read at startup only, so a change waits for a restart. */
+            restart: boolean;
+            /** Format: int64 */
+            minimum?: number | null;
         };
-        /** SettingsView */
         SettingsView: {
-            /** Fields */
             fields: components["schemas"]["SettingInfo"][];
-            /** Missing */
+            /** @description The required settings still empty. */
             missing: string[];
-            /** Restart Required */
+            /** @description Settings changed since startup that apply only at the next. */
             restart_required: string[];
         };
-        /**
-         * Site
-         * @description One domain with pages cached.
-         */
+        /** @description One domain with pages cached. */
         Site: {
-            /** Domain */
             domain: string;
-            /** Pages */
+            /** Format: uint64 */
             pages: number;
-            /** Pieces */
+            /** Format: uint64 */
             pieces: number;
-            /** Fetched At */
+            /**
+             * Format: double
+             * @description Unix seconds of the latest fetch among its pages.
+             */
             fetched_at: number;
-            /** Engines */
             engines: string[];
             source?: components["schemas"]["SourceInfo"] | null;
         };
-        /**
-         * SiteEdge
-         * @description Links from the pages of one cached site to the pages of another.
-         */
+        /** @description Links from the pages of one cached site to the pages of another. */
         SiteEdge: {
-            /** Source */
             source: string;
-            /** Target */
             target: string;
-            /** Count */
+            /** Format: uint64 */
             count: number;
         };
-        /**
-         * SiteGraph
-         * @description The cached sites and the links between them.
-         */
+        /** @description The cached sites and the links between them. */
         SiteGraph: {
-            /** Sites */
             sites: components["schemas"]["SiteNode"][];
-            /** Edges */
             edges: components["schemas"]["SiteEdge"][];
         };
-        /**
-         * SiteNode
-         * @description One cached site in the link graph.
-         */
+        /** @description One cached site in the link graph. */
         SiteNode: {
-            /** Domain */
             domain: string;
-            /** Pages */
+            /** Format: uint64 */
             pages: number;
-            /** Links */
+            /**
+             * Format: uint64
+             * @description Links stored on its pages, wherever they lead.
+             */
             links: number;
             source?: components["schemas"]["SourceInfo"] | null;
         };
-        /**
-         * SourceInfo
-         * @description What is known of a site: its kind, tags and trust tier. See `kvasir.research.sources`.
-         */
+        /** @description What is known of a site: its kind, tags and trust tier. */
         SourceInfo: {
-            /** Kind */
             kind: string;
-            /** Tags */
             tags: string[];
-            /**
-             * Tier
-             * @enum {string}
-             */
-            tier: "high" | "normal" | "unknown" | "low" | "avoid";
-            /** Label */
+            tier: components["schemas"]["Tier"];
+            /** @description Empty when Wikidata gave none. */
             label: string;
-            /** Qid */
+            /** @description The Wikidata item, or empty. */
             qid: string;
-            /** Origin */
+            /**
+             * @description What decided it: config, mark, list, rule or wikidata. Empty when nothing is known. A site
+             *     set in the config cannot be marked.
+             */
             origin: string;
         };
-        /**
-         * StageUsage
-         * @description What one stage spent, including what is not a completion.
-         */
+        /** @description What one stage spent, including what is not a completion. */
         StageUsage: {
-            /** Calls */
+            /** Format: uint64 */
             calls: number;
-            /** Prompt Tokens */
+            /** Format: uint64 */
             prompt_tokens: number;
-            /** Completion Tokens */
+            /** Format: uint64 */
             completion_tokens: number;
-            /** Reasoning Tokens */
+            /**
+             * Format: uint64
+             * @description Part of `completion_tokens`, not in addition to it.
+             */
             reasoning_tokens: number;
-            /** Cost */
+            /** Format: double */
             cost: number;
             /**
-             * Seconds
-             * @default 0
+             * Format: double
+             * @description Wall time of the calls that answered, summed.
              */
             seconds: number;
-            /** Embedding Tokens */
+            /** Format: uint64 */
             embedding_tokens: number;
-            /** Searches */
+            /** Format: uint64 */
             searches: number;
         };
         /**
@@ -1603,65 +814,69 @@ export interface components {
          * @description Options of the `storm` method. Each falls back to the configured default when omitted.
          */
         StormOptions: {
-            /** Search Top K */
-            search_top_k?: number | null;
-            /** Max Conv Turn */
-            max_conv_turn?: number | null;
-            /** Max Perspective */
-            max_perspective?: number | null;
+            /**
+             * Search Top K
+             * @default null
+             */
+            search_top_k: number | null;
+            /**
+             * Max Conv Turn
+             * @default null
+             */
+            max_conv_turn: number | null;
+            /**
+             * Max Perspective
+             * @default null
+             */
+            max_perspective: number | null;
             /**
              * Do Polish Article
              * @default true
              */
             do_polish_article: boolean;
-            /** Model Fast */
-            model_fast?: string | null;
-            /** Model Strong */
-            model_strong?: string | null;
+            /**
+             * Model Fast
+             * @default null
+             */
+            model_fast: string | null;
+            /**
+             * Model Strong
+             * @default null
+             */
+            model_strong: string | null;
         };
         /** StormRun */
         StormRun: {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Method
+             * @constant
              */
             method: "storm";
             input: components["schemas"]["Input"];
-            /**
-             * @default {
-             *       "do_polish_article": true
-             *     }
-             */
-            options: components["schemas"]["StormOptions"];
+            options?: components["schemas"]["StormOptions"];
         };
         /**
-         * TaskRequest
-         * @description Body of `POST /v1/tasks`. OpenAI-shaped chat messages, forwarded to the fast model as-is.
+         * @description Body of `POST /v1/tasks`: OpenAI-shaped chat messages, forwarded to the fast model as-is. At
+         *     least one.
          */
         TaskRequest: {
-            /** Messages */
             messages: {
                 [key: string]: string;
             }[];
         };
-        /**
-         * TaskResponse
-         * @description Payload of `POST /v1/tasks`. One completion, unparsed.
-         */
+        /** @description Payload of `POST /v1/tasks`. One completion, unparsed. */
         TaskResponse: {
-            /** Content */
             content: string;
         };
         /**
-         * UnverifiedSentence
-         * @description A sentence no step could judge, left in the report marked `[unverified]`.
+         * @description How far a site is trusted.
+         * @enum {string}
          */
+        Tier: "high" | "normal" | "unknown" | "low" | "avoid";
+        /** @description A sentence no step could judge, left in the report marked `[unverified]`. */
         UnverifiedSentence: {
-            /** Section */
             section: string;
-            /** Sentence */
             sentence: string;
-            /** Reason */
             reason: string;
         };
         /** ValidationError */
@@ -1677,6 +892,11 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /**
+         * @description The step of verification that decided a sentence.
+         * @enum {string}
+         */
+        VerifyStage: "citation" | "checker" | "verify" | "escalate" | "rewrite";
     };
     responses: never;
     parameters: never;
@@ -1685,909 +905,4 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export interface operations {
-    login_v1_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Login"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_runs_v1_runs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunSummary"][];
-                };
-            };
-        };
-    };
-    start_run_v1_runs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LedgerRun"] | components["schemas"]["GraphRun"] | components["schemas"]["StormRun"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_detail_v1_runs__run_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    call_content_v1_runs__run_id__calls__call_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-                call_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LmCallContent"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    search_content_v1_runs__run_id__searches__search_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-                search_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchContent"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_events_v1_runs__run_id__events_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    methods_v1_methods_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MethodInfo"][];
-                };
-            };
-        };
-    };
-    list_sites_v1_sites_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Site"][];
-                };
-            };
-        };
-    };
-    site_graph_v1_sites_graph_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SiteGraph"];
-                };
-            };
-        };
-    };
-    stats_v1_pages_stats_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CacheStats"];
-                };
-            };
-        };
-    };
-    list_pages_v1_pages_get: {
-        parameters: {
-            query?: {
-                site?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageSummary"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    flush_v1_pages_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    recall_v1_pages_recall_get: {
-        parameters: {
-            query: {
-                q: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Recall"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    page_detail_v1_pages__id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_page_v1_pages__id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_site_v1_sites__name__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    refetch_v1_pages__id__refetch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    favicon_v1_favicons__host__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                host: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The site's icon. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "image/*": unknown;
-                };
-            };
-            /** @description No icon for the host, or not now. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    flush_v1_favicons_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    source_v1_sources__host__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                host: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SourceInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    flush_v1_sources_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    mark_v1_sources__host__mark_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                host: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Mark"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SourceInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    unmark_v1_sources__host__mark_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                host: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clarify_question_v1_clarify_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClarifyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClarifyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    task_v1_tasks_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TaskRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_settings_v1_settings_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingsView"];
-                };
-            };
-        };
-    };
-    patch_settings_v1_settings_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": unknown;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingsView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reset_setting_v1_settings__key__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingsView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_providers_v1_providers_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderInfo"][];
-                };
-            };
-        };
-    };
-    list_models_v1_providers__name__models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelInfo"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    healthz_healthz_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    readyz_readyz_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-}
+export type operations = Record<string, never>;
