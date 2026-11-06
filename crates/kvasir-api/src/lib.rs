@@ -1,10 +1,4 @@
-//! The HTTP service: runs, the page cache, sites, settings and providers, behind one token.
-//!
-//! [`open`] builds the shared state from the environment's settings and those stored in
-//! `kvasir.db`, as the Python service's lifespan did; [`router`] serves it. Every route but health,
-//! the login and the page needs the token: see `auth`. The routes answer as the FastAPI service
-//! did, error bodies included, so a client cannot tell them apart. `docs/rust-plan.md` lists where
-//! they differ.
+#![doc = include_str!("../README.md")]
 
 mod auth;
 mod body;

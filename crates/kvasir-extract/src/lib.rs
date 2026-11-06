@@ -1,5 +1,4 @@
-//! What a page says: its article as markdown, its links, and whether it holds an article at all.
-//! Nothing here touches the network.
+#![doc = include_str!("../README.md")]
 
 mod check;
 mod html;

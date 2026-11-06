@@ -1,4 +1,4 @@
-//! Types and small pure functions shared by every kvasir crate.
+#![doc = include_str!("../README.md")]
 
 pub mod pages;
 pub mod requests;

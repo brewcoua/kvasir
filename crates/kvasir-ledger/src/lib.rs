@@ -1,8 +1,4 @@
-//! The question ledger: a brief split into questions, searched for one at a time.
-//!
-//! Code decides how much to search and when to stop; the model only decides what to search for,
-//! what a page says, and how to write it up. Every model call sees one small input, so a 16k
-//! context is enough. See `docs/research.md` for the design.
+#![doc = include_str!("../README.md")]
 
 pub mod brief;
 pub mod compare;

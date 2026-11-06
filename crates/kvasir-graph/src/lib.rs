@@ -1,11 +1,4 @@
-//! The graph method: questions explored best first, each raising the next from its evidence.
-//!
-//! The brief is split into first questions, as in the ledger. Exploration then searches the
-//! question proof numbers pick, takes in its claims, and adds the questions they raise as its
-//! children, until the research time is spent or no question can still be settled. The report has
-//! sections an outline call groups the questions into after the research, each written from the
-//! claims its questions rest on. Always a report: the graph has no ranking or table. See
-//! `docs/research.md` for the design.
+#![doc = include_str!("../README.md")]
 
 pub mod explore;
 pub mod graph;

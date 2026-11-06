@@ -1,10 +1,4 @@
-//! The kvasir binary.
-//!
-//! - `kvasir serve` runs the service, configured by `KVASIR_*` variables and `kvasir.db`.
-//! - `kvasir eval <out>` researches `eval/questions.toml` through a running service and scores
-//!   each result; see `eval.rs`.
-//! - `kvasir openapi` prints the OpenAPI document the web client's types are generated from.
-//! - `kvasir pdf-text` reads a PDF on stdin and writes its text; the service runs it as a child.
+#![doc = include_str!("../README.md")]
 
 mod eval;
 

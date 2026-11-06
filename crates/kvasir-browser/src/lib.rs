@@ -1,4 +1,4 @@
-//! A page as a browser builds it, for pages whose text a script writes.
+#![doc = include_str!("../README.md")]
 
 use std::future::Future;
 use std::pin::Pin;

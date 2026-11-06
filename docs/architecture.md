@@ -47,26 +47,8 @@ flowchart LR
     registry -.-> data
 ```
 
-The workspace is one crate per concern, under `crates/`:
-
-| Crate | Holds |
-| --- | --- |
-| `kvasir` | The binary: `kvasir serve`, which configures logging and starts the service, and `kvasir eval`. |
-| `kvasir-api` | The axum app and its routes: runs, tasks, the page cache, sites, sources, settings and providers. `runs.rs` streams a run as SSE; `page.rs` serves the runs page. |
-| `kvasir-config` | `Settings`, from the environment and the `settings` table of `kvasir.db`. |
-| `kvasir-types` | The request, result and run types the API serves. |
-| `kvasir-run` | `Run`, `RunRegistry`, `Slots` and `RunCtx`: state, stages, usage and live followers for each run. `store.rs` is the optional SQLite history. |
-| `kvasir-llm` | Signatures rendered and parsed as dspy did, the roles table, and `Gateway`, the OpenAI-compatible client. |
-| `kvasir-research` | The steps every research method shares: search, reading, verification, writing, rendering. See [`research.md`](research.md). |
-| `kvasir-ledger` | The `ledger` method, the research pipeline. |
-| `kvasir-graph` | The `graph` method, which explores the questions findings raise over the same steps. See [`methods-plan.md`](methods-plan.md). |
-| `kvasir-storm` | The `storm` method, STORM translated from `knowledge_storm`. See [`storm.md`](storm.md). |
-| `kvasir-fetch` | Reading a page: the public-address guard, robots.txt, politeness per host, and `pages.db`. |
-| `kvasir-extract` | What a page says: its article as markdown, its links, and PDF text. No network. |
-| `kvasir-browser` | A page as Chromium builds it, behind the `chromium` feature. |
-| `kvasir-sites` | Source trust (`sources.rs`) and site icons (`favicons.rs`). |
-| `kvasir-db` | Opening and migrating kvasir's SQLite files, and running their blocking work off the async runtime. |
-| `kvasir-testkit` | Stand-ins for tests: a scripted model and the golden check of a signature. |
+The workspace is one crate per concern, under `crates/`. [`crates/README.md`](../crates/README.md)
+lists them by layer, and each crate's own README lists its modules.
 
 The runs page is built from `web/` into `web/dist` by `pnpm build` and not committed. A debug build
 reads it from disk and a release build embeds it. `GET /` answers 503 until it is built.

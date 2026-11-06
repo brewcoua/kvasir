@@ -1,5 +1,4 @@
-//! Reading a page from the web: who may be asked and how often, what is kept, and what a page that
-//! a plain request cannot read falls back to.
+#![doc = include_str!("../README.md")]
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

@@ -1,5 +1,4 @@
-//! The research steps the methods share: searching, reading pages into claims, recalling what was
-//! read, writing sections, and checking what was written against its evidence.
+#![doc = include_str!("../README.md")]
 
 pub mod claims;
 pub mod clarify;

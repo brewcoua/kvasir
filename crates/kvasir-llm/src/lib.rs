@@ -1,5 +1,4 @@
-//! Calling language models: signatures rendered and parsed as dspy did, and an OpenAI-compatible
-//! gateway client that retries what a retry can fix and reports what each call spent.
+#![doc = include_str!("../README.md")]
 
 pub mod adapter;
 pub mod gateway;

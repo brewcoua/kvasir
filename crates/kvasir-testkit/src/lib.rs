@@ -1,5 +1,4 @@
-//! Stand-ins for the services kvasir calls, for tests: a scripted language model, and the golden
-//! check of a signature.
+#![doc = include_str!("../README.md")]
 
 pub mod golden;
 

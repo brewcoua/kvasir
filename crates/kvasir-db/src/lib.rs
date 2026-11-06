@@ -1,8 +1,4 @@
-//! Opening kvasir's SQLite files, migrating them by `user_version`, and running blocking database
-//! work off the async runtime.
-//!
-//! Each file has one connection behind a mutex. The service's writes are small and rare, so
-//! serialising them costs nothing, and WAL lets a reader in another process see a consistent file.
+#![doc = include_str!("../README.md")]
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

@@ -1,4 +1,4 @@
-//! What kind of site a host is, and its icon.
+#![doc = include_str!("../README.md")]
 
 pub mod favicons;
 pub mod sources;

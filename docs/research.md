@@ -16,7 +16,7 @@ applies them.
 
 | Rule | Consequence |
 | --- | --- |
-| Code decides how much to search and when to stop. The model decides what to search for, what a page says, and how to write it. | Budgets, stop conditions, query shapes and ranking arithmetic are constants in the modules of `methods/ledger/` and `research/`, not prompts. A prompted small model searches too little when left to decide. |
+| Code decides how much to search and when to stop. The model decides what to search for, what a page says, and how to write it. | Budgets, stop conditions, query shapes and ranking arithmetic are constants in the modules of `crates/kvasir-ledger` and `crates/kvasir-research`, not prompts. A prompted small model searches too little when left to decide. |
 | No call sees more than one page. | A page is cut into pieces of about 1,500 tokens, and one call reads as many of its closest pieces as the context holds, with one question and the brief. Nothing carries the run's history. |
 | Nothing counts as evidence unless a page says it word for word. | Every claim carries a quote, and a claim whose quote is not on the page is dropped. Every cited sentence is later checked against those quotes. |
 | Calls are sequential, but for intake and downloads. | Intake calls run in a pool as wide as `KVASIR_MAX_THREADS`. A local server batches requests it holds at once, one pass over the weights serving each, so this is faster only when it holds several: for Ollama, set `OLLAMA_NUM_PARALLEL` to the same width. Each slot takes its own context's worth of memory. |

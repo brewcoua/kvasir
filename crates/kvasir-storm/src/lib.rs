@@ -1,9 +1,4 @@
-//! STORM: an article written from simulated conversations between editors and an expert who
-//! searches to answer them. Stanford OVAL's algorithm and prompts, MIT licensed; see `NOTICE`.
-//!
-//! The stages are `research`, `outline`, `article` and, unless turned off, `polish`. Each editor
-//! holds a conversation side by side with the others; the sections are written side by side too.
-//! STORM reads search snippets only, not pages.
+#![doc = include_str!("../README.md")]
 
 pub mod article;
 pub mod curation;
