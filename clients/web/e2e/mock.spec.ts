@@ -540,3 +540,17 @@ test("flushing the cache empties the knowledge page after a confirm", async ({ p
   expect(messages[0]).toContain("cannot be undone");
   await expect(page.getByRole("button", { name: "Flush cache" })).toHaveCount(0);
 });
+
+test("the lists page turns a list on and explains a site", async ({ page }) => {
+  await page.goto("/#/lists");
+  await expect(page.getByRole("heading", { name: /SEO and farms/ })).toBeVisible();
+  await expect(page.getByText("Last download failed: status 404")).toBeVisible();
+
+  const toggle = page.getByRole("switch", { name: "Use SpamdexingSites" });
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+
+  await page.getByLabel("Site to try").fill("bad.example");
+  await page.getByRole("button", { name: "Explain" }).click();
+  await expect(page.getByText("applies")).toBeVisible();
+});

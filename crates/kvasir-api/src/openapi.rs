@@ -51,7 +51,11 @@ const OPTIONAL: &[(&str, &[&str])] = &[
     ("SettingInfo", &["minimum", "choices"]),
     ("Site", &["source"]),
     ("SiteNode", &["source"]),
-    ("SourceInfo", &["evidence"]),
+    ("SourceInfo", &["evidence", "listed_by"]),
+    (
+        "ListChange",
+        &["name", "url", "entries", "enabled", "effect", "tag", "ttl_days", "guard", "except"],
+    ),
 ];
 
 /// No `default`, as FastAPI's response schemas have none: `required` alone says what is sent. One

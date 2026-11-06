@@ -3,11 +3,12 @@
   import type { SourceInfo } from "../lib/api";
   import { KIND_LABELS } from "../lib/format";
 
-  // `onpick` gets `allow`, `deny`, a kind, or null to clear the mark.
+  // `onpick` gets `allow`, `deny`, `exempt`, a kind, or null to clear the mark.
   let { domain, source, disabled = false, onpick }: { domain: string; source: SourceInfo; disabled?: boolean; onpick: (value: string | null) => void } = $props();
 
   const kinds = Object.keys(KIND_LABELS).filter((kind) => kind !== "unknown");
-  const marked = $derived(source.origin === "mark" ? (source.tags.find((tag) => tag === "allow" || tag === "deny") ?? source.kind) : "");
+  // An exempt site keeps what the rest of the order found, so its origin is not `mark`.
+  const marked = $derived(source.tags.includes("exempt") ? "exempt" : source.origin === "mark" ? (source.tags.find((tag) => tag === "allow" || tag === "deny") ?? source.kind) : "");
 </script>
 
 {#if source.origin === "config"}
@@ -18,7 +19,7 @@
     <DropdownMenu.Portal>
       <DropdownMenu.Content class="menu" align="end" sideOffset={4}>
         <DropdownMenu.RadioGroup aria-label="Mark as" value={marked} onValueChange={(value) => onpick(value)}>
-          {#each ["allow", "deny", ...kinds] as value (value)}
+          {#each ["allow", "deny", "exempt", ...kinds] as value (value)}
             <DropdownMenu.RadioItem {value} class="option">{value}</DropdownMenu.RadioItem>
           {/each}
         </DropdownMenu.RadioGroup>

@@ -323,19 +323,19 @@ export interface components {
         };
         /** @description What to change on a list: only the fields given. A catalog list keeps its `url` and `entries`. */
         ListChange: {
-            name: string | null;
-            url: string | null;
-            entries: string[] | null;
-            enabled: boolean | null;
-            effect: string | null;
-            tag: string | null;
+            name?: string | null;
+            url?: string | null;
+            entries?: string[] | null;
+            enabled?: boolean | null;
+            effect?: string | null;
+            tag?: string | null;
             /**
              * Format: uint64
              * @description 0 goes back to `sources.ttl_days`.
              */
-            ttl_days: number | null;
-            guard: boolean | null;
-            except: string[] | null;
+            ttl_days?: number | null;
+            guard?: boolean | null;
+            except?: string[] | null;
         };
         /** @description A list naming a site, and whether it counts. */
         ListHit: {
@@ -851,7 +851,7 @@ export interface components {
             /** @description Why the survey called it a likely farm. Left out otherwise. */
             evidence?: string;
             /** @description The lists that decided or tagged it, by name. Left out when none did. */
-            listed_by: string[];
+            listed_by?: string[];
         };
         /** @description A list and how its last read and download went. */
         SourceListInfo: {

@@ -19,6 +19,7 @@ type LmCallContent = components["schemas"]["LmCallContent"];
 type SearchContent = components["schemas"]["SearchContent"];
 type PageDetail = components["schemas"]["PageDetail"];
 type SourceInfo = components["schemas"]["SourceInfo"];
+type SourceListInfo = components["schemas"]["SourceListInfo"];
 
 const FIXTURES = join(import.meta.dirname, "..", "fixtures");
 const SPEED = Number(process.env.MOCK_SPEED ?? 20);
@@ -277,14 +278,45 @@ const SOURCES: Record<string, SourceInfo> = {
   "explainx.ai": source("unknown", "avoid", "config", { tags: ["deny"] }),
 };
 // The values a mark takes and the tiers they give repeat research/sources.py (MARKS, tier()); keep them in step.
-const MARKS = ["allow", "deny", "intergovernmental", "government", "academic", "standards", "news", "reference", "organization"];
+const MARKS = ["allow", "deny", "exempt", "intergovernmental", "government", "academic", "standards", "news", "reference", "organization"];
+
+// A few of the catalog's lists and one of the config's, so the lists page has one of each.
+const sourceList = (id: string, name: string, group: string, more: Partial<SourceListInfo> = {}) => ({
+  id,
+  name,
+  url: `https://lists.example/${id}.txt`,
+  entries: [],
+  enabled: false,
+  effect: "block",
+  tag: "",
+  ttl_days: null,
+  guard: true,
+  except: [],
+  group,
+  licence: "none",
+  custom: false,
+  hosts: 0,
+  skipped: 0,
+  fetched_at: null,
+  error: null,
+  ...more,
+});
+const LISTS = (): SourceListInfo[] =>
+  [
+    sourceList("seo-garbage", "seo-garbage", "SEO and farms", { tag: "seo_spam", enabled: true, hosts: 412, skipped: 3, fetched_at: 1_700_000_000 }),
+    sourceList("spamdexing", "SpamdexingSites", "SEO and farms", { tag: "seo_spam", licence: "BSD-3-Clause" }),
+    sourceList("ublacklist-ai", "ublacklist-ai", "AI", { effect: "demote", tag: "ai_slop", error: "status 404" }),
+    sourceList("config-0", "government", "Config", { effect: "kind:government", guard: false, licence: "", hosts: 12000 }),
+  ] as unknown as SourceListInfo[];
 
 export function mock(): Plugin {
   const runs = load();
+  const lists = LISTS();
   const pages = [...PAGES];
   const marks = new Map<string, string>();
   const describe = (host: string): SourceInfo => {
     const mark = marks.get(host);
+    if (mark === "exempt") return { ...(SOURCES[host] ?? source("unknown", "unknown", "")), tags: ["exempt"] };
     if (mark === "allow" || mark === "deny") return source("unknown", mark === "deny" ? "avoid" : "high", "mark", { tags: [mark] });
     if (mark) return source(mark, ["intergovernmental", "government", "academic", "standards"].includes(mark) ? "high" : "normal", "mark");
     return SOURCES[host] ?? source("unknown", "unknown", "");
@@ -332,6 +364,37 @@ export function mock(): Plugin {
         if (request.method === "DELETE" && path === "/v1/favicons") {
           response.statusCode = 204;
           return response.end();
+        }
+
+        if (path === "/v1/sources/lists") {
+          if (request.method === "GET") return send(response, 200, lists);
+          if (request.method === "POST") {
+            const fields = await read(request);
+            const added = sourceList(`custom-${lists.length}`, String(fields.name), "Custom", { ...fields, custom: true, enabled: true, licence: "", url: (fields.url as string) ?? null }) as unknown as SourceListInfo;
+            lists.push(added);
+            return send(response, 201, added);
+          }
+        }
+        const oneList = path.match(/^\/v1\/sources\/lists\/([^/]+)(\/refresh)?$/);
+        if (oneList) {
+          const at = lists.findIndex((list) => list.id === decodeURIComponent(oneList[1]));
+          if (at < 0) return send(response, 404, { message: `no list ${oneList[1]}` });
+          if (request.method === "POST" && oneList[2]) return send(response, 200, lists[at]);
+          if (request.method === "PATCH") {
+            lists[at] = { ...lists[at], ...(await read(request)) } as SourceListInfo;
+            return send(response, 200, lists[at]);
+          }
+          if (request.method === "DELETE") {
+            if (lists[at].custom) lists.splice(at, 1);
+            else lists[at] = LISTS().find((list) => list.id === lists[at].id)!;
+            response.statusCode = 204;
+            return response.end();
+          }
+        }
+        const explained = path.match(/^\/v1\/sources\/([^/]+)\/explain$/);
+        if (explained && request.method === "GET") {
+          const host = decodeURIComponent(explained[1]);
+          return send(response, 200, { source: describe(host), lists: host === "bad.example" ? [{ id: "seo-garbage", name: "seo-garbage", effect: "block", state: "applies" }] : [] });
         }
 
         const sourced = path.match(/^\/v1\/sources\/([^/]+)(\/mark)?$/);

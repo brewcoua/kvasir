@@ -7,7 +7,7 @@
 
   const text = $derived(source ? [KIND_LABELS[source.kind] ?? source.kind, ...(source.tier === "unknown" ? [] : [source.tier])].join(" · ") : "");
   const title = $derived(
-    source ? [source.label, source.kind, `tier ${source.tier}`, source.tags.join(", "), source.origin && `from ${source.origin}`, source.evidence].filter(Boolean).join(" · ") : "",
+    source ? [source.label, source.kind, `tier ${source.tier}`, source.tags.join(", "), source.origin && `from ${source.origin}`, source.listed_by?.length ? `listed by ${source.listed_by.join(", ")}` : "", source.evidence].filter(Boolean).join(" · ") : "",
   );
 </script>
 

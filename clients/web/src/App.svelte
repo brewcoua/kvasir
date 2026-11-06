@@ -10,6 +10,7 @@
   import Setup from "./components/Setup.svelte";
   import Theme from "./components/Theme.svelte";
   import Knowledge from "./pages/Knowledge.svelte";
+  import Lists from "./pages/Lists.svelte";
   import NewRun from "./pages/NewRun.svelte";
   import Run from "./pages/Run.svelte";
   import Runs from "./pages/Runs.svelte";
@@ -97,6 +98,7 @@
         Runs{#if active > 0}<span class="meta">{" · "}{active} running</span>{/if}
       </a>
       <a href="#/knowledge" aria-current={route.current.page === "knowledge" ? "page" : undefined}>Knowledge</a>
+      <a href="#/lists" aria-current={route.current.page === "lists" ? "page" : undefined}>Lists</a>
     </nav>
     <Theme />
     <button type="button" class="icon" title="Settings" aria-label="Settings" onclick={() => (settingsOpen = true)}>
@@ -119,6 +121,8 @@
       <Runs {runs} {summary} />
     {:else if route.current.page === "knowledge"}
       <Knowledge id={route.current.id} />
+    {:else if route.current.page === "lists"}
+      <Lists />
     {:else}
       <NewRun {defaults} {runs} onstarted={(id) => (go({ page: "run", id, tab: null }), refresh())} />
     {/if}

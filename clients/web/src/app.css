@@ -2419,3 +2419,65 @@ tr.cut td {
   display: block;
   font-size: 0.72rem;
 }
+
+.lists h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list-rows > li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.list-name {
+  font-weight: 600;
+}
+.list-row .action {
+  margin-left: auto;
+}
+.list-fields {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.list-edit {
+  display: grid;
+  gap: 8px;
+  max-width: 480px;
+  padding: 8px 0;
+}
+.list-edit label {
+  display: grid;
+  gap: 4px;
+}
+.list-edit .switch-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.list-edit textarea {
+  min-height: 72px;
+}
+.lists .field {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  padding: 4px 8px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}

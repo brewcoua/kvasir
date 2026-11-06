@@ -22,9 +22,17 @@ describe("SourceMenu", () => {
     const items = (await screen.findAllByRole("menuitemradio")).map((item) => item.textContent);
     expect(screen.getByRole("menuitem", { name: "Clear the mark" }).getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByRole("group", { name: "Mark as" })).toBeTruthy();
-    expect(items).toEqual(["allow", "deny", "intergovernmental", "government", "academic", "standards", "news", "reference", "organization"]);
+    expect(items).toEqual(["allow", "deny", "exempt", "intergovernmental", "government", "academic", "standards", "news", "reference", "organization"]);
     await fireEvent.click(screen.getByRole("menuitemradio", { name: "news" }));
     expect(onpick).toHaveBeenCalledWith("news");
+  });
+
+  it("shows an exempt site as marked, whatever else is known of it", async () => {
+    const onpick = vi.fn();
+    render(SourceMenu, { domain: "x.org", source: { ...source, kind: "news", tags: ["exempt"], origin: "wikidata" }, onpick });
+    await fireEvent.pointerDown(screen.getByRole("button", { name: "Mark x.org" }), { button: 0, ctrlKey: false });
+    expect(await screen.findByRole("menuitemradio", { name: "exempt" })).toHaveProperty("ariaChecked", "true");
+    expect(screen.getByRole("menuitem", { name: "Clear the mark" }).getAttribute("aria-disabled")).toBe("false");
   });
 
   it("clears a mark, and has nothing to clear without one", async () => {
