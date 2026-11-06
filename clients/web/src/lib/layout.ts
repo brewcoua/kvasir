@@ -40,6 +40,9 @@ export interface StepData extends Record<string, unknown> {
   // Drawn as a box around its children.
   container: boolean;
   expandable: boolean;
+  // Whether a line ends on this side of the card, which is where its dot shows.
+  linkedIn?: boolean;
+  linkedOut?: boolean;
   // A page's parts, shown as markers on its card.
   parts: { state: Step["state"] }[];
   // Filled in by the caller, which has the run: a stage's spend, and the latest event while it is in that stage.
@@ -306,7 +309,12 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
       edges.push({ id, source: l.from, target: l.to, class: l.kind });
     }
   }
+  for (const e of edges) {
+    at.get(e.source)!.data.linkedOut = true;
+    at.get(e.target)!.data.linkedIn = true;
+  }
   // What no link reaches hangs from its container: down a rail in the container's left padding, then into the child's header.
+  // A rail leaves the container's inside, not its right side, so only the child gets a dot; arcs below touch neither.
   const reached = new Set(edges.map((e) => e.target));
   for (const node of nodes) {
     if (!node.parentId || reached.has(node.id)) continue;
@@ -314,6 +322,7 @@ export function layout(roots: Step[], open: Set<string>, links: Link[]): { nodes
     const [x, y0, y1] = [p.x + PAD / 2, p.y + HEADER, c.y + HEADER / 2];
     const r = Math.min(R, c.x - x, y1 - y0);
     const path = `M${x} ${y0}V${y1 - r}Q${x} ${y1} ${x + r} ${y1}H${c.x}`;
+    node.data.linkedIn = true;
     edges.push({ id: `rail:${node.parentId}>${node.id}`, source: node.parentId, target: node.id, type: "rail", ...progress(node.data.step), data: { path } satisfies LinkData });
   }
   for (const { x: ox, y: oy, research } of lanes) {

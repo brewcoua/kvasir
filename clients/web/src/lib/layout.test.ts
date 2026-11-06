@@ -34,6 +34,22 @@ describe("layout", () => {
     expect(nodes.every((n) => n.position.y === 0)).toBe(true);
   });
 
+  it("marks only the sides a line ends on", () => {
+    const { at } = abs(layout(roots, new Set(), linked).nodes);
+    const [first, last] = [at.get(roots[0].id)!.data, at.get(roots.at(-1)!.id)!.data];
+    expect([first.linkedIn, first.linkedOut]).toEqual([undefined, true]);
+    expect([last.linkedIn, last.linkedOut]).toEqual([true, undefined]);
+  });
+
+  it("gives a rail's child a dot and not the side of its container", () => {
+    const opened = layout(roots, everything, linked);
+    const { at } = abs(opened.nodes);
+    const rail = opened.edges.find((e) => e.type === "rail")!;
+    expect(at.get(rail.target)!.data.linkedIn).toBe(true);
+    const onlyRails = opened.nodes.find((n) => n.data.container && opened.edges.every((e) => e.source !== n.id || e.type === "rail"))!;
+    expect(onlyRails.data.linkedOut).toBeUndefined();
+  });
+
   it("counts what a closed step hides", () => {
     const { nodes } = layout(roots, new Set(), linked);
     expect(nodes.find((n) => n.id === research.id)!.data.hidden).toBe(count(research));

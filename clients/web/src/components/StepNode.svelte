@@ -16,7 +16,7 @@
   const plural = (n: number, word: string) => `${count(n)} ${word}${n === 1 ? "" : "s"}`;
 </script>
 
-<Handle type="target" position={Position.Left} isConnectable={false} />
+<Handle type="target" position={Position.Left} isConnectable={false} class={{ linked: data.linkedIn }} />
 {#if step.kind === "attempt" || step.kind === "recall" || step.kind === "page"}
   <div class="step-card step-row {step.state} {step.kind}" title={step.detail} data-testid="step-{step.id}">
     <div class="step-head">
@@ -54,4 +54,4 @@
     {/if}
   </div>
 {/if}
-<Handle type="source" position={Position.Right} isConnectable={false} />
+<Handle type="source" position={Position.Right} isConnectable={false} class={{ linked: data.linkedOut }} />

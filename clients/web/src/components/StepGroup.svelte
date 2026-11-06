@@ -13,7 +13,7 @@
   const step = $derived(data.step);
 </script>
 
-<Handle type="target" position={Position.Left} isConnectable={false} />
+<Handle type="target" position={Position.Left} isConnectable={false} class={{ linked: data.linkedIn }} />
 <div class="step-group {step.state} {step.kind}" data-testid="step-{step.id}">
   <div class="step-head">
     {#if step.kind === "attempt" || step.kind === "recall"}
@@ -35,4 +35,4 @@
     <div class="claim-strip"><span class="meta">claims</span><ClaimDots {data} /></div>
   {/if}
 </div>
-<Handle type="source" position={Position.Right} isConnectable={false} />
+<Handle type="source" position={Position.Right} isConnectable={false} class={{ linked: data.linkedOut }} />
