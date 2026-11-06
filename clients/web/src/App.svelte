@@ -128,7 +128,7 @@
     {/if}
   </main>
 
-  <Settings bind:open={settingsOpen} {defaults} />
+  <Settings bind:open={settingsOpen} {defaults} onsaved={loadDefaults} />
 {/if}
 
 <svelte:window onkeydown={slash} />

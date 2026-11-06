@@ -25,6 +25,13 @@
     background: "M8 2l6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3",
     assess: "M2 12a6 6 0 1 1 12 0M8 12l2.5-3.5",
     outline: "M3 4h10M5.5 7h7.5M5.5 10h7.5M3 13h10",
+    globe: "M2 8h12M8 2c2 1.8 2.6 3.8 2.6 6S10 12.2 8 14c-2-1.8-2.6-3.8-2.6-6S6 3.8 8 2",
+    book: "M8 4.2C6.8 3 5 2.6 2.5 2.6v10c2.5 0 4.3.4 5.5 1.6 1.2-1.2 3-1.6 5.5-1.6v-10C11 2.6 9.2 3 8 4.2zM8 4.2v10",
+    play: "M4.5 2.5v11l9-5.5z",
+    download: "M8 2v8M4.8 7 8 10.2 11.2 7M2.5 13.5h11",
+    image: "M2.5 3h11v10h-11zM2.5 11l3-3 2.5 2.5L10.5 8l3 3",
+    tag: "M2.5 2.5h5l6 6-5 5-6-6zM5.2 5.2h.01",
+    chevron: "M4 6l4 4 4-4",
     polish: "M8 2c.5 3 1.5 4.5 5 6-3.5 1.5-4.5 3-5 6-.5-3-1.5-4.5-5-6 3.5-1.5 4.5-3 5-6z",
   };
 
@@ -44,7 +51,7 @@
       <circle cx="7" cy="7" r="4.5" />
     {:else if name === "chip"}
       <rect x="4" y="4" width="8" height="8" rx="1" />
-    {:else if name === "question" || name === "clock" || name === "coin"}
+    {:else if name === "question" || name === "clock" || name === "coin" || name === "globe"}
       <circle cx="8" cy="8" r="6" />
     {:else if name === "event"}
       <circle cx="8" cy="8" r="2.2" />

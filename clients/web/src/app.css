@@ -824,8 +824,8 @@ header .icon {
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
-  width: min(46rem, calc(100vw - 2rem));
-  height: min(34rem, calc(100vh - 2rem));
+  width: min(58rem, calc(100vw - 2rem));
+  height: min(42rem, calc(100vh - 2rem));
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -879,11 +879,132 @@ header .icon {
   margin: 0;
   flex: 1;
 }
+.settings-search {
+  display: contents;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim);
+}
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+.settings .results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+.settings .results > .meta {
+  padding: 0.5rem;
+}
+.setting-hit {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1rem 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.setting-hit[data-selected] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.setting-hit-label {
+  font-weight: 600;
+}
+.setting-hit .meta {
+  justify-self: end;
+}
+.setting-hit .hint {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  color: var(--dim);
+}
+.setting.found {
+  animation: setting-found 1.6s ease-out;
+}
+@keyframes setting-found {
+  from {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
 .settings .layout {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 11rem 1fr;
+  grid-template-columns: 12rem 1fr;
+}
+.tab-group {
+  margin-top: 0.6rem;
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.tab-group:first-child {
+  margin-top: 0;
+}
+.folds {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.fold + .fold {
+  border-top: 1px solid var(--line);
+}
+.fold-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-head:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.fold-head svg {
+  flex: none;
+  color: var(--dim);
+  transition: transform 0.12s;
+  transform: rotate(-90deg);
+}
+.fold-head[data-state="open"] svg {
+  transform: none;
+}
+.fold-head .chip {
+  margin-left: auto;
+}
+.fold-title {
+  font-weight: 600;
+}
+.fold-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.fold-body[hidden] {
+  display: none;
+}
+.settings .panes > .error,
+.settings .panes > .restart {
+  margin: 0.75rem 1.25rem 0;
 }
 .settings .tabs {
   display: grid;
@@ -939,7 +1060,7 @@ header .icon {
 }
 .setting input[type="number"],
 .setting input[type="text"],
-.setting select,
+.setting input[type="password"],
 .setting textarea {
   width: 100%;
   box-sizing: border-box;
@@ -950,8 +1071,14 @@ header .icon {
   border-radius: 4px;
   padding: 0.3rem 0.5rem;
 }
-.setting input[type="checkbox"] {
+.setting .switch {
   justify-self: end;
+}
+.setting .select {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  background: var(--bg);
 }
 .settings h4,
 .settings h5 {
@@ -991,6 +1118,9 @@ header .icon {
   .settings .layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+  }
+  .tab-group {
+    display: none;
   }
   .settings .tabs {
     display: flex;

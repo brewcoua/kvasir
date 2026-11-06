@@ -1,15 +1,31 @@
 // The service's own settings, as opposed to the per-run ones in `settings.svelte.ts`.
-import { json, type ModelInfo, type ProviderInfo, type SettingInfo } from "./api";
+import { json, type ModelInfo, type ProviderInfo } from "./api";
 
-export const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
+const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 // `research.max_searches` as "Max searches", `search.brave.api_key` as "Brave api key".
 export const labelOf = (key: string) => capitalize(key.slice(key.indexOf(".") + 1).replaceAll(/[._]/g, " "));
 
+// Names that say more than the key does, in the settings dialog.
+const LABELS: Record<string, string> = {
+  "research.max_searches": "Searches",
+  "research.results_per_query": "Pages per search",
+  "research.max_attempts": "Attempts per question",
+  "research.follow_ups": "Follow-up questions",
+  "research.max_depth": "Follow-up depth",
+  "research.max_entities": "Most options",
+  "research.max_criteria": "Most criteria",
+  "storm.max_conv_turn": "Turns per perspective",
+  "storm.max_perspective": "Perspectives",
+  "search.top_k": "Results per search",
+  "fetch.max_age_hours": "Page cache age (hours)",
+};
+export const settingLabel = (key: string) => LABELS[key] ?? labelOf(key);
+
 export const SCRAPING_NOTICE = "These read each engine's own pages, which is against its terms: turning one on is your choice and your risk. An engine may block them or change its pages without notice.";
 
 // Prices as `docs/search-plan.md` found them. An engine's own page is the authority.
-const SEARCH_GROUPS: { title: string; notice?: string; providers: { id: string; name: string; price?: string }[] }[] = [
+export const SEARCH_GROUPS: { title: string; notice?: string; providers: { id: string; name: string; price?: string }[] }[] = [
   {
     title: "Web, with a key",
     providers: [
@@ -42,19 +58,6 @@ const SEARCH_GROUPS: { title: string; notice?: string; providers: { id: string; 
     ],
   },
 ];
-
-// The search settings under their providers, and what belongs to none, such as `search.top_k`.
-export function groupSearch(fields: SettingInfo[]) {
-  const of = (id: string) => fields.filter((field) => field.key.startsWith(`search.${id}.`));
-  const known = SEARCH_GROUPS.flatMap((group) => group.providers.flatMap((provider) => of(provider.id)));
-  return {
-    rest: fields.filter((field) => !known.includes(field)),
-    groups: SEARCH_GROUPS.map((group) => ({
-      ...group,
-      providers: group.providers.map((provider) => ({ ...provider, fields: of(provider.id) })),
-    })),
-  };
-}
 
 // A provider that cannot list its models is told apart, so a page can say which.
 export async function loadModels(): Promise<{ models: ModelInfo[]; unreachable: string[]; providers: number }> {

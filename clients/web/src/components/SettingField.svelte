@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Switch } from "bits-ui";
   import type { Defaults } from "../lib/api";
   import { keep, saved, type Setting } from "../lib/settings.svelte";
 
@@ -11,18 +12,19 @@
   const shown = $derived(saved[setting.name] ?? defaults[setting.name]);
 
   function change(input: HTMLInputElement) {
-    if (setting.type === "checkbox") keep(setting.name, input.checked, defaults);
-    else if (input.value.trim() === "") keep(setting.name, undefined, defaults);
+    if (input.value.trim() === "") keep(setting.name, undefined, defaults);
     // An out of range number stays on screen, marked invalid by the browser, and is not kept.
     else if (!input.checkValidity()) return;
     else keep(setting.name, setting.type === "number" ? Number(input.value) : input.value.trim(), defaults);
   }
 </script>
 
-<div class="setting" class:wide={setting.type === "text"} class:changed>
+<div class="setting" data-setting={setting.name} class:wide={setting.type === "text"} class:changed>
   <label for={id}>{setting.label}</label>
   {#if setting.type === "checkbox"}
-    <input {id} type="checkbox" checked={Boolean(shown)} onchange={(e) => change(e.currentTarget)} />
+    <Switch.Root {id} class="switch" bind:checked={() => Boolean(shown), (on) => keep(setting.name, on, defaults)}>
+      <Switch.Thumb class="switch-thumb" />
+    </Switch.Root>
   {:else}
     <input
       {id}

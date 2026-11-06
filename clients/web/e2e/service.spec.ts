@@ -82,18 +82,51 @@ test("a scraped engine can be the setup's search provider, against a notice of i
   expect((await field(request, "search.bing.enabled")).value).toBe(false);
 });
 
-test("the service settings group the search providers, with prices and the scraping notice", async ({ page, request }) => {
+test("the settings group the search providers, with prices and the scraping notice", async ({ page, request }) => {
   await settings(request, SET_UP);
   await logIn(page);
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("tab", { name: "Service" }).click();
+  await page.getByRole("tab", { name: "Web" }).click();
 
-  for (const group of ["Web, with a key", "Web, without a key", "Web, scraped", "Specialized"]) {
+  for (const group of ["Web, with a key", "Web, without a key", "Web, scraped"]) {
     await expect(page.getByRole("heading", { name: group, exact: true })).toBeVisible();
   }
-  await expect(page.getByText("Brave: $5 per 1,000 queries")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Brave.*\$5 per 1,000 queries/ })).toBeVisible();
   await expect(page.getByText("These read each engine's own pages")).toBeVisible();
-  await expect(page.getByLabel("Duckduckgo enabled", { exact: true })).not.toBeChecked();
+  await page.getByRole("button", { name: "DuckDuckGo" }).click();
+  await expect(page.getByRole("switch", { name: "Duckduckgo enabled", exact: true })).not.toBeChecked();
+  await page.getByRole("tab", { name: "Specialized" }).click();
+  await expect(page.getByRole("button", { name: "Wikipedia" })).toBeVisible();
+  // Every field the service has is placed somewhere on purpose.
+  await expect(page.getByRole("tab", { name: "Other" })).toHaveCount(0);
+});
+
+test("a setting found by search opens where it lives", async ({ page, request }) => {
+  await settings(request, SET_UP);
+  await logIn(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+
+  const search = page.getByLabel("Search settings");
+  await expect(search).toBeFocused();
+  await search.fill("nothing has this name");
+  await expect(page.getByText("No setting matches.")).toBeVisible();
+
+  await search.fill("brave key");
+  await search.press("Enter");
+  await expect(page.getByRole("tab", { name: "Web" })).toHaveAttribute("data-state", "active");
+  await expect(page.getByLabel("Brave api key", { exact: true })).toBeFocused();
+});
+
+test("the verification tab has an icon, and no setting shows twice", async ({ page, request }) => {
+  await settings(request, SET_UP);
+  await logIn(page);
+  await page.getByRole("button", { name: "Settings" }).click();
+
+  await expect(page.getByRole("tab", { name: "Verification" }).locator("svg path")).toHaveAttribute("d", /./);
+  await page.getByRole("tab", { name: "Roles" }).click();
+  await expect(page.getByLabel("Fast", { exact: true })).toBeVisible();
+  await page.getByLabel("Search settings").fill("fast model");
+  await expect(page.locator(".setting-hit-label", { hasText: /^Fast model$/ })).toHaveCount(0);
 });
 
 test("a blank value does not end the setup", async ({ page }) => {
@@ -111,7 +144,8 @@ test("a secret setting is written but never shown", async ({ page, request }) =>
   await settings(request, SET_UP);
   await logIn(page);
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("tab", { name: "Service" }).click();
+  await page.getByRole("tab", { name: "Web" }).click();
+  await page.getByRole("button", { name: /Brave/ }).click();
 
   const key = page.getByLabel("Brave api key", { exact: true });
   await expect(key).toHaveAttribute("placeholder", "not set");
@@ -129,21 +163,23 @@ test("a service setting saves as it changes, and resets", async ({ page, request
   await settings(request, SET_UP);
   await logIn(page);
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("tab", { name: "Service" }).click();
 
-  const searches = page.getByLabel("Max searches", { exact: true });
+  const searches = page.getByRole("dialog").getByLabel("Searches", { exact: true });
   await expect(searches).toHaveValue("16");
   await searches.fill("24");
   await searches.blur();
   await expect.poll(async () => field(request, "research.max_searches")).toMatchObject({ value: 24, stored: true });
 
-  await page.getByRole("button", { name: "Reset max searches to the default" }).click();
+  await page.getByRole("button", { name: "Reset searches to the default" }).click();
   await expect(searches).toHaveValue("16");
   expect(await field(request, "research.max_searches")).toMatchObject({ value: 16, stored: false });
 
-  await page.getByLabel("Store", { exact: true }).selectOption("sqlite");
+  await page.getByRole("tab", { name: "Run storage" }).click();
+  await page.getByLabel("Store", { exact: true }).click();
+  await page.getByRole("option", { name: "sqlite" }).click();
   await expect(page.getByRole("status")).toContainText("runs.store");
 
+  await page.getByRole("tab", { name: "Roles" }).click();
   const fast = page.getByLabel("Fast", { exact: true });
   await fast.fill("elsewhere/fast");
   await fast.blur();
@@ -156,6 +192,7 @@ test("a service setting saves as it changes, and resets", async ({ page, request
   await expect(page.getByRole("alert")).toContainText("Fast is required");
   await expect(fast).toHaveValue("unused/fast");
 
+  await page.getByRole("tab", { name: "Research" }).click();
   await searches.fill("");
   await searches.blur();
   await expect(searches).toHaveValue("16");
@@ -176,7 +213,7 @@ test("a model is picked from a list of every model, or typed", async ({ page, re
   );
   await logIn(page);
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByRole("tab", { name: "Service" }).click();
+  await page.getByRole("tab", { name: "Roles" }).click();
   const fast = page.getByLabel("Fast", { exact: true });
   const options = page.getByRole("listbox").getByRole("option");
 
@@ -197,7 +234,7 @@ test("a model is picked from a list of every model, or typed", async ({ page, re
 
   // A provider's model it did not list can be typed.
   await fast.fill("unused/not-listed");
-  await page.getByRole("heading", { name: "Service" }).click();
+  await page.getByRole("heading", { name: "Roles" }).click();
   await expect.poll(async () => (await field(request, "model.fast")).value).toBe("unused/not-listed");
   await expect(fast).toHaveValue("unused/not-listed");
 
@@ -209,7 +246,7 @@ test("a model is picked from a list of every model, or typed", async ({ page, re
   // A refused value is restored, and refused again when typed again.
   for (let attempt = 0; attempt < 2; attempt++) {
     await fast.fill("elsewhere/x");
-    await page.getByRole("heading", { name: "Service" }).click();
+    await page.getByRole("heading", { name: "Roles" }).click();
     await expect(page.getByRole("alert")).toContainText("unknown provider 'elsewhere'");
     await expect(fast).toHaveValue("unused/not-listed");
   }

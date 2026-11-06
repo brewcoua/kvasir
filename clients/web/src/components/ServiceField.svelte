@@ -1,24 +1,24 @@
 <script lang="ts">
+  import { Select, Switch } from "bits-ui";
   import { tick } from "svelte";
   import { request, type ModelInfo, type SettingInfo, type SettingsView } from "../lib/api";
-  import { labelOf } from "../lib/service";
+  import { settingLabel } from "../lib/service";
   import ModelField from "./ModelField.svelte";
 
   let { field, models, onsaved }: { field: SettingInfo; models: ModelInfo[]; onsaved: (view: SettingsView) => void } = $props();
 
   const uid = $props.id();
   const id = $derived(`${uid}-${field.key}`);
-  const label = $derived(labelOf(field.key));
+  const label = $derived(settingLabel(field.key));
   let error = $state("");
-  let control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | undefined = $state();
+  let control: HTMLInputElement | HTMLTextAreaElement | undefined = $state();
   // svelte-ignore state_referenced_locally
   let model = $state(String(field.value ?? ""));
 
   // What the service holds, which a refused value or a reset to the same default would not rewrite.
   function show() {
     model = String(field.value ?? "");
-    if (control instanceof HTMLInputElement && control.type === "checkbox") control.checked = Boolean(field.value);
-    else if (control && field.type === "secret") control.value = "";
+    if (control && field.type === "secret") control.value = "";
     else if (control) control.value = field.type === "list" ? (field.value as string[]).join("\n") : String(field.value ?? "");
   }
 
@@ -63,10 +63,12 @@
   const lines = (text: string) => text.split("\n").map((line) => line.trim()).filter(Boolean);
 </script>
 
-<div class="setting" class:wide={field.type !== "integer" && field.type !== "number" && field.type !== "boolean"} class:changed={field.stored}>
+<div class="setting" data-setting={field.key} class:wide={field.type !== "integer" && field.type !== "number" && field.type !== "boolean"} class:changed={field.stored}>
   <label for={id}>{label}</label>
   {#if field.type === "boolean"}
-    <input {id} bind:this={control} type="checkbox" checked={Boolean(field.value)} onchange={(e) => save(e.currentTarget.checked)} />
+    <Switch.Root {id} class="switch" bind:checked={() => Boolean(field.value), (on) => save(on)}>
+      <Switch.Thumb class="switch-thumb" />
+    </Switch.Root>
   {:else if field.type === "integer" || field.type === "number"}
     <input
       {id}
@@ -89,9 +91,16 @@
   {:else if field.type === "list"}
     <textarea {id} bind:this={control} rows="3" value={(field.value as string[]).join("\n")} onchange={(e) => save(lines(e.currentTarget.value))}></textarea>
   {:else if field.choices}
-    <select {id} bind:this={control} value={field.value} onchange={(e) => save(e.currentTarget.value)}>
-      {#each field.choices as choice (choice)}<option value={choice}>{choice}</option>{/each}
-    </select>
+    <Select.Root type="single" bind:value={() => String(field.value), (choice) => save(choice)} items={field.choices.map((choice) => ({ value: choice, label: choice }))}>
+      <Select.Trigger {id} class="select">{field.value}</Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="menu" sideOffset={4}>
+          <Select.Viewport>
+            {#each field.choices as choice (choice)}<Select.Item value={choice} label={choice} class="option">{choice}</Select.Item>{/each}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
   {:else if field.type === "model"}
     <ModelField {id} bind:value={model} {models} oncommit={() => text(model)} />
   {:else}

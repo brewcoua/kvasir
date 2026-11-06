@@ -115,12 +115,11 @@ test("a result marks unverified sentences, and lists what verification changed",
 
 test("a research run asks its questions first, and sends the settings changed", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Settings").click();
-  const settings = page.getByRole("dialog");
-  await settings.getByLabel("Searches", { exact: true }).fill("7");
-  await settings.getByLabel("Searches", { exact: true }).press("Tab");
-  await expect(settings.locator(".setting.changed")).toHaveCount(1);
-  await page.keyboard.press("Escape");
+  const plan = page.locator(".plan");
+  await plan.locator("li", { has: page.getByLabel("Searches", { exact: true }) }).locator("summary").click();
+  await plan.getByLabel("Searches", { exact: true }).fill("7");
+  await plan.getByLabel("Searches", { exact: true }).press("Tab");
+  await expect(plan.locator(".setting.changed")).toHaveCount(1);
   // The plan on the page follows the settings.
   await expect(page.locator(".plan")).toContainText("Up to 7 searches");
 
