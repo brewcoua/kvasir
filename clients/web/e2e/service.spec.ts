@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 const AUTH = { Authorization: "Bearer e2e-token" };
-const REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.url"];
-const SET_UP = { "model.fast": "unused/fast", "model.strong": "unused/strong", "model.embedding": "unused/embed", "search.searxng.url": "http://127.0.0.1:9" };
+const REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.enabled", "search.searxng.url"];
+const SET_UP = { "model.fast": "unused/fast", "model.strong": "unused/strong", "model.embedding": "unused/embed", "search.searxng.enabled": true, "search.searxng.url": "http://127.0.0.1:9" };
 
 async function settings(request: APIRequestContext, changes: Record<string, unknown>) {
   const response = await request.patch("/v1/settings", { headers: AUTH, data: changes });
@@ -58,6 +58,15 @@ test("a value setup refuses is explained", async ({ page }) => {
   await page.getByLabel("SearXNG URL").fill("http://127.0.0.1:9");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("alert")).toContainText("unknown provider 'elsewhere'");
+});
+
+test("the setup asks for a search provider", async ({ page }) => {
+  await logIn(page);
+  await page.getByLabel("Fast model").fill("unused/fast");
+  await page.getByLabel("Strong model").fill("unused/strong");
+  await page.getByLabel("Embedding model").fill("unused/embed");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toContainText("Still unset: a search provider.");
 });
 
 test("a blank value does not end the setup", async ({ page }) => {

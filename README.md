@@ -107,7 +107,7 @@ first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for 
           "model.strong": "local/deepseek-v4.1-flash:cloud",
           "model.embedding": "local/nomic-embed-text:latest",
           "model.reasoning_effort": "none",
-          "search.searxng.url": "http://localhost:8888"}' | jq '.missing // .message'
+          "search.searxng.enabled": true, "search.searxng.url": "http://localhost:8888"}' | jq '.missing // .message'
    ```
 
    It prints `[]` once nothing required is unset, or the `message` naming a value it refused. `reasoning_effort` `none` keeps a thinking model
@@ -118,7 +118,7 @@ first use, Node 26 and pnpm for the runs page, Ollama, and podman or docker for 
 
    ```console
    $ curl -s localhost:8080/readyz
-   {"providers":{"local":true},"searxng":true}
+   {"providers":{"local":true},"search":{"SearXNG":{"state":"ok"}}}
    ```
 
 Then [write an article](#write-an-article). On one local model a run takes much longer than through
@@ -152,11 +152,13 @@ Verify it started:
 $ curl -s localhost:8080/healthz
 {"status":"ok"}
 $ curl -s localhost:8080/readyz
-{"providers":{"local":true},"searxng":true}
+{"providers":{"local":true},"search":{"SearXNG":{"state":"ok"}}}
 ```
 
-`/readyz` returns 503 if SearXNG or a provider is unreachable, and names which one. It probes only
-the providers a model refers to. On a first start it answers 503 with the settings still to
+`/readyz` returns 503 if a provider a model refers to is unreachable, or if no search provider can
+serve, and says which. It probes only the providers a model refers to, and SearXNG. Each search
+provider's `state` is `ok`, `cooling_down` with `until` in seconds since the epoch, `unauthorized` or
+`unreachable`. One cooling down still counts as able to serve. On a first start it answers 503 with the settings still to
 store, listed as `missing`: store them as in [Store a setting](#store-a-setting). A
 missing or unusable environment variable makes the container exit at startup, rather than starting
 and failing on the first request.
@@ -549,8 +551,8 @@ A nullable text setting, such as `model.reason_effort`, is turned off by storing
 
 ### First start
 
-With `model.fast`, `model.strong`, `model.embedding` or `search.searxng.url` unset, the service starts and
-logs which are missing, and the page opens on a setup form asking for them. Until they are stored, `/readyz` answers 503 with
+With `model.fast`, `model.strong` or `model.embedding` unset, or no web search provider enabled with
+its key or URL (listed as `search.provider`), the service starts and logs which are missing, and the page opens on a setup form asking for them. Until they are stored, `/readyz` answers 503 with
 `{"setup":"required","missing":[...]}`, and every route that starts a run or a task answers 409. A model whose provider is no longer in the environment counts as unset.
 
 ### Providers and models
@@ -633,8 +635,8 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `model.reason_effort` | `medium` | Sent as `reasoning_effort` to the reason model instead of `model.reasoning_effort`. |
 | `model.context_tokens` | `16384` | The context window the models are served with, such as Ollama's `num_ctx`. Sizes how much of a page one intake call reads, and the room for its answer. |
 | `search.top_k` | `3` | Search results per query. |
-| `search.searxng.enabled` | `true` | Search through a SearXNG instance. |
-| `search.searxng.url` | required | SearXNG base URL. |
+| `search.searxng.enabled` | `false` | Search through a SearXNG instance. |
+| `search.searxng.url` | unset | SearXNG base URL. |
 | `search.searxng.weight` | `1.0` | Its weight when results are fused. |
 | `search.brave.api_key` | unset | Brave Search API key. A secret: never returned. No search uses it yet. |
 | `runs.store` | `memory` | `memory`, or `sqlite` to keep runs across restarts in `kvasir.db`. Read at startup. |

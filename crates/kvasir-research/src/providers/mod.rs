@@ -22,6 +22,7 @@ use kvasir_fetch::Web;
 use kvasir_llm::BoxFuture;
 use kvasir_run::RunCtx;
 use kvasir_types::runs::SearchResult;
+use serde::Serialize;
 use tokio::time::Instant;
 
 pub use searxng::SearXng;
@@ -68,7 +69,38 @@ pub trait Provider: Send + Sync {
         Duration::ZERO
     }
 
+    /// What readiness may ask without spending anything, if there is such a thing.
+    fn probe(&self) -> Option<&str> {
+        None
+    }
+
     fn query<'a>(&'a self, query: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>>;
+}
+
+/// How a provider stands, as `/readyz` shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum State {
+    Ok,
+    /// `until` is in seconds since the epoch.
+    CoolingDown {
+        until: f64,
+    },
+    Unauthorized,
+    Unreachable,
+}
+
+impl State {
+    /// Whether the provider can serve a query, now or once it has rested.
+    pub fn usable(self) -> bool {
+        matches!(self, Self::Ok | Self::CoolingDown { .. })
+    }
+}
+
+pub struct Status {
+    pub name: &'static str,
+    pub state: State,
+    pub probe: Option<String>,
 }
 
 #[derive(Default)]
@@ -101,6 +133,22 @@ impl Entry {
         }
         gate.next_call = Some(now + self.provider.interval());
         Ok(())
+    }
+
+    fn state(&self) -> State {
+        let now = Instant::now();
+        let gate = self.gate.lock().expect("a gate is not held across a panic");
+        if gate.unauthorized {
+            return State::Unauthorized;
+        }
+        match gate.cooling_until.filter(|until| now < *until) {
+            Some(until) => {
+                let at = SystemTime::now() + (until - now);
+                let since_epoch = at.duration_since(UNIX_EPOCH).unwrap_or_default();
+                State::CoolingDown { until: since_epoch.as_secs_f64() }
+            }
+            None => State::Ok,
+        }
     }
 
     fn failed(&self, failure: &Failure) {
@@ -143,11 +191,23 @@ impl Providers {
 
     pub fn from_settings(settings: &SearchSettings, web: Arc<Web>) -> Self {
         let mut providers: Vec<(Box<dyn Provider>, f64)> = Vec::new();
-        if settings.searxng.enabled {
+        if settings.has_web_provider() {
             providers
                 .push((Box::new(SearXng::new(&settings.searxng.url)), settings.searxng.weight));
         }
         Self::new(providers, web)
+    }
+
+    /// Each provider's state, as far as it is known without asking it.
+    pub fn statuses(&self) -> Vec<Status> {
+        self.entries
+            .iter()
+            .map(|entry| Status {
+                name: entry.provider.name(),
+                state: entry.state(),
+                probe: entry.provider.probe().map(str::to_owned),
+            })
+            .collect()
     }
 
     /// `entry`'s rows for `query`, reported to `ctx`, or why it has none.

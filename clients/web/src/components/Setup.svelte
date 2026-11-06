@@ -5,6 +5,9 @@
   import ModelField from "./ModelField.svelte";
 
   const EMBEDDING = "model.embedding";
+  const WEB_PROVIDER = "search.provider";
+  // Those that search the whole web, of which a run needs one. Filling one in enables it.
+  const WEB_PROVIDERS = [{ name: "SearXNG URL", key: "search.searxng.url", enabled: "search.searxng.enabled" }];
 
   let { view, ondone }: { view: SettingsView; ondone: () => void } = $props();
 
@@ -12,7 +15,11 @@
   // what is typed here replaces it.
   // svelte-ignore state_referenced_locally
   const fields = view.fields.filter((field) => field.required);
-  const values: Record<string, string> = $state(Object.fromEntries(fields.map((field) => [field.key, String(field.value ?? "")])));
+  // svelte-ignore state_referenced_locally
+  const providers = WEB_PROVIDERS.map((provider) => ({ ...provider, field: view.fields.find((field) => field.key === provider.key)! }));
+  const values: Record<string, string> = $state(
+    Object.fromEntries([...fields, ...providers.map((provider) => provider.field)].map((field) => [field.key, String(field.value ?? "")])),
+  );
 
   let models: ModelInfo[] = $state([]);
   let unreachable: string[] = $state([]);
@@ -44,17 +51,21 @@
     error = "";
     silent = null;
     try {
-      const entered = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]));
+      const entered: Record<string, unknown> = Object.fromEntries(fields.map(({ key }) => [key, values[key].trim()]));
+      for (const { key, enabled } of WEB_PROVIDERS) {
+        const value = values[key].trim();
+        if (value !== "") Object.assign(entered, { [key]: value, [enabled]: true });
+      }
       const saved = await request<SettingsView>("PATCH", "/v1/settings", entered);
       if (saved.missing.length > 0) {
-        error = `Still unset: ${saved.missing.join(", ")}.`;
+        error = `Still unset: ${saved.missing.map((key) => (key === WEB_PROVIDER ? "a search provider" : key)).join(", ")}.`;
         return;
       }
       // 503 is an answer here, so not through `request`.
       const ready = await (await fetch("/readyz")).json();
       const failed = [
         ...Object.entries(ready.providers ?? {}).filter(([, ok]) => !ok).map(([name]) => `provider ${name}`),
-        ...(ready.searxng === false ? ["SearXNG"] : []),
+        ...Object.entries<{ state: string }>(ready.search ?? {}).filter(([, { state }]) => state === "unreachable" || state === "unauthorized").map(([name]) => name),
       ];
       if (failed.length === 0) ondone();
       else silent = failed;
@@ -79,13 +90,20 @@
   {/if}
   {#each fields as field (field.key)}
     {@const chosen = models.find((model) => model.ref === values[field.key])}
-    <label for={field.key}>{field.type === "model" ? `${labelOf(field.key)} model` : field.key === "search.searxng.url" ? "SearXNG URL" : labelOf(field.key)}</label>
+    <label for={field.key}>{field.type === "model" ? `${labelOf(field.key)} model` : labelOf(field.key)}</label>
     {#if field.type === "model"}
       <ModelField id={field.key} bind:value={values[field.key]} {models} required />
     {:else}
       <input id={field.key} type="text" autocomplete="off" bind:value={values[field.key]} required />
     {/if}
     <p class="meta">{field.help}{#if chosen && describeModel(chosen)}{" "}<br />{describeModel(chosen)}{/if}</p>
+  {/each}
+  <h3>Search</h3>
+  <p class="meta">At least one of these.</p>
+  {#each providers as { name, field } (field.key)}
+    <label for={field.key}>{name}</label>
+    <input id={field.key} type="text" autocomplete="off" bind:value={values[field.key]} />
+    <p class="meta">{field.help}</p>
   {/each}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if silent}

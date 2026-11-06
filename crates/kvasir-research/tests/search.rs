@@ -243,7 +243,7 @@ mod providers {
     use kvasir_fetch::{Guard, Options, Web, system_lookup};
     use kvasir_llm::BoxFuture;
     use kvasir_research::Search;
-    use kvasir_research::providers::{Failure, Provider, Providers, Row};
+    use kvasir_research::providers::{Failure, Provider, Providers, Row, State};
     use serde_json::json;
     use wiremock::matchers::{path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -391,6 +391,29 @@ mod providers {
         assert_eq!(ask(&providers).await.1, ["p: cooling down"]);
         tokio::time::advance(Duration::from_secs(24 * 60 * 60)).await;
         assert!(ask(&providers).await.1.is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_status_tells_rest_from_a_refused_key() {
+        let limited = Failure::RateLimited { retry_after: Some(Duration::from_secs(5)) };
+        let providers = Providers::new(
+            vec![
+                (Stub::boxed("rests", vec![Err(limited)]), 1.0),
+                (Stub::boxed("refused", vec![Err(Failure::Unauthorized)]), 1.0),
+                (Stub::boxed("fine", Vec::new()), 1.0),
+            ],
+            web(),
+        );
+        assert!(providers.statuses().iter().all(|status| status.state == State::Ok));
+
+        ask(&providers).await;
+
+        let states: Vec<State> = providers.statuses().iter().map(|s| s.state).collect();
+        assert!(matches!(states[0], State::CoolingDown { .. }));
+        assert_eq!(states[1..], [State::Unauthorized, State::Ok]);
+        assert!(states[0].usable() && !states[1].usable());
+        tokio::time::advance(Duration::from_secs(6)).await;
+        assert_eq!(providers.statuses()[0].state, State::Ok);
     }
 
     #[tokio::test(start_paused = true)]

@@ -77,7 +77,7 @@ pub struct SearxngSettings {
 
 impl Default for SearxngSettings {
     fn default() -> Self {
-        Self { enabled: true, url: String::new(), weight: 1.0 }
+        Self { enabled: false, url: String::new(), weight: 1.0 }
     }
 }
 
@@ -86,6 +86,13 @@ pub struct SearchSettings {
     pub top_k: usize,
     pub searxng: SearxngSettings,
     pub brave: BraveSettings,
+}
+
+impl SearchSettings {
+    /// Whether a provider that searches the whole web can be asked.
+    pub fn has_web_provider(&self) -> bool {
+        self.searxng.enabled && !self.searxng.url.is_empty()
+    }
 }
 
 impl Default for SearchSettings {

@@ -29,7 +29,10 @@ fn dump(s: &Settings) -> Value {
         "fetch": s.fetch,
         "favicons": s.favicons,
         "sources": s.sources,
-        "missing": s.missing(),
+        // Python required its one search URL.
+        "missing": s.missing().iter().map(|key| {
+            if *key == kvasir_config::WEB_PROVIDER { "search.searxng.url" } else { key }
+        }).collect::<Vec<_>>(),
     })
 }
 
@@ -61,11 +64,15 @@ fn settings_load_as_python_loaded_them() {
         let mut env: Vec<(String, String)> = serde_json::from_value(case["env"].clone()).unwrap();
         // Python had no such variable, and each case's outcome is about the others.
         env.insert(0, ("KVASIR_SECRET_KEY".into(), "ab".repeat(32)));
-        let stored = case["stored"].as_object().unwrap();
+        let mut stored = case["stored"].as_object().unwrap().clone();
+        // Python had no switch: its URL was its search.
+        if stored.contains_key("search.searxng.url") {
+            stored.insert("search.searxng.enabled".into(), true.into());
+        }
         let strict = case["strict"].as_bool().unwrap();
         let mut warnings = Vec::new();
         let got = Settings::from_env(env, &mut warnings)
-            .and_then(|s| s.with_stored(stored, strict, &mut warnings));
+            .and_then(|s| s.with_stored(&stored, strict, &mut warnings));
         let mut want = case.clone();
         for key in ["env", "stored", "strict"] {
             want.as_object_mut().unwrap().remove(key);

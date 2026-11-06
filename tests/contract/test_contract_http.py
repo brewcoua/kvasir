@@ -47,7 +47,10 @@ GUARDED = [
 def test_health_needs_no_token(service: Service) -> None:
     with service.client(headers={}) as anonymous:
         assert anonymous.get("/healthz").json() == {"status": "ok"}
-        assert anonymous.get("/readyz").json() == {"providers": {"gateway": True}, "searxng": True}
+        assert anonymous.get("/readyz").json() == {
+            "providers": {"gateway": True},
+            "search": {"SearXNG": {"state": "ok"}},
+        }
         # Built or not, the page itself is not behind the token.
         assert anonymous.get("/").status_code in (200, 503)
 
@@ -70,7 +73,10 @@ def test_readiness_fails_with_what_is_unreachable(new_service: Any, fakes: Fakes
         response = client.get("/readyz")
 
     assert response.status_code == 503
-    assert response.json() == {"providers": {"gateway": True}, "searxng": False}
+    assert response.json() == {
+        "providers": {"gateway": True},
+        "search": {"SearXNG": {"state": "unreachable"}},
+    }
 
 
 @pytest.mark.parametrize(("method", "path"), GUARDED)
@@ -141,7 +147,14 @@ def test_an_unknown_route_is_404(client: httpx.Client) -> None:
 # -- First start -----------------------------------------------------------------------------------
 
 
-REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.searxng.url"]
+REQUIRED = ["model.fast", "model.strong", "model.embedding", "search.provider"]
+SET_UP = [
+    "model.fast",
+    "model.strong",
+    "model.embedding",
+    "search.searxng.enabled",
+    "search.searxng.url",
+]
 BEFORE_SETUP = [
     ("/v1/runs", {"method": "ledger", "input": {"question": "x"}}),
     ("/v1/clarify", {"question": "x"}),
@@ -164,7 +177,7 @@ def test_nothing_runs_before_the_setup(new_service: Any, fakes: Fakes) -> None:
         assert client.get("/v1/settings").json()["missing"] == REQUIRED
         assert client.get("/v1/runs").json() == []
 
-        changes = {key: fakes.settings()[key] for key in REQUIRED}
+        changes = {key: fakes.settings()[key] for key in SET_UP}
         answer = client.patch("/v1/settings", json=changes).json()
 
         assert answer["missing"] == []

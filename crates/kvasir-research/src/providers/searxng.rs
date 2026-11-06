@@ -85,6 +85,10 @@ impl Provider for SearXng {
         "SearXNG"
     }
 
+    fn probe(&self) -> Option<&str> {
+        Some(&self.url)
+    }
+
     fn query<'a>(&'a self, query: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>> {
         Box::pin(self.rows(query))
     }

@@ -20,6 +20,10 @@ pub use sections::{
     SearxngSettings, Secret, SourceSettings, StormSettings,
 };
 
+/// Listed by [`Settings::missing`] when no web search provider is enabled with its key or URL. It
+/// names no one setting, since any provider will do.
+pub const WEB_PROVIDER: &str = "search.provider";
+
 /// Sent when a provider has no key: the OpenAI client refuses an empty one, and Ollama ignores it.
 pub const NO_API_KEY: &str = "none";
 
@@ -137,11 +141,15 @@ impl Settings {
 
     /// The stored fields the service needs before it can run anything, still unset.
     pub fn missing(&self) -> Vec<&'static str> {
-        FIELDS
+        let mut missing: Vec<&'static str> = FIELDS
             .iter()
             .filter(|f| f.required && self.value(f.key).is_none_or(|v| v == ""))
             .map(|f| f.key)
-            .collect()
+            .collect();
+        if !self.search.has_web_provider() {
+            missing.push(WEB_PROVIDER);
+        }
+        missing
     }
 
     pub fn ready(&self) -> Result<(), SetupRequired> {
@@ -232,6 +240,21 @@ mod tests {
         assert_eq!(settings.value("search.brave.api_key"), Some(json!("k")));
         assert_eq!(settings.value("search.brave"), Some(json!({"api_key": "k"})));
         assert_eq!(settings.value("search.brave.nope"), None);
+    }
+
+    #[test]
+    fn a_web_provider_needs_to_be_enabled_and_to_have_its_url() {
+        let lacks_one = |rows: &[(&str, Value)]| {
+            let stored = rows.iter().map(|(k, v)| ((*k).to_owned(), v.clone())).collect();
+            let settings = from_env().with_stored(&stored, true, &mut vec![]).unwrap();
+            settings.missing().contains(&WEB_PROVIDER)
+        };
+        let (enabled, url) = ("search.searxng.enabled", "search.searxng.url");
+
+        assert!(lacks_one(&[]));
+        assert!(lacks_one(&[(enabled, json!(true))]));
+        assert!(lacks_one(&[(url, json!("http://s"))]));
+        assert!(!lacks_one(&[(enabled, json!(true)), (url, json!("http://s"))]));
     }
 
     #[test]

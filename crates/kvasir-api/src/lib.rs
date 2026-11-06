@@ -27,7 +27,7 @@ use kvasir_config::{ConfigError, Settings, SetupRequired};
 use kvasir_db::{Db, DbError};
 use kvasir_fetch::{Guard, PageStore, Web};
 use kvasir_llm::Llm;
-use kvasir_research::providers::Providers;
+use kvasir_research::providers::{Providers, State as SearchState};
 use kvasir_run::{NotFound, RunRegistry, RunStore, Slots};
 use kvasir_sites::favicons::Favicons;
 use kvasir_sites::sources::Sources;
@@ -159,9 +159,9 @@ pub async fn open(
         .map(|(name, provider)| format!("{name}={}", provider.api_base))
         .collect();
     tracing::info!(
-        "kvasir ready, providers {}, searxng {}, {} concurrent run(s)",
+        "kvasir ready, providers {}, search {}, {} concurrent run(s)",
         providers.join(", "),
-        settings.search.searxng.url,
+        live.search.statuses().iter().map(|status| status.name).collect::<Vec<_>>().join(", "),
         settings.runs.max_concurrent
     );
     let missing = settings.missing();
@@ -228,11 +228,14 @@ async fn healthz() -> Json<Value> {
     Json(json!({ "status": "ok" }))
 }
 
-/// Readiness. Fails while a required setting is unset, or when SearXNG or any provider a model
-/// uses is unreachable. No check spends tokens: listing models is free, and SearXNG is only asked
-/// for its root. A provider no model refers to is not probed, since no run needs it.
+/// Readiness. Fails while a required setting is unset, when any provider a model uses is
+/// unreachable, or when no search provider can serve. A provider resting after a failure still can.
+/// No check spends tokens or quota: listing models is free, SearXNG is only asked for its root, and
+/// other search providers are not called. A provider no model refers to is not probed, since no run
+/// needs it.
 async fn readyz(State(app): State<Arc<App>>) -> Response {
-    let settings = app.settings();
+    let live = app.live();
+    let settings = &live.settings;
     let missing = settings.missing();
     if !missing.is_empty() {
         let body = json!({ "setup": "required", "missing": missing });
@@ -255,15 +258,23 @@ async fn readyz(State(app): State<Arc<App>>) -> Response {
             app.probe.get(format!("{}/models", provider.api_base)).bearer_auth(&provider.api_key);
         reachable(request).await
     });
-    let searxng = &settings.search.searxng;
-    let (probed, searxng) = tokio::join!(futures::future::join_all(probes), async {
-        !searxng.enabled || reachable(app.probe.get(&searxng.url)).await
+    let probe = &app.probe;
+    let searches = live.search.statuses().into_iter().map(|status| async move {
+        let answers = match (status.state, &status.probe) {
+            (SearchState::Ok, Some(url)) => reachable(probe.get(url)).await,
+            _ => true,
+        };
+        (status.name, if answers { status.state } else { SearchState::Unreachable })
     });
-    let ready = searxng && probed.iter().all(|ok| *ok);
+    let (probed, search) =
+        tokio::join!(futures::future::join_all(probes), futures::future::join_all(searches));
+    let ready = search.iter().any(|(_, state)| state.usable()) && probed.iter().all(|ok| *ok);
     let providers: serde_json::Map<String, Value> =
         names.iter().zip(probed).map(|(name, ok)| ((*name).to_owned(), ok.into())).collect();
     let status = if ready { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-    (status, Json(json!({ "providers": providers, "searxng": searxng }))).into_response()
+    let search: serde_json::Map<String, Value> =
+        search.into_iter().map(|(name, state)| (name.to_owned(), json!(state))).collect();
+    (status, Json(json!({ "providers": providers, "search": search }))).into_response()
 }
 
 async fn reachable(request: reqwest::RequestBuilder) -> bool {
