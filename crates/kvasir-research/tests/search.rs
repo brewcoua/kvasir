@@ -239,7 +239,9 @@ mod providers {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    use kvasir_config::{SearchSettings, SearxngSettings};
+    use kvasir_config::{
+        CrossrefSettings, KeyedSettings, OpenSettings, SearchSettings, SearxngSettings,
+    };
     use kvasir_fetch::{Guard, Options, Web, system_lookup};
     use kvasir_llm::BoxFuture;
     use kvasir_research::Search;
@@ -483,6 +485,27 @@ mod providers {
         assert_eq!(second.1, ["slow: waiting on its rate limit"]);
         assert_eq!(*calls.lock().unwrap(), 1);
         assert!(ask(&providers).await.1.is_empty());
+    }
+
+    #[test]
+    fn the_settings_enable_each_specialized_provider() {
+        let open = OpenSettings { enabled: true, ..OpenSettings::default() };
+        let settings = SearchSettings {
+            wikipedia: open.clone(),
+            arxiv: open.clone(),
+            crossref: CrossrefSettings { enabled: true, ..CrossrefSettings::default() },
+            europe_pmc: open,
+            // A key is optional here, and required on OpenAlex.
+            semantic_scholar: KeyedSettings { enabled: true, ..KeyedSettings::default() },
+            openalex: KeyedSettings { enabled: true, ..KeyedSettings::default() },
+            ..SearchSettings::default()
+        };
+
+        let providers = Providers::from_settings(&settings, web());
+
+        let names: Vec<&str> = providers.statuses().iter().map(|status| status.name).collect();
+        assert_eq!(names, ["Wikipedia", "arXiv", "Crossref", "Europe PMC", "Semantic Scholar"]);
+        assert!(!settings.has_web_provider());
     }
 
     async fn searxng(url: &str) -> (Vec<Hit>, Vec<String>) {
