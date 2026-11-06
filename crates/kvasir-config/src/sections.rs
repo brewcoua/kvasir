@@ -98,6 +98,20 @@ impl Default for SearxngSettings {
     }
 }
 
+/// A search provider that needs nothing to be asked.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OpenSettings {
+    pub enabled: bool,
+    /// In the fusion of the providers' results.
+    pub weight: f64,
+}
+
+impl Default for OpenSettings {
+    fn default() -> Self {
+        Self { enabled: false, weight: 1.0 }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SearchSettings {
     pub top_k: usize,
@@ -106,6 +120,7 @@ pub struct SearchSettings {
     pub tavily: KeyedSettings,
     pub exa: KeyedSettings,
     pub mojeek: KeyedSettings,
+    pub wikipedia: OpenSettings,
 }
 
 impl SearchSettings {
@@ -127,6 +142,7 @@ impl Default for SearchSettings {
             tavily: KeyedSettings::default(),
             exa: KeyedSettings::default(),
             mojeek: KeyedSettings::default(),
+            wikipedia: OpenSettings::default(),
         }
     }
 }

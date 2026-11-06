@@ -445,6 +445,46 @@ mod providers {
         assert_eq!(*calls.lock().unwrap(), 2);
     }
 
+    struct Slow {
+        calls: Arc<Mutex<u32>>,
+    }
+
+    impl Provider for Slow {
+        fn name(&self) -> &'static str {
+            "slow"
+        }
+
+        fn interval(&self) -> Duration {
+            Duration::from_secs(1)
+        }
+
+        fn query<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Vec<Row>, Failure>> {
+            *self.calls.lock().unwrap() += 1;
+            Box::pin(async {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                Ok(Vec::new())
+            })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_limited_provider_answers_one_query_at_a_time() {
+        let calls = Arc::new(Mutex::new(0));
+        let slow = Slow { calls: Arc::clone(&calls) };
+        let providers = Providers::new(vec![(Box::new(slow), 1.0)], web());
+
+        let (first, second) = tokio::join!(ask(&providers), async {
+            // Past the interval, with the first still out.
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            ask(&providers).await
+        });
+
+        assert!(first.1.is_empty());
+        assert_eq!(second.1, ["slow: waiting on its rate limit"]);
+        assert_eq!(*calls.lock().unwrap(), 1);
+        assert!(ask(&providers).await.1.is_empty());
+    }
+
     async fn searxng(url: &str) -> (Vec<Hit>, Vec<String>) {
         let settings = SearchSettings {
             searxng: SearxngSettings { enabled: true, url: url.into(), weight: 1.0 },

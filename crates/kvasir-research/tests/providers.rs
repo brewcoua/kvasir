@@ -1,8 +1,10 @@
 //! Each provider against a fake of its documented request and answer, including its errors.
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use kvasir_research::providers::{Brave, Exa, Failure, Mojeek, Provider, Row, Tavily};
+use kvasir_fetch::{Guard, Options, Web, system_lookup};
+use kvasir_research::providers::{Brave, Exa, Failure, Mojeek, Provider, Row, Tavily, Wikipedia};
 use serde_json::json;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -16,6 +18,17 @@ async fn answering(answer: ResponseTemplate) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(path("/s")).respond_with(answer).mount(&server).await;
     server
+}
+
+fn web() -> Arc<Web> {
+    let options = Options {
+        contact: "ops@example.org".into(),
+        host_interval: Duration::ZERO,
+        render: false,
+        stealth: false,
+        max_age_hours: 48,
+    };
+    Arc::new(Web::new(options, 8, Guard::Public, system_lookup()))
 }
 
 mod brave {
@@ -222,5 +235,65 @@ mod mojeek {
 
         assert!(matches!(failure, Failure::Other(_)));
         assert!(!failure.to_string().contains("the-key"), "{failure}");
+    }
+}
+
+mod wikipedia {
+    use super::*;
+
+    fn at(server: &MockServer) -> Wikipedia {
+        Wikipedia::at(&format!("{}/s", server.uri()), web())
+    }
+
+    #[tokio::test]
+    async fn results_are_read_from_the_request_the_documentation_gives() {
+        let server = MockServer::start().await;
+        let answer = json!({"pages": [
+            {
+                "key": "Foo_(bar)?",
+                "title": "Foo (bar)?",
+                "excerpt": "<span class=\"searchmatch\">Foo</span> &amp; more",
+                "description": "a foo",
+            },
+            {"key": "Baz", "title": "Baz", "excerpt": "", "description": "a baz"},
+            {"key": "Qux", "title": "Qux", "excerpt": "", "description": null},
+        ]});
+        Mock::given(method("GET"))
+            .and(path("/s"))
+            .and(header("User-Agent", web().user_agent().as_str()))
+            .and(query_param("q", "the query"))
+            .and(query_param("limit", "20"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let rows = at(&server).query("the query").await.unwrap();
+
+        assert_eq!(
+            rows,
+            [
+                row("https://en.wikipedia.org/wiki/Foo_(bar)%3F", "Foo (bar)?", "Foo & more"),
+                row("https://en.wikipedia.org/wiki/Baz", "Baz", "a baz"),
+                row("https://en.wikipedia.org/wiki/Qux", "Qux", ""),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_rests_it() {
+        let server = answering(ResponseTemplate::new(429)).await;
+
+        assert_eq!(at(&server).query("q").await, Err(Failure::RateLimited { retry_after: None }));
+    }
+
+    /// With no key to replace, a refusal must not switch it off for good.
+    #[tokio::test]
+    async fn a_refusal_is_not_about_a_key() {
+        let server = answering(ResponseTemplate::new(403)).await;
+
+        let failure = at(&server).query("q").await.unwrap_err();
+
+        assert!(matches!(failure, Failure::Other(_)), "{failure:?}");
     }
 }

@@ -15,9 +15,10 @@ mod exa;
 mod mojeek;
 mod searxng;
 mod tavily;
+mod wikipedia;
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use indexmap::IndexMap;
@@ -26,9 +27,11 @@ use kvasir_fetch::Web;
 use kvasir_llm::BoxFuture;
 use kvasir_run::RunCtx;
 use kvasir_types::runs::SearchResult;
+use regex::{Captures, Regex};
 use reqwest::StatusCode;
 use reqwest::header::RETRY_AFTER;
 use serde::Serialize;
+use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::time::Instant;
 
 pub use brave::Brave;
@@ -36,6 +39,7 @@ pub use exa::Exa;
 pub use mojeek::Mojeek;
 pub use searxng::SearXng;
 pub use tavily::Tavily;
+pub use wikipedia::Wikipedia;
 
 use crate::search::{Hit, RRF_K, Search};
 
@@ -72,6 +76,46 @@ fn status_failure(response: &reqwest::Response) -> Option<Failure> {
     }
 }
 
+/// The same for a provider asked without a key, whose refusal is not about one and may pass.
+fn keyless_failure(response: &reqwest::Response) -> Option<Failure> {
+    status_failure(response).filter(|failure| *failure != Failure::Unauthorized)
+}
+
+/// The text of a snippet of HTML or JATS, on one line.
+fn plain_text(markup: &str) -> String {
+    static TAG: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"<[^>]*>").expect("the pattern is valid"));
+    // One pass, so `&amp;lt;` comes out as the text `&lt;` and not as a bracket.
+    static ENTITY: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"&(amp|lt|gt|quot|apos|nbsp|#[0-9]+|#[xX][0-9a-fA-F]+);")
+            .expect("the pattern is valid")
+    });
+    let text = TAG.replace_all(markup, " ");
+    let text = ENTITY.replace_all(&text, |entity: &Captures<'_>| {
+        let name = &entity[1];
+        let code = match name.strip_prefix('#') {
+            Some(number) => match number.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok(),
+                None => number.parse().ok(),
+            },
+            None => Some(match name {
+                "amp" => '&',
+                "lt" => '<',
+                "gt" => '>',
+                "quot" => '"',
+                "apos" => '\'',
+                _ => ' ',
+            } as u32),
+        };
+        code.and_then(char::from_u32).map_or_else(|| entity[0].to_owned(), String::from)
+    });
+    one_line(&text)
+}
+
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// A failure the provider did not explain, without the request's URL, which may hold its key.
 fn other(what: &str, err: reqwest::Error) -> Failure {
     Failure::Other(format!("{what}: {}", err.without_url()))
@@ -105,8 +149,8 @@ pub trait Provider: Send + Sync {
     /// As shown in the run's searches and in a failure.
     fn name(&self) -> &'static str;
 
-    /// The least time between the starts of two requests. A query that comes sooner goes without
-    /// this provider rather than waiting for it.
+    /// The least time between the starts of two requests. A provider with one is also asked one
+    /// request at a time. A query that comes too soon goes without it rather than waiting for it.
     fn interval(&self) -> Duration {
         Duration::ZERO
     }
@@ -157,11 +201,13 @@ struct Entry {
     provider: Box<dyn Provider>,
     weight: f64,
     gate: Mutex<Gate>,
+    in_flight: Semaphore,
 }
 
 impl Entry {
-    /// Takes the provider's next slot, or says why this query goes without it.
-    fn enter(&self) -> Result<(), String> {
+    /// Takes the provider's next slot, held as long as the result, or says why this query goes
+    /// without it.
+    fn enter(&self) -> Result<Option<SemaphorePermit<'_>>, String> {
         let now = Instant::now();
         let mut gate = self.gate.lock().expect("a gate is not held across a panic");
         if gate.unauthorized {
@@ -173,8 +219,15 @@ impl Entry {
         if gate.next_call.is_some_and(|next| now < next) {
             return Err("waiting on its rate limit".into());
         }
-        gate.next_call = Some(now + self.provider.interval());
-        Ok(())
+        let interval = self.provider.interval();
+        let turn = if interval.is_zero() {
+            None
+        } else {
+            let busy = |_| "waiting on its rate limit".to_owned();
+            Some(self.in_flight.try_acquire().map_err(busy)?)
+        };
+        gate.next_call = Some(now + interval);
+        Ok(turn)
     }
 
     fn state(&self) -> State {
@@ -226,7 +279,12 @@ impl Providers {
     pub fn new(providers: Vec<(Box<dyn Provider>, f64)>, web: Arc<Web>) -> Self {
         let entries = providers
             .into_iter()
-            .map(|(provider, weight)| Entry { provider, weight, gate: Mutex::default() })
+            .map(|(provider, weight)| Entry {
+                provider,
+                weight,
+                gate: Mutex::default(),
+                in_flight: Semaphore::new(1),
+            })
             .collect();
         Self { entries, web }
     }
@@ -249,6 +307,9 @@ impl Providers {
         if let Some(key) = settings.mojeek.usable_key() {
             providers.push((Box::new(Mojeek::new(key)), settings.mojeek.weight));
         }
+        if settings.wikipedia.enabled {
+            providers.push((Box::new(Wikipedia::new(Arc::clone(&web))), settings.wikipedia.weight));
+        }
         Self::new(providers, web)
     }
 
@@ -267,7 +328,7 @@ impl Providers {
     /// `entry`'s rows for `query`, reported to `ctx`, or why it has none.
     async fn ask(&self, entry: &Entry, query: &str, ctx: &RunCtx) -> Result<Vec<Row>, String> {
         let name = entry.provider.name();
-        entry.enter().map_err(|why| format!("{name}: {why}"))?;
+        let _turn = entry.enter().map_err(|why| format!("{name}: {why}"))?;
         let search = ctx.search_started(name, query);
         let answer = {
             let _permit = self.web.permit().await;
@@ -356,6 +417,17 @@ impl Search for Providers {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn markup_comes_out_as_text() {
+        assert_eq!(
+            plain_text(
+                "<span class=\"m\">Foo</span>\n  bar &amp; baz&#39;s &#x3B1;&nbsp;&lt;b&gt;"
+            ),
+            "Foo bar & baz's \u{3b1} <b>"
+        );
+        assert_eq!(plain_text("&amp;lt; &#xFFFFFFF; &unknown;"), "&lt; &#xFFFFFFF; &unknown;");
+    }
 
     #[test]
     fn a_quota_returns_at_the_next_utc_midnight() {

@@ -214,6 +214,8 @@ pub const FIELDS: &[Field] = &[
     field("search.mojeek.enabled", Kind::Bool, "Search through the Mojeek API."),
     field("search.mojeek.api_key", Kind::Secret, "Mojeek API key."),
     field("search.mojeek.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.wikipedia.enabled", Kind::Bool, "Search English Wikipedia."),
+    field("search.wikipedia.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },

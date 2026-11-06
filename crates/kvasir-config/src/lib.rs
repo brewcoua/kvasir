@@ -16,7 +16,7 @@ pub use load::decode;
 use repr::text as quote;
 pub use sections::{
     FaviconProvider, FaviconSettings, FetchSettings, KeyedSettings, LogFormat, LogSettings,
-    ModelSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings,
+    ModelSettings, OpenSettings, Render, ResearchSettings, RunSettings, RunStore, SearchSettings,
     SearxngSettings, Secret, SourceSettings, StormSettings,
 };
 
