@@ -129,6 +129,9 @@ mod tests {
         got.sort();
         let mut want = golden_schema("kvasir.sql");
         want.push("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)".into());
+        want.push(
+            "CREATE TABLE search_cookies (provider TEXT PRIMARY KEY, cookies TEXT NOT NULL)".into(),
+        );
         want.sort();
         assert_eq!(got, want);
     }

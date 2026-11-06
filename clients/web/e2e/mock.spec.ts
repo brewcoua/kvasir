@@ -292,7 +292,8 @@ test("a ledger run stacks its rows, puts repair in verify, and links every step"
   // Rows of a question sit one above the other, not side by side.
   const [recall, attempt] = [(await row("e:2").boundingBox())!, (await row("e:7").boundingBox())!];
   expect(attempt.y).toBeGreaterThanOrEqual(recall.y + recall.height);
-  expect(Math.abs(attempt.x - recall.x)).toBeLessThan(1);
+  // Polled: the view may still be zooming to fit between the two reads.
+  await expect.poll(async () => Math.abs((await row("e:7").boundingBox())!.x - (await row("e:2").boundingBox())!.x)).toBeLessThan(1);
 
   // Repair attempts are in the repair step, which is in verify.
   const [verify, repair, repaired] = await Promise.all(["stage:verify", "e:16", "e:20"].map(async (id) => (await row(id).boundingBox())!));
