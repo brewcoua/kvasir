@@ -12,6 +12,7 @@
 
 mod brave;
 mod searxng;
+mod tavily;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -30,6 +31,7 @@ use tokio::time::Instant;
 
 pub use brave::Brave;
 pub use searxng::SearXng;
+pub use tavily::Tavily;
 
 use crate::search::{Hit, RRF_K, Search};
 
@@ -233,6 +235,9 @@ impl Providers {
         }
         if let Some(key) = settings.brave.usable_key() {
             providers.push((Box::new(Brave::new(key)), settings.brave.weight));
+        }
+        if let Some(key) = settings.tavily.usable_key() {
+            providers.push((Box::new(Tavily::new(key)), settings.tavily.weight));
         }
         Self::new(providers, web)
     }

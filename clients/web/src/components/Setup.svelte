@@ -10,6 +10,7 @@
   const WEB_PROVIDERS = [
     { name: "SearXNG URL", key: "search.searxng.url", enabled: "search.searxng.enabled" },
     { name: "Brave API key", key: "search.brave.api_key", enabled: "search.brave.enabled" },
+    { name: "Tavily API key", key: "search.tavily.api_key", enabled: "search.tavily.enabled" },
   ];
 
   let { view, ondone }: { view: SettingsView; ondone: () => void } = $props();

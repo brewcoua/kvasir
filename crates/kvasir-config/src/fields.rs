@@ -205,6 +205,9 @@ pub const FIELDS: &[Field] = &[
     field("search.brave.enabled", Kind::Bool, "Search through the Brave Search API."),
     field("search.brave.api_key", Kind::Secret, "Brave Search API key."),
     field("search.brave.weight", Kind::Float, "Its weight when results are fused."),
+    field("search.tavily.enabled", Kind::Bool, "Search through the Tavily API."),
+    field("search.tavily.api_key", Kind::Secret, "Tavily API key."),
+    field("search.tavily.weight", Kind::Float, "Its weight when results are fused."),
     restart(
         "runs.store",
         Kind::Text { choices: &["memory", "sqlite"] },
