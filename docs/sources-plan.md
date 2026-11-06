@@ -1,6 +1,6 @@
 # Source trust: plan
 
-Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05, and carried to Rust. Phase 7's research done 2026-11-06. File names in phases 1 to 6 are the Python ones. Co-STORM citations (`conversation.py`) carry no source.
+Status: written 2026-11-04. Phases 1 to 5 built 2026-11-05, and carried to Rust. Phase 7's research, survey and tags endpoint built 2026-11-06. Phase 6 is not run: a baseline in `data/eval/sources-before-dataset` stopped after 5 of 21 questions, and `just eval` resumes it. File names in phases 1 to 6 are the Python ones. Co-STORM citations (`conversation.py`) carry no source.
 
 kvasir treats every site alike. A ministry, a newspaper and a content farm each count as one
 source, and the only sign of quality is site affinity: a site's corroborated claims over its pages
