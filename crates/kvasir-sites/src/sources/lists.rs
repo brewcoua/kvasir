@@ -12,7 +12,7 @@ use reqwest::header;
 use sha1::{Digest, Sha1};
 use tokio::time::Instant;
 
-use super::{Source, Sources, normalize, parse_rsp};
+use super::{Source, Sources, normalize, parse_rsp, parse_tranco};
 
 // How often the downloaded lists are checked for age.
 pub(super) const LIST_CHECK: Duration = Duration::from_secs(3600);
@@ -24,6 +24,7 @@ pub(super) static COMMENT: LazyLock<Regex> =
 pub(super) struct Lists {
     pub(super) index: HashMap<String, Source>,
     pub(super) rsp: HashMap<String, String>,
+    pub(super) popular: HashSet<String>,
 }
 
 impl Sources {
@@ -79,6 +80,9 @@ impl Sources {
         if self.settings.enabled && self.settings.rsp {
             entries.push(format!("rsp={}", self.rsp_url));
         }
+        if self.settings.enabled && self.settings.survey {
+            entries.push(format!("tranco={}", self.tranco_url));
+        }
         entries
     }
 
@@ -116,6 +120,9 @@ impl Sources {
         let lists =
             tokio::task::spawn_blocking(move || this.read_lists()).await.unwrap_or_default();
         *self.lists.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(lists));
+        if self.settings.survey {
+            self.load_flags().await;
+        }
     }
 
     pub(super) fn read_lists(&self) -> Lists {
@@ -141,7 +148,7 @@ impl Sources {
                 Err(e) => tracing::warn!("source list {label} unreadable: {e}"),
             }
         }
-        Lists { index, rsp: self.read_rsp() }
+        Lists { index, rsp: self.read_rsp(), popular: self.read_popular() }
     }
 
     pub(super) fn read_rsp(&self) -> HashMap<String, String> {
@@ -156,6 +163,21 @@ impl Sources {
         read.unwrap_or_else(|e| {
             tracing::warn!("perennial sources list unreadable: {e}");
             HashMap::new()
+        })
+    }
+
+    fn read_popular(&self) -> HashSet<String> {
+        if !(self.settings.enabled && self.settings.survey) {
+            return HashSet::new();
+        }
+        let read = match std::fs::read(self.list_path(&self.tranco_url)) {
+            Ok(zip) => parse_tranco(&zip),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(HashSet::new()),
+            Err(e) => Err(e.to_string()),
+        };
+        read.unwrap_or_else(|e| {
+            tracing::warn!("Tranco list unreadable: {e}");
+            HashSet::new()
         })
     }
 

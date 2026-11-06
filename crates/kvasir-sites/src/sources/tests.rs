@@ -911,3 +911,256 @@ fn a_host_chain_stops_at_two_labels() {
     assert_eq!(chain("a.b.example.org"), ["a.b.example.org", "b.example.org", "example.org"]);
     assert_eq!(chain("example.org"), ["example.org"]);
 }
+
+mod survey {
+    use std::io::Write;
+
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+    use crate::sources::survey::LIKELY_FARM;
+
+    fn stamps(days: usize, per_day: usize) -> Vec<String> {
+        (0..days)
+            .flat_map(|day| {
+                std::iter::repeat_n(
+                    format!("2026-{:02}-{:02}", day / 28 + 1, day % 28 + 1),
+                    per_day,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rate_leaves_out_the_busiest_day() {
+        let mut regenerated = stamps(1, 672);
+        regenerated.extend(stamps(5, 1));
+        assert!(rate(&regenerated).unwrap() < 2.0);
+        assert_eq!(rate(&stamps(10, 20)), Some(20.0));
+    }
+
+    #[test]
+    fn rate_needs_enough_dates_and_more_than_one_day() {
+        assert_eq!(rate(&stamps(9, 11)), None);
+        assert_eq!(rate(&stamps(1, 500)), None);
+    }
+
+    #[test]
+    fn only_dense_and_unranked_is_a_verdict() {
+        let dense = Survey { urls: 500, dated: 500, rate: Some(5.0) };
+        let slow = Survey { urls: 500, dated: 500, rate: Some(4.9) };
+        let undated = Survey { urls: 90_000, dated: 0, rate: None };
+        assert!(verdict(&dense, false).unwrap().contains("5.0 URLs a day over 500 dated"));
+        assert_eq!(verdict(&dense, true), None);
+        assert_eq!(verdict(&slow, false), None);
+        assert_eq!(verdict(&undated, false), None);
+    }
+
+    fn tranco(lines: &str) -> Vec<u8> {
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        zip.start_file("top-1m.csv", zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(lines.as_bytes()).unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn tranco_is_read_from_its_zip() {
+        let hosts = parse_tranco(&tranco("1,google.com\n2,www.example.org\n3,bad name\n")).unwrap();
+        assert_eq!(hosts.len(), 2);
+        assert!(hosts.contains("google.com") && hosts.contains("example.org"));
+        assert!(parse_tranco(b"not a zip").is_err());
+    }
+
+    fn sitemap(days: usize, per_day: usize) -> String {
+        let urls: String = stamps(days, per_day)
+            .iter()
+            .enumerate()
+            .map(|(at, stamp)| format!("<url><loc>x/{at}</loc><lastmod>{stamp}</lastmod></url>"))
+            .collect();
+        format!("<urlset>{urls}</urlset>")
+    }
+
+    struct Site {
+        server: MockServer,
+        sources: Arc<Sources>,
+        _dir: TempDir,
+    }
+
+    /// A service surveying a fake site, with `popular` in its Tranco list and Wikidata off.
+    async fn site(popular: &str, settings: impl FnOnce(&mut SourceSettings)) -> Site {
+        let server = MockServer::start().await;
+        let dir = TempDir::new().unwrap();
+        let key = kvasir_db::Key::for_tests();
+        let store = SourceStore::open(&dir.path().join("sources.db"), &key).unwrap();
+        let mut config = SourceSettings {
+            enabled: true,
+            wikidata: false,
+            survey: true,
+            lists: Vec::new(),
+            ..SourceSettings::default()
+        };
+        settings(&mut config);
+        let options = Options {
+            contact: "me@example.org".to_owned(),
+            host_interval: Duration::ZERO,
+            render: false,
+            stealth: false,
+            max_age_hours: 48,
+        };
+        let web = Arc::new(Web::new(options, 8, Guard::Loopback, system_lookup()));
+        let mut sources = Sources::new(config, store, dir.path().to_owned(), web);
+        sources.tranco_url = format!("{}/tranco.zip", server.uri());
+        sources.survey_base = Some(server.uri());
+        let sources = Arc::new(sources);
+        let path = sources.list_path(&sources.tranco_url);
+        if !popular.is_empty() {
+            std::fs::write(path, tranco(popular)).unwrap();
+        }
+        sources.load_lists().await;
+        Site { server, sources, _dir: dir }
+    }
+
+    async fn serve(site: &Site, at: &str, body: String) {
+        Mock::given(method("GET"))
+            .and(path(at.to_owned()))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
+            .mount(&site.server)
+            .await;
+    }
+
+    async fn classify(site: &Site, host: &str) -> Source {
+        let hosts = [host.to_owned()];
+        site.sources.classify(&hosts, Duration::ZERO).await.remove(host).unwrap()
+    }
+
+    /// Classifies `host`, lets its survey finish, and classifies it again.
+    async fn surveyed(site: &Site, host: &str) -> Source {
+        classify(site, host).await;
+        for _ in 0..500 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            if !site.sources.surveying.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+        }
+        classify(site, host).await
+    }
+
+    fn hits(requests: &[Request], at: &str) -> usize {
+        requests.iter().filter(|request| request.url.path() == at).count()
+    }
+
+    #[tokio::test]
+    async fn a_dense_unranked_site_is_tagged_low_with_its_evidence() {
+        let site = site("1,google.com\n", |_| {}).await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+
+        let source = surveyed(&site, "blog.farm.org").await;
+
+        assert!(source.tags.contains(LIKELY_FARM));
+        assert_eq!(source.tier(), Tier::Low);
+        assert_eq!(source.origin, "survey");
+        assert!(source.evidence.contains("20.0 URLs a day"), "{}", source.evidence);
+        // A site's other hosts share its verdict, which outlives a restart.
+        site.sources.flags.lock().unwrap().clone_from(&Arc::default());
+        site.sources.load_flags().await;
+        assert!(classify(&site, "farm.org").await.tags.contains(LIKELY_FARM));
+    }
+
+    #[tokio::test]
+    async fn a_ranked_site_and_a_slow_site_stay_unknown() {
+        let site = site("1,popular.example\n", |_| {}).await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+        assert_eq!(surveyed(&site, "popular.example").await.tier(), Tier::Unknown);
+
+        let slow = self::site("1,google.com\n", |_| {}).await;
+        serve(&slow, "/sitemap.xml", sitemap(150, 1)).await;
+        assert_eq!(surveyed(&slow, "slow.example").await.tier(), Tier::Unknown);
+    }
+
+    #[tokio::test]
+    async fn without_the_tranco_list_nothing_is_read() {
+        let site = site("", |_| {}).await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+
+        assert_eq!(surveyed(&site, "farm.example").await.tier(), Tier::Unknown);
+
+        let requests = site.server.received_requests().await.unwrap();
+        assert_eq!(hits(&requests, "/sitemap.xml"), 0);
+    }
+
+    #[tokio::test]
+    async fn an_avoid_site_or_one_with_a_kind_is_never_read() {
+        let site = site("1,google.com\n", |settings| {
+            settings.deny = vec!["denied.example".to_owned()];
+        })
+        .await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+        site.sources.mark("marked.example", "deny").await.unwrap();
+
+        assert_eq!(surveyed(&site, "denied.example").await.tier(), Tier::Avoid);
+        assert_eq!(surveyed(&site, "marked.example").await.tier(), Tier::Avoid);
+        assert_eq!(surveyed(&site, "deepwiki.com").await.tier(), Tier::Avoid);
+        assert_eq!(surveyed(&site, "whitehouse.gov").await.tier(), Tier::High);
+
+        assert!(site.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_mark_set_after_the_survey_beats_it() {
+        let site = site("1,google.com\n", |_| {}).await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+        assert_eq!(surveyed(&site, "farm.example").await.tier(), Tier::Low);
+
+        site.sources.mark("farm.example", "allow").await.unwrap();
+
+        assert_eq!(classify(&site, "farm.example").await.tier(), Tier::High);
+    }
+
+    #[tokio::test]
+    async fn clearing_the_cache_forgets_a_survey() {
+        let site = site("1,google.com\n", |_| {}).await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+        assert_eq!(surveyed(&site, "farm.example").await.tier(), Tier::Low);
+
+        site.sources.flush().await.unwrap();
+
+        assert!(site.sources.flag(Source::new("farm.example", "unknown", &[], "")).tags.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_sitemaps_robots_names_are_read_through_an_index() {
+        let site = site("1,google.com\n", |_| {}).await;
+        let uri = site.server.uri();
+        serve(&site, "/robots.txt", format!("User-agent: *\nSitemap: {uri}/index.xml\n")).await;
+        let index = format!(
+            "<sitemapindex><sitemap><loc>{uri}/a.xml</loc></sitemap>\
+             <sitemap><loc>https://elsewhere.example/b.xml</loc></sitemap></sitemapindex>"
+        );
+        serve(&site, "/index.xml", index).await;
+        serve(&site, "/a.xml", sitemap(10, 20)).await;
+
+        assert_eq!(surveyed(&site, "farm.example").await.tier(), Tier::Low);
+    }
+
+    #[tokio::test]
+    async fn a_site_past_its_ttl_is_surveyed_again_and_can_lose_the_tag() {
+        let site = site("1,google.com\n", |settings| settings.ttl_days = 0).await;
+        serve(&site, "/sitemap.xml", sitemap(10, 20)).await;
+        assert_eq!(surveyed(&site, "farm.example").await.tier(), Tier::Low);
+
+        site.server.reset().await;
+        serve(&site, "/sitemap.xml", sitemap(150, 1)).await;
+
+        // The first survey since the reset runs as this classification starts it.
+        assert_eq!(surveyed(&site, "farm.example").await.tier(), Tier::Unknown);
+    }
+
+    #[tokio::test]
+    async fn the_tranco_list_is_downloaded_only_with_the_survey() {
+        let on = site("", |_| {}).await;
+        assert!(on.sources.list_entries().iter().any(|entry| entry.starts_with("tranco=")));
+        let off = site("", |settings| settings.survey = false).await;
+        assert!(off.sources.list_entries().is_empty());
+    }
+}

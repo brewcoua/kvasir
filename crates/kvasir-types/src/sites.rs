@@ -44,7 +44,7 @@ pub fn tier<'a>(kind: &str, tags: impl IntoIterator<Item = &'a str> + Clone) -> 
     let has = |wanted: &[&str]| tags.clone().into_iter().any(|tag| wanted.contains(&tag));
     if has(&AVOID_TAGS) {
         Tier::Avoid
-    } else if has(&["rsp_unreliable"]) {
+    } else if has(&["rsp_unreliable", "likely_farm"]) {
         Tier::Low
     } else if HIGH_KINDS.contains(&kind) || has(&["rsp_reliable", "allow"]) {
         Tier::High
@@ -65,9 +65,12 @@ pub struct SourceInfo {
     pub label: String,
     /// The Wikidata item, or empty.
     pub qid: String,
-    /// What decided it: config, mark, list, rule or wikidata. Empty when nothing is known. A site
-    /// set in the config cannot be marked.
+    /// What decided it: config, mark, list, rule, wikidata or survey. Empty when nothing is known.
+    /// A site set in the config cannot be marked.
     pub origin: String,
+    /// Why the survey called it a likely farm. Left out otherwise.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub evidence: String,
 }
 
 /// A site's kind, tags and tier, without what only a person reading about it needs.

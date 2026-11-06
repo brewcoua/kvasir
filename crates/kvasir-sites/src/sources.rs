@@ -2,7 +2,8 @@
 //!
 //! A host resolves in order: config `allow`/`deny`, a mark, the lists, suffix rules, the cache, then
 //! Wikidata. With `rsp`, Wikipedia's perennial sources list adds `rsp_*` tags to what the host
-//! resolves to, and sets no kind. Hosts come from search results, so they are attacker-influenced:
+//! resolves to, and sets no kind. With `survey`, a site nothing else decides may be tagged
+//! `likely_farm` from its sitemap and popularity. Hosts come from search results, so they are attacker-influenced:
 //! they are normalized before they reach a query, and the only text sent to Wikidata is a host or a
 //! URL built from one.
 //! Nothing here is built unless `[sources] enabled`; the caller decides that.
@@ -10,10 +11,12 @@
 mod lists;
 mod rsp;
 mod store;
+mod survey;
 mod wikidata;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -30,6 +33,8 @@ pub use lists::parse_list;
 use rsp::RSP_URL;
 pub use rsp::parse_rsp;
 pub use store::SourceStore;
+use survey::TRANCO_URL;
+pub use survey::{Survey, parse_tranco, rate, verdict};
 
 /// Past this a host still unresolved is `unknown` for the pick, and known by the next.
 pub const DEADLINE: Duration = Duration::from_secs(5);
@@ -42,7 +47,7 @@ const WORKERS: usize = 2;
 const BUNDLED: &str = include_str!("sources.toml");
 
 /// What is known of one host. `tags` are `official`, `community`, `ai_generated`, `content_farm`,
-/// `predatory`, `rsp_*`, and `allow` or `deny` from the config or a mark.
+/// `predatory`, `likely_farm`, `rsp_*`, and `allow` or `deny` from the config or a mark.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
     /// The host as asked, lowercase and without `www.`.
@@ -51,8 +56,10 @@ pub struct Source {
     pub tags: BTreeSet<String>,
     pub label: String,
     pub qid: String,
-    /// config, mark, list, rule or wikidata; empty when nothing is known.
+    /// config, mark, list, rule, wikidata or survey; empty when nothing is known.
     pub origin: String,
+    /// Why the survey tagged it; empty otherwise.
+    pub evidence: String,
 }
 
 impl Source {
@@ -64,6 +71,7 @@ impl Source {
             label: String::new(),
             qid: String::new(),
             origin: origin.to_owned(),
+            evidence: String::new(),
         }
     }
 
@@ -79,6 +87,7 @@ impl Source {
             label: self.label.clone(),
             qid: self.qid.clone(),
             origin: self.origin.clone(),
+            evidence: self.evidence.clone(),
         }
     }
 }
@@ -121,7 +130,13 @@ pub struct Sources {
     first_load: tokio::sync::Mutex<()>,
     lists_checked: Mutex<Option<Instant>>,
     rsp_url: String,
+    tranco_url: String,
     max_list_bytes: usize,
+    // The sites the survey tagged, with why, by registrable domain.
+    flags: Mutex<Arc<HashMap<String, String>>>,
+    surveying: AtomicBool,
+    // Where a surveyed site is asked instead of its own host: a test's fake site.
+    survey_base: Option<String>,
 }
 
 impl Sources {
@@ -161,7 +176,11 @@ impl Sources {
             first_load: tokio::sync::Mutex::new(()),
             lists_checked: Mutex::new(None),
             rsp_url: RSP_URL.to_owned(),
+            tranco_url: TRANCO_URL.to_owned(),
             max_list_bytes: MAX_LIST_BYTES,
+            flags: Mutex::default(),
+            surveying: AtomicBool::new(false),
+            survey_base: None,
         }
     }
 
@@ -216,6 +235,9 @@ impl Sources {
             let entry = self.cached(key).await;
             out.insert(raw.clone(), self.overlay(merge(key, None, entry.flatten())));
         }
+        if self.settings.survey {
+            self.note_met(out.values()).await;
+        }
         out
     }
 
@@ -249,14 +271,20 @@ impl Sources {
         Ok(self.store.marks(vec![key.clone()]).await?.contains_key(&key))
     }
 
-    /// Forgets the cached Wikidata answers; marks and the config stay.
+    /// Forgets the cached Wikidata answers and surveys; marks and the config stay.
     pub async fn flush(&self) -> Result<(), DbError> {
-        self.store.clear().await
+        self.store.clear().await?;
+        self.load_flags().await;
+        Ok(())
     }
 
-    /// `source` with the `rsp_*` tags of its host or registrable domain. A config entry or a mark
-    /// decides alone.
-    fn overlay(&self, mut source: Source) -> Source {
+    /// `source` with what the lists and the survey add. A config entry or a mark decides alone.
+    fn overlay(&self, source: Source) -> Source {
+        self.flag(self.rsp(source))
+    }
+
+    /// `source` with the `rsp_*` tags of its host or registrable domain.
+    fn rsp(&self, mut source: Source) -> Source {
         if source.origin == "config" || source.origin == "mark" {
             return source;
         }

@@ -47,10 +47,12 @@ pub const FAVICONS: &[&str] = &["
 CREATE TABLE IF NOT EXISTS favicons (host TEXT PRIMARY KEY, body BLOB, content_type TEXT, provider TEXT, fetched_at REAL NOT NULL);
 "];
 
-/// `sources.db`: what each site is, and the operator's marks.
+/// `sources.db`: what each site is, what its survey found, and the operator's marks.
 pub const SOURCES: &[&str] = &["
 CREATE TABLE IF NOT EXISTS marks (host TEXT PRIMARY KEY, value TEXT NOT NULL, marked_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS sources (host TEXT PRIMARY KEY, kind TEXT, tags TEXT, label TEXT, qid TEXT, fetched_at REAL NOT NULL);
+", "
+CREATE TABLE surveys (host TEXT PRIMARY KEY, urls INTEGER, dated INTEGER, rate REAL, evidence TEXT, surveyed_at REAL NOT NULL);
 "];
 
 #[cfg(test)]
@@ -116,7 +118,7 @@ mod tests {
     fn a_new_file_has_the_schema_python_made() {
         let dir = tempfile::tempdir().unwrap();
         for (file, migrations) in
-            [("pages.sql", PAGES), ("favicons.sql", FAVICONS), ("sources.sql", SOURCES)]
+            [("pages.sql", PAGES), ("favicons.sql", FAVICONS), ("sources.sql", &SOURCES[..1])]
         {
             let db =
                 Db::open(&dir.path().join(file), &crate::Key::for_tests(), migrations).unwrap();
@@ -124,6 +126,10 @@ mod tests {
             got.sort();
             assert_eq!(got, golden_schema(file), "{file}");
         }
+        let db =
+            Db::open(&dir.path().join("surveyed.sql"), &crate::Key::for_tests(), SOURCES).unwrap();
+        let got = db.call_blocking(|c| Ok(schema(c))).unwrap();
+        assert!(got.iter().any(|sql| sql.starts_with("CREATE TABLE surveys")), "{got:?}");
         let db = Db::open(&dir.path().join("kvasir.db"), &crate::Key::for_tests(), KVASIR).unwrap();
         let mut got = db.call_blocking(|c| Ok(schema(c))).unwrap();
         got.sort();

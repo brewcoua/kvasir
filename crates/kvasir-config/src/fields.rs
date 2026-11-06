@@ -342,6 +342,11 @@ pub const FIELDS: &[Field] = &[
     field("sources.miss_ttl_days", INT, "Days a host Wikidata does not know is remembered."),
     field("sources.rsp", Kind::Bool, "Also tag hosts by Wikipedia's perennial sources list."),
     field(
+        "sources.survey",
+        Kind::Bool,
+        "Tag sites nothing decides as likely farms, from their sitemaps and the Tranco list.",
+    ),
+    field(
         "sources.allow",
         Kind::List { choices: &[] },
         "Hosts, with their subdomains, always trusted. Beats any mark.",

@@ -18,6 +18,12 @@ describe("SourceBadge", () => {
     expect(badge.tagName).toBe("SPAN");
   });
 
+  it("says why the survey tagged a site", () => {
+    const tagged = { ...source, kind: "unknown", tags: ["likely_farm"], tier: "low" as const, origin: "survey", evidence: "20.0 URLs a day" };
+    const { container } = render(SourceBadge, { source: tagged });
+    expect(container.querySelector(".source")!.getAttribute("title")).toContain("20.0 URLs a day");
+  });
+
   it("leaves out an unknown tier", () => {
     const { container } = render(SourceBadge, { source: { ...source, kind: "unknown", tier: "unknown", origin: "" } });
     expect(container.querySelector(".source")!.textContent).toBe("unknown");

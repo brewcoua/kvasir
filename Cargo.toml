@@ -69,6 +69,7 @@ tracing-subscriber = { version = "0.3", features = ["json"] }
 url = "2.5"
 uuid = { version = "1", features = ["v4"] }
 wiremock = "0.6"
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 # Enough for a backtrace's file and line, at under half the size of target/debug. A debugger shows no
 # local variables: use `debug = true` locally for a session that needs them.

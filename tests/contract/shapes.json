@@ -3768,6 +3768,7 @@
   "sources.lists": "string",
   "sources.miss_ttl_days": "string",
   "sources.rsp": "string",
+  "sources.survey": "string",
   "sources.ttl_days": "string",
   "sources.wikidata": "string",
   "storm.max_conv_turn": "string",

@@ -795,10 +795,12 @@ export interface components {
             /** @description The Wikidata item, or empty. */
             qid: string;
             /**
-             * @description What decided it: config, mark, list, rule or wikidata. Empty when nothing is known. A site
-             *     set in the config cannot be marked.
+             * @description What decided it: config, mark, list, rule, wikidata or survey. Empty when nothing is known.
+             *     A site set in the config cannot be marked.
              */
             origin: string;
+            /** @description Why the survey called it a likely farm. Left out otherwise. */
+            evidence?: string;
         };
         /** @description What one stage spent, including what is not a completion. */
         StageUsage: {

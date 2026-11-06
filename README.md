@@ -448,7 +448,7 @@ The same data is available as JSON.
 | `GET /v1/favicons/{host}` | The icon of a site, fetched on first request and kept in `favicons.db`. 404 when the site has none, the host is not a public DNS name, or favicons are off. |
 | `GET /v1/search/challenges` | The blocks a person can clear: each with its `provider`, `url` and `expires_in` in seconds. Empty without the `chromium` feature. |
 | `GET /v1/search/challenges/{provider}/live` | A WebSocket on a browser tab on the challenge. Sends `frame` (base64 JPEG) as the page changes and at the end `state`, one of `cleared`, `expired`, `left` or `failed`. Takes mouse, key and text input as JSON. 403 from another site's page. Needs the `chromium` feature. |
-| `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule` or `wikidata`) of a site; Wikidata is asked when nothing else decides it. 404 unless `sources.enabled`. |
+| `GET /v1/sources/{host}` | The kind, tags, tier, label, Wikidata `qid` and `origin` (`config`, `mark`, `list`, `rule`, `wikidata` or `survey`) of a site; Wikidata is asked when nothing else decides it. 404 unless `sources.enabled`. |
 | `GET /v1/sources/tags?host=a.com&host=b.org`, `POST /v1/sources/tags` | `{host: {kind, tags, tier}}` for each host, from `host` in the query or `{"hosts": [...]}` in the body, at most 1,000. Answers from what is known and never waits for Wikidata; a name that is not a host is `unknown`. 404 unless `sources.enabled`. |
 | `PUT /v1/sources/{host}/mark`, `DELETE /v1/sources/{host}/mark` | Mark a site with `{"value": "allow" \| "deny" \| <kind>}`, or clear the mark. 422 for another value, 409 for a host set in `sources.allow` or `sources.deny`. A mark takes effect for runs in flight. 404 unless `sources.enabled`. |
 | `DELETE /v1/sources` | Forget the cached Wikidata answers. Marks stay. 404 unless `sources.enabled`. |
@@ -719,6 +719,7 @@ PRAGMA key = "x'<KVASIR_SECRET_KEY>'";
 | `sources.allow` | empty | A list of hosts, with their subdomains, always trusted (`high`). Beats any mark. |
 | `sources.deny` | empty | A list of hosts, with their subdomains, never read (`avoid`). Beats `sources.allow` and any mark. |
 | `sources.rsp` | `false` | Also tag hosts by Wikipedia's perennial sources list, fetched from `en.wikipedia.org` and refreshed with the lists. Needs `sources.enabled`. |
+| `sources.survey` | `false` | Tag sites nothing else decides as `likely_farm`, from their own sitemaps and the Tranco list, in the background. Needs `sources.enabled`. |
 | `sources.lists` | CISA `.gov` list | A list of `<label>=<url>` lists to download, the label being a kind (`government`) or a tag (`ai_generated`, `content_farm`, `predatory`). Hosts files, uBlacklist files and CSVs with the host first are read. An empty list uses none. |
 
 Favicons are fetched by the server and served from `/v1/favicons/{host}`, so a browser never contacts
@@ -759,6 +760,15 @@ part of one (`example.com/news`), is skipped. Wikipedia's own row is skipped too
 unreliable because an article citing an article is circular (WP:CIRCULAR), which a run citing it
 is not. Rows name publications, not domains, so only sites
 the page lists are tagged.
+
+With `sources.survey` set to `true` as well, a site a run met and nothing else decides is surveyed
+in the background, and again after `sources.ttl_days`. kvasir reads up to 8 of its sitemap files and
+downloads the [Tranco](https://tranco-list.eu/) top 1M, nothing of it shipped. One of Tranco's
+sources is CC BY-NC 4.0, so check that it suits your use. A site publishing 5 or more URLs per
+dated day, over 100 or more dated URLs and leaving out its busiest day, and outside Tranco's top
+300,000, gets the tag `likely_farm`, of tier `low`: it is ranked lower and gets no `site:` search, but
+it is still read. Its `evidence` says why, and a mark or `sources.allow` overrides it. These
+thresholds come from 25 sites, so treat them as a first guess.
 
 Set `model.reasoning_effort` to `none` for a thinking model on Ollama. Its reasoning counts
 against each role's token budget, which is a few hundred tokens for the outline and article roles,

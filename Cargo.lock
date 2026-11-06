@@ -2015,6 +2015,7 @@ dependencies = [
  "tracing",
  "url",
  "wiremock",
+ "zip",
 ]
 
 [[package]]

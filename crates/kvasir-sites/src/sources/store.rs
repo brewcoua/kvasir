@@ -1,4 +1,4 @@
-//! `sources.db`: the Wikidata answers, which expire, and the marks, which do not.
+//! `sources.db`: the Wikidata answers and site surveys, which expire, and the marks, which do not.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -7,10 +7,11 @@ use kvasir_db::rusqlite::params_from_iter;
 use kvasir_db::schema::SOURCES;
 use kvasir_db::{Db, DbError, Key, OptionalExtension, params};
 
-use super::Match;
+use super::{Match, Survey};
 use crate::{SECONDS_PER_DAY, now};
 
-/// Two tables in one file: `sources`, a cache that expires, and `marks`, which never do.
+/// Three tables in one file: `sources` and `surveys`, caches that expire, and `marks`, which never
+/// do.
 #[derive(Clone, Debug)]
 pub struct SourceStore {
     db: Db,
@@ -86,9 +87,76 @@ impl SourceStore {
             .await
     }
 
-    /// Forgets every cached answer, and keeps the marks.
+    /// Forgets every cached answer and survey, and keeps the marks.
     pub async fn clear(&self) -> Result<(), DbError> {
-        self.db.call(|db| db.execute("DELETE FROM sources", []).map(|_| ())).await
+        self.db.call(|db| db.execute_batch("DELETE FROM sources; DELETE FROM surveys;")).await
+    }
+
+    /// Queues for a survey each of `hosts` not surveyed or queued yet.
+    pub async fn note_met(&self, hosts: Vec<String>) -> Result<(), DbError> {
+        self.db
+            .call(move |db| {
+                let mut add =
+                    db.prepare("INSERT OR IGNORE INTO surveys (host, surveyed_at) VALUES (?, 0)")?;
+                for host in hosts {
+                    add.execute([host])?;
+                }
+                Ok(())
+            })
+            .await
+    }
+
+    /// Up to `limit` hosts queued, or surveyed over `ttl_days` ago, the longest waiting first.
+    pub async fn due(&self, ttl_days: u64, limit: usize) -> Result<Vec<String>, DbError> {
+        let before = now() - ttl_days as f64 * SECONDS_PER_DAY;
+        self.db
+            .call(move |db| {
+                let mut due = db.prepare(
+                    "SELECT host FROM surveys WHERE surveyed_at < ? ORDER BY surveyed_at LIMIT ?",
+                )?;
+                let hosts = due.query_map(params![before, limit as i64], |r| r.get(0))?;
+                hosts.collect()
+            })
+            .await
+    }
+
+    /// Keeps a survey of `host` with why it was tagged, if it was.
+    pub async fn record(
+        &self,
+        host: &str,
+        survey: &Survey,
+        evidence: Option<&str>,
+    ) -> Result<(), DbError> {
+        let (host, survey) = (host.to_owned(), survey.clone());
+        let evidence = evidence.map(str::to_owned);
+        self.db
+            .call(move |db| {
+                db.execute(
+                    "INSERT OR REPLACE INTO surveys VALUES (?, ?, ?, ?, ?, ?)",
+                    params![
+                        host,
+                        survey.urls as i64,
+                        survey.dated as i64,
+                        survey.rate,
+                        evidence,
+                        now()
+                    ],
+                )
+                .map(|_| ())
+            })
+            .await
+    }
+
+    /// Why each tagged site was tagged, by host.
+    pub async fn flagged(&self) -> Result<HashMap<String, String>, DbError> {
+        self.db
+            .call(|db| {
+                let mut found =
+                    db.prepare("SELECT host, evidence FROM surveys WHERE evidence IS NOT NULL")?;
+                let rows = found.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+                rows.collect()
+            })
+            .await
     }
 
     pub async fn mark(&self, host: &str, value: &str) -> Result<(), DbError> {

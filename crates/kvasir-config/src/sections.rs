@@ -329,6 +329,8 @@ pub struct SourceSettings {
     pub miss_ttl_days: u64,
     /// Whether Wikipedia's perennial sources list tags hosts. Needs `enabled`.
     pub rsp: bool,
+    /// Whether sites a run met and nothing decides are surveyed for `likely_farm`. Needs `enabled`.
+    pub survey: bool,
     pub allow: Vec<String>,
     pub deny: Vec<String>,
     /// Each `<label>=<url>`, the label a kind or a tag given to every host on the list.
@@ -344,6 +346,7 @@ impl Default for SourceSettings {
             ttl_days: 30,
             miss_ttl_days: 7,
             rsp: false,
+            survey: false,
             allow: Vec::new(),
             deny: Vec::new(),
             lists: vec![
